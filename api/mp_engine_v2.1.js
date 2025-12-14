@@ -12,8 +12,8 @@ MP.Engine = (function () {
 
   const CFG = {
     // Token bars (value only, max untouched)
-    HITS_BAR: "bar1_value",
-    POWER_BAR: "bar2_value",
+    POWER_BAR: "bar1_value",
+    HITS_BAR: "bar2_value",
 
     // Auto-roll damage display (toggle with !mp config autoroll on/off)
     AUTO_ROLL_DAMAGE: true,
@@ -50,12 +50,13 @@ MP.Engine = (function () {
   state.MP_Engine = state.MP_Engine || {
     pending: {},
     snares: {},
-    autoroll: true
+    autoroll: true,
+    enabled: true
   };
 
   // -------------------------
   // UTILITY FUNCTIONS
-  // -------------------------
+  // -------------------------  
 
   function ch(who, msg) {
     sendChat(who, msg, null, { noarchive: true });
@@ -184,7 +185,11 @@ MP.Engine = (function () {
   }
 
   function getRepeatingAttackAttr(charId, rowId, shortName) {
-    return getAttr(charId, `repeating_attacks_${rowId}_${shortName}`);
+    // Case-insensitive lookup since Roll20 rowIDs can have mixed case
+    const searchName = `repeating_attacks_${rowId}_${shortName}`.toLowerCase();
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    const found = attrs.find(a => a.get("name").toLowerCase() === searchName);
+    return found ? found.get("current") : "";
   }
 
   // Roll dice expression (NdM+K format)
@@ -232,29 +237,29 @@ MP.Engine = (function () {
   function rollCritical(isSuccess) {
     const r = randomInteger(20);
     if (isSuccess) {
-      if (r <= 2) return `(${r}) Gear Shot`;
-      if (r <= 4) return `(${r}) Free Action`;
-      if (r <= 6) return `(${r}) Leg Shot`;
-      if (r === 7) return `(${r}) Avoid Light Armor/Cover`;
-      if (r === 8) return `(${r}) Avoid Armor/Cover`;
-      if (r === 9) return `(${r}) Muscle Strain (target)`;
-      if (r <= 11) return `(${r}) Arm Shot`;
-      if (r <= 13) return `(${r}) Precise Hit (½ roll-with)`;
-      if (r <= 15) return `(${r}) Solid Hit (+3 dmg / -3 save TN)`;
-      if (r <= 17) return `(${r}) Off Balance (target -3 def)`;
-      if (r === 18) return `(${r}) Head Shot`;
-      return `(${r}) Other (GM choice)`;
+      if (r <= 2) return `(${r}) Gear Shot - damage vs break point`;
+      if (r <= 4) return `(${r}) Free Action - attacker gets free action`;
+      if (r <= 6) return `(${r}) Leg Shot - EN+7 save at -1/Hit or lose leg; AG save or fall`;
+      if (r === 7) return `(${r}) Avoid Light Armor - bypasses partial coverage`;
+      if (r === 8) return `(${r}) Avoid Heavy Armor - bypasses partial coverage`;
+      if (r === 9) return `(${r}) Muscle Strain (target) - 1 Hit to torso`;
+      if (r <= 11) return `(${r}) Arm Shot - EN+7 save at -1/Hit or lose arm; AG save or drop`;
+      if (r <= 13) return `(${r}) Precise Hit - target's roll-with halved`;
+      if (r <= 15) return `(${r}) Solid Hit - +3 dmg or -3 to save TN`;
+      if (r <= 17) return `(${r}) Off Balance - target at -3 def next phase`;
+      if (r === 18) return `(${r}) Head Shot - DOUBLE Hits after protection/roll-with`;
+      return `(${r}) Other - GM choice`;
     } else {
-      if (r <= 2) return `(${r}) Wrong Target`;
-      if (r <= 4) return `(${r}) Off Balance (attacker -3 def)`;
-      if (r <= 6) return `(${r}) Leg Strain (1 Hit to leg)`;
-      if (r <= 8) return `(${r}) Left an Opening (target free action)`;
-      if (r <= 10) return `(${r}) Muscle Strain (attacker)`;
-      if (r <= 12) return `(${r}) Arm Strain (1 Hit to arm)`;
-      if (r <= 14) return `(${r}) Weapon Stuck`;
-      if (r <= 16) return `(${r}) Lost Opportunity`;
-      if (r <= 18) return `(${r}) Gear Damage (attacker)`;
-      return `(${r}) Other (GM choice)`;
+      if (r <= 2) return `(${r}) Wrong Target - GM determines`;
+      if (r <= 4) return `(${r}) Off Balance - attacker at -3 def next phase`;
+      if (r <= 6) return `(${r}) Leg Strain - 1 Hit to attacker's leg`;
+      if (r <= 8) return `(${r}) Left Opening - target gets free action`;
+      if (r <= 10) return `(${r}) Muscle Strain - 1 Hit to attacker's torso`;
+      if (r <= 12) return `(${r}) Arm Strain - 1 Hit to attacker's arm`;
+      if (r <= 14) return `(${r}) Weapon Stuck - lose action to free it`;
+      if (r <= 16) return `(${r}) Lost Opportunity - lose next action`;
+      if (r <= 18) return `(${r}) Gear Damage - attacker's gear vs break point`;
+      return `(${r}) Other - GM choice`;
     }
   }
 
@@ -263,6 +268,9 @@ MP.Engine = (function () {
   // -------------------------
 
   function handleMpAttack(msg) {
+    // Check if API processing is enabled
+    if (state.MP_Engine.enabled === false) return;
+    
     const fields = parseTemplateFields(msg.content);
     if (!fields.mpapi || fields.mpapi !== "1") return;
 
@@ -270,150 +278,169 @@ MP.Engine = (function () {
 
     const atkCharId = fields.atk;
     const defTokenId = fields.def;
-    const rowId = fields.attackid;
+    const rowId = fields.row;
+    const isPushing = (fields.push === "1");
 
     const atkChar = getObj("character", atkCharId);
     const defTok = getObj("graphic", defTokenId);
     const defChar = getCharFromToken(defTok);
 
+    if (!atkChar || !defTok || !defChar) {
+      ch("MP", `/w gm <b>MP:</b> Could not resolve attacker/defender. Select a target token.`);
+      return;
+    }
+
+    // Get inline roll results from sheet
     const rollIR = inlineTotal(msg, fields.roll);
     const confIR = inlineTotal(msg, fields.confirm);
-    const targIR = inlineTotal(msg, fields.target);
     const dmgIR = inlineTotal(msg, fields.damage);
 
-    if (!atkChar || !defTok || !defChar || !rollIR || !targIR) {
-      ch("MP", `/w gm <b>MP Engine:</b> Could not resolve attacker/defender or inline rolls.`);
+    if (!rollIR) {
+      ch("MP", `/w gm <b>MP:</b> Could not parse roll.`);
       return;
     }
 
     const nat = inlineNatD20(rollIR);
-    const rollTotal = num(rollIR.total, 0);
-    const targetTotal = num(targIR.total, 0);
+    const roll = num(rollIR.total, 0);
+    const confirm = confIR ? num(confIR.total, 0) : 10;
     const damageTotal = dmgIR ? num(dmgIR.total, 0) : 0;
 
-    const atkName = fields.name || atkChar.get("name") || "Attacker";
-    const defName = defChar.get("name") || "Defender";
-    const dmgTypeStr = fields.type || "Other";
-    const protKey = typeToProtKey(dmgTypeStr);
-
     // Get attack row attributes
-    const atkType = (rowId ? getRepeatingAttackAttr(atkCharId, rowId, "attack_type") : "std") || "std";
-    const atkAPRaw = rowId ? getRepeatingAttackAttr(atkCharId, rowId, "attack_ap") : "";
+    const getAtkAttr = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+
+    // Debug logging
+    const rawAtkType = getAtkAttr("attack_atk");
+    log("MP: rowId=" + rowId);
+    log("MP: looking for: repeating_attacks_" + rowId + "_attack_atk");
+    // Debug: list all attributes matching this rowId
+    const allAttrs = findObjs({ _type: "attribute", _characterid: atkCharId });
+    const matchingAttrs = allAttrs.filter(a => a.get("name").toLowerCase().includes(rowId.toLowerCase()));
+    log("MP: All attrs for row: " + JSON.stringify(matchingAttrs.map(a => a.get("name") + "=" + a.get("current"))));
+    log("MP: rawAtkType=" + rawAtkType + " (type: " + typeof rawAtkType + ")");
+
+    const atkName = atkChar.get("name") + " - " + (getAtkAttr("attack_name") || fields.name || "Attack");
+    const defName = defChar.get("name");
+
+    const atkTypeCode = rawAtkType || "P";
+    log("MP: atkTypeCode=" + atkTypeCode);
+
+    const atkMod = num(getAtkAttr("attack_mod"), 0);
+    const dmgTypeShort = getAtkAttr("attack_dmgtype") || "Kin";
+    const dmgTypeStr = {Kin:"Kinetic", Eng:"Energy", Bio:"Biochemical", Ent:"Entropy", Psy:"Psychic", Oth:"Other"}[dmgTypeShort] || fields.type || "Other";
+    const protKey = typeToProtKey(dmgTypeStr);
+    const range = getAtkAttr("attack_range") || fields.range || "-";
+    const kbChecked = getAtkAttr("attack_kb");
+    const causesKB = (kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes");
+
+    // Special attack attributes
+    const atkType = getAtkAttr("attack_type") || "std";
+    const atkAPRaw = getAtkAttr("attack_ap") || fields.ap || "";
     const atkAP = (atkAPRaw === "ALL" || atkAPRaw === "all") ? Infinity : num(atkAPRaw, 0);
+    const saveBC = getAtkAttr("attack_save_bc") || "";
+    const saveMod = num(getAtkAttr("attack_save_mod"), 0);
+    const recMod = num(getAtkAttr("attack_recovery"), 0);
+    const snBP = num(getAtkAttr("attack_bp"), 0);
+    const snMaxBP = num(getAtkAttr("attack_max_bp"), 0);
+    const snType = getAtkAttr("attack_snare_type") || "";
 
-    const saveBC = rowId ? getRepeatingAttackAttr(atkCharId, rowId, "attack_save_bc") : "";
-    const saveMod = num(rowId ? getRepeatingAttackAttr(atkCharId, rowId, "attack_save_mod") : 0, 0);
-    const recMod = num(rowId ? getRepeatingAttackAttr(atkCharId, rowId, "attack_recovery") : 0, 0);
+    // Calculate TN using ACTUAL defender defense
+    let atkSaveAttr;
+    if (atkTypeCode === "M") atkSaveAttr = "intelligence_save";
+    else if (atkTypeCode === "E") atkSaveAttr = "cool_save";
+    else atkSaveAttr = "agility_save";
 
-    const snBP = num(rowId ? getRepeatingAttackAttr(atkCharId, rowId, "attack_bp") : 0, 0);
-    const snMaxBP = num(rowId ? getRepeatingAttackAttr(atkCharId, rowId, "attack_max_bp") : 0, 0);
-    const snType = rowId ? getRepeatingAttackAttr(atkCharId, rowId, "attack_snare_type") : "";
+    const atkSave = getAttrNum(atkCharId, atkSaveAttr, 10);
+    const baseToHit = atkSave + 3 + atkMod;
 
-    // Check for knockback
-    const kbDisplay = fields.kb || "Yes";
-    const causesKB = (kbDisplay.toLowerCase() !== "no");
+    const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
+    const defValue = getAttrNum(defChar.id, defAttr, 0);
+    log("MP: atkTypeCode=" + atkTypeCode + " defAttr=" + defAttr + " defValue=" + defValue);
 
-    // Determine hit/miss (roll-under system)
+    const targetTotal = baseToHit - defValue;
+
+    // Deduct push cost from attacker
+    if (isPushing) {
+      const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
+      if (atkTok) {
+        const atkPow0 = getResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+        setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - 2));
+      }
+    }
+
+    // Determine outcome using API-calculated TN
     let outcome = "MISS";
     let isCrit = false;
     let isFumble = false;
 
-    if (nat === CFG.FUMBLE_FAIL_NAT) {
-      // Check for fumble confirmation
-      const confNat = confIR ? inlineNatD20(confIR) : null;
-      const confTotal = confIR ? num(confIR.total, 20) : 20;
-      if (confTotal > targetTotal) {
+    if (nat === 20) {
+      if (confirm > targetTotal) {
         isFumble = true;
         outcome = "FUMBLE";
       } else {
         outcome = "MISS";
       }
-    } else if (nat === CFG.CRIT_SUCCESS_NAT) {
-      // Check for critical confirmation
-      const confTotal = confIR ? num(confIR.total, 1) : 1;
-      if (confTotal <= targetTotal) {
+    } else if (nat === 1) {
+      if (confirm <= targetTotal) {
         isCrit = true;
         outcome = "CRIT";
       } else {
         outcome = "HIT";
       }
-    } else if (rollTotal <= targetTotal) {
+    } else if (roll <= targetTotal) {
       outcome = "HIT";
     }
 
-    // Store context for button actions
+    // Store pending
     const rollId = String(Date.now()) + "_" + randomInteger(999999);
     state.MP_Engine.pending[rollId] = {
-      rollId,
-      playerid: msg.playerid,
-      atkCharId,
-      atkName,
-      defTokenId,
-      defCharId: defChar.id,
-      defName,
-      rowId,
-      nat,
-      rollTotal,
-      targetTotal,
-      outcome,
-      isCrit,
-      isFumble,
-      damageTotal,
-      dmgTypeStr,
-      protKey,
-      atkType,
-      atkAP,
-      saveBC,
-      saveMod,
-      recMod,
-      snBP,
-      snMaxBP,
-      snType,
-      causesKB,
-      created: Date.now()
+      rollId, playerid: msg.playerid, atkCharId, atkName, defTokenId, 
+      defCharId: defChar.id, defName, rowId, nat, roll, confirm, targetTotal,
+      outcome, isCrit, isFumble, damageTotal, dmgTypeStr, protKey, atkType,
+      atkAP, saveBC, saveMod, recMod, snBP, snMaxBP, snType, causesKB,
+      isPushing, created: Date.now()
     };
 
     // Build output
     const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
-    const autoroll = state.MP_Engine.autoroll;
 
-    let html = `<div style="background:#1a1a2e; border:2px solid ${outcome === 'MISS' || outcome === 'FUMBLE' ? '#e94560' : '#50fa7b'}; border-radius:6px; padding:8px; margin:4px 0;">`;
-    html += `<div style="color:#eaeaea; font-weight:bold;">→ <span style="color:${outcome === 'MISS' || outcome === 'FUMBLE' ? '#e94560' : '#50fa7b'}">${outcome}</span> vs ${esc(defName)}</div>`;
+    const atkTypeLabel = atkTypeCode === "M" ? "Mental" : (atkTypeCode === "E" ? "Emot" : "Phys");
+    const defTypeLabel = (atkTypeCode === "M" || atkTypeCode === "E") ? "MDef" : "PDef";
 
-    if (isCrit) html += `<div style="color:#f4d03f; font-size:11px;">⚡ ${rollCritical(true)}</div>`;
-    if (isFumble) html += `<div style="color:#e94560; font-size:11px;">💥 ${rollCritical(false)}</div>`;
+    let html;
+    if (outcome === "HIT" || outcome === "CRIT") {
+      html = `<div style="background:#90ee90; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+      html += `<span style="color:#000; font-weight:bold; font-size:14px;">💥 ${outcome}!</span> `;
+    } else {
+      html = `<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+      html += `<span style="color:#000; font-weight:bold; font-size:14px;">${outcome}!</span> `;
+    }
+    html += `<span style="color:#000;" title="Target">vs ${esc(defName)}</span> `;
+    html += `<span style="color:#333; font-size:10px;" title="Attack type: ${atkTypeLabel}&#10;Roll: ${roll}&#10;Target Number: ${targetTotal}-&#10;${defTypeLabel}: ${defValue}">[${atkTypeLabel}] ${roll} vs ${targetTotal}- (${defTypeLabel}:${defValue})</span>`;
+
+    if (isCrit) html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Critical hit effect">⚡ ${rollCritical(true)}</span>`;
+    if (isFumble) html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Fumble effect">💥 ${rollCritical(false)}</span>`;
+    if (isPushing) html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Pushing: +2 damage, costs 2 Power">⚡ PUSH!</span>`;
 
     html += `</div>`;
 
     let buttons = "";
     if (outcome === "HIT" || outcome === "CRIT") {
+      const critBonus = isCrit ? 3 : 0;
+
       if (atkType === "std") {
-        const critBonus = isCrit ? 3 : 0;
-        
-        if (autoroll) {
-          // Show damage and apply buttons immediately
-          html = html.slice(0, -6); // Remove closing </div>
-          html += `<div style="color:#eaeaea; margin-top:4px;">Damage: <b>${damageTotal}</b> (${esc(dmgTypeStr)})</div>`;
-          html += `</div>`;
-          
-          buttons = `[Apply Damage](!mp apply --id ${rollId} --mode noroll --crit ${critBonus}) `;
-          buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax --crit ${critBonus}) `;
-          buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0} --crit ${critBonus})`;
-          
-          if (causesKB) {
-            buttons += ` [Knockback](!mp kb --id ${rollId})`;
-          }
-        } else {
-          // Show roll damage button only
-          buttons = `[Roll Damage](!mp rolldamage --id ${rollId})`;
-        }
+        buttons = `[Apply](!mp apply --id ${rollId} --mode noroll --crit ${critBonus}) `;
+        buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax --crit ${critBonus}) `;
+        buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0} --crit ${critBonus})`;
+        if (causesKB) buttons += ` [KB](!mp kb --id ${rollId})`;
       } else if (atkType === "sav") {
         const critMod = isCrit ? -3 : 0;
-        buttons = `[Make Save](!mp save --id ${rollId} --critmod ${critMod}) `;
-        buttons += `[Save + Roll-With](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod})`;
+        const pushMod = isPushing ? -2 : 0;
+        buttons = `[Make Save](!mp save --id ${rollId} --critmod ${critMod + pushMod}) `;
+        buttons += `[Save + Roll-With](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod + pushMod})`;
       } else if (atkType === "snr") {
-        const critBonus = isCrit ? 2 : 0;
-        buttons = `[Apply Snare](!mp snare --id ${rollId} --crit ${critBonus})`;
+        const snCritBonus = isCrit ? 2 : 0;
+        const pushBonus = isPushing ? 2 : 0;
+        buttons = `[Apply Snare](!mp snare --id ${rollId} --crit ${snCritBonus + pushBonus})`;
       }
     }
 
@@ -490,22 +517,26 @@ MP.Engine = (function () {
 
     let statusLine = "";
     if (incapacitated) {
-      statusLine = `<br/><span style="color:#e94560;font-weight:bold">💀 INCAPACITATED!</span>`;
+      statusLine = `<br/><span style="color:#000; font-weight:bold;">💀 INCAPACITATED!</span>`;
       defTok.set("status_dead", true);
     } else if (unconscious) {
-      statusLine = `<br/><span style="color:#f4d03f;font-weight:bold">😵 UNCONSCIOUS!</span>`;
+      statusLine = `<br/><span style="color:#000; font-weight:bold;">😵 UNCONSCIOUS!</span>`;
       defTok.set("status_sleepy", true);
     }
 
     const msgLine =
-      `<b>Damage Applied to ${esc(rec.defName)}</b><br/>` +
-      `Raw: <b>${raw}</b>${critBonus ? ` (+${critBonus} crit)` : ""} | Prot(${esc(protKey)}): <b>${Math.floor(prot)}</b>` +
-      (ap > 0 ? ` <span style="color:#f4d03f">(AP ${ap === Infinity ? 'ALL' : ap})</span>` : "") +
-      `<br/>Penetrating: <b>${penetrating}</b>` +
-      `<br/>Roll-with: <b>${divert}</b> (max ${maxDivert})` +
-      `<br/>To Hits: <b>${toHits}</b>` + (overflow > 0 ? ` | Overflow to Power: <b>${overflow}</b>` : "") +
-      `<br/>Hits: <b>${hits0} → ${hits1}</b> | Power: <b>${pow0} → ${pow1}</b>` +
-      statusLine;
+      `<div style="background:#fff200; border:3px solid #000; padding:4px 8px;">` +
+      `<span style="color:#000; font-weight:bold;" title="Target">${esc(rec.defName)}</span>: ` +
+      `<span title="Raw damage${critBonus ? ' (+' + critBonus + ' crit bonus)' : ''}">${raw}</span>` +
+      ` - <span title="Protection vs ${protKey}">${Math.floor(prot)}</span> prot` +
+      ` = <span title="Penetrating damage">${penetrating}</span> pen` +
+      (divert > 0 ? `, <span title="Roll-with (max ${maxDivert})">RW ${divert}</span>` : "") +
+      ` → <b title="Hits damage">${toHits}</b> to Hits` +
+      (overflow > 0 ? ` <span title="Overflow to Power">(+${overflow} ovf)</span>` : "") +
+      `<br/><span title="Hits">Hits: <b>${hits0}→${hits1}</b></span>` +
+      ` | <span title="Power">Pwr: <b>${pow0}→${pow1}</b></span>` +
+      statusLine +
+      `</div>`;
 
     ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msgLine);
   }
@@ -615,8 +646,10 @@ MP.Engine = (function () {
     // Critical mod (Solid Hit = -3 to save TN)
     const critMod = num(args.critmod, 0);
 
+    const pushMod = rec.isPushing ? -2 : 0;
+
     // Final save TN = base + attack mod + protection + roll-with + crit mod
-    const tn = baseSave + num(rec.saveMod, 0) + Math.floor(prot) + rwPaid + critMod;
+    const tn = baseSave + num(rec.saveMod, 0) + Math.floor(prot) + rwPaid + critMod + pushMod;
 
     const d20 = randomInteger(20);
     const pass = (d20 !== CFG.FUMBLE_FAIL_NAT) && (d20 <= tn);
@@ -677,7 +710,8 @@ MP.Engine = (function () {
     const defTok = getObj("graphic", rec.defTokenId);
     if (!defTok) return ch("MP", `/w gm <b>MP:</b> Target token missing.`);
 
-    let bp = Math.max(0, num(rec.snBP, 0)) + critBonus;
+    const pushBonus = rec.isPushing ? 2 : 0;
+    let bp = Math.max(0, num(rec.snBP, 0)) + critBonus + pushBonus;
     const maxBp = Math.max(bp, num(rec.snMaxBP, 0));
 
     // Check for existing snare - stack bonus per 4.10
@@ -944,32 +978,20 @@ MP.Engine = (function () {
     const setting = args.setting;
     const value = args.value;
     
-    if (setting === "autoroll") {
+    if (setting === "enabled") {
+      state.MP_Engine.enabled = (value === "on" || value === "true" || value === "1");
+      ch("MP", "/w gm API processing: " + (state.MP_Engine.enabled ? "ON" : "OFF"));
+    } else if (setting === "autoroll") {
       state.MP_Engine.autoroll = (value === "on" || value === "true" || value === "1");
       ch("MP", "/w gm Auto-roll damage: " + (state.MP_Engine.autoroll ? "ON" : "OFF"));
     } else {
-      ch("MP", "/w gm Config options: autoroll (on/off)");
+      ch("MP", "/w gm Config options: enabled (on/off), autoroll (on/off)");
     }
   }
 
   function onChat(msg) {
-    // Debug: log every message type
-    log("MP: msg.type=" + msg.type + " rolltemplate=" + msg.rolltemplate);
-    
-    // Handle rolltemplate
+    // Handle rolltemplate FIRST (doesn't start with !mp)
     if (msg.rolltemplate === "mpattack") {
-      log("MP: mpattack template detected!");
-      log("MP: content=" + msg.content);
-      log("MP: inlinerolls=" + JSON.stringify(msg.inlinerolls));
-      
-      const fields = parseTemplateFields(msg.content);
-      log("MP: parsed fields=" + JSON.stringify(fields));
-      
-      if (fields.mpapi !== "1") {
-        log("MP: mpapi not 1, skipping");
-        return;
-      }
-      
       return handleMpAttack(msg);
     }
 
@@ -981,6 +1003,7 @@ MP.Engine = (function () {
     const args = parsed.args;
 
     switch (cmd) {
+      case "attack": return cmdAttack(msg, args);
       case "config": 
         const configParts = msg.content.split(/\s+/);
         return cmdConfig(msg, { setting: args.setting || configParts[2], value: args.value || configParts[3] });
