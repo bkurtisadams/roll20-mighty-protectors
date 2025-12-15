@@ -14,6 +14,7 @@ MP.Engine = (function () {
     // Token bars (value only, max untouched)
     POWER_BAR: "bar1_value",
     HITS_BAR: "bar2_value",
+    DEF_MOD_BAR: "bar3_value",  // Defense modifier (stances, off balance, etc.)
 
     // Auto-roll damage display (toggle with !mp config autoroll on/off)
     AUTO_ROLL_DAMAGE: true,
@@ -251,6 +252,11 @@ MP.Engine = (function () {
     });
   }
 
+  function getSelectedToken(msg) {
+    if (!msg.selected || !msg.selected.length) return null;
+    return getObj("graphic", msg.selected[0]._id);
+  }
+
   // -------------------------
   // CRITICAL/FUMBLE TABLES (4.7.6)
   // -------------------------
@@ -410,10 +416,20 @@ MP.Engine = (function () {
     else atkSaveAttr = "agility_save";
 
     const atkSave = getAttrNum(atkCharId, atkSaveAttr, 10);
-    const baseToHit = atkSave + 3 + atkMod;
+    
+    // Check if attacker is in Defensive stance (bar3 = 3) - they take -3 to hit
+    const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
+    const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
+    const atkStancePenalty = (atkDefMod === 3) ? -3 : 0;  // Defensive stance only
+    
+    const baseToHit = atkSave + 3 + atkMod + atkStancePenalty;
 
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
-    const defValue = getAttrNum(defChar.id, defAttr, 0);
+    const defBase = getAttrNum(defChar.id, defAttr, 0);
+    
+    // Read defense modifier from bar3 (stances, off balance, etc.)
+    const defMod = num(defTok.get(CFG.DEF_MOD_BAR), 0);
+    const defValue = defBase + defMod;
 
     const targetTotal = baseToHit - defValue;
 
@@ -478,13 +494,45 @@ MP.Engine = (function () {
       html += `<span style="color:#000; font-weight:bold; font-size:14px;">${outcome}!</span> `;
     }
     html += `<span style="color:#000;" title="Target">vs ${esc(defName)}</span> `;
-    html += `<span style="color:#333; font-size:10px;" title="Attack type: ${atkTypeLabel}&#10;Roll: ${roll}&#10;Target Number: ${targetTotal}-&#10;${defTypeLabel}: ${defValue}">[${atkTypeLabel}] ${roll} vs ${targetTotal}- (${defTypeLabel}:${defValue})</span>`;
+    const defModLabel = defMod !== 0 ? `${defBase}${defMod >= 0 ? '+' : ''}${defMod}` : `${defBase}`;
+    const atkPenaltyNote = atkStancePenalty !== 0 ? ` [Def Stance ${atkStancePenalty}]` : "";
+    html += `<span style="color:#333; font-size:10px;" title="Attack type: ${atkTypeLabel}&#10;Roll: ${roll}&#10;Target Number: ${targetTotal}-&#10;${defTypeLabel}: ${defValue}">[${atkTypeLabel}] ${roll} vs ${targetTotal}- (${defTypeLabel}:${defModLabel})${atkPenaltyNote}</span>`;
 
     if (isCrit && critResult) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Critical hit effect">⚡ ${esc(critResult.desc)}</span>`;
+      
+      // Auto-apply Off Balance to target
+      if (critResult.type === CRIT_TYPES.OFF_BALANCE) {
+        html += applyOffBalance(defTok, defName);
+      }
+      // Auto-apply Muscle Strain (1 Hit to target)
+      if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
+        const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+        setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, hits0 - 1));
+        html += `<br/><span style="color:#e94560;"><b>${esc(defName)}</b> takes 1 Hit (muscle strain)! Hits: ${hits0}→${hits0-1}</span>`;
+      }
     }
     if (isFumble && fumbleResult) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Fumble effect">💥 ${esc(fumbleResult.desc)}</span>`;
+      
+      // Auto-apply Off Balance to attacker
+      if (fumbleResult.type === FUMBLE_TYPES.OFF_BALANCE_ATK) {
+        const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
+        if (atkTok) {
+          html += applyOffBalance(atkTok, atkChar.get("name"));
+        }
+      }
+      // Auto-apply strain damage to attacker
+      if (fumbleResult.type === FUMBLE_TYPES.MUSCLE_STRAIN_ATK || 
+          fumbleResult.type === FUMBLE_TYPES.LEG_STRAIN ||
+          fumbleResult.type === FUMBLE_TYPES.ARM_STRAIN) {
+        const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
+        if (atkTok) {
+          const atkHits0 = getResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+          setResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, atkHits0 - 1));
+          html += `<br/><span style="color:#e94560;"><b>${esc(atkChar.get("name"))}</b> takes 1 Hit (strain)! Hits: ${atkHits0}→${atkHits0-1}</span>`;
+        }
+      }
     }
     if (isPushing) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Pushing: +2 damage, costs 2 Power">⚡ PUSH!</span>`;
@@ -700,7 +748,7 @@ MP.Engine = (function () {
       effectNotes = ` <span style="color:#e94560;">[HEAD SHOT x2]</span>`;
     }
     if (mode.includes("solid")) {
-      effectNotes += ` <span style="color:#f4d03f;">[+3 Solid Hit]</span>`;
+      effectNotes += ` <span style="color:#8b4513;">[+3 Solid Hit]</span>`;
     }
     if (mode.includes("precise")) {
       effectNotes += ` <span style="color:#8be9fd;">[½ Roll-With]</span>`;
@@ -1186,6 +1234,648 @@ MP.Engine = (function () {
   }
 
   // -------------------------
+  // STANCE & COMBAT MODIFIERS
+  // -------------------------
+
+  const STANCE = {
+    NORMAL: { mod: 0, marker: "", name: "Normal" },
+    DEFENSIVE: { mod: 3, marker: "blue", name: "Defensive (+3 def, -3 to hit)" },
+    FULL_DEFENSE: { mod: 6, marker: "white-tower", name: "Full Defense (+6 def, ½ move, no attacks)" },
+    OFF_BALANCE: { mod: -3, marker: "broken-heart", name: "Off Balance" }
+  };
+
+  function cmdStance(msg, args) {
+    const tok = getSelectedToken(msg);
+    if (!tok) {
+      return ch("MP", `/w gm Select a token first.`);
+    }
+    
+    const char = getCharFromToken(tok);
+    const charName = char ? char.get("name") : "Token";
+    
+    const stanceArg = (args.stance || "").toLowerCase();
+    let stance;
+    
+    switch (stanceArg) {
+      case "def":
+      case "defensive":
+        stance = STANCE.DEFENSIVE;
+        break;
+      case "full":
+      case "fulldef":
+      case "fulldefense":
+        stance = STANCE.FULL_DEFENSE;
+        break;
+      case "offbal":
+      case "offbalance":
+        stance = STANCE.OFF_BALANCE;
+        break;
+      case "normal":
+      case "clear":
+      case "none":
+      case "":
+        stance = STANCE.NORMAL;
+        break;
+      default:
+        // Check if it's a number for custom modifier
+        const customMod = parseInt(stanceArg, 10);
+        if (!isNaN(customMod)) {
+          tok.set(CFG.DEF_MOD_BAR, customMod);
+          ch("MP", `/w gm <b>${esc(charName)}</b>: Defense modifier set to <b>${customMod >= 0 ? '+' : ''}${customMod}</b>`);
+          return;
+        }
+        return ch("MP", `/w gm <b>Stance Options:</b><br/>
+          <code>!mp stance normal</code> - Clear modifiers<br/>
+          <code>!mp stance def</code> - Defensive (+3 def, -3 to hit)<br/>
+          <code>!mp stance full</code> - Full Defense (+6 def, ½ move)<br/>
+          <code>!mp stance offbal</code> - Off Balance (-3 def)<br/>
+          <code>!mp stance N</code> - Custom defense modifier`);
+    }
+    
+    // Set bar3 value
+    tok.set(CFG.DEF_MOD_BAR, stance.mod);
+    
+    // Clear previous stance markers
+    tok.set("status_blue", false);
+    tok.set("status_white-tower", false);
+    tok.set("status_broken-heart", false);
+    
+    // Set new marker if any
+    if (stance.marker) {
+      tok.set("status_" + stance.marker, true);
+    }
+    
+    const modStr = stance.mod >= 0 ? `+${stance.mod}` : `${stance.mod}`;
+    ch("MP", `/w gm <b>${esc(charName)}</b>: ${stance.name} (Def ${modStr})`);
+  }
+
+  function cmdClearStances(msg, args) {
+    // Clear stances for all selected tokens, or all tokens on page
+    const selected = msg.selected || [];
+    
+    if (selected.length > 0) {
+      selected.forEach(s => {
+        const tok = getObj("graphic", s._id);
+        if (tok) {
+          tok.set(CFG.DEF_MOD_BAR, 0);
+          tok.set("status_blue", false);
+          tok.set("status_white-tower", false);
+          tok.set("status_broken-heart", false);
+        }
+      });
+      ch("MP", `/w gm Cleared stances for ${selected.length} selected token(s).`);
+    } else {
+      // Clear all tokens on the current page
+      const pageId = Campaign().get("playerpageid");
+      const tokens = findObjs({ _type: "graphic", _pageid: pageId, layer: "objects" });
+      let count = 0;
+      tokens.forEach(tok => {
+        const bar3 = tok.get(CFG.DEF_MOD_BAR);
+        if (bar3 && bar3 !== "0" && bar3 !== 0) {
+          tok.set(CFG.DEF_MOD_BAR, 0);
+          tok.set("status_blue", false);
+          tok.set("status_white-tower", false);
+          tok.set("status_broken-heart", false);
+          count++;
+        }
+      });
+      ch("MP", `/w gm Cleared stances for ${count} token(s) on page.`);
+    }
+  }
+
+  function applyOffBalance(tok, charName) {
+    tok.set(CFG.DEF_MOD_BAR, -3);
+    tok.set("status_broken-heart", true);
+    return `<br/><span style="color:#e94560;"><b>${esc(charName)}</b> is Off Balance! (-3 Def)</span>`;
+  }
+
+  // -------------------------
+  // TEST/DEBUG COMMANDS (GM only)
+  // -------------------------
+
+  function cmdTest(msg, args) {
+    if (!playerIsGM(msg.playerid)) {
+      return ch("MP", "/w " + msg.who + " Only GM can use test commands.");
+    }
+
+    const subCmd = args.subcmd || "";
+    
+    switch (subCmd) {
+      case "crit":
+        return testForceCrit(msg, args);
+      case "fumble":
+        return testForceFumble(msg, args);
+      case "damage":
+        return testDamage(msg, args);
+      case "save":
+        return testSaveAttack(msg, args);
+      case "snare":
+        return testSnare(msg, args);
+      case "status":
+        return testStatus(msg, args);
+      case "heal":
+        return testHeal(msg, args);
+      case "reset":
+        return testReset(msg, args);
+      default:
+        return ch("MP", `/w gm <b>Test Commands:</b><br/>
+          <code>!mp test crit [type]</code> - Force crit (types: headshot, solid, precise, armor, leg, arm, gear, free, muscle, offbal, other)<br/>
+          <code>!mp test fumble [type]</code> - Force fumble<br/>
+          <code>!mp test damage N</code> - Apply N raw damage to selected token<br/>
+          <code>!mp test save BC MOD</code> - Test save attack (BC=EN/AG/IN/CL)<br/>
+          <code>!mp test snare BP [MAX]</code> - Apply snare to selected token<br/>
+          <code>!mp test heal N</code> - Heal N hits to selected token<br/>
+          <code>!mp test reset</code> - Reset selected token to full Hits/Power<br/>
+          <code>!mp test status</code> - Show selected token's full status`);
+    }
+  }
+
+  function testForceCrit(msg, args) {
+    const critTypeArg = (args.type || "").toLowerCase();
+    const tok = getSelectedToken(msg);
+    
+    if (!tok) {
+      return ch("MP", `/w gm Select a target token first.`);
+    }
+    
+    const char = getCharFromToken(tok);
+    if (!char) {
+      return ch("MP", `/w gm Token not linked to a character.`);
+    }
+
+    // Map shorthand to crit type
+    const typeMap = {
+      "headshot": CRIT_TYPES.HEAD_SHOT,
+      "head": CRIT_TYPES.HEAD_SHOT,
+      "solid": CRIT_TYPES.SOLID_HIT,
+      "precise": CRIT_TYPES.PRECISE_HIT,
+      "armor": CRIT_TYPES.AVOID_HEAVY_ARMOR,
+      "lightarmor": CRIT_TYPES.AVOID_LIGHT_ARMOR,
+      "heavyarmor": CRIT_TYPES.AVOID_HEAVY_ARMOR,
+      "leg": CRIT_TYPES.LEG_SHOT,
+      "arm": CRIT_TYPES.ARM_SHOT,
+      "gear": CRIT_TYPES.GEAR_SHOT,
+      "free": CRIT_TYPES.FREE_ACTION,
+      "muscle": CRIT_TYPES.MUSCLE_STRAIN_TARGET,
+      "offbal": CRIT_TYPES.OFF_BALANCE,
+      "offbalance": CRIT_TYPES.OFF_BALANCE,
+      "other": CRIT_TYPES.OTHER
+    };
+
+    let critResult;
+    if (critTypeArg && typeMap[critTypeArg]) {
+      // Force specific crit type
+      const forcedType = typeMap[critTypeArg];
+      critResult = {
+        roll: 0,
+        type: forcedType,
+        desc: `[FORCED] ${forcedType}`
+      };
+    } else {
+      // Roll random crit
+      critResult = rollCriticalTable();
+    }
+
+    // Create a fake pending record for testing
+    const rollId = "test_" + String(Date.now()) + "_" + randomInteger(999999);
+    const testDamage = num(args.damage, 10);
+    
+    state.MP_Engine.pending[rollId] = {
+      rollId,
+      playerid: msg.playerid,
+      atkCharId: null,
+      atkName: "TEST ATTACK",
+      defTokenId: tok.id,
+      defCharId: char.id,
+      defName: char.get("name"),
+      rowId: null,
+      nat: 1,
+      roll: 1,
+      confirm: 1,
+      targetTotal: 15,
+      outcome: "CRIT",
+      isCrit: true,
+      isFumble: false,
+      critResult: critResult,
+      fumbleResult: null,
+      damageTotal: testDamage,
+      dmgTypeStr: "Kinetic",
+      protKey: "kinetic",
+      atkType: "std",
+      atkAP: 0,
+      saveBC: "",
+      saveMod: 0,
+      recMod: 0,
+      snBP: 0,
+      snMaxBP: 0,
+      snType: "",
+      causesKB: true,
+      isPushing: false,
+      created: Date.now()
+    };
+
+    let html = `<div style="background:#90ee90; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST CRIT!</span> `;
+    html += `<span style="color:#000;">vs ${esc(char.get("name"))}</span>`;
+    html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;">⚡ ${esc(critResult.desc)}</span>`;
+    html += `<br/><span style="color:#333; font-size:10px;">Base Damage: ${testDamage} (use --damage N to change)</span>`;
+    html += `</div>`;
+
+    const buttons = buildStandardAttackButtons(rollId, critResult, true);
+
+    ch("MP", "/w gm " + html + buttons);
+  }
+
+  function testForceFumble(msg, args) {
+    const fumbleTypeArg = (args.type || "").toLowerCase();
+    
+    // Map shorthand to fumble type
+    const typeMap = {
+      "wrong": FUMBLE_TYPES.WRONG_TARGET,
+      "wrongtarget": FUMBLE_TYPES.WRONG_TARGET,
+      "offbal": FUMBLE_TYPES.OFF_BALANCE_ATK,
+      "offbalance": FUMBLE_TYPES.OFF_BALANCE_ATK,
+      "leg": FUMBLE_TYPES.LEG_STRAIN,
+      "opening": FUMBLE_TYPES.LEFT_OPENING,
+      "muscle": FUMBLE_TYPES.MUSCLE_STRAIN_ATK,
+      "arm": FUMBLE_TYPES.ARM_STRAIN,
+      "stuck": FUMBLE_TYPES.WEAPON_STUCK,
+      "lost": FUMBLE_TYPES.LOST_OPPORTUNITY,
+      "gear": FUMBLE_TYPES.GEAR_DAMAGE,
+      "other": FUMBLE_TYPES.OTHER_FUMBLE
+    };
+
+    let fumbleResult;
+    if (fumbleTypeArg && typeMap[fumbleTypeArg]) {
+      const forcedType = typeMap[fumbleTypeArg];
+      fumbleResult = {
+        roll: 0,
+        type: forcedType,
+        desc: `[FORCED] ${forcedType}`
+      };
+    } else {
+      fumbleResult = rollFumbleTable();
+    }
+
+    let html = `<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST FUMBLE!</span>`;
+    html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;">💥 ${esc(fumbleResult.desc)}</span>`;
+    html += `</div>`;
+
+    ch("MP", "/w gm " + html);
+  }
+
+  function testDamage(msg, args) {
+    const tok = getSelectedToken(msg);
+    if (!tok) {
+      return ch("MP", `/w gm Select a target token first.`);
+    }
+    
+    const char = getCharFromToken(tok);
+    if (!char) {
+      return ch("MP", `/w gm Token not linked to a character.`);
+    }
+
+    const rawDamage = num(args.amount, 10);
+    const dmgType = (args.dtype || "kinetic").toLowerCase();
+    const protKey = typeToProtKey(dmgType);
+    const ignoreProt = (args.noprot === "1");
+    const isHeadshot = (args.headshot === "1");
+
+    // Create test pending record
+    const rollId = "test_" + String(Date.now()) + "_" + randomInteger(999999);
+    
+    state.MP_Engine.pending[rollId] = {
+      rollId,
+      playerid: msg.playerid,
+      atkCharId: null,
+      atkName: "TEST DAMAGE",
+      defTokenId: tok.id,
+      defCharId: char.id,
+      defName: char.get("name"),
+      rowId: null,
+      nat: 5,
+      roll: 5,
+      confirm: 10,
+      targetTotal: 15,
+      outcome: "HIT",
+      isCrit: false,
+      isFumble: false,
+      critResult: null,
+      fumbleResult: null,
+      damageTotal: rawDamage,
+      dmgTypeStr: dmgType.charAt(0).toUpperCase() + dmgType.slice(1),
+      protKey: protKey,
+      atkType: "std",
+      atkAP: ignoreProt ? Infinity : 0,
+      saveBC: "",
+      saveMod: 0,
+      recMod: 0,
+      snBP: 0,
+      snMaxBP: 0,
+      snType: "",
+      causesKB: true,
+      isPushing: false,
+      created: Date.now()
+    };
+
+    let html = `<div style="background:#8be9fd; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST DAMAGE</span> `;
+    html += `<span style="color:#000;">vs ${esc(char.get("name"))}</span>`;
+    html += `<br/><span style="color:#333; font-size:11px;">Raw: ${rawDamage} | Type: ${dmgType}${ignoreProt ? " | NO PROT" : ""}${isHeadshot ? " | HEADSHOT x2" : ""}</span>`;
+    html += `</div>`;
+
+    let mode = ignoreProt ? "noprot" : "noroll";
+    if (isHeadshot) mode = "headshot";
+
+    const buttons = `[Apply](!mp apply --id ${rollId} --mode ${mode}) ` +
+      `[RW Max](!mp apply --id ${rollId} --mode ${mode === "noprot" ? "noprot_rwmax" : (isHeadshot ? "headshot_rw" : "rollwithmax")}) ` +
+      `[RW Custom](!mp apply --id ${rollId} --mode ${mode === "noprot" ? "noprot_rw" : (isHeadshot ? "headshot_rw" : "rollwithcustom")} --amt ?{Divert to Power|0}) ` +
+      `[KB](!mp kb --id ${rollId})`;
+
+    ch("MP", "/w gm " + html + buttons);
+  }
+
+  function testSaveAttack(msg, args) {
+    const tok = getSelectedToken(msg);
+    if (!tok) {
+      return ch("MP", `/w gm Select a target token first.`);
+    }
+    
+    const char = getCharFromToken(tok);
+    if (!char) {
+      return ch("MP", `/w gm Token not linked to a character.`);
+    }
+
+    const bc = (args.bc || "EN").toUpperCase();
+    const saveMod = num(args.mod, 0);
+    const recMod = num(args.rec, -14);
+    const dmgType = (args.dtype || "psychic").toLowerCase();
+    const protKey = typeToProtKey(dmgType);
+
+    const rollId = "test_" + String(Date.now()) + "_" + randomInteger(999999);
+    
+    state.MP_Engine.pending[rollId] = {
+      rollId,
+      playerid: msg.playerid,
+      atkCharId: null,
+      atkName: "TEST SAVE ATTACK",
+      defTokenId: tok.id,
+      defCharId: char.id,
+      defName: char.get("name"),
+      rowId: null,
+      nat: 5,
+      roll: 5,
+      confirm: 10,
+      targetTotal: 15,
+      outcome: "HIT",
+      isCrit: false,
+      isFumble: false,
+      critResult: null,
+      fumbleResult: null,
+      damageTotal: 0,
+      dmgTypeStr: dmgType.charAt(0).toUpperCase() + dmgType.slice(1),
+      protKey: protKey,
+      atkType: "sav",
+      atkAP: 0,
+      saveBC: bc,
+      saveMod: saveMod,
+      recMod: recMod,
+      snBP: 0,
+      snMaxBP: 0,
+      snType: "",
+      causesKB: false,
+      isPushing: false,
+      created: Date.now()
+    };
+
+    let html = `<div style="background:#ff79c6; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST SAVE ATTACK</span> `;
+    html += `<span style="color:#000;">vs ${esc(char.get("name"))}</span>`;
+    html += `<br/><span style="color:#333; font-size:11px;">Save BC: ${bc} | Mod: ${saveMod} | Recovery: ${recMod}</span>`;
+    html += `</div>`;
+
+    const buttons = `[Make Save](!mp save --id ${rollId} --critmod 0) ` +
+      `[Save + Roll-With](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod 0)`;
+
+    ch("MP", "/w gm " + html + buttons);
+  }
+
+  function testSnare(msg, args) {
+    const tok = getSelectedToken(msg);
+    if (!tok) {
+      return ch("MP", `/w gm Select a target token first.`);
+    }
+    
+    const char = getCharFromToken(tok);
+    if (!char) {
+      return ch("MP", `/w gm Token not linked to a character.`);
+    }
+
+    const bp = num(args.bp, 12);
+    const maxBp = num(args.max, bp + 6);
+    const snType = args.type || "Ice";
+
+    const rollId = "test_" + String(Date.now()) + "_" + randomInteger(999999);
+    
+    state.MP_Engine.pending[rollId] = {
+      rollId,
+      playerid: msg.playerid,
+      atkCharId: null,
+      atkName: "TEST SNARE",
+      defTokenId: tok.id,
+      defCharId: char.id,
+      defName: char.get("name"),
+      rowId: null,
+      nat: 5,
+      roll: 5,
+      confirm: 10,
+      targetTotal: 15,
+      outcome: "HIT",
+      isCrit: false,
+      isFumble: false,
+      critResult: null,
+      fumbleResult: null,
+      damageTotal: 0,
+      dmgTypeStr: "Entropy",
+      protKey: "entropy",
+      atkType: "snr",
+      atkAP: 0,
+      saveBC: "",
+      saveMod: 0,
+      recMod: 0,
+      snBP: bp,
+      snMaxBP: maxBp,
+      snType: snType,
+      causesKB: false,
+      isPushing: false,
+      created: Date.now()
+    };
+
+    let html = `<div style="background:#50fa7b; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST SNARE</span> `;
+    html += `<span style="color:#000;">vs ${esc(char.get("name"))}</span>`;
+    html += `<br/><span style="color:#333; font-size:11px;">Type: ${snType} | BP: ${bp} | Max: ${maxBp}</span>`;
+    html += `</div>`;
+
+    const buttons = `[Apply Snare](!mp snare --id ${rollId} --bonus 0)`;
+
+    ch("MP", "/w gm " + html + buttons);
+  }
+
+  function testHeal(msg, args) {
+    const tok = getSelectedToken(msg);
+    if (!tok) {
+      return ch("MP", `/w gm Select a target token first.`);
+    }
+    
+    const char = getCharFromToken(tok);
+    if (!char) {
+      return ch("MP", `/w gm Token not linked to a character.`);
+    }
+
+    const healAmount = num(args.amount, 10);
+    const healPower = num(args.power, 0);
+
+    const hits0 = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const hitsMax = getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const pow0 = getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const powMax = getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+
+    const hits1 = Math.min(hitsMax, hits0 + healAmount);
+    const pow1 = Math.min(powMax, pow0 + healPower);
+
+    setResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+    if (healPower > 0) {
+      setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    }
+
+    // Clear status markers if healed above thresholds
+    if (hits1 > 0) {
+      tok.set("status_dead", false);
+    }
+    if (hits1 > Math.floor(hitsMax / 2)) {
+      tok.set("status_sleepy", false);
+    }
+
+    let msg_out = `<b>🧪 TEST HEAL</b> (${esc(char.get("name"))})<br/>` +
+      `Hits: <b>${hits0} → ${hits1}</b> / ${hitsMax}`;
+    if (healPower > 0) {
+      msg_out += `<br/>Power: <b>${pow0} → ${pow1}</b> / ${powMax}`;
+    }
+
+    ch("MP", "/w gm " + msg_out);
+  }
+
+  function testReset(msg, args) {
+    const tok = getSelectedToken(msg);
+    if (!tok) {
+      return ch("MP", `/w gm Select a target token first.`);
+    }
+    
+    const char = getCharFromToken(tok);
+    if (!char) {
+      return ch("MP", `/w gm Token not linked to a character.`);
+    }
+
+    const hitsMax = getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const powMax = getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+
+    setResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR, hitsMax);
+    setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, powMax);
+    tok.set(CFG.DEF_MOD_BAR, 0);
+
+    // Clear all status markers
+    tok.set("status_dead", false);
+    tok.set("status_sleepy", false);
+    tok.set("status_prone", false);
+    tok.set("status_cobweb", false);
+    tok.set("status_grab", false);
+    tok.set("status_broken-leg", false);
+    tok.set("status_broken-shield", false);
+    tok.set("status_blue", false);
+    tok.set("status_white-tower", false);
+    tok.set("status_broken-heart", false);
+
+    // Clear snares
+    delete state.MP_Engine.snares[tok.id];
+
+    ch("MP", `/w gm <b>🧪 RESET</b> ${esc(char.get("name"))}: Hits ${hitsMax}, Power ${powMax}, defense mod 0, all status cleared.`);
+  }
+
+  function testStatus(msg, args) {
+    const tok = getSelectedToken(msg);
+    if (!tok) {
+      return ch("MP", `/w gm Select a target token first.`);
+    }
+    
+    const char = getCharFromToken(tok);
+    if (!char) {
+      return ch("MP", `/w gm Token not linked to a character.`);
+    }
+
+    const hits = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const hitsMax = getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const pow = getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const powMax = getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const defMod = num(tok.get(CFG.DEF_MOD_BAR), 0);
+
+    const enSave = getAttrNum(char.id, "endurance_save", 10);
+    const agSave = getAttrNum(char.id, "agility_save", 10);
+    const inSave = getAttrNum(char.id, "intelligence_save", 10);
+    const clSave = getAttrNum(char.id, "cool_save", 10);
+
+    const physDef = getAttrNum(char.id, "physical_def", 0);
+    const mentDef = getAttrNum(char.id, "mental_def", 0);
+
+    const kinProt = sumProtection(char.id, "kinetic");
+    const engProt = sumProtection(char.id, "energy");
+    const entProt = sumProtection(char.id, "entropy");
+    const psyProt = sumProtection(char.id, "psychic");
+    const bioProt = sumProtection(char.id, "bio");
+    const othProt = sumProtection(char.id, "other");
+
+    const hth = getAttr(char.id, "hth_damage") || "?";
+    const mass = getAttr(char.id, "mass") || "?";
+
+    const snare = state.MP_Engine.snares[tok.id];
+
+    let msg_out = `<div style="background:#1a1a2e; border:2px solid #8be9fd; padding:8px; color:#eaeaea;">`;
+    msg_out += `<b style="color:#f4d03f;">${esc(char.get("name"))}</b><br/>`;
+    msg_out += `<b>Hits:</b> ${hits}/${hitsMax} | <b>Power:</b> ${pow}/${powMax}<br/>`;
+    msg_out += `<b>Saves:</b> EN ${enSave}- | AG ${agSave}- | IN ${inSave}- | CL ${clSave}-<br/>`;
+    
+    // Show defense with modifier
+    const physTotal = physDef + defMod;
+    const mentTotal = mentDef + defMod;
+    const defModStr = defMod !== 0 ? ` (${defMod >= 0 ? '+' : ''}${defMod})` : "";
+    msg_out += `<b>Defense:</b> Phys ${physDef}${defModStr}=${physTotal} | Ment ${mentDef}${defModStr}=${mentTotal}<br/>`;
+    
+    // Stance indicator
+    if (defMod === 3) {
+      msg_out += `<span style="color:#8be9fd;"><b>Stance:</b> Defensive (+3 def, -3 to hit)</span><br/>`;
+    } else if (defMod === 6) {
+      msg_out += `<span style="color:#50fa7b;"><b>Stance:</b> Full Defense (+6 def, ½ move)</span><br/>`;
+    } else if (defMod === -3) {
+      msg_out += `<span style="color:#e94560;"><b>Status:</b> Off Balance</span><br/>`;
+    } else if (defMod !== 0) {
+      msg_out += `<span style="color:#f4d03f;"><b>Def Mod:</b> ${defMod >= 0 ? '+' : ''}${defMod}</span><br/>`;
+    }
+    
+    msg_out += `<b>Protection:</b> Kin ${kinProt} | Eng ${engProt} | Ent ${entProt} | Psy ${psyProt} | Bio ${bioProt} | Oth ${othProt}<br/>`;
+    msg_out += `<b>HTH:</b> ${hth} | <b>Mass:</b> ${mass}<br/>`;
+    msg_out += `<b>Roll-With Cap:</b> ${Math.floor(pow / 10)}`;
+    
+    if (snare) {
+      msg_out += `<br/><span style="color:#e94560;"><b>Snared:</b> ${snare.type} (BP ${snare.bp || "N/A"}) by ${snare.source}</span>`;
+    }
+
+    msg_out += `</div>`;
+
+    ch("MP", "/w gm " + msg_out);
+  }
+
+  // -------------------------
   // COMMAND PARSING
   // -------------------------
 
@@ -1242,6 +1932,51 @@ MP.Engine = (function () {
     const args = parsed.args;
 
     switch (cmd) {
+      case "test":
+        // Parse test subcommand and args
+        const testParts = msg.content.split(/\s+/);
+        const testArgs = { subcmd: testParts[2] || "" };
+        // Parse remaining args based on subcommand
+        if (testArgs.subcmd === "crit") {
+          testArgs.type = testParts[3] || "";
+          testArgs.damage = testParts[4] || "10";
+        } else if (testArgs.subcmd === "fumble") {
+          testArgs.type = testParts[3] || "";
+        } else if (testArgs.subcmd === "damage") {
+          testArgs.amount = testParts[3] || "10";
+          testArgs.dtype = testParts[4] || "kinetic";
+          // Check for flags
+          for (let i = 3; i < testParts.length; i++) {
+            if (testParts[i] === "--noprot") testArgs.noprot = "1";
+            if (testParts[i] === "--headshot") testArgs.headshot = "1";
+          }
+        } else if (testArgs.subcmd === "save") {
+          testArgs.bc = testParts[3] || "EN";
+          testArgs.mod = testParts[4] || "0";
+          testArgs.rec = testParts[5] || "-14";
+        } else if (testArgs.subcmd === "snare") {
+          testArgs.bp = testParts[3] || "12";
+          testArgs.max = testParts[4] || "";
+          testArgs.type = testParts[5] || "Ice";
+        } else if (testArgs.subcmd === "heal") {
+          testArgs.amount = testParts[3] || "10";
+          testArgs.power = testParts[4] || "0";
+        }
+        return cmdTest(msg, testArgs);
+      case "stance":
+        const stanceParts = msg.content.split(/\s+/);
+        return cmdStance(msg, { stance: stanceParts[2] || "" });
+      case "clearstances":
+      case "clearstance":
+        return cmdClearStances(msg, args);
+      case "offbal":
+      case "offbalance":
+        const offbalTok = getSelectedToken(msg);
+        if (!offbalTok) return ch("MP", `/w gm Select a token first.`);
+        const offbalChar = getCharFromToken(offbalTok);
+        const offbalName = offbalChar ? offbalChar.get("name") : "Token";
+        ch("MP", "/w gm " + applyOffBalance(offbalTok, offbalName));
+        return;
       case "config": 
         const configParts = msg.content.split(/\s+/);
         return cmdConfig(msg, { setting: args.setting || configParts[2], value: args.value || configParts[3] });
@@ -1262,8 +1997,8 @@ MP.Engine = (function () {
       case "help":
       default:
         return ch("MP", `/w gm <b>MP Engine v2.2</b> Commands:<br/>
+          <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
-          Modes: noroll, rollwithmax, rollwithcustom, headshot, headshot_rw, solid, solid_rwmax, solid_rw, precise_rwmax, precise_rw, noprot, noprot_rwmax, noprot_rw<br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
           <code>!mp save --id ID --rollwith N --critmod N</code><br/>
           <code>!mp recover --target TOKID --bc BC --tn N</code><br/>
@@ -1273,7 +2008,13 @@ MP.Engine = (function () {
           <code>!mp kbsave --target TOKID --penalty N</code><br/>
           <code>!mp grapple --atk TOKID --def TOKID</code><br/>
           <code>!mp wakeup --target TOKID</code><br/>
-          <code>!mp status --target TOKID</code>`);
+          <code>!mp status --target TOKID</code><br/>
+          <b>Stances (Bar3):</b><br/>
+          <code>!mp stance normal|def|full|offbal|N</code><br/>
+          <code>!mp clearstances</code> - Clear all on page<br/>
+          <code>!mp offbal</code> - Apply Off Balance to selected<br/>
+          <b>Test Commands:</b><br/>
+          <code>!mp test</code> - Show all test commands`);
     }
   }
 
@@ -1282,7 +2023,7 @@ MP.Engine = (function () {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.2:</b> Loaded. Critical hits now handled per MP rules.`);
+  ch("MP", `/w gm <b>MP Engine v2.2:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, rollExpr };
 })();
