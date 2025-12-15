@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.8 -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.9 -->
 
 <div tabindex="0" style="background:#1a1a2e; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -481,7 +481,7 @@
             <div style="display:flex; gap:2px;">
               <input type="text" name="attr_ability_name" style="flex:1; min-width:0; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;" />
               <button type="roll" name="roll_ability_info"
-                value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}}"
+                value="!mp info --char @{character_id} --name @{ability_name} --cp @{ability_cp} --ip @{ability_ip} --atype @{ability_type}"
                 style="background:transparent; color:#666; border:none; padding:0 3px; cursor:pointer; font-size:10px; flex-shrink:0;" title="Show ability info">?</button>
             </div>
           </td>

@@ -1,11 +1,11 @@
-/* Mighty Protectors - MP Engine v2.2 (Roll20 API)
+/* Mighty Protectors - MP Engine v2.3 (Roll20 API)
  * Fixed critical hit handling per MP rules
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.2 FILE STARTING");
+log("MP ENGINE v2.3 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -209,7 +209,116 @@ MP.Engine = (function () {
     }, 0);
   }
 
-  function getRepeatingAttackAttr(charId, rowId, shortName) {
+  
+  // --- Vulnerability automation (Weakness: Vulnerability) -----------------
+  // Minimal, opt-in parsing: define your vulnerability in an "Ability" row
+  // named "Vulnerability" (or similar) and put one or more of these lines in Notes:
+  //   Attract: Energy -2
+  //   Vulnerable: Kinetic +2
+  // You can list multiple types on separate lines; numbers are in points.
+  //
+  // Attract  => reduces protection against that damage type
+  // Vulnerable => increases penetrating damage after protection
+  const MP_DAMAGE_TYPES = ["Kinetic","Energy","Biochemical","Entropy","Psychic","Other"];
+
+  function _normKey(s) {
+    return String(s || "")
+      .toLowerCase()
+      .replace(/[_\-]+/g, " ")
+      .replace(/[^a-z0-9\s]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function _extractDamageTypes(line) {
+    const found = [];
+    const low = String(line || "").toLowerCase();
+    MP_DAMAGE_TYPES.forEach(dt => {
+      const dlow = dt.toLowerCase();
+      // allow "bio" for biochemical
+      if (dlow === "biochemical") {
+        if (/\bbio\b|\bbiochem\b|\bbiochemical\b/.test(low)) found.push("Biochemical");
+      } else if (new RegExp("\\b" + dlow + "\\b").test(low)) {
+        found.push(dt);
+      }
+    });
+    return found;
+  }
+
+  function _extractSignedNumber(line) {
+    const m = String(line || "").match(/([+\-]?\d+)\s*(?:pts?|points?|prot|def|damage|dmg)?\b/i);
+    if (!m) return null;
+    return parseInt(m[1], 10);
+  }
+
+  function getRepeatingAbilityRows(charId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const byRow = {};
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const m = n.match(/^repeating_abilities_([^_]+)_(ability_name|ability_notes|ability_type|ability_cp)$/);
+      if (!m) return;
+      const rowId = m[1];
+      const field = m[2];
+      byRow[rowId] = byRow[rowId] || {};
+      byRow[rowId][field] = a.get("current");
+    });
+    return Object.values(byRow);
+  }
+
+  function getVulnerabilityMods(charId, damageType) {
+    const dt = (damageType || "").trim();
+    if (!dt) return { protMod: 0, dmgMod: 0, notes: [] };
+
+    let protMod = 0; // negative reduces protection
+    let dmgMod = 0;  // positive adds to penetrating damage
+    const notes = [];
+
+    const rows = getRepeatingAbilityRows(charId);
+    rows.forEach(r => {
+      const nm = _normKey(r.ability_name);
+      if (!nm.includes("vulner")) return;
+
+      const rawNotes = String(r.ability_notes || "");
+      const lines = rawNotes.split(/\r?\n|;/).map(s => s.trim()).filter(Boolean);
+
+      // If notes are empty, try to glean from the name itself.
+      const scanLines = lines.length ? lines : [String(r.ability_name || "")];
+
+      scanLines.forEach(line => {
+        const low = line.toLowerCase();
+        const kinds = [];
+        if (low.includes("attract")) kinds.push("attract");
+        if (low.includes("vulner")) kinds.push("vulnerable");
+        if (!kinds.length) return;
+
+        const dts = _extractDamageTypes(line);
+        if (!dts.length) return;
+
+        const numRaw = _extractSignedNumber(line);
+        if (numRaw === null) return;
+
+        // Apply only if this line mentions the current damage type
+        if (!dts.some(x => x.toLowerCase() === dt.toLowerCase())) return;
+
+        if (kinds.includes("attract")) {
+          const delta = -Math.abs(numRaw);
+          protMod += delta;
+          notes.push(`Attract: ${dt} ${delta}`);
+        }
+        if (kinds.includes("vulnerable")) {
+          const delta = Math.abs(numRaw);
+          dmgMod += delta;
+          notes.push(`Vulnerable: ${dt} +${delta}`);
+        }
+      });
+    });
+
+    return { protMod, dmgMod, notes };
+  }
+  // ------------------------------------------------------------------------
+
+function getRepeatingAttackAttr(charId, rowId, shortName) {
     const searchName = `repeating_attacks_${rowId}_${shortName}`.toLowerCase();
     const attrs = findObjs({ _type: "attribute", _characterid: charId });
     const found = attrs.find(a => a.get("name").toLowerCase() === searchName);
@@ -836,7 +945,11 @@ MP.Engine = (function () {
       prot = Math.max(0, prot - ap);
     }
 
-    const penetrating = Math.max(0, raw - prot);
+    // Vulnerability (opt-in via repeating abilities notes)
+    const vuln = getVulnerabilityMods(defChar.id, rec.type);
+    if (vuln.protMod) prot = Math.max(0, prot + vuln.protMod);
+    let penetrating = Math.max(0, raw - prot);
+    if (vuln.dmgMod) penetrating += vuln.dmgMod;
 
     // Current resources
     const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
@@ -910,7 +1023,8 @@ MP.Engine = (function () {
       `<span style="color:#000; font-weight:bold;" title="Target">${esc(rec.defName)}</span>:${effectNotes}` +
       `<br/><span title="Raw damage">${raw}</span>` +
       ` - <span title="Protection vs ${protKey}">${Math.floor(prot)}</span> prot` +
-      ` = <span title="Penetrating damage">${penetrating}</span> pen` +
+      ` = <span title="Penetrating damage${(vuln && vuln.notes && vuln.notes.length) ? ('&#10;' + vuln.notes.join('&#10;')) : ''}">${penetrating}</span> pen` +
+      ((vuln && vuln.notes && vuln.notes.length) ? ` <span title="${vuln.notes.join('&#10;')}">[vuln]</span>` : "") +
       (divert > 0 ? `, <span title="Roll-with (max ${maxDivert})">RW ${divert}</span>` : "") +
       (isHeadShot ? ` → ${penetrating - divert} x2` : "") +
       ` → <b title="Hits damage">${toHits}</b> to Hits` +
@@ -1564,7 +1678,78 @@ MP.Engine = (function () {
     OFF_BALANCE: { mod: -3, marker: "broken-heart", name: "Off Balance" }
   };
 
-  function cmdStance(msg, args) {
+  
+
+  // --- Ability/Weakness info lookup --------------------------------------
+  // This lets the sheet's per-row "Info" button show rules text by name.
+  // Extend MP_INFO_DB over time (abilities, powers, weaknesses, etc.).
+  const MP_INFO_DB = {
+    "vulnerability": {
+      title: "Vulnerability (Weakness)",
+      body: [
+        "The character is more easily harmed by certain damage types than usual.",
+        "<b>Attract Damage Type(s)</b>: The character’s Defense against a Damage Type is reduced. " +
+          "(-5 CPs per -2 Defense against the specified Damage Type; or (-2.5) CPs per -2 if only a specific damage form, e.g. electrical Energy.)",
+        "<b>Vulnerable to Damage Type(s)</b>: The character takes extra damage from a Damage Type. " +
+          "(-5 CPs per +2 damage taken (or -2 save modifier for save-based attacks); or (-2.5) CPs per +2 if only a specific damage form.)",
+        "<b>Automation note</b>: If you want this automated in damage application, put notes like " +
+          "<code>Attract: Energy -2</code> or <code>Vulnerable: Kinetic +2</code> in a repeating Ability row named “Vulnerability”."
+      ]
+    }
+  };
+
+  const MP_INFO_ALIASES = {
+    "vulnerable": "vulnerability",
+    "attract damage type": "vulnerability",
+    "vulnerable to damage type": "vulnerability"
+  };
+
+  function lookupInfoEntry(name) {
+    const key = _normKey(name);
+    if (!key) return null;
+    if (MP_INFO_DB[key]) return MP_INFO_DB[key];
+    if (MP_INFO_ALIASES[key] && MP_INFO_DB[MP_INFO_ALIASES[key]]) return MP_INFO_DB[MP_INFO_ALIASES[key]];
+
+    // loose match: "vulnerability (fire)" => vulnerability
+    const keys = Object.keys(MP_INFO_DB);
+    const hit = keys.find(k => key.includes(k) || k.includes(key));
+    return hit ? MP_INFO_DB[hit] : null;
+  }
+
+  function cmdInfo(msg, args) {
+    const name = args.name || args.n || "";
+    if (!name) {
+      return sendChat("MP", `/w "${msg.who}" Usage: !mp info --name <Ability/Weakness name>`);
+    }
+
+    const entry = lookupInfoEntry(name);
+    if (!entry) {
+      return sendChat("MP", `/w "${msg.who}" No rules text stored for: <b>${esc(name)}</b>. Add it to <code>MP_INFO_DB</code> in the API script.`);
+    }
+
+    const who = `/w "${msg.who}" `;
+    const headerBits = [];
+    if (args.atype) headerBits.push(`Type: ${esc(args.atype)}`);
+    if (args.cp) headerBits.push(`CP: ${esc(args.cp)}`);
+    if (args.ip) headerBits.push(`IP: ${esc(args.ip)}`);
+
+    const headerLine = headerBits.length ? `<div style="opacity:0.85; font-size:11px; margin-top:2px;">${headerBits.join(" | ")}</div>` : "";
+
+    const bodyHtml = (entry.body || [])
+      .map(p => `<div style="margin:4px 0;">${p}</div>`)
+      .join("");
+
+    const html = `<div style="border:1px solid #333; border-radius:6px; padding:8px; background:#16213e; color:#eaeaea;">` +
+      `<div style="font-weight:bold; font-size:14px; color:#f4d03f;">${esc(entry.title || name)}</div>` +
+      headerLine +
+      `<div style="margin-top:6px;">${bodyHtml}</div>` +
+      `</div>`;
+
+    return sendChat("MP", who + html);
+  }
+  // ------------------------------------------------------------------------
+
+function cmdStance(msg, args) {
     const tok = getSelectedToken(msg);
     if (!tok) {
       return ch("MP", `/w gm Select a token first.`);
@@ -2292,14 +2477,20 @@ MP.Engine = (function () {
     const cmd = (parts[1] || "").toLowerCase();
     const args = {};
 
+    // Supports multi-word values: --name Heightened Senses --cp -5
     let i = 2;
     while (i < parts.length) {
       const p = parts[i];
       if (p && p.startsWith("--")) {
-        const key = p.slice(2);
-        const val = (i + 1 < parts.length && !parts[i + 1].startsWith("--")) ? parts[i + 1] : "1";
-        args[key] = val;
-        i += (val === "1" && (i + 1 >= parts.length || parts[i + 1].startsWith("--"))) ? 1 : 2;
+        const key = p.slice(2).toLowerCase();
+        const vals = [];
+        let j = i + 1;
+        while (j < parts.length && !parts[j].startsWith("--")) {
+          vals.push(parts[j]);
+          j++;
+        }
+        args[key] = vals.length ? vals.join(" ") : "1";
+        i = j;
       } else {
         i++;
       }
@@ -2413,6 +2604,7 @@ MP.Engine = (function () {
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
       case "status": return cmdStatus(msg, args);
+      case "info": return cmdInfo(msg, args);
       case "help":
       default:
         return ch("MP", `/w gm <b>MP Engine v2.2</b> Commands:<br/>
@@ -2432,7 +2624,8 @@ MP.Engine = (function () {
           <code>!mp countergrapple --target TOKID --wrestle 0|1</code><br/>
 
           <code>!mp wakeup --target TOKID</code><br/>
-          <code>!mp status --target TOKID</code><br/>
+          <code>!mp status --target TOKID</code><br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
+
           <b>Stances (Bar3):</b><br/>
           <code>!mp stance normal|def|full|offbal|N</code><br/>
           <code>!mp clearstances</code> - Clear all on page<br/>
@@ -2451,7 +2644,7 @@ MP.Engine = (function () {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.2:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.3:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, rollExpr };
 })();
