@@ -339,6 +339,10 @@
         <!-- NEW: per-row hidden RowID storage -->
         <input type="hidden" name="attr_attack_rowid" />
 
+        <!-- NEW: auto row number + display labels for info cards -->
+        <input type="hidden" name="attr_attack_num" />
+        <input type="hidden" name="attr_attack_atk_full" />
+
         <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
       </td>
 
@@ -405,7 +409,7 @@
             style="flex:1; min-width:0; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;"
             title="Shorthand: sav:BC:mod:rec | snr:type:bp/max | ap:N" />
           <button type="roll" name="roll_attack_info"
-            value="&{template:mpinfo} {{name=@{character_name}: @{attack_name}}} {{range=@{attack_range}}} {{cost=@{attack_cost}}} {{damage=@{attack_damage}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{atktype=@{attack_type}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{ap=@{attack_ap}}} {{notes=@{attack_notes}}}"
+            value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{notes=@{attack_notes}}}"
             style="background:transparent; color:#666; border:none; padding:0 3px; cursor:pointer; font-size:10px; flex-shrink:0;"
             title="Show attack info">?</button>
         </div>
@@ -464,7 +468,15 @@
 
   <!-- ABILITIES / WEAKNESSES (Repeating) -->
   <div style="background:#16213e; padding:4px; margin-bottom:3px; border-radius:4px;">
-    <div style="color:#f4d03f; font-weight:bold; margin-bottom:5px;">Abilities / Weaknesses <span style="color:#666; font-size:10px;">(use negative CPs for weaknesses, max -20)</span></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:5px;">
+  <div style="color:#f4d03f; font-weight:bold;">
+    Abilities / Weaknesses <span style="color:#666; font-size:10px;">(use negative CPs for weaknesses, max -20)</span>
+  </div>
+  <button type="roll" name="roll_abw_summary"
+    value="&{template:mpabw} {{name=@{character_name}: Abilities & Weaknesses}} {{body=@{abw_summary}}}"
+    style="background:#444; color:#f4d03f; border:1px solid #555; padding:1px 6px; cursor:pointer; font-size:10px;"
+    title="Send all Abilities/Weaknesses to chat">All</button>
+</div>
     <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
       <tr style="font-size:10px; color:#888;">
         <th style="width:40px; text-align:center;">CP</th>
@@ -481,7 +493,7 @@
             <div style="display:flex; gap:2px;">
               <input type="text" name="attr_ability_name" style="flex:1; min-width:0; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;" />
               <button type="roll" name="roll_ability_info"
-                value="!mp info --char @{character_id} --name @{ability_name} --cp @{ability_cp} --ip @{ability_ip} --atype @{ability_type}"
+                value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}}"
                 style="background:transparent; color:#666; border:none; padding:0 3px; cursor:pointer; font-size:10px; flex-shrink:0;" title="Show ability info">?</button>
             </div>
           </td>
@@ -611,7 +623,8 @@
     <div style="background:#8be9fd; color:#000; font-weight:bold; padding:6px 10px;">{{name}}</div>
     <div style="padding:8px 10px; color:#eaeaea;">
       {{#range}}<div><span style="color:#aaa;">Range:</span> <span style="color:#fff;">{{range}}"</span></div>{{/range}}
-      {{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
+            {{#ap}}<div><span style="color:#aaa;">AP:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
+{{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
       {{#damage}}<div><span style="color:#aaa;">Damage:</span> <span style="color:#8be9fd;">{{damage}}</span></div>{{/damage}}
       {{#dtype}}<div><span style="color:#aaa;">Type:</span> <span style="color:#fff;">{{dtype}}</span></div>{{/dtype}}
       {{#kb}}<div><span style="color:#aaa;">Knockback:</span> <span style="color:#fff;">{{kb}}</span></div>{{/kb}}
@@ -639,6 +652,41 @@
       </div>
       {{/bp}}
       {{#notes}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#aaa;">Notes:</span> <span style="color:#fff;">{{notes}}</span></div>{{/notes}}
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpatkinfo">
+  <div style="background:#2b2b3d; border:2px solid #bd93f9; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#bd93f9; color:#000; font-weight:bold; padding:6px 10px;">{{title}}</div>
+    <div style="padding:8px 10px; color:#eaeaea; line-height:1.25;">
+      {{#name}}<div><span style="color:#aaa;">Name:</span> <span style="color:#fff;">{{name}}</span></div>{{/name}}
+      {{#atype}}<div><span style="color:#aaa;">A-Type:</span> <span style="color:#fff;">{{atype}}</span></div>{{/atype}}
+      {{#mod}}<div><span style="color:#aaa;">Modifier:</span> <span style="color:#fff;">{{mod}}</span></div>{{/mod}}
+      {{#tohit}}<div><span style="color:#aaa;">To Hit:</span> <span style="color:#8be9fd;">{{tohit}}</span></div>{{/tohit}}
+      {{#damage}}<div><span style="color:#aaa;">Damage:</span> <span style="color:#8be9fd;">{{damage}}</span></div>{{/damage}}
+      {{#range}}<div><span style="color:#aaa;">Range:</span> <span style="color:#fff;">{{range}}"</span></div>{{/range}}
+            {{#ap}}<div><span style="color:#aaa;">AP:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
+{{#dtype}}<div><span style="color:#aaa;">D-Type:</span> <span style="color:#fff;">{{dtype}}</span></div>{{/dtype}}
+      {{#kb}}<div><span style="color:#aaa;">KB:</span> <span style="color:#fff;">{{kb}}</span></div>{{/kb}}
+      {{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
+      {{#notes}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#aaa;">Notes:</div>
+        <div style="color:#fff;">{{notes}}</div>
+      </div>
+      {{/notes}}
+    </div>
+  </div>
+</rolltemplate>
+
+
+
+<rolltemplate class="sheet-rolltemplate-mpabw">
+  <div style="background:#2b2b3d; border:2px solid #bd93f9; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#bd93f9; color:#000; font-weight:bold; padding:6px 10px;">{{name}}</div>
+    <div style="padding:8px 10px; color:#eaeaea; line-height:1.35;">
+      {{body}}
     </div>
   </div>
 </rolltemplate>
@@ -1575,25 +1623,98 @@ function initAttackNotes() {
     });
   });
 
-  function syncAttackRowIDs() {
+  // --- ATTACK ROW META (no API required) ---
+  function syncAttackRowMeta() {
     getSectionIDs("repeating_attacks", function(ids) {
       if (!ids || !ids.length) return;
 
-      const updates = {};
-      ids.forEach(id => {
-        // store the rowid in a normal repeating attribute
-        updates[`repeating_attacks_${id}_attack_rowid`] = id;
-      });
+      // Pull A-Type codes so we can keep a human-readable label for the info card
+      const atkAttrs = ids.map(id => `repeating_attacks_${id}_attack_atk`);
 
-      // silent avoids triggering loops
-      setAttrs(updates, { silent: true });
+      getAttrs(atkAttrs, function(values) {
+        const typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
+        const updates = {};
+
+        ids.forEach((id, index) => {
+          // stable row id + display row number (Attack #1, #2, ...)
+          updates[`repeating_attacks_${id}_attack_rowid`] = id;
+          updates[`repeating_attacks_${id}_attack_num`] = String(index + 1);
+
+          const code = values[`repeating_attacks_${id}_attack_atk`] || "P";
+          updates[`repeating_attacks_${id}_attack_atk_full`] = typeMap[code] || "Physical";
+        });
+
+        // silent avoids triggering loops
+        setAttrs(updates, { silent: true });
+      });
     });
   }
 
   // Run once on sheet open
-  on("sheet:opened", syncAttackRowIDs);
+  on("sheet:opened", syncAttackRowMeta);
 
-  // Run when attacks are edited / rows added
-  on("change:repeating_attacks", syncAttackRowIDs);
+  // Run when rows are added/removed
+  on("change:repeating_attacks remove:repeating_attacks", syncAttackRowMeta);
 
+  // Keep A-Type label fresh when the dropdown changes
+  on("change:repeating_attacks:attack_atk", function(eventInfo) {
+    const rowPrefix = eventInfo.sourceAttribute.replace("_attack_atk", "");
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      const typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
+      const code = v[eventInfo.sourceAttribute] || "P";
+      const update = {};
+      update[rowPrefix + "_attack_atk_full"] = typeMap[code] || "Physical";
+      setAttrs(update);
+    });
+  });
+
+
+
+// --- ABILITIES/WEAKNESSES SUMMARY (no API required) ---
+// --- ABILITIES/WEAKNESSES SUMMARY (no API required) ---
+function rebuildABWSummary() {
+  getSectionIDs("repeating_abilities", function(ids) {
+    if (!ids || !ids.length) {
+      setAttrs({ abw_summary: "<b>Abilities</b><br>None<br><br><b>Weaknesses</b><br>None" });
+      return;
+    }
+
+    var attrList = [];
+    ids.forEach(function(id) {
+      attrList.push("repeating_abilities_" + id + "_ability_name");
+      attrList.push("repeating_abilities_" + id + "_ability_cp");
+      attrList.push("repeating_abilities_" + id + "_ability_ip");
+    });
+
+    getAttrs(attrList, function(v) {
+      var abilities = [];
+      var weaknesses = [];
+
+      ids.forEach(function(id) {
+        var name = (v["repeating_abilities_" + id + "_ability_name"] || "").trim();
+        var cp = parseFloat(v["repeating_abilities_" + id + "_ability_cp"]) || 0;
+        var ip = parseFloat(v["repeating_abilities_" + id + "_ability_ip"]) || 0;
+
+        // Skip truly empty rows
+        if (!name && cp === 0 && ip === 0) return;
+
+        var label = name || "(unnamed)";
+        var line = label + " (CP " + cp + (ip ? (", IP " + ip) : "") + ")";
+        if (cp < 0) weaknesses.push(line);
+        else abilities.push(line);
+      });
+
+      function fmt(arr) {
+        if (!arr.length) return "None";
+        return arr.map(function(s) { return "• " + s; }).join("<br>");
+      }
+
+      var summary = "<b>Abilities</b><br>" + fmt(abilities) + "<br><br><b>Weaknesses</b><br>" + fmt(weaknesses);
+      setAttrs({ abw_summary: summary });
+    });
+  });
+}
+
+on("change:repeating_abilities remove:repeating_abilities", rebuildABWSummary);
+on("sheet:opened", rebuildABWSummary);
 </script>
