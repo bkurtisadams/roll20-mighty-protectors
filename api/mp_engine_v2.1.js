@@ -615,18 +615,24 @@ MP.Engine = (function () {
     let hoverBreakdown = `Base: ${baseToHitPreMods}-`;
     if (defValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${defValue}`;
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
-    // Always show range + penalty (even when penalty is 0), and include feet for quick sanity checks.
     // MP scale: 1" = 5 ft.
+    // Always show range penalty in hover (format: Range: -1 (9"))
     if (rangeData && typeof rangeData.inches === "number") {
-      const ft = Math.round((rangeData.inches * 5) * 10) / 10;
+      const usedInches =
+        (rangeData.profileAdjusted && typeof rangeData.adjustedInches === "number")
+          ? rangeData.adjustedInches
+          : rangeData.inches;
 
-      if (rangeData.profileAdjusted) {
-        const adjFt = Math.round((rangeData.adjustedInches * 5) * 10) / 10;
-        hoverBreakdown += `&#10;Range: ${rangeData.inches}" (${ft} ft) (adj: ${rangeData.adjustedInches}" / ${adjFt} ft) = ${rangePenalty}`;
-      } else {
-        hoverBreakdown += `&#10;Range: ${rangeData.inches}" (${ft} ft) = ${rangePenalty}`;
-      }
+      // Show target profile only if it isn't 1
+      const profNote =
+        (rangeData.defProfile && rangeData.defProfile !== 1)
+          ? `, TgtProf:${rangeData.defProfile}`
+          : "";
+
+      // IMPORTANT: use &quot; so the title="" attribute doesn't get truncated by a raw quote
+      hoverBreakdown += `&#10;Range: ${rangePenalty} (${usedInches}&quot;${profNote})`;
     }
+
 
     hoverBreakdown += `&#10;Final: ${targetTotal}-`;
     html += `<br/><span style="color:#000; font-size:12px;" title="${hoverBreakdown}"><b>To-Hit: ${targetTotal}-</b></span> `;
