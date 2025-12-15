@@ -258,6 +258,106 @@ MP.Engine = (function () {
   }
 
   // -------------------------
+  // RANGE CALCULATION (4.7.3)
+  // -------------------------
+
+  // Range penalty table: [maxInches, penalty]
+  const RANGE_TABLE = [
+    [4, 0],
+    [9, -1],
+    [19, -2],
+    [39, -3],
+    [79, -4],
+    [159, -5],
+    [319, -6],
+    [639, -7],
+    [1279, -8],
+    [2559, -9],
+    [5119, -10],
+    [10239, -11],
+    [Infinity, -12]
+  ];
+
+  function getRangePenalty(inches) {
+    for (let i = 0; i < RANGE_TABLE.length; i++) {
+      if (inches <= RANGE_TABLE[i][0]) {
+        return RANGE_TABLE[i][1];
+      }
+    }
+    return -12;
+  }
+
+  function calculateRange(atkTok, defTok) {
+    if (!atkTok || !defTok) return { inches: 0, penalty: 0 };
+    
+    const atkX = atkTok.get("left");
+    const atkY = atkTok.get("top");
+    const defX = defTok.get("left");
+    const defY = defTok.get("top");
+    
+    // Distance in pixels
+    const dx = defX - atkX;
+    const dy = defY - atkY;
+    const distPixels = Math.sqrt(dx * dx + dy * dy);
+    
+    // Get page scale settings
+    const pageId = atkTok.get("_pageid");
+    const page = getObj("page", pageId);
+    
+    // Default: 70 pixels per grid square, 1 square = 1" in MP
+    // Users can set scale_number to change this (e.g., 5 for "5 feet per square")
+    // For MP, we assume 1 square = 1 inch unless configured otherwise
+    const pixelsPerSquare = 70;
+    const scaleNumber = page ? page.get("scale_number") : 1;
+    
+    // If scale is 1, assume 1 square = 1"
+    const scaleUnits = page ? String(page.get("scale_units") || "").toLowerCase() : "";
+
+    let inchesPerSquare = 1;
+
+    // Roll20 typically uses scale_number + scale_units (ex: 5 ft per square).
+    // Mighty Protectors combat scale: 1" = 5 feet.
+    if (scaleUnits.startsWith("ft")) {
+      inchesPerSquare = (scaleNumber || 5) / 5;
+    } else if (scaleUnits.startsWith("m")) {
+      // meters -> feet -> MP inches (1" = 5 ft)
+      inchesPerSquare = ((scaleNumber || 1) * 3.28084) / 5;
+    } else {
+      // If units are "units" (or blank), treat scale_number as already "MP inches per square".
+      inchesPerSquare = (scaleNumber || 1);
+    }
+    
+    const distSquares = distPixels / pixelsPerSquare;
+    const distInches = distSquares * inchesPerSquare;
+    
+    return {
+      inches: Math.round(distInches * 10) / 10,  // Round to 1 decimal
+      penalty: getRangePenalty(distInches)
+    };
+  }
+
+  function calculateRangeWithProfile(atkTok, defTok, atkCharId, defCharId) {
+    const baseRange = calculateRange(atkTok, defTok);
+    if (baseRange.inches === 0) return baseRange;
+    
+    // Get profiles (default 1)
+    const atkProfile = getAttrNum(atkCharId, "profile", 1) || 1;
+    const defProfile = getAttrNum(defCharId, "profile", 1) || 1;
+    
+    // Adjusted range = actual range * attacker profile / target profile
+    const adjustedInches = (baseRange.inches * atkProfile) / defProfile;
+    
+    return {
+      inches: Math.round(baseRange.inches * 10) / 10,
+      adjustedInches: Math.round(adjustedInches * 10) / 10,
+      penalty: getRangePenalty(adjustedInches),
+      atkProfile,
+      defProfile,
+      profileAdjusted: (atkProfile !== 1 || defProfile !== 1)
+    };
+  }
+
+  // -------------------------
   // CRITICAL/FUMBLE TABLES (4.7.6)
   // -------------------------
 
@@ -418,11 +518,23 @@ MP.Engine = (function () {
     const atkSave = getAttrNum(atkCharId, atkSaveAttr, 10);
     
     // Check if attacker is in Defensive stance (bar3 = 3) - they take -3 to hit
+    // Check if attacker is in Full Defense (bar3 = 6) - they cannot attack
     const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
     const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
+    
+    // Block attacks in Full Defense
+    if (atkDefMod === 6) {
+      ch("MP", `/w gm <div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;"><b>${esc(atkChar.get("name"))}</b> is in <b>Full Defense</b> and cannot attack!</div>`);
+      return;
+    }
+    
     const atkStancePenalty = (atkDefMod === 3) ? -3 : 0;  // Defensive stance only
     
-    const baseToHit = atkSave + 3 + atkMod + atkStancePenalty;
+    // Calculate range from token positions (4.7.3)
+    const rangeData = calculateRangeWithProfile(atkTok, defTok, atkCharId, defChar.id);
+    const rangePenalty = rangeData.penalty;
+    
+    const baseToHit = atkSave + 3 + atkMod + atkStancePenalty + rangePenalty;
 
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
@@ -477,7 +589,7 @@ MP.Engine = (function () {
       outcome, isCrit, isFumble, critResult, fumbleResult,
       damageTotal, dmgTypeStr, protKey, atkType,
       atkAP, saveBC, saveMod, recMod, snBP, snMaxBP, snType, causesKB,
-      isPushing, created: Date.now()
+      isPushing, rangeData, created: Date.now()
     };
 
     // Build output
@@ -495,8 +607,30 @@ MP.Engine = (function () {
     }
     html += `<span style="color:#000;" title="Target">vs ${esc(defName)}</span> `;
     const defModLabel = defMod !== 0 ? `${defBase}${defMod >= 0 ? '+' : ''}${defMod}` : `${defBase}`;
-    const atkPenaltyNote = atkStancePenalty !== 0 ? ` [Def Stance ${atkStancePenalty}]` : "";
-    html += `<span style="color:#333; font-size:10px;" title="Attack type: ${atkTypeLabel}&#10;Roll: ${roll}&#10;Target Number: ${targetTotal}-&#10;${defTypeLabel}: ${defValue}">[${atkTypeLabel}] ${roll} vs ${targetTotal}- (${defTypeLabel}:${defModLabel})${atkPenaltyNote}</span>`;
+    const atkPenaltyNote = atkStancePenalty !== 0 ? ` Stance:${atkStancePenalty}` : "";
+    const rangePenaltyNote = rangePenalty !== 0 ? ` Rng:${rangePenalty}` : "";
+    const distNote = (rangeData && typeof rangeData.inches === "number") ? ` Dist:${rangeData.inches}"` : "";
+
+    const baseToHitPreMods = atkSave + 3 + atkMod;  // Before stance, range, and defense
+    let hoverBreakdown = `Base: ${baseToHitPreMods}-`;
+    if (defValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${defValue}`;
+    if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
+    // Always show range + penalty (even when penalty is 0), and include feet for quick sanity checks.
+    // MP scale: 1" = 5 ft.
+    if (rangeData && typeof rangeData.inches === "number") {
+      const ft = Math.round((rangeData.inches * 5) * 10) / 10;
+
+      if (rangeData.profileAdjusted) {
+        const adjFt = Math.round((rangeData.adjustedInches * 5) * 10) / 10;
+        hoverBreakdown += `&#10;Range: ${rangeData.inches}" (${ft} ft) (adj: ${rangeData.adjustedInches}" / ${adjFt} ft) = ${rangePenalty}`;
+      } else {
+        hoverBreakdown += `&#10;Range: ${rangeData.inches}" (${ft} ft) = ${rangePenalty}`;
+      }
+    }
+
+    hoverBreakdown += `&#10;Final: ${targetTotal}-`;
+    html += `<br/><span style="color:#000; font-size:12px;" title="${hoverBreakdown}"><b>To-Hit: ${targetTotal}-</b></span> `;
+    html += `<span style="color:#333; font-size:10px;" title="${hoverBreakdown}">[${atkTypeLabel}] Roll:${roll} | ${defTypeLabel}:${defModLabel}${atkPenaltyNote}${rangePenaltyNote}${distNote}</span>`;
 
     if (isCrit && critResult) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Critical hit effect">⚡ ${esc(critResult.desc)}</span>`;
@@ -1349,6 +1483,41 @@ MP.Engine = (function () {
     return `<br/><span style="color:#e94560;"><b>${esc(charName)}</b> is Off Balance! (-3 Def)</span>`;
   }
 
+  function cmdRange(msg, args) {
+    if (!msg.selected || msg.selected.length < 2) {
+      return ch("MP", `/w gm Select two tokens to check range between them.`);
+    }
+    
+    const tok1 = getObj("graphic", msg.selected[0]._id);
+    const tok2 = getObj("graphic", msg.selected[1]._id);
+    
+    if (!tok1 || !tok2) {
+      return ch("MP", `/w gm Could not find selected tokens.`);
+    }
+    
+    const char1 = getCharFromToken(tok1);
+    const char2 = getCharFromToken(tok2);
+    const name1 = char1 ? char1.get("name") : "Token 1";
+    const name2 = char2 ? char2.get("name") : "Token 2";
+    const char1Id = char1 ? char1.id : null;
+    const char2Id = char2 ? char2.id : null;
+    
+    const rangeData = calculateRangeWithProfile(tok1, tok2, char1Id, char2Id);
+    
+    let msg_out = `<b>Range Check</b><br/>`;
+    msg_out += `${esc(name1)} → ${esc(name2)}<br/>`;
+    msg_out += `Distance: <b>${rangeData.inches}"</b><br/>`;
+    
+    if (rangeData.profileAdjusted) {
+      msg_out += `Profiles: ${rangeData.atkProfile} / ${rangeData.defProfile}<br/>`;
+      msg_out += `Adjusted: <b>${rangeData.adjustedInches}"</b><br/>`;
+    }
+    
+    msg_out += `Penalty: <b>${rangeData.penalty}</b>`;
+    
+    ch("MP", "/w gm " + msg_out);
+  }
+
   // -------------------------
   // TEST/DEBUG COMMANDS (GM only)
   // -------------------------
@@ -1966,6 +2135,8 @@ MP.Engine = (function () {
       case "stance":
         const stanceParts = msg.content.split(/\s+/);
         return cmdStance(msg, { stance: stanceParts[2] || "" });
+      case "range":
+        return cmdRange(msg, args);
       case "clearstances":
       case "clearstance":
         return cmdClearStances(msg, args);
@@ -2013,6 +2184,8 @@ MP.Engine = (function () {
           <code>!mp stance normal|def|full|offbal|N</code><br/>
           <code>!mp clearstances</code> - Clear all on page<br/>
           <code>!mp offbal</code> - Apply Off Balance to selected<br/>
+          <b>Range:</b><br/>
+          <code>!mp range</code> - Check range between 2 selected tokens<br/>
           <b>Test Commands:</b><br/>
           <code>!mp test</code> - Show all test commands`);
     }
