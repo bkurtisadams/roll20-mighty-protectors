@@ -2650,5 +2650,5 @@ function cmdStance(msg, args) {
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.2 READY");
+  log("MP ENGINE v2.3 READY");
 });

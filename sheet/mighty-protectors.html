@@ -83,8 +83,8 @@
         <input type="checkbox" name="attr_license" value="1" title="License to operate as a hero" /><span style="color:#aaa; font-size:11px;">Lic</span>
         <input type="checkbox" name="attr_wanted" value="1" /><span style="color:#aaa; font-size:11px;">Wanted</span>
         <input type="checkbox" name="attr_criminal_record" value="1" title="Criminal Record" /><span style="color:#aaa; font-size:11px;">Rec</span>
-        <span style="color:#aaa; font-size:11px;">Sec:</span>
-        <input type="text" name="attr_security_clearance" style="width:25px; background:#0f0f23; color:#f4d03f; border:1px solid #333; padding:2px; text-align:center; font-weight:bold;" title="Security Clearance level" />
+        <input type="checkbox" name="attr_use_security" value="1" title="Enable Security Clearance calculation" /><span style="color:#aaa; font-size:11px;">Sec:</span>
+        <input type="text" name="attr_security_clearance" style="width:25px; background:#0f0f23; color:#f4d03f; border:1px solid #333; padding:2px; text-align:center; font-weight:bold;" title="Security Clearance level (IN Save + CL Save + Earned/5 - 20)" />
       </div>
     </div>
   </div>
@@ -906,6 +906,16 @@ var carryDisplay = [
         
         setAttrs(updates);
 
+        // Calculate movement (ST+EN+AG)/3
+        var moveVal = Math.round((st + en + ag) / 3);
+        getAttrs(["move"], function(mv) {
+          // Only set if empty or already has " suffix (auto-calculated)
+          var curMove = (mv.move || "").trim();
+          if (!curMove || curMove.endsWith('"')) {
+            setAttrs({ move: moveVal + '"' });
+          }
+        });
+
         getAttrs(["leap_base", "leap_mult"], function(lv) {
           var base = parseFloat((lv.leap_base || "0").replace(/,/g, '')) || 0;
           var mult = parseInt(lv.leap_mult) || 1;
@@ -1393,7 +1403,11 @@ function initAttackNotes() {
   }
 
   function calcSecurityClearance() {
-    getAttrs(["intelligence_save", "cool_save", "ep_earned"], function(v) {
+    getAttrs(["use_security", "intelligence_save", "cool_save", "ep_earned"], function(v) {
+      if (v.use_security !== "1") {
+        setAttrs({ security_clearance: "" });
+        return;
+      }
       var inSave = parseInt(v.intelligence_save) || 6;
       var clSave = parseInt(v.cool_save) || 6;
       var earnedEPs = parseInt(v.ep_earned) || 0;
@@ -1402,7 +1416,7 @@ function initAttackNotes() {
     });
   }
 
-  on("change:intelligence_save change:cool_save change:ep_earned", function() {
+  on("change:use_security change:intelligence_save change:cool_save change:ep_earned", function() {
     calcSecurityClearance();
   });
 
@@ -1427,7 +1441,7 @@ function initAttackNotes() {
       
       var oldAttrs = [
         "identity-name", "skills", "careers", "origin", "origin_type", "group",
-        "starting_cps", "xp_earned"
+        "starting_cps", "xp_earned", "exp_base", "exp_earned"
       ];
       if (!alreadyMigratedRepeating) {
         for (var i = 1; i <= 16; i++) {
@@ -1475,21 +1489,35 @@ function initAttackNotes() {
         if (old["starting_cps"] && old["starting_cps"].trim()) {
           updates["starting_eps"] = old["starting_cps"];
           hasOldData = true;
+        } else if (old["exp_base"]) {
+          var expBase = String(old["exp_base"]).trim();
+          if (expBase) {
+            updates["starting_eps"] = expBase;
+            hasOldData = true;
+          }
         }
         if (old["xp_earned"] && old["xp_earned"].trim()) {
           updates["ep_earned"] = old["xp_earned"];
           hasOldData = true;
+        } else if (old["exp_earned"]) {
+          var expEarned = String(old["exp_earned"]).trim();
+          if (expEarned) {
+            updates["ep_earned"] = expEarned;
+            hasOldData = true;
+          }
         }
         
         if (!alreadyMigratedRepeating) {
           for (var i = 1; i <= 16; i++) {
             var desc = old["ability" + i + "_desc"];
             var cost = old["ability" + i + "_cost"];
-            if (desc && desc.trim()) {
+            // Convert to string and trim, handle null/undefined/number values
+            var descStr = (desc === null || desc === undefined) ? "" : String(desc).trim();
+            if (descStr) {
               hasOldData = true;
               var rowId = generateRowID();
-              updates["repeating_abilities_" + rowId + "_ability_name"] = desc;
-              updates["repeating_abilities_" + rowId + "_ability_cp"] = cost || "0";
+              updates["repeating_abilities_" + rowId + "_ability_name"] = descStr;
+              updates["repeating_abilities_" + rowId + "_ability_cp"] = (cost === null || cost === undefined) ? "0" : String(cost);
             }
           }
           
@@ -1502,7 +1530,8 @@ function initAttackNotes() {
               updates["repeating_attacks_" + rowId + "_attack_damage"] = old["damage_" + slot] || "";
               updates["repeating_attacks_" + rowId + "_attack_dmgtype"] = old["damagetype_" + slot] || "";
               updates["repeating_attacks_" + rowId + "_attack_tohit"] = old["tohit_" + slot] || "";
-              updates["repeating_attacks_" + rowId + "_attack_kb"] = (old["knockback_" + slot] === "Yes" || old["knockback_" + slot] === "1") ? "1" : "0";
+              var kbVal = String(old["knockback_" + slot] || "").toLowerCase().trim();
+              updates["repeating_attacks_" + rowId + "_attack_kb"] = (kbVal === "yes" || kbVal === "y" || kbVal === "1" || kbVal === "true") ? "1" : "0";
             }
           });
           
