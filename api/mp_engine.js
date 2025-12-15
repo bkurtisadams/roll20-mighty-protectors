@@ -1,4 +1,4 @@
-/* Mighty Protectors - MP Engine v2.3 (Roll20 API)
+/* Mighty Protectors Roll20 API Engine v2.3 (git 56fbb40)
  * Fixed critical hit handling per MP rules
  * 
  * Works with sheet's mpattack rolltemplate:
