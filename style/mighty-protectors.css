@@ -1,0 +1,90 @@
+.sheet-rolltemplate-mpattack .inlinerollresult { background: transparent !important; border: none !important; padding: 0 !important; }
+
+/* Roll + Action buttons */
+.charsheet button[type="roll"],
+.charsheet button[type="action"]{
+  border-radius: 4px !important;
+  transition: filter 120ms linear, box-shadow 120ms linear, transform 120ms linear !important;
+  outline: none !important;
+}
+
+/* Hover: brighten + soft glow */
+.charsheet button[type="roll"]:hover,
+.charsheet button[type="action"]:hover{
+  filter: brightness(1.35) saturate(1.25) !important;
+  box-shadow:
+    0 0 0 2px rgba(233, 69, 96, 0.40),
+    0 0 10px rgba(233, 69, 96, 0.35) !important;
+}
+
+/* Focus */
+.charsheet button[type="roll"]:focus,
+.charsheet button[type="action"]:focus{
+  filter: brightness(1.25) saturate(1.10) !important;
+  box-shadow:
+    0 0 0 3px rgba(244, 208, 63, 0.55),
+    0 0 12px rgba(244, 208, 63, 0.35) !important;
+}
+
+/* Active */
+.charsheet button[type="roll"]:active,
+.charsheet button[type="action"]:active{
+  transform: translateY(1px) !important;
+  filter: brightness(1.10) saturate(1.05) !important;
+}
+
+/* Disabled (native) */
+.charsheet button[disabled]{
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* Repeating section controls: + Add / Modify */
+.charsheet .repcontrol button{
+  border-radius: 6px !important;
+  transition: filter 120ms linear, box-shadow 120ms linear, transform 120ms linear !important;
+}
+
+.charsheet .repcontrol button:hover{
+  filter: brightness(1.15) !important;
+  box-shadow: 0 0 0 2px rgba(244, 208, 63, 0.35), 0 0 10px rgba(244, 208, 63, 0.20) !important;
+}
+
+.charsheet .repcontrol button:active{
+  transform: translateY(1px) !important;
+}
+
+/* allow the tooltip to spill out of the flex row */
+.charsheet { overflow: visible !important; }
+
+.mp-leapwrap{
+  position: relative;
+  display: inline-block;
+}
+
+.mp-leaptip{
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+
+  padding: 2px 6px;
+  border: 1px solid #c0c0c0;
+  background: #ffffe1;
+  color: #000;
+  font: 12px Arial, sans-serif;
+  white-space: nowrap;
+
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  z-index: 9999;
+}
+
+.mp-leapwrap:hover .mp-leaptip{ display: inline-block; }
+
+/* if leap_distance is empty, don’t show a blank tooltip */
+.mp-leaptip:empty{ display:none; }

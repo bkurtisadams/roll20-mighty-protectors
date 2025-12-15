@@ -81,7 +81,7 @@
       </div>
       <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
         <input type="checkbox" name="attr_license" value="1" title="License to operate as a hero" /><span style="color:#aaa; font-size:11px;">Lic</span>
-        <input type="checkbox" name="attr_wanted" value="1" /><span style="color:#aaa; font-size:11px;">Wanted</span>
+        <input type="checkbox" name="attr_wanted" value="1" title="Authorities want them brought in" /><span style="color:#aaa; font-size:11px;">Wanted</span>
         <input type="checkbox" name="attr_criminal_record" value="1" title="Criminal Record" /><span style="color:#aaa; font-size:11px;">Rec</span>
         <input type="checkbox" name="attr_use_security" value="1" title="Enable Security Clearance calculation" /><span style="color:#aaa; font-size:11px;">Sec:</span>
         <input type="text" name="attr_security_clearance" style="width:25px; background:#0f0f23; color:#f4d03f; border:1px solid #333; padding:2px; text-align:center; font-weight:bold;" title="Security Clearance level (IN Save + CL Save + Earned/5 - 20)" />
@@ -165,7 +165,7 @@
         <td style="text-align:center;"><input type="text" name="attr_endurance_score" readonly style="width:100%; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
           <input type="text" name="attr_endurance_save" readonly style="width:26px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" title="EN Save: Resist physical effects, poison, disease, fatigue" />
-          <button type="roll" name="roll_endurance_save" value="&{template:default} {{name=EN Save}} {{Roll=[[1d20cs<@{endurance_save}cf>@{endurance_save}]]}} {{Target=[[@{endurance_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+          <button type="roll" name="roll_endurance_save" title="Roll EN Save (d20 ≤ EN Save)" value="&{template:default} {{name=EN Save}} {{Roll=[[1d20cs<@{endurance_save}cf>@{endurance_save}]]}} {{Target=[[@{endurance_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
           </td>
         <td style="white-space:nowrap;">
           <span style="color:#aaa; font-size:10px;">Heal:</span>
@@ -180,7 +180,7 @@
         <td style="text-align:center;"><input type="text" name="attr_agility_score" readonly style="width:100%; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
           <input type="text" name="attr_agility_save" readonly style="width:26px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" title="AG Save: Dodge, balance, acrobatics, physical accuracy" />
-          <button type="roll" name="roll_agility_save" value="&{template:default} {{name=AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+          <button type="roll" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)" value="&{template:default} {{name=AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
         </td>
         <td style="white-space:nowrap;">
           <div style="display:flex; align-items:center; gap:2px;">
@@ -201,7 +201,7 @@
         <td style="text-align:center;"><input type="text" name="attr_intelligence_score" readonly style="width:100%; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
           <input type="text" name="attr_intelligence_save" readonly style="width:26px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" title="IN Save: Perception, knowledge, mental attacks, inventing" />
-          <button type="roll" name="roll_intelligence_save" value="&{template:default} {{name=IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+          <button type="roll" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)" value="&{template:default} {{name=IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
         </td>
         <td style="white-space:nowrap;">
           <div style="display:flex; align-items:center; gap:2px;">
@@ -228,7 +228,7 @@
         <td style="text-align:center;"><input type="text" name="attr_cool_score" readonly style="width:100%; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
           <input type="text" name="attr_cool_save" readonly style="width:26px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" title="CL Save: Willpower, fear, emotional attacks, composure" />
-          <button type="roll" name="roll_cool_save" value="&{template:default} {{name=CL Save}} {{Roll=[[1d20cs<@{cool_save}cf>@{cool_save}]]}} {{Target=[[@{cool_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+          <button type="roll" name="roll_cool_save" title="Roll CL Save (d20 ≤ CL Save)" value="&{template:default} {{name=CL Save}} {{Roll=[[1d20cs<@{cool_save}cf>@{cool_save}]]}} {{Target=[[@{cool_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
         </td>
         <td style="white-space:nowrap;">
           <div style="display:flex; align-items:center; gap:2px;">
@@ -251,7 +251,14 @@
         <span style="color:#666; font-size:9px;">x</span>
         <input type="text" name="attr_leap_mult" value="1" style="width:35px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center;" title="Super Leap multiplier" />
         <span style="color:#666; font-size:9px;">=</span>
-        <input type="text" name="attr_leap_total" readonly style="width:95px; flex-shrink:1; min-width:50px; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; font-size:10px;" title="Total leap distance in inches" />
+
+        <span class="mp-leapwrap">
+          <input type="text" name="attr_leap_total" readonly
+            style="width:95px; flex-shrink:1; min-width:50px; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; font-size:10px;" />
+
+          <span class="mp-leaptip"><span name="attr_leap_distance"></span></span>
+        </span>
+
         <!-- <input type="checkbox" name="attr_show_leap_dist" value="1" style="margin-left:4px;" title="Show leap in miles/km" /> -->
         <!-- <input type="text" name="attr_leap_distance" readonly style="width:70px; background:transparent; color:#888; border:none; padding:2px; font-size:9px;" title="Leap distance in miles/kilometers" /> -->
         <span style="color:#aaa; font-size:9px; margin-left:4px;">Other:</span>
@@ -494,6 +501,7 @@
               <input type="text" name="attr_ability_name" style="flex:1; min-width:0; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;" />
               <button type="roll" name="roll_ability_info"
                 value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}}"
+
                 style="background:transparent; color:#666; border:none; padding:0 3px; cursor:pointer; font-size:10px; flex-shrink:0;" title="Show ability info">?</button>
             </div>
           </td>
@@ -1055,41 +1063,33 @@ var carryDisplay = [
     });
   });
 
-  /* 
+  function formatIntWithCommas(n) {
+    const s = String(Math.round(n));
+    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
   function calcLeapDistance() {
-    getAttrs(["leap_total", "show_leap_dist"], function(v) {
-      if (v.show_leap_dist !== "1") {
-        setAttrs({ leap_distance: "" });
-        return;
+    getAttrs(["leap_total"], function(v) {
+      const leapStr = (v.leap_total || "0").replace(/,/g, "");
+      const leapInches = parseFloat(leapStr) || 0;
+
+      // Mighty Protectors: 1" = 5 ft
+      const feet = leapInches * 5;
+      const miles = feet / 5280;
+
+      let display = "";
+
+      if (feet >= 2640) {             // 0.5 miles
+        display = miles.toFixed(1) + " mi";
+      } else if (feet > 0) {
+        display = formatIntWithCommas(feet) + " ft";
       }
-      
-      var leapStr = (v.leap_total || "0").replace(/,/g, '');
-      var leapInches = parseFloat(leapStr) || 0;
-      
-      // 1 inch = 5 feet in Mighty Protectors
-      var feet = leapInches * 5;
-      var miles = feet / 5280;
-      var km = feet / 3280.84;
-      
-      var display = "";
-      if (miles >= 0.1) {
-        display = miles.toFixed(1) + " mi / " + km.toFixed(1) + " km";
-      } else if (feet >= 100) {
-        display = feet.toFixed(0) + " ft";
-      }
-      
+
       setAttrs({ leap_distance: display });
     });
   }
 
-  on("change:show_leap_dist change:leap_total", function() {
-    calcLeapDistance();
-  }); 
-  */
-
-  /* on("change:leap_total", function() {
-    calcLeapDistance();
-  }); */
+  on("change:leap_total sheet:opened", calcLeapDistance);
 
   function calcIPTotals() {
     getSectionIDs("repeating_abilities", function(abilityIDs) {
