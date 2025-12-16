@@ -1932,6 +1932,135 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     return sendChat("MP", who + html);
   }
+
+function cmdAttackInfo(msg, args) {
+  // The row argument may have template junk appended - extract just the rowid
+  const rowId = (args.row || "").split(/\s+/)[0].trim();
+  
+  if (!rowId || rowId === "") {
+    return ch("MP", `/w gm <b>Debug:</b> No rowId received.`);
+  }
+
+  const tok = getSelectedToken(msg);
+  if (!tok) return ch("MP", `/w gm Select your token first.`);
+  
+  const char = getCharFromToken(tok);
+  if (!char) return ch("MP", `/w gm Token not linked to character.`);
+  const charId = char.id;
+  const charName = char.get("name");
+
+  // Debug: show what rowId we got
+  if (!rowId || rowId === "") {
+    return ch("MP", `/w gm <b>Debug:</b> No rowId received. Button may not be passing @{attack_rowid}`);
+  }
+
+  const getAtk = (name) => getRepeatingAttackAttr(charId, rowId, name);
+  
+  const attackName = getAtk("attack_name") || "";
+  const notes = getAtk("attack_notes") || "";
+  const damage = getAtk("attack_damage") || "";
+  const dmgType = getAtk("attack_dmgtype") || "Kin";
+  const dmgTypeFull = {Kin:"Kinetic", Eng:"Energy", Bio:"Biochemical", Ent:"Entropy", Psy:"Psychic", Oth:"Other"}[dmgType] || dmgType;
+  const range = getAtk("attack_range") || "";
+  const cost = getAtk("attack_cost") || "";
+  const kb = getAtk("attack_kb") === "1" ? "Yes" : "No";
+  const apRaw = getAtk("attack_ap") || "";
+  const tohit = getAtk("attack_tohit") || "";
+  const mod = getAtk("attack_mod") || "0";
+  const atkType = getAtk("attack_atk") || "P";
+  const atkTypeFull = {P:"Physical", M:"Mental", E:"Emotion"}[atkType] || "Physical";
+
+  // Debug: if attack name is empty, something's wrong with row lookup
+  if (!attackName) {
+    return ch("MP", `/w gm <b>Debug:</b> rowId="${esc(rowId)}" but attack_name is empty. Check that attack_rowid is being set by sheet worker.`);
+  }
+
+  // Parse notes for special attacks
+  const notesLower = notes.toLowerCase();
+  let specialType = "std";
+  let saveBC = "", saveMod = 0, recMod = 0;
+  let snareType = "", bp = 0, maxBP = 0;
+
+  const savMatch = notesLower.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
+  if (savMatch) {
+    specialType = "sav";
+    saveBC = savMatch[1].toUpperCase();
+    saveMod = parseInt(savMatch[2]) || 0;
+    recMod = parseInt(savMatch[3]) || 0;
+  }
+
+  const snrMatch = notesLower.match(/snr:(grp|ice):(\d+)\/?(\d+)?/);
+  if (snrMatch) {
+    specialType = "snr";
+    snareType = snrMatch[1];
+    bp = parseInt(snrMatch[2]) || 0;
+    maxBP = parseInt(snrMatch[3]) || bp;
+  }
+
+  // Build output
+  let out = `<div style="background:#2b2b3d; border:2px solid #8be9fd; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">`;
+  out += `<div style="background:#8be9fd; color:#000; font-weight:bold; padding:6px 10px;">${esc(charName)}: ${esc(attackName)}</div>`;
+  out += `<div style="padding:8px 10px; color:#eaeaea;">`;
+
+  // Basic info
+  out += `<div><span style="color:#aaa;">Type:</span> ${esc(atkTypeFull)}</div>`;
+  if (tohit) out += `<div><span style="color:#aaa;">To-Hit:</span> <span style="color:#8be9fd;">${esc(tohit)}</span></div>`;
+  if (mod !== "0") out += `<div><span style="color:#aaa;">Modifier:</span> ${esc(mod)}</div>`;
+  if (range) out += `<div><span style="color:#aaa;">Range:</span> ${esc(range)}"</div>`;
+  if (cost) out += `<div><span style="color:#aaa;">Cost:</span> ${esc(cost)}</div>`;
+  if (apRaw) out += `<div><span style="color:#bd93f9; font-weight:bold;">Armor Piercing:</span> ${apRaw === "ALL" ? "Ignores ALL protection" : "Ignores " + apRaw + " protection"}</div>`;
+
+  if (specialType === "sav") {
+    out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;">`;
+    out += `<div style="color:#f4d03f; font-weight:bold;">💫 SAVE ATTACK</div>`;
+    out += `<div><span style="color:#aaa;">Save BC:</span> <span style="color:#e94560; font-weight:bold;">${saveBC}</span></div>`;
+    out += `<div><span style="color:#aaa;">Save Mod:</span> ${saveMod >= 0 ? "+" : ""}${saveMod}</div>`;
+    if (recMod !== 0) out += `<div><span style="color:#aaa;">Recovery:</span> ${recMod}</div>`;
+    out += `<div style="color:#666; font-size:11px; margin-top:4px;">• Target's protection adds to save TN</div>`;
+    out += `<div style="color:#666; font-size:11px;">• Roll-with: Power/10 adds to save TN</div>`;
+    out += `<div style="color:#666; font-size:11px;">• Recovery roll each between-rounds phase</div>`;
+    out += `</div>`;
+  } else if (specialType === "snr") {
+    const snrLabel = snareType === "ice" ? "ICE SNARE" : "GRAPNEL SNARE";
+    out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;">`;
+    out += `<div style="color:#f4d03f; font-weight:bold;">🔗 ${snrLabel}</div>`;
+    out += `<div><span style="color:#aaa;">Break Point:</span> <span style="color:#e94560; font-weight:bold;">${bp}</span></div>`;
+    out += `<div><span style="color:#aaa;">Max BP:</span> ${maxBP}</div>`;
+    out += `<div style="color:#666; font-size:11px; margin-top:4px;">• Escape: HTH ≥ BP</div>`;
+    out += `<div style="color:#666; font-size:11px;">• Exceed by 4+: move OR action only</div>`;
+    out += `<div style="color:#666; font-size:11px;">• Push escape: +2 to HTH</div>`;
+    out += `<div style="color:#666; font-size:11px;">• Next hit: +2 BP (max ${maxBP})</div>`;
+
+    if (snareType === "ice") {
+      out += `<div style="border-top:1px solid #444; margin-top:4px; padding-top:4px; color:#8be9fd;">`;
+      out += `<div style="font-size:11px;">• 3 Entropy dmg/round while snared</div>`;
+      out += `<div style="font-size:11px;">• BP melts -1/round (1 PR to hold)</div>`;
+      out += `</div>`;
+    } else {
+      out += `<div style="border-top:1px solid #444; margin-top:4px; padding-top:4px; color:#aaa;">`;
+      out += `<div style="font-size:11px;">• Lasts 1 hour or until broken</div>`;
+      out += `</div>`;
+    }
+    out += `</div>`;
+  } else {
+    // Standard attack
+    out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;">`;
+    out += `<div><span style="color:#aaa;">Damage:</span> <span style="color:#8be9fd;">${esc(damage) || "—"}</span></div>`;
+    out += `<div><span style="color:#aaa;">Type:</span> ${esc(dmgTypeFull)}</div>`;
+    out += `<div><span style="color:#aaa;">Knockback:</span> ${kb}</div>`;
+    out += `</div>`;
+  }
+
+  if (notes && specialType === "std") {
+    out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;">`;
+    out += `<div><span style="color:#aaa;">Notes:</span> ${esc(notes)}</div>`;
+    out += `</div>`;
+  }
+
+  out += `</div></div>`;
+  ch("MP", `/w ${msg.who} ` + out);
+}
+  
   // ------------------------------------------------------------------------
 
 function cmdStance(msg, args) {
@@ -2859,6 +2988,7 @@ function cmdStance(msg, args) {
       case "wakeup": return cmdWakeup(msg, args);
       case "status": return cmdStatus(msg, args);
       case "info": return cmdInfo(msg, args);
+      case "atkinfo": return cmdAttackInfo(msg, args);
       case "help":
       default:
         return ch("MP", `/w gm <b>MP Engine v2.6</b> Commands:<br/>

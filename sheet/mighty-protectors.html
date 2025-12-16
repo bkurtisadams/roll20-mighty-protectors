@@ -418,9 +418,13 @@
             style="flex:1; min-width:0; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;"
             title="Shorthand: sav:BC:mod:rec | snr:type:bp/max | ap:N" />
           <button type="roll" name="roll_attack_info"
-            value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{notes=@{attack_notes}}}"
-            style="background:transparent; color:#666; border:none; padding:0 3px; cursor:pointer; font-size:10px; flex-shrink:0;"
-            title="Show attack info">?</button>
+  value="!mp atkinfo --row @{attack_rowid} &{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{atktype=@{attack_type}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
+  style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
+  title="Show attack info">?</button>
+          <button type="roll" name="roll_macro_gen"
+  value="&{template:mpmac} {{name=Macro: @{attack_name}}} {{macro=&amp;#38;&amp;#123;template:default&amp;#125; &amp;#123;&amp;#123;name=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_name&amp;#125;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Attack=**&amp;#64;&amp;#123;selected&amp;#124;token_name&amp;#125;** vs **&amp;#64;&amp;#123;target&amp;#124;token_name&amp;#125;**&amp;#125;&amp;#125; &amp;#123;&amp;#123;To Hit=&amp;#91;&amp;#91;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_tohit_num&amp;#125; - &amp;#63;&amp;#123;Defense&amp;#124;Physical,&amp;#64;&amp;#123;target&amp;#124;physical_def&amp;#125;&amp;#124;Mental/Emotion,&amp;#64;&amp;#123;target&amp;#124;mental_def&amp;#125;&amp;#125; + &amp;#63;&amp;#123;Modifier?&amp;#124;0&amp;#125;&amp;#93;&amp;#93;-&amp;#125;&amp;#125; &amp;#123;&amp;#123;Roll=&amp;#91;&amp;#91;d20&amp;#93;&amp;#93;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Damage=&amp;#91;&amp;#91;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_damage&amp;#125; + &amp;#63;&amp;#123;Damage Modifier?&amp;#124;0&amp;#125;&amp;#93;&amp;#93; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_dmgtype&amp;#125;&amp;#125;&amp;#125; &amp;#123;&amp;#123;KB=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_kb_display&amp;#125;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Range=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_range&amp;#125;&amp;quot;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Cost=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_cost&amp;#125;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Notes=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_notes&amp;#125;&amp;#125;&amp;#125;}}"
+  style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
+  title="Generate copyable macro">⚙</button>
         </div>
       </td>
     </tr>
@@ -432,6 +436,7 @@
   <input type="hidden" name="attr_attack_dmgtype_full" value="Kinetic" />
 
   <!-- Hidden attributes for special attacks -->
+   <input type="hidden" name="attr_attack_idx" />
   <input type="hidden" name="attr_attack_type" value="std" />
   <input type="hidden" name="attr_attack_save_bc" value="" />
   <input type="hidden" name="attr_attack_save_mod" value="" />
@@ -558,6 +563,13 @@
 <input type="hidden" name="attr_other_query" value="0" />
 
 <!-- ROLL TEMPLATE -->
+ <rolltemplate class="sheet-rolltemplate-mpmac">
+  <div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; padding:8px;">
+    <div style="color:#50fa7b; font-weight:bold;">{{name}}</div>
+    <div style="color:#eaeaea; font-family:monospace; font-size:11px; white-space:pre-wrap; word-break:break-all;">{{macro}}</div>
+  </div>
+</rolltemplate>
+
 <rolltemplate class="sheet-rolltemplate-mpattack">
   <div style="background:#fff200; border:4px solid #000; border-radius:0; font-family:Arial,sans-serif; font-size:13px; max-width:250px;">
     <div style="background:#e94560; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px; border-bottom:3px solid #000;">{{name}}</div>
@@ -1647,9 +1659,9 @@ function initAttackNotes() {
         const updates = {};
 
         ids.forEach((id, index) => {
-          // stable row id + display row number (Attack #1, #2, ...)
           updates[`repeating_attacks_${id}_attack_rowid`] = id;
           updates[`repeating_attacks_${id}_attack_num`] = String(index + 1);
+          updates[`repeating_attacks_${id}_attack_idx`] = String(index);  // new for macro generateRowID
 
           const code = values[`repeating_attacks_${id}_attack_atk`] || "P";
           updates[`repeating_attacks_${id}_attack_atk_full`] = typeMap[code] || "Physical";
