@@ -235,7 +235,8 @@
             <span style="color:#8be9fd; font-size:10px;" title="Die roll for combat initiative, based on CL score">Init:</span>
             <input type="text" name="attr_initiative_score" style="width:80px; background:#0f0f23; color:#8be9fd; border:1px solid #333; padding:2px; text-align:center;" title="Initiative die roll (e.g., 1d10+1)" />
             <button type="action" name="act_reset_initiative" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to CL-based initiative">↺</button>
-            <button type="roll" name="roll_initiative" value="&{template:default} {{name=Initiative}} {{Roll=[[@{initiative_score} &{tracker}]]}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+            <!-- <button type="roll" name="roll_initiative" value="&{template:default} {{name=Initiative}} {{Roll=[[@{initiative_score} &{tracker}]]}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button> -->
+            <button type="roll" name="roll_initiative" value="&{template:default} {{name=Initiative}} {{Roll=[[@{initiative_score} &{tracker}]]}}" style="background:#8be9fd; color:#000; border:none; padding:2px 4px; cursor:pointer; font-size:10px;" title="Roll initiative for combat order">Roll</button>
           </div>
         </td>
       </tr>
@@ -323,7 +324,8 @@
         <th style="width:40px; text-align:center; padding:2px 1px;" title="Attack Type: Physical (AG) / Mental (IN) / Emotion (CL)">A-Type</th>
         <th style="width:28px; text-align:center; padding:2px 1px;" title="To-hit modifier">Mod</th>
         <th style="width:34px; text-align:center; padding:2px 1px;" title="Target number to hit">ToHit</th>
-        <th style="width:55px; text-align:center; padding:2px 1px;" title="Damage dice">Damage</th>
+        <th style="width:65px; text-align:center; padding:2px 1px;" title="Damage dice">Damage</th>
+        <!-- <th style="width:60px; text-align:center; padding:2px 1px;" title="Damage dice">DMG TEST</th> -->
         <th style="width:30px; text-align:center; padding:2px 1px;" title="Range in inches">Rng</th>
         <th style="width:40px; text-align:center; padding:2px 1px;" title="Damage Type">D-Type</th>
         <th style="width:20px; text-align:center; padding:2px 1px;" title="Knockback">KB</th>
@@ -375,7 +377,7 @@
           title="Target number" />
       </td>
 
-      <td style="width:55px; text-align:center; padding:1px; vertical-align:middle;">
+      <td style="width:65px; text-align:center; padding:1px; vertical-align:middle;">
         <input type="text" name="attr_attack_damage"
           style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;"
           title="Damage dice" />

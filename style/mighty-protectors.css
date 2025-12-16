@@ -88,3 +88,18 @@
 
 /* if leap_distance is empty, don’t show a blank tooltip */
 .mp-leaptip:empty{ display:none; }
+
+/* Initiative button (cyan) - override red glow */
+.charsheet button[name="roll_initiative"]:hover{
+  filter: brightness(1.35) saturate(1.25) !important;
+  box-shadow:
+    0 0 0 2px rgba(139, 233, 253, 0.50),
+    0 0 10px rgba(139, 233, 253, 0.45) !important;
+}
+
+.charsheet button[name="roll_initiative"]:focus{
+  filter: brightness(1.25) saturate(1.10) !important;
+  box-shadow:
+    0 0 0 3px rgba(139, 233, 253, 0.55),
+    0 0 12px rgba(139, 233, 253, 0.35) !important;
+}
