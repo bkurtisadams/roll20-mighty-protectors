@@ -418,13 +418,15 @@
             style="flex:1; min-width:0; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;"
             title="Shorthand: sav:BC:mod:rec | snr:type:bp/max | ap:N" />
           <button type="roll" name="roll_attack_info"
-  value="!mp atkinfo --row @{attack_rowid} &{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{atktype=@{attack_type}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
+  value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
   style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
   title="Show attack info">?</button>
-          <button type="roll" name="roll_macro_gen"
-  value="&{template:mpmac} {{name=Macro: @{attack_name}}} {{macro=&amp;#38;&amp;#123;template:default&amp;#125; &amp;#123;&amp;#123;name=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_name&amp;#125;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Attack=**&amp;#64;&amp;#123;selected&amp;#124;token_name&amp;#125;** vs **&amp;#64;&amp;#123;target&amp;#124;token_name&amp;#125;**&amp;#125;&amp;#125; &amp;#123;&amp;#123;To Hit=&amp;#91;&amp;#91;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_tohit_num&amp;#125; - &amp;#63;&amp;#123;Defense&amp;#124;Physical,&amp;#64;&amp;#123;target&amp;#124;physical_def&amp;#125;&amp;#124;Mental/Emotion,&amp;#64;&amp;#123;target&amp;#124;mental_def&amp;#125;&amp;#125; + &amp;#63;&amp;#123;Modifier?&amp;#124;0&amp;#125;&amp;#93;&amp;#93;-&amp;#125;&amp;#125; &amp;#123;&amp;#123;Roll=&amp;#91;&amp;#91;d20&amp;#93;&amp;#93;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Damage=&amp;#91;&amp;#91;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_damage&amp;#125; + &amp;#63;&amp;#123;Damage Modifier?&amp;#124;0&amp;#125;&amp;#93;&amp;#93; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_dmgtype&amp;#125;&amp;#125;&amp;#125; &amp;#123;&amp;#123;KB=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_kb_display&amp;#125;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Range=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_range&amp;#125;&amp;quot;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Cost=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_cost&amp;#125;&amp;#125;&amp;#125; &amp;#123;&amp;#123;Notes=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_$@{attack_idx}_attack_notes&amp;#125;&amp;#125;&amp;#125;}}"
+          
+<button type="roll" name="roll_macro_gen"
+  value="&{template:mpmac} {{name=@{attack_name}}} {{compact=&amp;#38;&amp;#123;template:default&amp;#125;&amp;#10;&amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; attacks &amp;#42;&amp;#42;&amp;#64;&amp;#123;target&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; with &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_name&amp;#125;&amp;#42;&amp;#42;, needs &amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_tohit_num&amp;#125; - &amp;#63;&amp;#123;Defense&amp;#124;Physical,&amp;#64;&amp;#123;target&amp;#124;physical_def&amp;#125;&amp;#124;Mental/Emotion,&amp;#64;&amp;#123;target&amp;#124;mental_def&amp;#125;&amp;#125; + &amp;#63;&amp;#123;Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; to hit, d20=&amp;#91;&amp;#91;d20&amp;#93;&amp;#93;&amp;#10;Damage=&amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_damage&amp;#125; + &amp;#63;&amp;#123;Damage Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_dmgtype&amp;#125;&amp;#42;&amp;#42;, KB=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_kb_display&amp;#125;, Range=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_range&amp;#125;}}"
   style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
-  title="Generate copyable macro">⚙</button>
+  title="Generate copyable macros">⚙</button>
+
         </div>
       </td>
     </tr>
@@ -563,10 +565,27 @@
 <input type="hidden" name="attr_other_query" value="0" />
 
 <!-- ROLL TEMPLATE -->
- <rolltemplate class="sheet-rolltemplate-mpmac">
+<rolltemplate class="sheet-rolltemplate-mpmac">
   <div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; padding:8px;">
-    <div style="color:#50fa7b; font-weight:bold;">{{name}}</div>
-    <div style="color:#eaeaea; font-family:monospace; font-size:11px; white-space:pre-wrap; word-break:break-all;">{{macro}}</div>
+    <div style="color:#50fa7b; font-weight:bold; margin-bottom:8px;">Macros: {{name}}</div>
+    {{#compact}}
+    <div style="margin-bottom:8px;">
+      <div style="color:#f4d03f; font-weight:bold; font-size:11px;">COMPACT</div>
+      <div style="color:#eaeaea; font-family:monospace; font-size:10px; white-space:pre-wrap; word-break:break-all; background:#1a1a2e; padding:4px; border-radius:3px;">{{compact}}</div>
+    </div>
+    {{/compact}}
+    {{#table}}
+    <div style="margin-bottom:8px;">
+      <div style="color:#8be9fd; font-weight:bold; font-size:11px;">TABLE</div>
+      <div style="color:#eaeaea; font-family:monospace; font-size:10px; white-space:pre-wrap; word-break:break-all; background:#1a1a2e; padding:4px; border-radius:3px;">{{table}}</div>
+    </div>
+    {{/table}}
+    {{#api}}
+    <div>
+      <div style="color:#e94560; font-weight:bold; font-size:11px;">API (requires MP Engine)</div>
+      <div style="color:#eaeaea; font-family:monospace; font-size:10px; white-space:pre-wrap; word-break:break-all; background:#1a1a2e; padding:4px; border-radius:3px;">{{api}}</div>
+    </div>
+    {{/api}}
   </div>
 </rolltemplate>
 
@@ -697,10 +716,32 @@
       {{#tohit}}<div><span style="color:#aaa;">To Hit:</span> <span style="color:#8be9fd;">{{tohit}}</span></div>{{/tohit}}
       {{#damage}}<div><span style="color:#aaa;">Damage:</span> <span style="color:#8be9fd;">{{damage}}</span></div>{{/damage}}
       {{#range}}<div><span style="color:#aaa;">Range:</span> <span style="color:#fff;">{{range}}"</span></div>{{/range}}
-            {{#ap}}<div><span style="color:#aaa;">AP:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
-{{#dtype}}<div><span style="color:#aaa;">D-Type:</span> <span style="color:#fff;">{{dtype}}</span></div>{{/dtype}}
+      {{#ap}}<div><span style="color:#bd93f9; font-weight:bold;">Armor Piercing:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
+      {{#dtype}}<div><span style="color:#aaa;">D-Type:</span> <span style="color:#fff;">{{dtype}}</span></div>{{/dtype}}
       {{#kb}}<div><span style="color:#aaa;">KB:</span> <span style="color:#fff;">{{kb}}</span></div>{{/kb}}
       {{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
+      {{#savebc}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;">💫 SAVE ATTACK</div>
+        <div><span style="color:#aaa;">Save BC:</span> <span style="color:#e94560; font-weight:bold;">{{savebc}}</span></div>
+        {{#savemod}}<div><span style="color:#aaa;">Save Mod:</span> <span style="color:#fff;">{{savemod}}</span></div>{{/savemod}}
+        {{#recovery}}<div><span style="color:#aaa;">Recovery:</span> <span style="color:#fff;">{{recovery}}</span></div>{{/recovery}}
+        <div style="color:#666; font-size:11px; margin-top:4px;">• Target's protection adds to save TN</div>
+        <div style="color:#666; font-size:11px;">• Roll-with: Power/10 adds to save TN</div>
+        <div style="color:#666; font-size:11px;">• Recovery roll each between-rounds</div>
+      </div>
+      {{/savebc}}
+      {{#bp}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;">🔗 {{#snaretype}}{{snaretype}} {{/snaretype}}SNARE</div>
+        <div><span style="color:#aaa;">Break Point:</span> <span style="color:#e94560; font-weight:bold;">{{bp}}</span></div>
+        {{#maxbp}}<div><span style="color:#aaa;">Max BP:</span> <span style="color:#fff;">{{maxbp}}</span></div>{{/maxbp}}
+        <div style="color:#666; font-size:11px; margin-top:4px;">• Escape: HTH ≥ BP</div>
+        <div style="color:#666; font-size:11px;">• Exceed by 4+: move OR action only</div>
+        <div style="color:#666; font-size:11px;">• Push escape: +2 to HTH</div>
+        <div style="color:#666; font-size:11px;">• Next hit: +2 BP (max {{maxbp}})</div>
+      </div>
+      {{/bp}}
       {{#notes}}
       <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
         <div style="color:#aaa;">Notes:</div>
@@ -710,8 +751,6 @@
     </div>
   </div>
 </rolltemplate>
-
-
 
 <rolltemplate class="sheet-rolltemplate-mpabw">
   <div style="background:#2b2b3d; border:2px solid #bd93f9; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
