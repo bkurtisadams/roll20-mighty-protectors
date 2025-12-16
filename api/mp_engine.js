@@ -1,11 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.4 (AP/Hardened/Invuln)
+/* Mighty Protectors Roll20 API Engine v2.6 (AP/Hardened/Invuln/PR/Range)
  * Added Armor Piercing vs Hardened vs Invulnerability rules
+ * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
+ * PR cost auto-deducted from attacker
+ * Range uses edge-to-edge distance (adjacent tokens = 0")
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.4 FILE STARTING");
+log("MP ENGINE v2.6 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -197,93 +200,66 @@ MP.Engine = (function () {
     return "other";
   }
 
-  function sumProtection(charId, protKey) {
+  // Parse protection value - supports:
+  // "5" = 5 prot
+  // "5h" = 5 hardened prot
+  // "1/4" = invuln only (0 prot)
+  // "5/4" = 5 prot + invuln
+  // "5h/4" = 5 hardened + invuln
+  // Returns { prot: number, hardened: number, invuln: boolean }
+  function parseProtValue(val) {
+    const s = String(val || "").toLowerCase().trim();
+    if (!s || s === "0") return { prot: 0, hardened: 0, invuln: false };
+    
+    const hasInvuln = s.includes("/4");
+    const withoutInvuln = hasInvuln ? s.replace("/4", "") : s;
+    
+    const isHardened = withoutInvuln.endsWith("h");
+    const numStr = isHardened ? withoutInvuln.slice(0, -1) : withoutInvuln;
+    const prot = parseFloat(numStr) || 0;
+    
+    return {
+      prot: prot,
+      hardened: isHardened ? prot : 0,
+      invuln: hasInvuln
+    };
+  }
+
+  // Sum protection, hardened, and invuln for a specific damage type
+  // Returns { prot: total protection, hardened: total hardened, invuln: boolean }
+  function sumProtectionWithHardened(charId, protKey) {
     const re = new RegExp("^repeating_protection_.*_prot_" + protKey + "$");
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
-    return attrs.reduce((acc, a) => {
+    let totalProt = 0;
+    let totalHardened = 0;
+    let hasInvuln = false;
+    
+    attrs.forEach(a => {
       const n = a.get("name");
       if (re.test(n)) {
-        acc += parseFloat(a.get("current")) || 0;
+        const parsed = parseProtValue(a.get("current"));
+        totalProt += parsed.prot;
+        totalHardened += parsed.hardened;
+        if (parsed.invuln) hasInvuln = true;
       }
-      return acc;
-    }, 0);
-  }
-
-  // Sum all Hardened values from protection rows
-  function sumHardened(charId) {
-    const re = /^repeating_protection_.*_prot_hardened$/;
-    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
-    return attrs.reduce((acc, a) => {
-      const n = a.get("name");
-      if (re.test(n)) {
-        acc += parseFloat(a.get("current")) || 0;
-      }
-      return acc;
-    }, 0);
-  }
-
-  // Check if character has Invulnerability vs a damage type
-  // Parses from Abilities section - look for ability named "Invulnerability" or "Invuln"
-  // with Notes containing damage types like "Kinetic", "Energy", "Heat", etc.
-  // Returns { hasInvuln: bool, types: [], notes: [] }
-  function getInvulnerability(charId, damageType) {
-    const dt = (damageType || "").toLowerCase();
-    if (!dt) return { hasInvuln: false, types: [], notes: [] };
-
-    const rows = getRepeatingAbilityRows(charId);
-    const matchedTypes = [];
-    const notes = [];
-
-    rows.forEach(r => {
-      const nm = _normKey(r.ability_name);
-      if (!nm.includes("invuln")) return;
-
-      const rawNotes = String(r.ability_notes || "");
-      const lines = rawNotes.split(/\r?\n|;|,/).map(s => s.trim()).filter(Boolean);
-
-      // If notes are empty, check if the name itself contains the type
-      const scanLines = lines.length ? lines : [String(r.ability_name || "")];
-
-      scanLines.forEach(line => {
-        const lineLow = line.toLowerCase();
-        // Check for full damage types
-        MP_DAMAGE_TYPES.forEach(fullType => {
-          const ftLow = fullType.toLowerCase();
-          if (ftLow === "biochemical") {
-            if (/\bbio\b|\bbiochem\b|\bbiochemical\b/.test(lineLow)) {
-              if (dt === "biochemical" || dt === "bio") {
-                matchedTypes.push(fullType);
-                notes.push(`Invuln: ${fullType}`);
-              }
-            }
-          } else if (new RegExp("\\b" + ftLow + "\\b").test(lineLow)) {
-            if (dt === ftLow || dt.includes(ftLow)) {
-              matchedTypes.push(fullType);
-              notes.push(`Invuln: ${fullType}`);
-            }
-          }
-        });
-        // Check for sub-types (heat, electricity, radiation, sharp, blunt, etc.)
-        const subTypes = ["heat", "flame", "fire", "cold", "ice", "electricity", "lightning", 
-                         "radiation", "light", "laser", "sharp", "blunt", "sonic", "vibratory",
-                         "magnetism", "poison", "venom", "acid", "gas", "gravity", "disintegration"];
-        subTypes.forEach(sub => {
-          if (new RegExp("\\b" + sub + "\\b").test(lineLow)) {
-            // Check if the current damage type matches this subtype
-            if (dt.includes(sub) || lineLow.includes(dt)) {
-              matchedTypes.push(sub);
-              notes.push(`Invuln: ${sub}`);
-            }
-          }
-        });
-      });
     });
+    
+    return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln };
+  }
 
-    return {
-      hasInvuln: matchedTypes.length > 0,
-      types: matchedTypes,
-      notes: notes
-    };
+  // Legacy function for compatibility - just returns protection total
+  function sumProtection(charId, protKey) {
+    return sumProtectionWithHardened(charId, protKey).prot;
+  }
+
+  // Get total hardened for a specific damage type
+  function sumHardened(charId, protKey) {
+    return sumProtectionWithHardened(charId, protKey).hardened;
+  }
+  
+  // Check if character has invulnerability for a damage type (from protection rows)
+  function hasInvulnerability(charId, protKey) {
+    return sumProtectionWithHardened(charId, protKey).invuln;
   }
 
   
@@ -479,18 +455,31 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const pageId = atkTok.get("_pageid");
     const page = getObj("page", pageId);
 
-    // Roll20 grid: 70px per unit at snapping_increment=1
-    const snap = page ? (parseFloat(page.get("snapping_increment")) || 1) : 1;
-    const gridPx = 70 * snap;
+    // Roll20 grid is always 70px per cell
+    const gridPx = 70;
 
-    // Snap token centers to grid coordinates (works best when tokens are snapped)
-    const ax = Math.round(atkTok.get("left") / gridPx);
-    const ay = Math.round(atkTok.get("top") / gridPx);
-    const bx = Math.round(defTok.get("left") / gridPx);
-    const by = Math.round(defTok.get("top") / gridPx);
+    // Get center positions and token sizes
+    const ax = atkTok.get("left");
+    const ay = atkTok.get("top");
+    const aw = atkTok.get("width") || 70;
+    const ah = atkTok.get("height") || 70;
+    
+    const bx = defTok.get("left");
+    const by = defTok.get("top");
+    const bw = defTok.get("width") || 70;
+    const bh = defTok.get("height") || 70;
 
-    const dx = Math.abs(bx - ax);
-    const dy = Math.abs(by - ay);
+    // Calculate edge-to-edge distance (gap between bounding boxes)
+    // Negative gap means overlap = 0 distance
+    const gapX = Math.abs(bx - ax) - (aw / 2) - (bw / 2);
+    const gapY = Math.abs(by - ay) - (ah / 2) - (bh / 2);
+    
+    const dxPx = Math.max(0, gapX);
+    const dyPx = Math.max(0, gapY);
+    
+    // Convert to grid squares
+    const dx = dxPx / gridPx;
+    const dy = dyPx / gridPx;
 
     // Match Roll20 ruler diagonal setting
     const diag = page ? (page.get("diagonaltype") || "foure") : "foure";
@@ -506,10 +495,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         distSquares = max + Math.floor(min / 2);
         break;
       }
-      case "manhattan": // if ever used
+      case "manhattan":
         distSquares = dx + dy;
         break;
-      case "pythagorean": // true Euclidean
+      case "pythagorean":
         distSquares = Math.sqrt(dx * dx + dy * dy);
         break;
       default:
@@ -703,6 +692,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const snBP = num(getAtkAttr("attack_bp"), 0);
     const snMaxBP = num(getAtkAttr("attack_max_bp"), 0);
     const snType = getAtkAttr("attack_snare_type") || "";
+    
+    // Parse PR cost from attack_cost field (handles "2", "2/6c", etc.)
+    const atkCostRaw = getAtkAttr("attack_cost") || fields.cost || "";
+    const atkPR = num(atkCostRaw.split("/")[0], 0); // Get PR before any slash
 
     let atkSaveAttr;
     if (atkTypeCode === "M") atkSaveAttr = "intelligence_save";
@@ -713,7 +706,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Check if attacker is in Defensive stance (bar3 = 3) - they take -3 to hit
     // Check if attacker is in Full Defense (bar3 = 6) - they cannot attack
-    const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
+    // Find attacker token on same page as defender to avoid cross-page distance issues
+    const defPageId = defTok.get("_pageid");
+    const atkTok = findObjs({ _type: "graphic", represents: atkCharId, _pageid: defPageId })[0];
     const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
     
     // Block attacks in Full Defense
@@ -739,13 +734,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const targetTotal = baseToHit - defValue;
 
-    // Deduct push cost from attacker
-    if (isPushing) {
-      const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
-      if (atkTok) {
-        const atkPow0 = getResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
-        setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - 2));
-      }
+    // Deduct push cost from attacker (2 Power)
+    if (isPushing && atkTok) {
+      const atkPow0 = getResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - 2));
+    }
+    
+    // Deduct attack PR cost from attacker
+    let prDeducted = 0;
+    if (atkPR > 0 && atkTok) {
+      const atkPow0 = getResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      prDeducted = Math.min(atkPR, atkPow0);
+      setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - atkPR));
     }
 
     // Determine outcome
@@ -851,7 +851,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       // Auto-apply Off Balance to attacker
       if (fumbleResult.type === FUMBLE_TYPES.OFF_BALANCE_ATK) {
-        const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
         if (atkTok) {
           html += applyOffBalance(atkTok, atkChar.get("name"));
         }
@@ -860,7 +859,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (fumbleResult.type === FUMBLE_TYPES.MUSCLE_STRAIN_ATK || 
           fumbleResult.type === FUMBLE_TYPES.LEG_STRAIN ||
           fumbleResult.type === FUMBLE_TYPES.ARM_STRAIN) {
-        const atkTok = findObjs({ _type: "graphic", represents: atkCharId })[0];
         if (atkTok) {
           const atkHits0 = getResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
           setResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, atkHits0 - 1));
@@ -870,6 +868,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     if (isPushing) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Pushing: +2 damage, costs 2 Power">⚡ PUSH!</span>`;
+    }
+    if (prDeducted > 0) {
+      html += `<br/><span style="color:#333; font-size:10px;">PR: -${prDeducted}</span>`;
     }
 
     html += `</div>`;
@@ -1007,18 +1008,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const protKey = rec.protKey;
     const damageType = rec.dmgTypeStr || "Kinetic";
     
-    // Get base protection
-    let baseProt = sumProtection(defChar.id, protKey);
+    // Get protection, hardened, and invuln for this damage type
+    const protData = sumProtectionWithHardened(defChar.id, protKey);
+    let baseProt = protData.prot;
+    const hardened = protData.hardened;
+    const hasInvuln = protData.invuln;
     
     // Avoid Armor crits bypass protection entirely
     const bypassProt = mode.includes("noprot");
-    
-    // Get Hardened (summed from all protection rows)
-    const hardened = sumHardened(defChar.id);
-    
-    // Check for Invulnerability vs this damage type
-    const invulnCheck = getInvulnerability(defChar.id, damageType);
-    const hasInvuln = invulnCheck.hasInvuln;
     
     // Get attack's Armor Piercing
     const rawAP = rec.atkAP;
@@ -1181,12 +1178,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Build protection display string
     let protDisplay = `${Math.floor(effectiveProt)}`;
     
-    // Invulnerability indicator
+    // Invulnerability indicator - dark orange for visibility on yellow
     let invulnIndicator = "";
     if (hasInvuln && invulnReduction > 0) {
-      invulnIndicator = ` <span style="color:#8be9fd;" title="Invulnerability: 1/4 damage">[×¼]</span>`;
+      invulnIndicator = ` <span style="color:#d35400;" title="Invulnerability: 1/4 damage">[×¼]</span>`;
     } else if (hasInvuln && leftoverAP > 0) {
-      invulnIndicator = ` <span style="color:#e94560;" title="AP bypassed Invulnerability">[Invuln bypassed]</span>`;
+      invulnIndicator = ` <span style="color:#c0392b;" title="AP bypassed Invulnerability">[Invuln bypassed]</span>`;
     }
     
     // AP indicator
@@ -1370,12 +1367,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const baseSave = getAttrNum(defChar.id, saveAttr, 10);
 
     // Protection adds to save (makes it easier) per 4.9
-    const prot = sumProtection(defChar.id, rec.protKey);
-    
-    // Invulnerability gives +8 to saves vs that damage type
-    const damageType = rec.dmgTypeStr || "Kinetic";
-    const invulnCheck = getInvulnerability(defChar.id, damageType);
-    const invulnBonus = invulnCheck.hasInvuln ? 8 : 0;
+    // Also check for invulnerability (+8 bonus)
+    const protData = sumProtectionWithHardened(defChar.id, rec.protKey);
+    const prot = protData.prot;
+    const invulnBonus = protData.invuln ? 8 : 0;
 
     // Roll-with for saves: spend Power to add to save TN (4.8.3.1)
     const rw = Math.max(0, num(args.rollwith, 0));
@@ -1406,7 +1401,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const msg_out =
       `<b>Save Attack</b> (${esc(rec.saveBC)}) vs <b>${esc(rec.defName)}</b><br/>` +
       `Base: <b>${baseSave}</b> | Mod: <b>${rec.saveMod}</b> | Prot: <b>+${Math.floor(prot)}</b>` +
-      (invulnBonus > 0 ? ` | <span style="color:#8be9fd;">Invuln: <b>+${invulnBonus}</b></span>` : "") +
+      (invulnBonus > 0 ? ` | <span style="color:#d35400;">Invuln: <b>+${invulnBonus}</b></span>` : "") +
       (rwPaid > 0 ? ` | RW: <b>+${rwPaid}</b>` : "") +
       (critMod !== 0 ? ` | Crit: <b>${critMod}</b>` : "") +
       `<br/>Save TN: <b>${tn}-</b> | Roll: <b>${d20}</b> → <b style="color:${pass ? '#50fa7b' : '#e94560'}">${pass ? "SAVED" : "FAILED"}</b>` +
@@ -2065,9 +2060,18 @@ function cmdStance(msg, args) {
     
     const rangeData = calculateRangeWithProfile(tok1, tok2, char1Id, char2Id);
     
+    // Debug info
+    const page = getObj("page", tok1.get("_pageid"));
+    const scaleNum = page ? page.get("scale_number") : "?";
+    const scaleUnit = page ? page.get("scale_units") : "?";
+    
     let msg_out = `<b>Range Check</b><br/>`;
     msg_out += `${esc(name1)} → ${esc(name2)}<br/>`;
     msg_out += `Distance: <b>${rangeData.inches}"</b><br/>`;
+    msg_out += `<span style="font-size:10px; color:#888;">`;
+    msg_out += `T1: ${Math.round(tok1.get("left"))}x${Math.round(tok1.get("top"))} (${tok1.get("width")}x${tok1.get("height")})<br/>`;
+    msg_out += `T2: ${Math.round(tok2.get("left"))}x${Math.round(tok2.get("top"))} (${tok2.get("width")}x${tok2.get("height")})<br/>`;
+    msg_out += `Page: ${scaleNum} ${scaleUnit}/sq</span><br/>`;
     
     if (rangeData.profileAdjusted) {
       msg_out += `Profiles: ${rangeData.atkProfile} / ${rangeData.defProfile}<br/>`;
@@ -2114,12 +2118,12 @@ function cmdStance(msg, args) {
           <code>!mp test crit [type]</code> - Force crit (types: headshot, solid, precise, armor, leg, arm, gear, free, muscle, offbal, other)<br/>
           <code>!mp test fumble [type]</code> - Force fumble<br/>
           <code>!mp test grapple [TOHIT] [lock]</code> - Grapple test harness (select 2 tokens: grappler, target)<br/>
-          <code>!mp test damage N</code> - Apply N raw damage to selected token<br/>
-          <code>!mp test save BC MOD</code> - Test save attack (BC=EN/AG/IN/CL)<br/>
+          <code>!mp test damage N [type] [--ap:N] [--headshot]</code> - Apply N damage (AP tests vs target's Hardened)<br/>
+          <code>!mp test save BC MOD REC [dtype]</code> - Test save attack (dtype tests target's Invuln +8)<br/>
           <code>!mp test snare BP [MAX]</code> - Apply snare to selected token<br/>
           <code>!mp test heal N</code> - Heal N hits to selected token<br/>
           <code>!mp test reset</code> - Reset selected token to full Hits/Power<br/>
-          <code>!mp test status</code> - Show selected token's full status`);
+          <code>!mp test status</code> - Show selected token's full status (shows Hardened/Invuln)`);
     }
   }
 
@@ -2324,6 +2328,17 @@ function cmdStance(msg, args) {
     const protKey = typeToProtKey(dmgType);
     const ignoreProt = (args.noprot === "1");
     const isHeadshot = (args.headshot === "1");
+    
+    // Parse AP value
+    let apValue = 0;
+    if (args.ap) {
+      if (args.ap === "all" || args.ap === "ALL") {
+        apValue = Infinity;
+      } else {
+        apValue = num(args.ap, 0);
+      }
+    }
+    if (ignoreProt) apValue = Infinity; // --noprot is same as ap:all
 
     // Create test pending record
     const rollId = "test_" + String(Date.now()) + "_" + randomInteger(999999);
@@ -2350,7 +2365,7 @@ function cmdStance(msg, args) {
       dmgTypeStr: dmgType.charAt(0).toUpperCase() + dmgType.slice(1),
       protKey: protKey,
       atkType: "std",
-      atkAP: ignoreProt ? Infinity : 0,
+      atkAP: apValue,
       saveBC: "",
       saveMod: 0,
       recMod: 0,
@@ -2362,18 +2377,37 @@ function cmdStance(msg, args) {
       created: Date.now()
     };
 
+    // Build info display
+    let apLabel = "";
+    if (apValue === Infinity) {
+      apLabel = " | AP: ALL";
+    } else if (apValue > 0) {
+      apLabel = ` | AP: ${apValue}`;
+    }
+    
+    // Get target's protection info (includes invuln)
+    const protData = sumProtectionWithHardened(char.id, protKey);
+    
+    let targetInfo = ` | Target Prot: ${protData.prot}`;
+    if (protData.hardened > 0) {
+      targetInfo += ` (<span style="color:#bd93f9;">${protData.hardened}h</span>)`;
+    }
+    if (protData.invuln) {
+      targetInfo += ` | <span style="color:#d35400;">Invuln ¼</span>`;
+    }
+
     let html = `<div style="background:#8be9fd; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
     html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST DAMAGE</span> `;
     html += `<span style="color:#000;">vs ${esc(char.get("name"))}</span>`;
-    html += `<br/><span style="color:#333; font-size:11px;">Raw: ${rawDamage} | Type: ${dmgType}${ignoreProt ? " | NO PROT" : ""}${isHeadshot ? " | HEADSHOT x2" : ""}</span>`;
+    html += `<br/><span style="color:#333; font-size:11px;">Raw: ${rawDamage} | Type: ${dmgType}${apLabel}${isHeadshot ? " | HEADSHOT x2" : ""}${targetInfo}</span>`;
     html += `</div>`;
 
-    let mode = ignoreProt ? "noprot" : "noroll";
+    let mode = "noroll";
     if (isHeadshot) mode = "headshot";
 
     const buttons = `[Apply](!mp apply --id ${rollId} --mode ${mode}) ` +
-      `[RW Max](!mp apply --id ${rollId} --mode ${mode === "noprot" ? "noprot_rwmax" : (isHeadshot ? "headshot_rw" : "rollwithmax")}) ` +
-      `[RW Custom](!mp apply --id ${rollId} --mode ${mode === "noprot" ? "noprot_rw" : (isHeadshot ? "headshot_rw" : "rollwithcustom")} --amt ?{Divert to Power|0}) ` +
+      `[RW Max](!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithmax"}) ` +
+      `[RW Custom](!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithcustom"} --amt ?{Divert to Power|0}) ` +
       `[KB](!mp kb --id ${rollId})`;
 
     ch("MP", "/w gm " + html + buttons);
@@ -2395,6 +2429,10 @@ function cmdStance(msg, args) {
     const recMod = num(args.rec, -14);
     const dmgType = (args.dtype || "psychic").toLowerCase();
     const protKey = typeToProtKey(dmgType);
+    
+    // Check for invulnerability from protection rows
+    const protData = sumProtectionWithHardened(char.id, protKey);
+    const invulnNote = protData.invuln ? " | <span style='color:#d35400;'>Invuln +8</span>" : "";
 
     const rollId = "test_" + String(Date.now()) + "_" + randomInteger(999999);
     
@@ -2435,7 +2473,7 @@ function cmdStance(msg, args) {
     let html = `<div style="background:#ff79c6; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
     html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST SAVE ATTACK</span> `;
     html += `<span style="color:#000;">vs ${esc(char.get("name"))}</span>`;
-    html += `<br/><span style="color:#333; font-size:11px;">Save BC: ${bc} | Mod: ${saveMod} | Recovery: ${recMod}</span>`;
+    html += `<br/><span style="color:#333; font-size:11px;">Save BC: ${bc} | Mod: ${saveMod} | Recovery: ${recMod} | Type: ${dmgType}${invulnNote}</span>`;
     html += `</div>`;
 
     const buttons = `[Make Save](!mp save --id ${rollId} --critmod 0) ` +
@@ -2611,20 +2649,32 @@ function cmdStance(msg, args) {
     const physDef = getAttrNum(char.id, "physical_def", 0);
     const mentDef = getAttrNum(char.id, "mental_def", 0);
 
-    const kinProt = sumProtection(char.id, "kinetic");
-    const engProt = sumProtection(char.id, "energy");
-    const entProt = sumProtection(char.id, "entropy");
-    const psyProt = sumProtection(char.id, "psychic");
-    const bioProt = sumProtection(char.id, "bio");
-    const othProt = sumProtection(char.id, "other");
-    const totalHardened = sumHardened(char.id);
+    const kinData = sumProtectionWithHardened(char.id, "kinetic");
+    const engData = sumProtectionWithHardened(char.id, "energy");
+    const entData = sumProtectionWithHardened(char.id, "entropy");
+    const psyData = sumProtectionWithHardened(char.id, "psychic");
+    const bioData = sumProtectionWithHardened(char.id, "bio");
+    const othData = sumProtectionWithHardened(char.id, "other");
     
-    // Check for invulnerabilities
-    const invulnTypes = [];
-    MP_DAMAGE_TYPES.forEach(dt => {
-      const check = getInvulnerability(char.id, dt);
-      if (check.hasInvuln) invulnTypes.push(dt);
-    });
+    // Format protection value with hardened and invuln indicators
+    function fmtProt(data) {
+      let result = "";
+      if (data.prot === 0 && !data.invuln) return "0";
+      if (data.prot === 0 && data.invuln) return `<span style="color:#d35400;">¼</span>`;
+      
+      if (data.hardened === 0) {
+        result = String(data.prot);
+      } else if (data.hardened >= data.prot) {
+        result = `<span style="color:#bd93f9;">${data.prot}h</span>`;
+      } else {
+        result = `${data.prot}(<span style="color:#bd93f9;">${data.hardened}h</span>)`;
+      }
+      
+      if (data.invuln) {
+        result += `<span style="color:#d35400;">/4</span>`;
+      }
+      return result;
+    }
 
     const hth = getAttr(char.id, "hth_damage") || "?";
     const mass = getAttr(char.id, "mass") || "?";
@@ -2653,14 +2703,7 @@ function cmdStance(msg, args) {
       msg_out += `<span style="color:#f4d03f;"><b>Def Mod:</b> ${defMod >= 0 ? '+' : ''}${defMod}</span><br/>`;
     }
     
-    msg_out += `<b>Protection:</b> Kin ${kinProt} | Eng ${engProt} | Ent ${entProt} | Psy ${psyProt} | Bio ${bioProt} | Oth ${othProt}`;
-    if (totalHardened > 0) {
-      msg_out += `<br/><span style="color:#bd93f9;"><b>Hardened:</b> ${totalHardened}</span>`;
-    }
-    if (invulnTypes.length > 0) {
-      msg_out += `<br/><span style="color:#8be9fd;"><b>Invulnerable (¼ dmg):</b> ${invulnTypes.join(", ")}</span>`;
-    }
-    msg_out += `<br/>`;
+    msg_out += `<b>Protection:</b> Kin ${fmtProt(kinData)} | Eng ${fmtProt(engData)} | Ent ${fmtProt(entData)} | Psy ${fmtProt(psyData)} | Bio ${fmtProt(bioData)} | Oth ${fmtProt(othData)}<br/>`;
     msg_out += `<b>HTH:</b> ${hth} | <b>Mass:</b> ${mass}<br/>`;
     msg_out += `<b>Roll-With Cap:</b> ${Math.floor(pow / 10)}`;
     
@@ -2753,11 +2796,17 @@ function cmdStance(msg, args) {
           for (let i = 3; i < testParts.length; i++) {
             if (testParts[i] === "--noprot") testArgs.noprot = "1";
             if (testParts[i] === "--headshot") testArgs.headshot = "1";
+            if (testParts[i].startsWith("--ap")) {
+              // --ap or --ap:N
+              const apParts = testParts[i].split(":");
+              testArgs.ap = apParts[1] || "all";
+            }
           }
         } else if (testArgs.subcmd === "save") {
           testArgs.bc = testParts[3] || "EN";
           testArgs.mod = testParts[4] || "0";
           testArgs.rec = testParts[5] || "-14";
+          testArgs.dtype = testParts[6] || "psychic";
         } else if (testArgs.subcmd === "snare") {
           testArgs.bp = testParts[3] || "12";
           testArgs.max = testParts[4] || "";
@@ -2812,7 +2861,7 @@ function cmdStance(msg, args) {
       case "info": return cmdInfo(msg, args);
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.2</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.6</b> Commands:<br/>
           <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
@@ -2849,11 +2898,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.4:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.6:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.4 READY");
+  log("MP ENGINE v2.6 READY");
 });
