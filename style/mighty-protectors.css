@@ -199,3 +199,19 @@
   font-weight: bold !important;
   box-sizing: border-box !important;
 }
+
+/* Target the container for the buttons */
+.charsheet .repcontrol {
+    min-height: 20px; /* Reduces the height of the row holding the buttons */
+    margin-top: 2px;
+}
+
+/* Target the Add and Modify buttons specifically */
+.charsheet .repcontrol .btn {
+    font-size: 10px !important; /* Smaller text */
+    padding: 1px 4px !important; /* Smaller clickable area */
+    line-height: 12px;           /* Tighter vertical spacing */
+    height: auto;                /* Let height adjust to the smaller font */
+    background-image: none;      /* Removes default gradient if you want flat color */
+    box-shadow: none;            /* Removes default 3D shadow */
+}

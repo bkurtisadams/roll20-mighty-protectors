@@ -49,45 +49,85 @@
     </table>
   </div>
 
-  <!-- CAREERS / INVENTING PTS / LEGAL - Flexbox layout -->
-  <div style="display:flex; gap:6px; margin-bottom:3px;">
-    <!-- CAREERS -->
-    <div style="background:#16213e; padding:4px; border-radius:4px; flex:1; min-width:0;">
-      <fieldset class="repeating_careers" style="border:none; padding:0; margin:0;">
-        <div style="display:flex; align-items:center; gap:4px; margin-bottom:2px;">
-          <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Career</span>
-          <input type="text" name="attr_career_name" style="flex:1; min-width:60px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; box-sizing:border-box;" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" />
-        </div>
-      </fieldset>
-    </div>
-    <!-- INVENTING PTS -->
-    <div style="background:#16213e; padding:4px; border-radius:4px; flex:1; min-width:0;">
-      <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px; flex-wrap:wrap;">
-        <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Inventing Pts:</span>
-        <input type="text" name="attr_ip_total" readonly style="width:30px; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:3px; text-align:center; font-weight:bold;" title="Total IPs (Base + Bonus from IN row)" />
-        <span style="color:#aaa; font-size:11px;">Used:</span>
-        <input type="text" name="attr_ip_used" readonly style="width:30px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:3px; text-align:center;" title="Sum of IPs spent on abilities" />
+<!-- WRAPPER -->
+<div style="display:flex; gap:4px; font-family:Arial,sans-serif; font-size:12px; align-items:stretch; margin-top:3px; margin-bottom:3px;">
+
+  <!-- COLUMN 1: CAREERS -->
+  <!-- justify-content:flex-start ensures top alignment -->
+  <div style="background:#16213e; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;">
+    <fieldset class="repeating_careers" style="border:none; padding:0; margin:0; width:100%;">
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom: 2px;">
+        <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Career</span>
+        <input type="text" name="attr_career_name" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; border-radius:0; box-sizing:border-box;" />
+      </div>
+    </fieldset>
+</div>
+
+  <!-- COLUMN 2: INVENTING PTS -->
+  <!-- justify-content:flex-start ensures top alignment -->
+  <div style="background:#16213e; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; gap:4px;">
+    
+    <!-- Top Row: Base and Mod -->
+    <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px;">
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#aaa; white-space:nowrap;">Base IPs from IN:</span>
+        <input type="text" name="attr_base_ip" title="Total IPs (Base + Bonus from IN row)" value="6" style="width:25px; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold;" />
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
-        <span style="color:#aaa; font-size:11px; white-space:nowrap;">Remaining Inv Pts:</span>
-        <input type="text" name="attr_ip_remaining" readonly style="width:30px; background:#0f0f23; color:#50fa7b; border:1px solid #222; padding:3px; text-align:center; font-weight:bold;" title="IPs available to spend" />
+        <span style="color:#aaa; white-space:nowrap;">IP Mod:</span>
+        <input type="text" name="attr_ip_mod" value="0" style="width:25px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" />
       </div>
     </div>
-    <!-- LEGAL STATUS -->
-    <div style="background:#16213e; padding:4px; border-radius:4px; flex:1; min-width:0;">
-      <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
-        <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Legal Status</span>
-        <input type="text" name="attr_legal_status" style="flex:1; min-width:40px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; box-sizing:border-box;" />
+
+    <!-- Bottom Row: Total (Right Justified) -->
+    <div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; font-size:11px;">
+      <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Remaining Inventing Points:</span>
+      <input type="text" name="attr_ip_remaining" title="IPs available to spend" value="6" style="width:25px; background:#0f0f23; color:#50fa7b; border:1px solid #222; padding:2px; text-align:center; font-weight:bold;" />
+    </div>
+
+  </div>
+
+  <!-- COLUMN 3: LEGAL STATUS -->
+  <div style="background:#16213e; padding:4px; border-radius:4px; flex:1; font-size:11px;">
+    
+    <!-- Row 1: Status Input -->
+    <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+      <span style="color:#f4d03f; font-weight:bold; white-space:nowrap; font-size:12px;">Legal Status</span>
+      <input type="text" name="attr_legal_status" value="Licensed" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;" />
+    </div>
+
+    <!-- Rows 2 & 3: Checkbox Grid -->
+    <div style="display:grid; grid-template-columns: 0.8fr 1.2fr; gap:2px; align-items:center;">
+      
+      <!-- Licensed -->
+      <label style="display:flex; align-items:center; gap:3px; cursor:pointer; margin:0;">
+        <input type="checkbox" name="attr_licensed" title="License to operate as a hero" style="margin:0;" />
+        <span style="color:#aaa; font-size:11px;">Licensed</span>
+      </label>
+
+      <!-- Security Clearance -->
+      <div style="display:flex; align-items:center; gap:3px;">
+        <span style="color:#aaa; white-space:nowrap; font-size:11px;">Security Clearance</span>
+        <input type="checkbox" name="attr_security_check" title="Enable Security Clearance calculation" style="margin:0;" />
+        <input type="text" name="attr_security_val" title="Security Clearance level (IN Save + CL Save + Earned/5 - 20)" value="13" style="width:22px; background:#0f0f23; color:#f4d03f; border:1px solid #333; text-align:center; font-weight:bold; font-size:11px; padding:0;" />
       </div>
-      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
-        <input type="checkbox" name="attr_license" value="1" title="License to operate as a hero" /><span style="color:#aaa; font-size:11px;">Lic</span>
-        <input type="checkbox" name="attr_wanted" value="1" title="Authorities want them brought in" /><span style="color:#aaa; font-size:11px;">Wanted</span>
-        <input type="checkbox" name="attr_criminal_record" value="1" title="Criminal Record" /><span style="color:#aaa; font-size:11px;">Rec</span>
-        <input type="checkbox" name="attr_use_security" value="1" title="Enable Security Clearance calculation" /><span style="color:#aaa; font-size:11px;">Sec:</span>
-        <input type="text" name="attr_security_clearance" style="width:25px; background:#0f0f23; color:#f4d03f; border:1px solid #333; padding:2px; text-align:center; font-weight:bold;" title="Security Clearance level (IN Save + CL Save + Earned/5 - 20)" />
-      </div>
+
+      <!-- Wanted -->
+      <label style="display:flex; align-items:center; gap:3px; cursor:pointer; margin:0;">
+        <input type="checkbox" name="attr_wanted" title="Authorities want them brought in" style="margin:0;" />
+        <span style="color:#aaa; font-size:11px;">Wanted</span>
+      </label>
+
+      <!-- Criminal Record -->
+      <label style="display:flex; align-items:center; gap:3px; cursor:pointer; margin:0;">
+        <input type="checkbox" name="attr_criminal_record" title="Criminal Record" style="margin:0;" />
+        <span style="color:#aaa; font-size:11px;">Criminal Record</span>
+      </label>
+
     </div>
   </div>
+
+</div>
 
   <!-- PROFILE / WEIGHT / MASS / WEALTH / LUCK ROW -->
   <div style="background:#16213e; padding:4px; margin-bottom:3px; border-radius:4px;">
@@ -98,14 +138,16 @@
         style="width:45px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; text-align:center; box-sizing:border-box;"
         title="Profile (default 1). Size affects range penalties." />
 
-      <span style="color:#aaa;">Weight</span>
+      <span style="color:#aaa; font-size:11px;">Weight</span>
       <input type="text" name="attr_weight" value="0"
         style="width:70px; flex-shrink:1; min-width:55px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; box-sizing:border-box;" />
       <span style="color:#888; font-size:10px;">lbs</span>
 
-      <!-- Mass label becomes the roll button (and remove the old separate Roll/Mass button) -->
+      <!-- MASS BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_mass"
+        style="font-size:9px; height:18px; line-height:16px; padding:0 5px; margin:0; background:#e94560; color:#fff; border:1px solid #333; border-radius:3px;"
         value="&{template:default} {{name=Mass Roll}} {{Mass=[[@{mass}]]}}">Mass</button>
+        
       <input type="text" name="attr_mass"
         style="width:65px; flex-shrink:1; min-width:40px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; text-align:center; box-sizing:border-box;"
         value="1d4" readonly />
@@ -115,16 +157,20 @@
         style="width:28px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; text-align:center; box-sizing:border-box;"
         title="Knockback Resistance bonus (from Inertia)" />
 
-      <!-- Wealth label becomes the roll button (remove the old Roll button) -->
+      <!-- WEALTH BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_wealth"
+        style="font-size:10px; height:20px; line-height:18px; padding:0 5px; margin:0; background:#e94560; color:#fff; border:1px solid #333; border-radius:3px;"
         value="&{template:default} {{name=Wealth}} {{Roll=[[@{wealth}]]}}">Wealth</button>
+        
       <input type="text" name="attr_wealth" value="d4"
         style="width:60px; flex-shrink:1; min-width:40px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; box-sizing:border-box;"
         title="Starting: d4 (~$40k annual income)" />
 
-      <!-- Luck label becomes the roll button (remove the old Roll button) -->
+      <!-- LUCK BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_luck"
+        style="font-size:10px; height:20px; line-height:18px; padding:0 5px; margin:0; background:#e94560; color:#fff; border:1px solid #333; border-radius:3px;"
         value="&{template:default} {{name=Luck Save}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}">Luck</button>
+        
       <input type="text" name="attr_luck" value="10"
         style="width:30px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; text-align:center; box-sizing:border-box;"
         title="Starting: 10- save (average luck)" />
