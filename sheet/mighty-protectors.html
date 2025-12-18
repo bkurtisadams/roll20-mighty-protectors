@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.14 (Jeff) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.15 (IPs/Security/Roll labels fix) -->
 
 <div tabindex="0" style="background:#1a1a2e; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -71,11 +71,11 @@
     <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px;">
       <div style="display:flex; align-items:center; gap:4px;">
         <span style="color:#aaa; white-space:nowrap;">Base IPs from IN:</span>
-        <input type="text" name="attr_base_ip" title="Total IPs (Base + Bonus from IN row)" value="6" style="width:25px; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold;" />
+        <input type="text" name="attr_base_ip" title="Base IPs = IN/2 rounded up (ceil). Auto-calculated from your IN (Intelligence) score." value="6" style="width:25px; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold;" readonly />
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
         <span style="color:#aaa; white-space:nowrap;">IP Mod:</span>
-        <input type="text" name="attr_ip_mod" value="0" style="width:25px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" />
+        <input type="text" name="attr_ip_mod" value="0" style="width:25px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" title="IP Mod = bonus/penalty added to Base IPs (after IN/2 rounded up)." />
       </div>
     </div>
 
@@ -108,8 +108,8 @@
       <!-- Security Clearance -->
       <div style="display:flex; align-items:center; gap:3px;">
         <span style="color:#aaa; white-space:nowrap; font-size:11px;">Security Clearance</span>
-        <input type="checkbox" name="attr_security_check" title="Enable Security Clearance calculation" style="margin:0;" />
-        <input type="text" name="attr_security_val" title="Security Clearance level (IN Save + CL Save + Earned/5 - 20)" value="13" style="width:22px; background:#0f0f23; color:#f4d03f; border:1px solid #333; text-align:center; font-weight:bold; font-size:11px; padding:0;" />
+        <input type="checkbox" name="attr_use_security" title="Enable Security Clearance calculation" style="margin:0;" />
+        <input type="text" name="attr_security_clearance" readonly title="Security Clearance level (IN Save + CL Save + Earned/5 - 20)" value="13" style="width:22px; background:#0f0f23; color:#f4d03f; border:1px solid #333; text-align:center; font-weight:bold; font-size:11px; padding:0;" />
       </div>
 
       <!-- Wanted -->
@@ -146,7 +146,7 @@
       <!-- MASS BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_mass"
         style="font-size:9px; height:18px; line-height:16px; padding:0 5px; margin:0; background:#e94560; color:#fff; border:1px solid #333; border-radius:3px;"
-        value="&{template:default} {{name=Mass Roll}} {{Mass=[[@{mass}]]}}">Mass</button>
+        value="&{template:default} {{name=@{character_name} makes a Mass roll}} {{Mass=[[@{mass}]]}}">Mass</button>
         
       <input type="text" name="attr_mass"
         style="width:65px; flex-shrink:1; min-width:40px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; text-align:center; box-sizing:border-box;"
@@ -160,7 +160,7 @@
       <!-- WEALTH BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_wealth"
         style="font-size:10px; height:20px; line-height:18px; padding:0 5px; margin:0; background:#e94560; color:#fff; border:1px solid #333; border-radius:3px;"
-        value="&{template:default} {{name=Wealth}} {{Roll=[[@{wealth}]]}}">Wealth</button>
+        value="&{template:default} {{name=@{character_name} makes a Wealth roll}} {{Roll=[[@{wealth}]]}}">Wealth</button>
         
       <input type="text" name="attr_wealth" value="d4"
         style="width:60px; flex-shrink:1; min-width:40px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; box-sizing:border-box;"
@@ -169,7 +169,7 @@
       <!-- LUCK BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_luck"
         style="font-size:10px; height:20px; line-height:18px; padding:0 5px; margin:0; background:#e94560; color:#fff; border:1px solid #333; border-radius:3px;"
-        value="&{template:default} {{name=Luck Save}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}">Luck</button>
+        value="&{template:default} {{name=@{character_name} makes a Luck roll}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}">Luck</button>
         
       <input type="text" name="attr_luck" value="10"
         style="width:30px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:3px; text-align:center; box-sizing:border-box;"
@@ -1631,6 +1631,33 @@ function initAttackNotes() {
     });
   }
 
+
+  // ==================== BASE INVENTING POINTS (IPs) ====================
+  // Rules: Base IPs from IN are IN/2 rounded up. IP Mod is a bonus/penalty added on top.
+  // Total Invention Points used by the sheet are stored in invention_points (used by calcIPTotals()).
+  function calcBaseIPs() {
+    getAttrs(["intelligence_score", "ip_mod"], function(v) {
+      var inScore = parseInt(v.intelligence_score, 10);
+      if (isNaN(inScore)) inScore = 0;
+
+      var baseIP = Math.ceil(inScore / 2);
+
+      var ipMod = parseInt(v.ip_mod, 10);
+      if (isNaN(ipMod)) ipMod = 0;
+
+      var totalIPs = baseIP + ipMod;
+
+      setAttrs({
+        base_ip: baseIP,
+        invention_points: totalIPs
+      }, function() {
+        // Keep remaining IPs in sync with any ability IP spend.
+        try { calcIPTotals(); } catch (e) {}
+      });
+    });
+  }
+
+
   on("change:use_security change:intelligence_save change:cool_save change:ep_earned", function() {
     calcSecurityClearance();
   });
@@ -1884,4 +1911,9 @@ function rebuildABWSummary() {
 
 on("change:repeating_abilities remove:repeating_abilities", rebuildABWSummary);
 on("sheet:opened", rebuildABWSummary);
+
+
+on("sheet:opened change:intelligence_score change:ip_mod", function() {
+    calcBaseIPs();
+  });
 </script>
