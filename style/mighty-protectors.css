@@ -153,3 +153,49 @@
   line-height: 16px !important;
 }
 
+/* Defense row: enforce column alignment across AG/IN */
+.charsheet .mp-defrow{
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+/* Column 1: Modifier label (fixed width so inputs align) */
+.charsheet .mp-defmod-label{
+  display: inline-block !important;
+  width: 160px !important;   /* tweak if you need more/less */
+  font-size: 10px !important;
+  color: #aaa !important;
+}
+
+/* Column 2: Modifier input */
+.charsheet .mp-defmod-input{
+  width: 28px !important;
+  background: #0f0f23 !important;
+  color: #eaeaea !important;
+  border: 1px solid #333 !important;
+  padding: 2px !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+/* Column 3: Total label (fixed width + GREEN text) */
+.charsheet .mp-deftotal-label{
+  display: inline-block !important;
+  width: 120px !important;   /* tweak to taste */
+  font-size: 10px !important;
+  color: #50fa7b !important; /* your requested green */
+  margin-left: 6px !important;
+}
+
+/* Column 4: Total input */
+.charsheet .mp-deftotal-input{
+  width: 30px !important;
+  background: #0f0f23 !important;
+  color: #f4d03f !important;
+  border: 1px solid #f4d03f !important;
+  padding: 2px !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  box-sizing: border-box !important;
+}

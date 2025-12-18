@@ -200,49 +200,88 @@
       </tr>
       <!-- AG -->
       <tr>
-        <td style="text-align:center; padding:2px;"><input type="text" name="attr_agility_cost" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center;"><input type="text" name="attr_agility_mod" value="0" style="width:100%; background:#0f0f23; color:#8be9fd; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center; color:#e94560; font-weight:bold;" title="Agility - coordination, physical defense, attack accuracy">AG</td>
-        <td style="text-align:center;"><input type="text" name="attr_agility_score" readonly style="width:100%; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
-        <td style="text-align:center; white-space:nowrap;">
-          <input type="text" name="attr_agility_save" readonly style="width:26px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" title="AG Save: Dodge, balance, acrobatics, physical accuracy" />
-          <button type="roll" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)" value="&{template:default} {{name=AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        <td style="text-align:center; padding:2px;">
+          <input type="text" name="attr_agility_cost" value="0"
+            style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" />
         </td>
+
+        <td style="text-align:center;">
+          <input type="text" name="attr_agility_mod" value="0"
+            style="width:100%; background:#0f0f23; color:#8be9fd; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center; color:#e94560; font-weight:bold;"
+            title="Agility - coordination, physical defense, attack accuracy">AG</td>
+
+        <td style="text-align:center;">
+          <input type="text" name="attr_agility_score" readonly
+            style="width:100%; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center; white-space:nowrap;">
+          <input type="text" name="attr_agility_save" readonly
+            style="width:26px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;"
+            title="AG Save: Dodge, balance, acrobatics, physical accuracy" />
+          <button type="roll" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)"
+            value="&{template:default} {{name=AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}"
+            style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        </td>
+
         <td style="white-space:nowrap;">
-          <div style="display:flex; align-items:center; gap:2px;">
-            <span style="color:#aaa; font-size:10px; display:inline-block; width:32px;">PDef:</span>
-            <input type="text" name="attr_physical_def_base" readonly style="width:20px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center; box-sizing:border-box;" title="Base Physical Defense = AG Save - 10" />
-            <span style="color:#666;">+</span>
-            <input type="text" name="attr_physical_def_bonus" value="0" style="width:20px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="Bonus from abilities" />
-            <span style="color:#666;">=</span>
-            <input type="text" name="attr_physical_def" readonly style="width:20px; background:#0f0f23; color:#f4d03f; border:1px solid #f4d03f; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" title="Total Physical Defense" />
+          <div style="display:inline-grid; grid-template-columns:max-content 34px max-content 34px; column-gap:6px; align-items:center; justify-content:start;">
+            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Physical Defense Modifier:</span>
+            <input type="text" name="attr_physical_def_bonus" value="0"
+              style="width:34px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;"
+              title="Physical Defense Modifier" />
+
+            <span style="color:#aaa; font-size:10px; white-space:nowrap; margin-left:10px;">Total Physical Def:</span>
+            <input type="text" name="attr_physical_def" readonly
+              style="width:34px; background:#0f0f23; color:#50fa7b; border:1px solid #f4d03f; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
+              title="Total Physical Def = AG Save + Physical Defense Modifier" />
           </div>
         </td>
       </tr>
+
       <!-- IN -->
       <tr>
-        <td style="text-align:center; padding:2px;"><input type="text" name="attr_intelligence_cost" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center;"><input type="text" name="attr_intelligence_mod" value="0" style="width:100%; background:#0f0f23; color:#8be9fd; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center; color:#e94560; font-weight:bold;" title="Intelligence - mental acuity, inventing, mental defense">IN</td>
-        <td style="text-align:center;"><input type="text" name="attr_intelligence_score" readonly style="width:100%; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
-        <td style="text-align:center; white-space:nowrap;">
-          <input type="text" name="attr_intelligence_save" readonly style="width:26px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;" title="IN Save: Perception, knowledge, mental attacks, inventing" />
-          <button type="roll" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)" value="&{template:default} {{name=IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}" style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        <td style="text-align:center; padding:2px;">
+          <input type="text" name="attr_intelligence_cost" value="0"
+            style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" />
         </td>
+
+        <td style="text-align:center;">
+          <input type="text" name="attr_intelligence_mod" value="0"
+            style="width:100%; background:#0f0f23; color:#8be9fd; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center; color:#e94560; font-weight:bold;"
+            title="Intelligence - mental acuity, inventing, mental defense">IN</td>
+
+        <td style="text-align:center;">
+          <input type="text" name="attr_intelligence_score" readonly
+            style="width:100%; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center; white-space:nowrap;">
+          <input type="text" name="attr_intelligence_save" readonly
+            style="width:26px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center;"
+            title="IN Save: Perception, knowledge, mental attacks" />
+          <button type="roll" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)"
+            value="&{template:default} {{name=IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}"
+            style="background:#e94560; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        </td>
+
         <td style="white-space:nowrap;">
-          <div style="display:flex; align-items:center; gap:2px;">
-            <span style="color:#aaa; font-size:10px; display:inline-block; width:32px;">MDef:</span>
-            <input type="text" name="attr_mental_def_base" readonly style="width:20px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center; box-sizing:border-box;" title="Base Mental Defense = IN Save - 10" />
-            <span style="color:#666;">+</span>
-            <input type="text" name="attr_mental_def_bonus" value="0" style="width:20px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="Bonus from abilities" />
-            <span style="color:#666;">=</span>
-            <input type="text" name="attr_mental_def" readonly style="width:20px; background:#0f0f23; color:#f4d03f; border:1px solid #f4d03f; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" title="Total Mental Defense" />
-            <span style="color:#aaa; font-size:10px; margin-left:6px;" title="Inventing Points = IN ÷ 2 (rounded up). Bonus from Inventing ability.">Inv:</span>
-            <input type="text" name="attr_invention_points_base" readonly style="width:18px; background:#0f0f23; color:#aaa; border:1px solid #222; padding:2px; text-align:center; box-sizing:border-box;" title="Base Inventing Points from IN score" />
-            <span style="color:#666;">+</span>
-            <input type="text" name="attr_invention_points_bonus" value="0" style="width:18px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="Bonus IPs from Inventing ability (1 IP per CP spent)" />
-            <span style="color:#666;">=</span>
-            <input type="text" name="attr_invention_points" readonly style="width:18px; background:#0f0f23; color:#f4d03f; border:1px solid #222; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" title="Total Inventing Points available" />
+          <div style="display:inline-grid; grid-template-columns:max-content 34px max-content 34px; column-gap:6px; align-items:center; justify-content:start;">
+            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Mental Defense Modifier:</span>
+            <input type="text" name="attr_mental_def_bonus" value="0"
+              style="width:34px; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;"
+              title="Mental Defense Modifier" />
+
+            <span style="color:#aaa; font-size:10px; white-space:nowrap; margin-left:10px;">Total Mental Def:</span>
+            <input type="text" name="attr_mental_def" readonly
+              style="width:34px; background:#0f0f23; color:#50fa7b; border:1px solid #f4d03f; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
+              title="Total Mental Def = IN Save + Mental Defense Modifier" />
           </div>
         </td>
       </tr>
