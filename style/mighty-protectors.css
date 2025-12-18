@@ -103,3 +103,53 @@
     0 0 0 3px rgba(139, 233, 253, 0.55),
     0 0 12px rgba(139, 233, 253, 0.35) !important;
 }
+
+/* Text-label roll buttons (Mass/Wealth/Luck) */
+.charsheet button.mp-labelroll[type="roll"]{
+  background: #0f0f23 !important;
+  color: #f4d03f !important;
+  border: 1px solid #333 !important;
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 16px !important;
+  height: 22px !important;
+}
+
+/* Hide Roll20's default d20 icon on these buttons */
+.charsheet button.mp-labelroll[type="roll"]::before{
+  content: "" !important;
+}
+
+/* Slight spacing so it reads like a label, not a big button */
+.charsheet button.mp-labelroll{
+  margin-right: 2px !important;
+}
+
+.charsheet input[name="attr_mass"],
+.charsheet input[name="attr_wealth"]{
+  width: 75px !important;   /* adjust to taste */
+  min-width: 65px !important;
+}
+
+/* Force label-roll buttons to use our font sizing (Roll20 sometimes overrides) */
+.charsheet button[type="roll"].mp-labellink{
+  font-size: 12px !important;
+  font-family: Arial, sans-serif !important;
+  font-weight: 700 !important;
+  line-height: 16px !important;
+
+  /* optional: stop weird shrinking */
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+
+  /* keep it from collapsing */
+  min-height: 22px !important;
+}
+
+/* If Roll20 injects a <span> inside the button, force that too */
+.charsheet button[type="roll"].mp-labellink span{
+  font-size: 12px !important;
+  line-height: 16px !important;
+}
+
