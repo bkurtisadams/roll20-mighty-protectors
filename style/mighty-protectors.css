@@ -247,5 +247,6 @@
 .charsheet button[name="roll_cool_save"] {
   width: 45px !important;
   min-width: 45px !important;
+  margin-right: 4px !important;
   box-sizing: border-box !important;
 }
