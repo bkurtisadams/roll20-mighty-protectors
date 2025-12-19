@@ -31,6 +31,54 @@ Custom character sheet and API for running Mighty Protectors RPG in Roll20.
   - `snr:ice:9/15` - Snare attack (type:bp/maxbp)
   - `ap:5` or `ap` - Armor piercing (amount or ALL)
 
+## Color Scheme
+
+The sheet uses a consistent color system based on the Mighty Protectors/V&V branding and Roll20 token bar defaults.
+
+### Backgrounds
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Deep purple-black | `#1a1428` | Main sheet background |
+| Dark blue-purple | `#1e1e38` | Panel backgrounds, calculated field backgrounds |
+| Black | `#0d0d1a` | User-input field backgrounds |
+
+### Borders
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Dark purple | `#2a2040` | Standard borders, dividers |
+| Light purple | `#4a4070` | Calculated field borders (visible against dark blue) |
+| Cyan | `#8be9fd` | Defense total borders (accent) |
+
+### Title
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Gold | `#ffd700` | Title text |
+| Orange | `#d35400` | Title stroke/border (V&V signature color) |
+
+### Functional Colors
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Red | `#e63946` | Clickable buttons, Hits, BC abbreviations (matches Roll20 Bar 2) |
+| Yellow/Gold | `#f4d03f` | Power, BC scores, important labels (matches Roll20 Bar 1) |
+| Green | `#50fa7b` | Spendable resources: Available CPs, Available IPs |
+| Cyan | `#8be9fd` | Informational/defensive: Init, HTH, Mod columns |
+
+### Text
+| Color | Hex | Usage |
+|-------|-----|-------|
+| Light gray | `#eaeaea` | Standard text, user-input values |
+| Medium gray | `#aaa` | Secondary labels |
+| Dark gray | `#888` | Tertiary labels |
+| Dim gray | `#666` | Disabled/n/a text, separators |
+
+### Design Principles
+- **Red = Action**: Anything clickable (roll buttons, attack buttons) uses red
+- **Yellow = Power**: Matches Roll20 token Bar 1, used for Power and key values
+- **Green = Spendable**: Resources the player can spend (CPs, IPs)
+- **Cyan = Info**: Reference values, defensive stats, calculated info
+- **Dark blue bg = Calculated**: Fields the sheet computes (readonly)
+- **Black bg = User input**: Fields the player types in
+
 ## API Features
 
 The API intercepts attack rolls and adds:

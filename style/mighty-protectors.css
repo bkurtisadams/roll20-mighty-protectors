@@ -238,3 +238,14 @@
     background-image: none;      /* Removes default gradient if you want flat color */
     box-shadow: none;            /* Removes default 3D shadow */
 }
+
+/* BC Stat roll buttons - uniform size and alignment */
+.charsheet button[name="roll_hth"],
+.charsheet button[name="roll_endurance_save"],
+.charsheet button[name="roll_agility_save"],
+.charsheet button[name="roll_intelligence_save"],
+.charsheet button[name="roll_cool_save"] {
+  width: 45px !important;
+  min-width: 45px !important;
+  box-sizing: border-box !important;
+}
