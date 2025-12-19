@@ -567,26 +567,52 @@
   <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
     <tr style="font-size:10px; color:#888; border-bottom:1px solid #333;">
       <th style="width:155px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
-      <th style="width:32px; text-align:center; padding:1px;" title="Kinetic. Suffixes: h=hardened, /4=invuln (e.g. 5h, 5/4, 5h/4)">Kin</th>
-      <th style="width:32px; text-align:center; padding:1px;" title="Energy. Suffixes: h=hardened, /4=invuln (e.g. 5h, 5/4, 5h/4)">Eng</th>
-      <th style="width:32px; text-align:center; padding:1px;" title="Biochemical. Suffixes: h=hardened, /4=invuln (e.g. 5h, 5/4, 5h/4)">Bio</th>
-      <th style="width:32px; text-align:center; padding:1px;" title="Entropy. Suffixes: h=hardened, /4=invuln (e.g. 5h, 5/4, 5h/4)">Ent</th>
-      <th style="width:32px; text-align:center; padding:1px;" title="Psychic. Suffixes: h=hardened, /4=invuln (e.g. 5h, 5/4, 5h/4)">Psy</th>
-      <th style="width:32px; text-align:center; padding:1px;" title="Other. Suffixes: h=hardened, /4=invuln (e.g. 5h, 5/4, 5h/4)">Oth</th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Kinetic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Kin
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Energy. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Eng
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Biochemical. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Bio
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Entropy. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Ent
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Psychic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Psy
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Other. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Oth
+      </th>
+
       <th style="text-align:left; padding:1px;">Notes</th>
     </tr>
   </table>
+
   <!-- PROTECTION (Repeating) -->
   <fieldset class="repeating_protection" style="border:none; padding:0; margin:0;">
     <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
       <tr>
         <td style="width:155px; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_name" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;" /></td>
-        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_kinetic" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 5/4=invuln, 5h/4=both" /></td>
-        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_energy" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 5/4=invuln, 5h/4=both" /></td>
-        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_bio" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 5/4=invuln, 5h/4=both" /></td>
-        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_entropy" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 5/4=invuln, 5h/4=both" /></td>
-        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_psychic" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 5/4=invuln, 5h/4=both" /></td>
-        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_other" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 5/4=invuln, 5h/4=both" /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_kinetic" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_energy" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_bio" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_entropy" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_psychic" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_other" value="0" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="padding:1px; vertical-align:middle; overflow:hidden;"><input type="text" name="attr_prot_notes" style="width:100%; background:#0f0f23; color:#eaeaea; border:1px solid #333; padding:2px; box-sizing:border-box;" /></td>
       </tr>
     </table>
@@ -772,10 +798,13 @@
         <div style="color:#50fa7b; font-weight:bold; margin-bottom:4px;">DEFENDER NOTATION</div>
         <div style="font-size:11px;">
           <div><span style="color:#bd93f9;">h suffix:</span> Hardened (e.g. 5h). Negates AP 1:1.</div>
-          <div><span style="color:#d35400;">/4 suffix:</span> Invulnerable (e.g. 5/4, 5h/4). Takes ¼ damage, +8 to saves.</div>
+          <div>
+            <span style="color:#d35400;">1/4 entry:</span>
+            Invulnerability. Put <b>Invulnerability</b> in the Protection Name field, then enter <b>1/4</b> in each damage type you’re invulnerable to (e.g. Kin 1/4, Eng 1/4). Takes ¼ damage (rounded down), +8 vs saves.
+          </div>
         </div>
       </div>
-    </div>
+
   </div>
 </rolltemplate>
 

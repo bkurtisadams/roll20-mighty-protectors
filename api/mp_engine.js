@@ -210,20 +210,24 @@ MP.Engine = (function () {
   function parseProtValue(val) {
     const s = String(val || "").toLowerCase().trim();
     if (!s || s === "0") return { prot: 0, hardened: 0, invuln: false };
-    
+
+    // IMPORTANT: treat "1/4" as invulnerability only (no numeric protection)
+    if (s === "1/4") return { prot: 0, hardened: 0, invuln: true };
+
     const hasInvuln = s.includes("/4");
     const withoutInvuln = hasInvuln ? s.replace("/4", "") : s;
-    
+
     const isHardened = withoutInvuln.endsWith("h");
     const numStr = isHardened ? withoutInvuln.slice(0, -1) : withoutInvuln;
     const prot = parseFloat(numStr) || 0;
-    
+
     return {
       prot: prot,
       hardened: isHardened ? prot : 0,
       invuln: hasInvuln
     };
   }
+
 
   // Sum protection, hardened, and invuln for a specific damage type
   // Returns { prot: total protection, hardened: total hardened, invuln: boolean }
@@ -299,7 +303,9 @@ MP.Engine = (function () {
   }
 
   function _extractSignedNumber(line) {
-    const m = String(line || "").match(/([+\-]?\d+)\s*(?:pts?|points?|prot|def|damage|dmg)?\b/i);
+    // Ignore fractions like "1/4" (we only want plain integers for Vulnerability rules)
+    const m = String(line || "").match(/([+\-]?\d+)(?!\s*\/)\s*(?:pts?|points?|prot|def|damage|dmg)?\b/i);
+
     if (!m) return null;
     return parseInt(m[1], 10);
   }
@@ -330,7 +336,11 @@ MP.Engine = (function () {
     const rows = getRepeatingAbilityRows(charId);
     rows.forEach(r => {
       const nm = _normKey(r.ability_name);
+
+      // Don't misread "Invulnerability" as "Vulnerability"
+      if (nm.includes("invulner")) return;
       if (!nm.includes("vulner")) return;
+
 
       const rawNotes = String(r.ability_notes || "");
       const lines = rawNotes.split(/\r?\n|;/).map(s => s.trim()).filter(Boolean);
@@ -341,8 +351,12 @@ MP.Engine = (function () {
       scanLines.forEach(line => {
         const low = line.toLowerCase();
         const kinds = [];
-        if (low.includes("attract")) kinds.push("attract");
-        if (low.includes("vulner")) kinds.push("vulnerable");
+        if (/\battract\b/.test(low)) kinds.push("attract");
+
+        // Require the actual word "vulnerable" and avoid matching "invulnerable"
+        if (/\binvulner/.test(low)) return;
+        if (/\bvulnerable\b/.test(low)) kinds.push("vulnerable");
+
         if (!kinds.length) return;
 
         const dts = _extractDamageTypes(line);
@@ -2800,7 +2814,7 @@ function cmdStance(msg, args) {
       }
       
       if (data.invuln) {
-        result += `<span style="color:#d35400;">/4</span>`;
+        result += `<span style="color:#d35400;">¼</span>`;
       }
       return result;
     }
