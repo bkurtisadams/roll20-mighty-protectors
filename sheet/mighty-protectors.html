@@ -1,10 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.15 (IPs/Security/Roll labels fix) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.16 (Logo-style title) -->
 
 <div tabindex="0" style="background:#1a1a2e; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
   <!-- TITLE -->
-  <div style="text-align:center; font-size:18px; font-weight:bold; color:#e94560; margin-bottom:3px; border-bottom:2px solid #e94560; padding-bottom:2px;">
-  Mighty Protectors Character Sheet
+  <div class="mp-title" style="text-align:center;">
+  Mighty Protectors<sup>®</sup>
   </div>
 
  <!-- CHARACTER INFO - Right-justified labels -->
@@ -653,6 +653,23 @@
           </td>
         </tr>
       </table>
+      <!-- Hidden attributes for ability modifiers (parsed from notes) -->
+      <input type="hidden" name="attr_ability_mod_type" value="" />
+      <input type="hidden" name="attr_ability_aura_damage" value="" />
+      <input type="hidden" name="attr_ability_aura_dtype" value="" />
+      <input type="hidden" name="attr_ability_aura_pr" value="" />
+      <input type="hidden" name="attr_ability_absorb_types" value="" />
+      <input type="hidden" name="attr_ability_absorb_limit" value="" />
+      <input type="hidden" name="attr_ability_absorb_effect" value="" />
+      <input type="hidden" name="attr_ability_reflect_types" value="" />
+      <input type="hidden" name="attr_ability_reflect_limit" value="" />
+      <input type="hidden" name="attr_ability_autofire_rof" value="" />
+      <input type="hidden" name="attr_ability_duration_time" value="" />
+      <input type="hidden" name="attr_ability_duration_escape" value="" />
+      <input type="hidden" name="attr_ability_contact_link" value="" />
+      <input type="hidden" name="attr_ability_contact_ind" value="" />
+      <input type="hidden" name="attr_ability_carrier_link" value="" />
+      <input type="hidden" name="attr_ability_carrier_ind" value="" />
     </fieldset>
   </div>
 
@@ -1383,6 +1400,7 @@ var carryDisplay = [
   });
 
   on("sheet:opened", function() {
+    initAbilityNotes();
     recalcAll();
     calcTotalEPs();
     calcSecurityClearance();
@@ -1951,4 +1969,209 @@ on("sheet:opened", rebuildABWSummary);
 on("sheet:opened change:intelligence_score change:ip_mod", function() {
     calcBaseIPs();
   });
+
+  // ==================== ABILITY MODIFIER NOTES PARSER ====================
+// Shorthand patterns:
+//   aura:d8+1:Energy:1       - Ability Field (damage:type:PR)
+//   absorb:Energy:25:Flame   - Absorption (types:limit:effect)
+//   reflect:Kinetic:20       - Reflection (types:limit)
+//   autofire:3               - Autofire (rate of fire)
+//   conductive               - Conductive (flag)
+//   duration:3rnd:water      - Duration (time:escape)
+//   contact:HTH or contact:HTH:ind - Contact Attack (link, :ind for independent)
+//   carrier:Blade or carrier:Blade:ind - Carrier Attack (link, :ind for independent)
+
+on("change:repeating_abilities:ability_notes", function(eventInfo) {
+  var rowPrefix = eventInfo.sourceAttribute.replace("_ability_notes", "");
+  
+  getAttrs([eventInfo.sourceAttribute], function(v) {
+    var notes = v[eventInfo.sourceAttribute] || "";
+    var notesLower = notes.toLowerCase();
+    var updates = {};
+    
+    // Reset all
+    updates[rowPrefix + "_ability_mod_type"] = "";
+    updates[rowPrefix + "_ability_aura_damage"] = "";
+    updates[rowPrefix + "_ability_aura_dtype"] = "";
+    updates[rowPrefix + "_ability_aura_pr"] = "";
+    updates[rowPrefix + "_ability_absorb_types"] = "";
+    updates[rowPrefix + "_ability_absorb_limit"] = "";
+    updates[rowPrefix + "_ability_absorb_effect"] = "";
+    updates[rowPrefix + "_ability_reflect_types"] = "";
+    updates[rowPrefix + "_ability_reflect_limit"] = "";
+    updates[rowPrefix + "_ability_autofire_rof"] = "";
+    updates[rowPrefix + "_ability_duration_time"] = "";
+    updates[rowPrefix + "_ability_duration_escape"] = "";
+    updates[rowPrefix + "_ability_contact_link"] = "";
+    updates[rowPrefix + "_ability_contact_ind"] = "";
+    updates[rowPrefix + "_ability_carrier_link"] = "";
+    updates[rowPrefix + "_ability_carrier_ind"] = "";
+    
+    // Aura: aura:d8+1:Energy:1
+    var auraMatch = notes.match(/aura:([^:]+):(\w+):(\d+)/i);
+    if (auraMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "aura";
+      updates[rowPrefix + "_ability_aura_damage"] = auraMatch[1];
+      updates[rowPrefix + "_ability_aura_dtype"] = auraMatch[2];
+      updates[rowPrefix + "_ability_aura_pr"] = auraMatch[3];
+    }
+    
+    // Absorb: absorb:Energy:25:Flame or absorb:Energy,Heat:25:Flame
+    var absorbMatch = notes.match(/absorb:([^:]+):(\d+):?(\w*)/i);
+    if (absorbMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "absorption";
+      updates[rowPrefix + "_ability_absorb_types"] = absorbMatch[1];
+      updates[rowPrefix + "_ability_absorb_limit"] = absorbMatch[2];
+      updates[rowPrefix + "_ability_absorb_effect"] = absorbMatch[3] || "";
+    }
+    
+    // Reflect: reflect:Kinetic:20
+    var reflectMatch = notes.match(/reflect:([^:]+):(\d+)/i);
+    if (reflectMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "reflection";
+      updates[rowPrefix + "_ability_reflect_types"] = reflectMatch[1];
+      updates[rowPrefix + "_ability_reflect_limit"] = reflectMatch[2];
+    }
+    
+    // Autofire: autofire:3
+    var autofireMatch = notes.match(/autofire:(\d+)/i);
+    if (autofireMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "autofire";
+      updates[rowPrefix + "_ability_autofire_rof"] = autofireMatch[1];
+    }
+    
+    // Conductive: just the word
+    if (notesLower.indexOf("conductive") !== -1) {
+      updates[rowPrefix + "_ability_mod_type"] = "conductive";
+    }
+    
+    // Duration: duration:3rnd:water or duration:1min
+    var durationMatch = notes.match(/duration:([^:]+):?(.*)?/i);
+    if (durationMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "duration";
+      updates[rowPrefix + "_ability_duration_time"] = durationMatch[1];
+      updates[rowPrefix + "_ability_duration_escape"] = durationMatch[2] || "";
+    }
+    
+    // Contact: contact:HTH or contact:HTH:ind
+    var contactMatch = notes.match(/contact:(\w+):?(ind)?/i);
+    if (contactMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "contact";
+      updates[rowPrefix + "_ability_contact_link"] = contactMatch[1];
+      updates[rowPrefix + "_ability_contact_ind"] = contactMatch[2] ? "1" : "0";
+    }
+    
+    // Carrier: carrier:Blade or carrier:Blade:ind
+    var carrierMatch = notes.match(/carrier:(\w+):?(ind)?/i);
+    if (carrierMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "carrier";
+      updates[rowPrefix + "_ability_carrier_link"] = carrierMatch[1];
+      updates[rowPrefix + "_ability_carrier_ind"] = carrierMatch[2] ? "1" : "0";
+    }
+    
+    setAttrs(updates);
+  });
+});
+
+// Initialize ability notes parsing on sheet open
+function initAbilityNotes() {
+  getSectionIDs("repeating_abilities", function(ids) {
+    if (ids.length === 0) return;
+    
+    var attrList = [];
+    ids.forEach(function(id) {
+      attrList.push("repeating_abilities_" + id + "_ability_notes");
+    });
+    
+    getAttrs(attrList, function(values) {
+      ids.forEach(function(id) {
+        var prefix = "repeating_abilities_" + id;
+        var notes = values[prefix + "_ability_notes"] || "";
+        
+        // Trigger the parser by faking an event
+        // Actually, we need to duplicate the parsing logic here or call setAttrs to trigger change
+        // Simpler: just set the notes value to itself to trigger the change handler
+        // But that's wasteful. Let's duplicate the parse inline:
+        
+        var notesLower = notes.toLowerCase();
+        var updates = {};
+        
+        updates[prefix + "_ability_mod_type"] = "";
+        updates[prefix + "_ability_aura_damage"] = "";
+        updates[prefix + "_ability_aura_dtype"] = "";
+        updates[prefix + "_ability_aura_pr"] = "";
+        updates[prefix + "_ability_absorb_types"] = "";
+        updates[prefix + "_ability_absorb_limit"] = "";
+        updates[prefix + "_ability_absorb_effect"] = "";
+        updates[prefix + "_ability_reflect_types"] = "";
+        updates[prefix + "_ability_reflect_limit"] = "";
+        updates[prefix + "_ability_autofire_rof"] = "";
+        updates[prefix + "_ability_duration_time"] = "";
+        updates[prefix + "_ability_duration_escape"] = "";
+        updates[prefix + "_ability_contact_link"] = "";
+        updates[prefix + "_ability_contact_ind"] = "";
+        updates[prefix + "_ability_carrier_link"] = "";
+        updates[prefix + "_ability_carrier_ind"] = "";
+        
+        var auraMatch = notes.match(/aura:([^:]+):(\w+):(\d+)/i);
+        if (auraMatch) {
+          updates[prefix + "_ability_mod_type"] = "aura";
+          updates[prefix + "_ability_aura_damage"] = auraMatch[1];
+          updates[prefix + "_ability_aura_dtype"] = auraMatch[2];
+          updates[prefix + "_ability_aura_pr"] = auraMatch[3];
+        }
+        
+        var absorbMatch = notes.match(/absorb:([^:]+):(\d+):?(\w*)/i);
+        if (absorbMatch) {
+          updates[prefix + "_ability_mod_type"] = "absorption";
+          updates[prefix + "_ability_absorb_types"] = absorbMatch[1];
+          updates[prefix + "_ability_absorb_limit"] = absorbMatch[2];
+          updates[prefix + "_ability_absorb_effect"] = absorbMatch[3] || "";
+        }
+        
+        var reflectMatch = notes.match(/reflect:([^:]+):(\d+)/i);
+        if (reflectMatch) {
+          updates[prefix + "_ability_mod_type"] = "reflection";
+          updates[prefix + "_ability_reflect_types"] = reflectMatch[1];
+          updates[prefix + "_ability_reflect_limit"] = reflectMatch[2];
+        }
+        
+        var autofireMatch = notes.match(/autofire:(\d+)/i);
+        if (autofireMatch) {
+          updates[prefix + "_ability_mod_type"] = "autofire";
+          updates[prefix + "_ability_autofire_rof"] = autofireMatch[1];
+        }
+        
+        if (notesLower.indexOf("conductive") !== -1) {
+          updates[prefix + "_ability_mod_type"] = "conductive";
+        }
+        
+        var durationMatch = notes.match(/duration:([^:]+):?(.*)?/i);
+        if (durationMatch) {
+          updates[prefix + "_ability_mod_type"] = "duration";
+          updates[prefix + "_ability_duration_time"] = durationMatch[1];
+          updates[prefix + "_ability_duration_escape"] = durationMatch[2] || "";
+        }
+        
+        var contactMatch = notes.match(/contact:(\w+):?(ind)?/i);
+        if (contactMatch) {
+          updates[prefix + "_ability_mod_type"] = "contact";
+          updates[prefix + "_ability_contact_link"] = contactMatch[1];
+          updates[prefix + "_ability_contact_ind"] = contactMatch[2] ? "1" : "0";
+        }
+        
+        var carrierMatch = notes.match(/carrier:(\w+):?(ind)?/i);
+        if (carrierMatch) {
+          updates[prefix + "_ability_mod_type"] = "carrier";
+          updates[prefix + "_ability_carrier_link"] = carrierMatch[1];
+          updates[prefix + "_ability_carrier_ind"] = carrierMatch[2] ? "1" : "0";
+        }
+        
+        setAttrs(updates, {silent: true});
+      });
+    });
+  });
+}
+
+// Add initAbilityNotes() call to your sheet:opened handler
 </script>

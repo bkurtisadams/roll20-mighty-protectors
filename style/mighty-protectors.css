@@ -1,5 +1,28 @@
 .sheet-rolltemplate-mpattack .inlinerollresult { background: transparent !important; border: none !important; padding: 0 !important; }
 
+/* Mighty Protectors Title - Logo Style */
+.mp-title {
+  font-family: Impact, 'Arial Black', sans-serif !important;
+  font-size: 28px !important;
+  font-weight: bold !important;
+  color: #ffd700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 2px !important;
+  -webkit-text-stroke: 1px #d35400 !important;
+  text-shadow: 1px 1px 0 #d35400, 0 2px 4px rgba(0,0,0,0.3) !important;
+  margin-bottom: 3px !important;
+  padding-bottom: 4px !important;
+  border-bottom: 2px solid #d35400 !important;
+}
+
+.mp-title sup {
+  font-size: 14px !important;
+  vertical-align: super !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+  color: #ffd700 !important;
+}
+
 /* Roll + Action buttons */
 .charsheet button[type="roll"],
 .charsheet button[type="action"]{
