@@ -129,7 +129,7 @@
 
 /* Text-label roll buttons (Mass/Wealth/Luck) */
 .charsheet button.mp-labelroll[type="roll"]{
-  background: #0f0f23 !important;
+  background: #0d0d1a !important;
   color: #f4d03f !important;
   border: 1px solid #333 !important;
   padding: 2px 6px !important;
@@ -194,7 +194,7 @@
 /* Column 2: Modifier input */
 .charsheet .mp-defmod-input{
   width: 28px !important;
-  background: #0f0f23 !important;
+  background: #0d0d1a !important;
   color: #eaeaea !important;
   border: 1px solid #333 !important;
   padding: 2px !important;
@@ -214,7 +214,7 @@
 /* Column 4: Total input */
 .charsheet .mp-deftotal-input{
   width: 30px !important;
-  background: #0f0f23 !important;
+  background: #0d0d1a !important;
   color: #f4d03f !important;
   border: 1px solid #f4d03f !important;
   padding: 2px !important;
