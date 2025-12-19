@@ -222,7 +222,7 @@
         </td>
         <td>
           <div style="display:flex; align-items:center; gap:2px;">
-            <span style="color:#aaa; font-size:10px;">Base HTH:</span>
+            <span style="color:#aaa; font-size:10px; padding-left:8px;">Base HTH:</span>
             <input type="text" name="attr_hth_damage" readonly style="width:80px; flex-shrink:1; min-width:70px; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center;" title="Hand-to-Hand damage dice" />
             <span style="color:#aaa; font-size:10px;">Carry:</span>
             <input type="text" name="attr_carry_capacity" readonly style="width:120px; flex-shrink:1; min-width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="Carrying capacity in pounds" />
@@ -240,7 +240,7 @@
           <button type="roll" class="mp-labellink" name="roll_endurance_save" title="Roll EN Save (d20 ≤ EN Save)" value="&{template:default} {{name=@{character_name} makes an EN Save}} {{Roll=[[1d20cs<@{endurance_save}cf>@{endurance_save}]]}} {{Target=[[@{endurance_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">EN</button>
         </td>
         <td style="white-space:nowrap;">
-          <span style="color:#aaa; font-size:10px;">Heal Rate:</span>
+          <span style="color:#aaa; font-size:10px; padding-left:8px;">Heal Rate:</span>
             <input type="text" name="attr_healing_rate" readonly style="width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" />
             <input type="hidden" name="attr_heal_base" value="0" />
             <input type="hidden" name="attr_heal_decimal" value="0" />
@@ -279,7 +279,7 @@
         </td>
 
         <td style="white-space:nowrap;">
-          <div style="display:inline-grid; grid-template-columns:155px 34px 105px 34px; column-gap:6px; align-items:center; justify-content:start;">
+          <div style="display:inline-grid; grid-template-columns:155px 34px 105px 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Physical Defense Modifier:</span>
             <input type="text" name="attr_physical_def_bonus" value="0"
               style="width:34px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
@@ -321,7 +321,7 @@
         </td>
 
         <td style="white-space:nowrap;">
-          <div style="display:inline-grid; grid-template-columns:155px 34px 105px 34px; column-gap:6px; align-items:center; justify-content:start;">
+          <div style="display:inline-grid; grid-template-columns:155px 34px 105px 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Mental Defense Modifier:</span>
             <input type="text" name="attr_mental_def_bonus" value="0"
               style="width:34px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
@@ -345,13 +345,14 @@
           <button type="roll" class="mp-labellink" name="roll_cool_save" title="Roll CL Save (d20 ≤ CL Save)" value="&{template:default} {{name=@{character_name} makes a CL Save}} {{Roll=[[1d20cs<@{cool_save}cf>@{cool_save}]]}} {{Target=[[@{cool_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">CL</button>
         </td>
         <td style="white-space:nowrap;">
-          <div style="display:flex; align-items:center; gap:2px;">
-            <span style="color:#aaa; font-size:10px;" title="Die roll for combat initiative, based on CL score">Initiative:</span>
-            <input type="text" name="attr_initiative_score" style="width:80px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative die roll (e.g., 1d10+1)" />
-            <button type="action" name="act_reset_initiative" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to CL-based initiative">↺</button>
-            <button type="roll" class="mp-labellink" name="roll_initiative" value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} &{tracker}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040;" title="Roll initiative for combat order">Init</button>
-          </div>
-        </td>
+  <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
+    <span style="color:#aaa; font-size:10px;">Init Mod:</span>
+    <input type="text" name="attr_initiative_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative modifier" />
+    <button type="roll" class="mp-labellink" name="roll_initiative" value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} + @{initiative_mod} &{tracker}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040;" title="Roll initiative for combat order">Initiative</button>
+    <input type="text" name="attr_initiative_score" style="width:80px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative die roll (e.g., 1d10+1)" />
+    <button type="action" name="act_reset_initiative" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to CL-based initiative">↺</button>
+  </div>
+</td>
       </tr>
     </table>
 
