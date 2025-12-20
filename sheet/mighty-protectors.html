@@ -366,19 +366,14 @@
         <span style="color:#aaa; font-size:11px;">Move:</span>
         <input type="text" name="attr_move" style="width:100px; flex-shrink:1; min-width:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; font-size:11px;" title="Ground movement in inches" />
         <button type="action" name="act_reset_move" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to (ST+EN+AG)/3">↺</button>
-        <span style="color:#aaa; font-size:11px; margin-left:4px;">Leap:</span>
-        <input type="text" name="attr_leap_base" readonly style="width:95px; flex-shrink:1; min-width:50px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center; font-size:10px;" title="Base leap = Carry / Weight" />
-        <span style="color:#666; font-size:9px;">x</span>
+        <span style="color:#aaa; font-size:11px; margin-left:4px;">Leap Multiplier:</span>
         <input type="text" name="attr_leap_mult" value="1" style="width:35px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" title="Super Leap multiplier" />
-        <span style="color:#666; font-size:9px;">=</span>
-
+        <span style="color:#aaa; font-size:11px;">Max Leap:</span>
         <span class="mp-leapwrap">
           <input type="text" name="attr_leap_total" readonly
             style="width:95px; flex-shrink:1; min-width:50px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; font-size:10px;" />
-
           <span class="mp-leaptip"><span name="attr_leap_distance"></span></span>
         </span>
-
         <span style="color:#aaa; font-size:9px; margin-left:4px;">Other:</span>
         <input type="text" name="attr_move_other" style="flex:1; min-width:20px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; font-size:11px;" placeholder="Flight 20&quot;, Swim 10&quot;" title="Other movement types (Flight, Swimming, etc.)" />
       </div>
