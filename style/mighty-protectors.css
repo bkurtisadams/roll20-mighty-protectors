@@ -268,7 +268,7 @@
 }
 
 .sheet-header-section { display: block; }
-.sheet-compact-toggle:checked + .sheet-compact-label + .sheet-header-section { display: none; }
+.sheet-compact-toggle:checked ~ .sheet-header-section { display: none; }
 
 /* Healing roll template - match default Roll20 style */
 .sheet-rolltemplate-healing .sheet-template-container {
@@ -352,3 +352,27 @@
   flex: 1 1 auto !important;
   min-width: 100px !important;
 }
+
+/* Power/Hits color toggle - tiny checkbox */
+.charsheet input.sheet-color-toggle {
+  width: 10px !important;
+  height: 10px !important;
+  opacity: 0.25 !important;
+  cursor: pointer !important;
+}
+
+.charsheet input.sheet-color-toggle:hover {
+  opacity: 1 !important;
+}
+
+/* Default: red Power, green Hits */
+.charsheet .sheet-power-label { color: #e63946; }
+.charsheet .sheet-power-input { color: #e63946 !important; }
+.charsheet .sheet-hits-label { color: #50fa7b; }
+.charsheet .sheet-hits-input { color: #50fa7b !important; }
+
+/* Classic (checked): yellow Power, red Hits */
+.charsheet input.sheet-color-toggle:checked ~ div .sheet-power-label { color: #f4d03f !important; }
+.charsheet input.sheet-color-toggle:checked ~ div .sheet-power-input { color: #f4d03f !important; }
+.charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-label { color: #e63946 !important; }
+.charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-input { color: #e63946 !important; }

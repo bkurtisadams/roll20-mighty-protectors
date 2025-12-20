@@ -1,9 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.18 (Cover color scheme) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.20 (Remove On/Active columns, add color toggle) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
   <!-- COMPACT MODE TOGGLE -->
   <input type="checkbox" name="attr_compact_mode" class="sheet-compact-toggle" title="Toggle compact mode - hides title and character info" />
+  <input type="checkbox" name="attr_color_classic" class="sheet-color-toggle" title="Toggle classic colors (yellow Power, red Hits)" />
   <label class="sheet-compact-label">Compact</label>
 
   <!-- HEADER SECTION (hidden when compact) -->
@@ -378,25 +379,26 @@
               <span class="mp-leaptip"><span name="attr_leap_distance"></span></span>
             </span>
           </div>
+          <!-- <input type="checkbox" name="attr_color_classic" class="sheet-color-toggle" title="Toggle classic colors (yellow Power, red Hits)" /> -->
           <!-- Power row -->
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="color:#e63946; font-size:11px; font-weight:bold; width:45px; text-align:right;">POWER:</span>
+          <div class="sheet-power-row" style="display:flex; align-items:center; gap:4px;">
+            <span class="sheet-power-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">POWER:</span>
             <span style="color:#aaa; font-size:10px;">Modifier</span>
-            <input type="text" name="attr_power_mod" value="0" style="width:28px; background:#0d0d1a; color:#e63946; border:1px solid #2a2040; padding:2px; text-align:center;" title="Power modifier" />
+            <input type="text" name="attr_power_mod" class="sheet-power-input" value="0" style="width:28px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center;" title="Power modifier" />
             <span style="color:#aaa; font-size:10px;">Maximum</span>
-            <input type="text" name="attr_power_score_max" readonly style="width:36px; background:#1e1e38; color:#e63946; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Power" />
+            <input type="text" name="attr_power_score_max" class="sheet-power-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Power" />
             <span style="color:#aaa; font-size:10px;">Current</span>
-            <input type="text" name="attr_power_score" style="width:36px; background:#0d0d1a; color:#e63946; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Current Power points" />
+            <input type="text" name="attr_power_score" class="sheet-power-input" style="width:36px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Current Power points" />
           </div>
           <!-- Hits row -->
-          <div style="display:flex; align-items:center; gap:4px;">
-            <span style="color:#50fa7b; font-size:11px; font-weight:bold; width:45px; text-align:right;">HITS:</span>
+          <div class="sheet-hits-row" style="display:flex; align-items:center; gap:4px;">
+            <span class="sheet-hits-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">HITS:</span>
             <span style="color:#aaa; font-size:10px;">Modifier</span>
-            <input type="text" name="attr_hits_mod" value="0" style="width:28px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center;" title="Hits modifier" />
+            <input type="text" name="attr_hits_mod" class="sheet-hits-input" value="0" style="width:28px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center;" title="Hits modifier" />
             <span style="color:#aaa; font-size:10px;">Maximum</span>
-            <input type="text" name="attr_hits_score_max" readonly style="width:36px; background:#1e1e38; color:#50fa7b; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Hits" />
+            <input type="text" name="attr_hits_score_max" class="sheet-hits-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Hits" />
             <span style="color:#aaa; font-size:10px;">Current</span>
-            <input type="text" name="attr_hits_score" style="width:36px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Current Hit points" />
+            <input type="text" name="attr_hits_score" class="sheet-hits-input" style="width:36px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Current Hit points" />
             <button type="roll" class="mp-labellink" name="roll_wakeup" value="&{template:default} {{name=@{character_name} rolls Wakeup}} {{Roll=[[1d20cs<@{hits_score}cf>@{hits_score}]]}} {{Target=[[@{hits_score}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px;" title="Roll current Hits or less to wake">Wake</button>
           </div>
         </div>
@@ -430,7 +432,6 @@
     <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
       <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
         <th style="width:155px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
-        <th style="width:20px; text-align:center; padding:1px;" title="Attack enabled">On</th>
         <th style="width:36px;"></th>
         <th style="width:40px; text-align:center; padding:1px 1px;" title="Attack Type: Physical (AG) / Mental (IN) / Emotion (CL)">
           <div style="line-height:9px;">Atk<br>Type</div>
@@ -459,12 +460,8 @@
         <input type="text" name="attr_attack_name"
           style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
       </td>
-      <td style="width:20px; text-align:center; padding:1px; vertical-align:middle;">
-      <input type="checkbox" name="attr_attack_active" value="1" checked="checked" title="Attack enabled" />
-    </td>
 
       <td style="width:36px; text-align:center; padding:1px; vertical-align:middle; overflow:visible;">
-
         <!-- NEW: per-row hidden RowID storage -->
         <input type="hidden" name="attr_attack_rowid" />
 
@@ -538,14 +535,14 @@
             style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;"
             title="Shorthand: sav:BC:mod:rec | snr:type:bp/max | ap:N" />
           <button type="roll" name="roll_attack_info"
-  value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
-  style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
-  title="Show attack info">?</button>
+            value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
+            style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
+            title="Show attack info">?</button>
           
-<button type="roll" name="roll_macro_gen"
-  value="&{template:mpmac} {{name=@{attack_name}}} {{compact=&amp;#38;&amp;#123;template:default&amp;#125;&amp;#10;&amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; attacks &amp;#42;&amp;#42;&amp;#64;&amp;#123;target&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; with &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_name&amp;#125;&amp;#42;&amp;#42;, needs &amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_tohit_num&amp;#125; - &amp;#63;&amp;#123;Defense&amp;#124;Physical,&amp;#64;&amp;#123;target&amp;#124;physical_def&amp;#125;&amp;#124;Mental/Emotion,&amp;#64;&amp;#123;target&amp;#124;mental_def&amp;#125;&amp;#125; + &amp;#63;&amp;#123;Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; to hit, d20=&amp;#91;&amp;#91;d20&amp;#93;&amp;#93;&amp;#10;Damage=&amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_damage&amp;#125; + &amp;#63;&amp;#123;Damage Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_dmgtype&amp;#125;&amp;#42;&amp;#42;, KB=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_kb_display&amp;#125;, Range=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_range&amp;#125;}}"
-  style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
-  title="Generate copyable macros">⚙</button>
+          <button type="roll" name="roll_macro_gen"
+            value="&{template:mpmac} {{name=@{attack_name}}} {{compact=&amp;#38;&amp;#123;template:default&amp;#125;&amp;#10;&amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; attacks &amp;#42;&amp;#42;&amp;#64;&amp;#123;target&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; with &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_name&amp;#125;&amp;#42;&amp;#42;, needs &amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_tohit_num&amp;#125; - &amp;#63;&amp;#123;Defense&amp;#124;Physical,&amp;#64;&amp;#123;target&amp;#124;physical_def&amp;#125;&amp;#124;Mental/Emotion,&amp;#64;&amp;#123;target&amp;#124;mental_def&amp;#125;&amp;#125; + &amp;#63;&amp;#123;Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; to hit, d20=&amp;#91;&amp;#91;d20&amp;#93;&amp;#93;&amp;#10;Damage=&amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_damage&amp;#125; + &amp;#63;&amp;#123;Damage Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_dmgtype&amp;#125;&amp;#42;&amp;#42;, KB=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_kb_display&amp;#125;, Range=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_range&amp;#125;}}"
+            style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
+            title="Generate copyable macros">⚙</button>
 
         </div>
       </td>
@@ -577,8 +574,6 @@
     <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
       <th style="width:155px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
 
-      <th style="width:20px; text-align:center; padding:1px;" title="Protection active">Active</th>
-
       <th style="width:32px; text-align:center; padding:1px;"
           title="Kinetic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
         Kin
@@ -609,6 +604,8 @@
         Oth
       </th>
 
+      <th style="width:35px; text-align:center; padding:1px;" title="Cost: PR, charges (6c), or both (2/6c)">Cost</th>
+
       <th style="text-align:left; padding:1px;">Notes</th>
     </tr>
   </table>
@@ -618,15 +615,13 @@
     <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
       <tr>
         <td style="width:155px; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" /></td>
-        <td style="width:20px; text-align:center; padding:1px; vertical-align:middle;">
-          <input type="checkbox" name="attr_prot_active" value="1" checked="checked" title="Active" />
-        </td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_kinetic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_energy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_bio" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_entropy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_psychic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_other" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:35px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_cost" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="PR cost or charges (e.g., 2, 6c, 2/6c)" /></td>
         <td style="padding:1px; vertical-align:middle; overflow:hidden;"><input type="text" name="attr_prot_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" /></td>
       </tr>
     </table>
@@ -648,8 +643,7 @@
       <tr style="font-size:10px; color:#888;">
         <th style="width:40px; text-align:center;">CP</th>
         <th style="width:40px; text-align:center;">IPs</th>
-        <th style="width:20px; text-align:center;">Active</th>
-        <th style="text-align:left;">Name and Notes</th>
+        <th style="text-align:left;">Name / Notes</th>
       </tr>
     </table>
     <fieldset class="repeating_abilities" style="border:none; padding:0; margin:0;">
@@ -657,17 +651,11 @@
         <tr>
           <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_cp" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
           <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_ip" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-
-          <td style="width:20px; text-align:center; padding:1px; vertical-align:middle;">
-            <input type="checkbox" name="attr_ability_active" value="1" checked="checked" title="Active" />
-          </td>
-          
           <td style="padding:1px; vertical-align:middle;">
             <div style="display:flex; gap:2px;">
               <input type="text" name="attr_ability_name" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
               <button type="roll" name="roll_ability_info"
                 value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}}"
-
                 style="background:transparent; color:#666; border:none; padding:0 3px; cursor:pointer; font-size:10px; flex-shrink:0;" title="Show ability info">?</button>
             </div>
           </td>
@@ -2128,6 +2116,13 @@ on("change:repeating_abilities:ability_notes", function(eventInfo) {
       updates[rowPrefix + "_ability_carrier_link"] = carrierMatch[1];
       updates[rowPrefix + "_ability_carrier_ind"] = carrierMatch[2] ? "1" : "0";
     }
+
+    // Off: ability is inactive
+    if (notesLower.indexOf("off") !== -1) {
+      updates[rowPrefix + "_ability_active"] = "0";
+    } else {
+      updates[rowPrefix + "_ability_active"] = "1";
+    }
     
     setAttrs(updates);
   });
@@ -2225,6 +2220,13 @@ function initAbilityNotes() {
           updates[prefix + "_ability_mod_type"] = "carrier";
           updates[prefix + "_ability_carrier_link"] = carrierMatch[1];
           updates[prefix + "_ability_carrier_ind"] = carrierMatch[2] ? "1" : "0";
+        }
+
+        // Off: ability is inactive
+        if (notesLower.indexOf("off") !== -1) {
+          updates[prefix + "_ability_active"] = "0";
+        } else {
+          updates[prefix + "_ability_active"] = "1";
         }
         
         setAttrs(updates, {silent: true});
