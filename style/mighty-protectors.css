@@ -310,3 +310,45 @@
   border: 1px solid #a82531 !important;
   border-radius: 3px !important;
 }
+
+/* BC table - make last column (derived values) flexible */
+.charsheet table[style*="table-layout:fixed"] td:last-child {
+  width: auto !important;
+}
+
+/* Flex containers in BC derived column - allow shrinking */
+.charsheet table td > div[style*="display:flex"],
+.charsheet table td > div[style*="display:inline-grid"] {
+  flex-wrap: wrap !important;
+  min-width: 0 !important;
+}
+
+/* Inputs in BC derived column - allow flex shrinking */
+.charsheet table td input[name="attr_hth_damage"],
+.charsheet table td input[name="attr_carry_capacity"],
+.charsheet table td input[name="attr_healing_rate"],
+.charsheet table td input[name="attr_initiative_score"] {
+  flex: 1 1 auto !important;
+  min-width: 50px !important;
+  max-width: 100px !important;
+}
+
+/* Defense grid rows - use flex instead for better responsiveness */
+.charsheet table td div[style*="inline-grid"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px 6px !important;
+}
+
+/* Move/Power/Hits section - allow flex shrinking */
+.charsheet input[name="attr_move"],
+.charsheet input[name="attr_leap_total"] {
+  flex: 1 1 auto !important;
+  min-width: 50px !important;
+}
+
+/* Notes textarea - ensure it fills available space */
+.charsheet textarea[name="attr_notes"] {
+  flex: 1 1 auto !important;
+  min-width: 100px !important;
+}
