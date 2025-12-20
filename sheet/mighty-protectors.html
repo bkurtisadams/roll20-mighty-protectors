@@ -1313,6 +1313,29 @@ var carryDisplay = [
     });
   });
 
+  // Initialize initiative_score on sheet open
+  on("sheet:opened", function() {
+    getAttrs(["initiative_score", "cool_cost", "cool_mod"], function(v) {
+      if (!v.initiative_score || v.initiative_score === "") {
+        var cl = (parseInt(v.cool_cost) || 0) + (parseInt(v.cool_mod) || 0);
+        var clIdx = clampIndex(cl);
+        setAttrs({ initiative_score: hthTable[clIdx] });
+      }
+    });
+  });
+
+  // Initialize default career row on sheet open
+  on("sheet:opened", function() {
+    getSectionIDs("repeating_careers", function(ids) {
+      if (ids.length === 0) {
+        var newRowId = generateRowID();
+        setAttrs({
+          ["repeating_careers_" + newRowId + "_career_name"]: ""
+        });
+      }
+    });
+  });
+
   on("clicked:reset_move", function() {
     getAttrs(["strength_cost", "strength_mod", "endurance_cost", "endurance_mod", "agility_cost", "agility_mod"], function(v) {
       var st = (parseInt(v.strength_cost) || 0) + (parseInt(v.strength_mod) || 0);
