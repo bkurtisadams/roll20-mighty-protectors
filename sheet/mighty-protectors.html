@@ -216,20 +216,21 @@
         <td style="text-align:center;"><input type="text" name="attr_strength_mod" value="0" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
         <td style="text-align:center; color:#e63946; font-weight:bold;" title="Strength - physical power, carrying capacity, HTH damage">ST</td>
         <td style="text-align:center;"><input type="text" name="attr_strength_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
-         <td style="text-align:center; white-space:nowrap;">
+        <td style="text-align:center; white-space:nowrap;">
           <span style="display:inline-block; width:26px; text-align:center; color:#666;" title="ST has no saving throw">n/a</span>
-          <button type="roll" class="mp-labellink" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
+          <button type="button" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:transparent; color:transparent; border:1px solid transparent; cursor:default;">HTH</button>
         </td>
         <td>
-          <div style="display:flex; align-items:center; gap:2px;">
-            <span style="color:#aaa; font-size:10px; padding-left:8px;">Base HTH:</span>
+          <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
+            <span style="color:#aaa; font-size:10px;">Base HTH:</span>
             <input type="text" name="attr_hth_damage" readonly style="width:80px; flex-shrink:1; min-width:70px; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center;" title="Hand-to-Hand damage dice" />
+            <button type="roll" class="mp-labellink" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
             <span style="color:#aaa; font-size:10px;">Carry:</span>
             <input type="text" name="attr_carry_capacity" readonly style="width:120px; flex-shrink:1; min-width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="Carrying capacity in pounds" />
           </div>
         </td>
       </tr>
-<!-- EN -->
+      <!-- EN -->
       <tr>
         <td style="text-align:center; padding:2px;"><input type="text" name="attr_endurance_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
         <td style="text-align:center;"><input type="text" name="attr_endurance_mod" value="0" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
@@ -279,12 +280,11 @@
         </td>
 
         <td style="white-space:nowrap;">
-          <div style="display:inline-grid; grid-template-columns:155px 34px 105px 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
+          <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Physical Defense Modifier:</span>
             <input type="text" name="attr_physical_def_bonus" value="0"
               style="width:34px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
               title="Physical Defense Modifier" />
-
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Physical Def:</span>
             <input type="text" name="attr_physical_def" readonly
               style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #8be9fd; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
@@ -321,12 +321,11 @@
         </td>
 
         <td style="white-space:nowrap;">
-          <div style="display:inline-grid; grid-template-columns:155px 34px 105px 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
+          <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Mental Defense Modifier:</span>
             <input type="text" name="attr_mental_def_bonus" value="0"
               style="width:34px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
               title="Mental Defense Modifier" />
-
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Mental Def:</span>
             <input type="text" name="attr_mental_def" readonly
               style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #8be9fd; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
@@ -346,7 +345,7 @@
         </td>
         <td style="white-space:nowrap;">
   <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
-    <span style="color:#aaa; font-size:10px;">Init Mod:</span>
+    <span style="color:#aaa; font-size:10px;">Initiative Modifier:</span>
     <input type="text" name="attr_initiative_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative modifier" />
     <button type="roll" class="mp-labellink" name="roll_initiative" value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} + @{initiative_mod} &{tracker}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040;" title="Roll initiative for combat order">Initiative</button>
     <input type="text" name="attr_initiative_score" style="width:80px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative die roll (e.g., 1d10+1)" />
