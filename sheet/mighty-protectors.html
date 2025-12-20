@@ -252,8 +252,7 @@
             <input type="hidden" name="attr_heal_base" value="0" />
             <input type="hidden" name="attr_heal_decimal" value="0" />
             <input type="hidden" name="attr_heal_decimal_target" value="1" />
-            <button type="roll" class="mp-labellink" name="roll_heal" 
-              value="&{template:default} {{name=@{character_name} Healing}} {{Rate=@{healing_rate}}} {{Base Healed=@{heal_base} points}} {{Bonus Roll=[[1d10]] (need @{heal_decimal} or less for +1)}} {{Notes=Heal Power Points first, then Hit Points.}}" 
+            <button type="action" name="act_heal" 
               style="font-size:10px; font-weight:bold; height:20px; line-height:18px; padding:0 6px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px; cursor:pointer;" 
               title="Roll daily healing">Heal</button>
         </td>
@@ -724,6 +723,16 @@
 <input type="hidden" name="attr_other_query" value="0" />
 
 <!-- ROLL TEMPLATE -->
+ <rolltemplate class="sheet-rolltemplate-healing">
+    <div class="sheet-template-container">
+        <h3>{{name}}</h3>
+        <div>Rate: {{rate}}</div>
+        <div>Roll: {{roll}} vs {{decimal}}</div>
+        <div>Healed: {{computed::healed}} points</div>
+        <div><i>{{notes}}</i></div>
+    </div>
+</rolltemplate>
+
 <rolltemplate class="sheet-rolltemplate-mpmac">
   <div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; padding:8px;">
     <div style="color:#50fa7b; font-weight:bold; margin-bottom:8px;">Macros: {{name}}</div>
@@ -1207,24 +1216,34 @@ var carryDisplay = [
   }
 
   // healing rate calculation (per 4.13)
-on("clicked:heal", function() {
-    getAttrs(["character_name", "healing_rate", "heal_base", "heal_decimal"], function(values) {
-        let base = parseInt(values.heal_base) || 0;
-        let decimal = parseInt(values.heal_decimal) || 0;
-        let rate = values.healing_rate || "0";
-        let charName = values.character_name || "Character";
-        
-        startRoll(`&{template:default} {{name=${charName} Healing}} {{Rate=${rate}}} {{Roll=[[1d10[dieroll]]] vs ${decimal}}} {{Healed=[[0[healed]]] points}} {{Notes=Heal Power Points first, then Hit Points.}}`, function(results) {
-            let d10 = results.results.dieroll.result;
-            let bonus = (decimal > 0 && d10 <= decimal) ? 1 : 0;
-            let total = base + bonus;
+    on("clicked:heal", function() {
+        getAttrs(["character_name", "healing_rate", "heal_base", "heal_decimal"], function(values) {
+            let base = parseInt(values.heal_base) || 0;
+            let decimal = parseInt(values.heal_decimal) || 0;
+            let rate = values.healing_rate || "0";
+            let charName = values.character_name || "Character";
             
-            finishRoll(results.rollId, {
-                healed: total
+            startRoll(`&{template:healing} {{name=${charName} Healing}} {{rate=${rate}}} {{roll=[[1d10]]}} {{decimal=${decimal}}} {{healed=[[0]]}} {{notes=Heal Power Points first, then Hit Points.}}`, function(results) {
+                let d10 = results.results.roll.result;
+                let bonus = (decimal > 0 && d10 <= decimal) ? 1 : 0;
+                let total = base + bonus;
+                
+                finishRoll(results.rollId, {
+                    healed: total
+                });
             });
         });
     });
-});
+
+    on("change:healing_rate sheet:opened", function() {
+        getAttrs(["healing_rate"], function(values) {
+            let rate = parseFloat(values.healing_rate) || 0;
+            setAttrs({
+                heal_base: Math.floor(rate),
+                heal_decimal: Math.round((rate % 1) * 10)
+            });
+        });
+    });
 
     on("change:power_mod", function(eventInfo) {
     var prevValue = parseInt(eventInfo.previousValue) || 0;
