@@ -429,6 +429,7 @@
     <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
       <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
         <th style="width:155px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
+        <th style="width:20px; text-align:center; padding:1px;" title="Attack enabled">On</th>
         <th style="width:36px;"></th>
         <th style="width:40px; text-align:center; padding:1px 1px;" title="Attack Type: Physical (AG) / Mental (IN) / Emotion (CL)">
           <div style="line-height:9px;">Atk<br>Type</div>
@@ -457,6 +458,9 @@
         <input type="text" name="attr_attack_name"
           style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
       </td>
+      <td style="width:20px; text-align:center; padding:1px; vertical-align:middle;">
+      <input type="checkbox" name="attr_attack_active" value="1" checked="checked" title="Attack enabled" />
+    </td>
 
       <td style="width:36px; text-align:center; padding:1px; vertical-align:middle; overflow:visible;">
 
@@ -572,6 +576,8 @@
     <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
       <th style="width:155px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
 
+      <th style="width:20px; text-align:center; padding:1px;" title="Protection active">Active</th>
+
       <th style="width:32px; text-align:center; padding:1px;"
           title="Kinetic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
         Kin
@@ -611,6 +617,9 @@
     <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
       <tr>
         <td style="width:155px; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" /></td>
+        <td style="width:20px; text-align:center; padding:1px; vertical-align:middle;">
+          <input type="checkbox" name="attr_prot_active" value="1" checked="checked" title="Active" />
+        </td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_kinetic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_energy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_bio" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
@@ -638,6 +647,7 @@
       <tr style="font-size:10px; color:#888;">
         <th style="width:40px; text-align:center;">CP</th>
         <th style="width:40px; text-align:center;">IPs</th>
+        <th style="width:20px; text-align:center;">Active</th>
         <th style="text-align:left;">Name and Notes</th>
       </tr>
     </table>
@@ -646,6 +656,11 @@
         <tr>
           <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_cp" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
           <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_ip" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+
+          <td style="width:20px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="checkbox" name="attr_ability_active" value="1" checked="checked" title="Active" />
+          </td>
+          
           <td style="padding:1px; vertical-align:middle;">
             <div style="display:flex; gap:2px;">
               <input type="text" name="attr_ability_name" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
