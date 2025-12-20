@@ -255,17 +255,17 @@
 
 .sheet-compact-toggle { 
   cursor: pointer;
-  display: inline;
-  vertical-align: middle;
+  opacity: 0.3;
+  width: 10px;
+  height: 10px;
+}
+
+.sheet-compact-toggle:hover {
+  opacity: 1;
 }
 
 .sheet-compact-label { 
-  display: inline;
-  vertical-align: middle;
-  color: #aaa;
-  font-size: 10px;
-  cursor: pointer;
-  margin-left: 2px;
+  display: none !important;
 }
 
 .sheet-header-section { display: block; }
