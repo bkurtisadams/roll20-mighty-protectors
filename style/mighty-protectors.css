@@ -10,6 +10,7 @@
   letter-spacing: 2px !important;
   -webkit-text-stroke: 1px #d35400 !important;
   text-shadow: 1px 1px 0 #d35400, 0 2px 4px rgba(0,0,0,0.3) !important;
+  margin-top: -22px !important;
   margin-bottom: 3px !important;
   padding-bottom: 4px !important;
   border-bottom: 2px solid #d35400 !important;
@@ -250,3 +251,22 @@
   margin-right: 4px !important;
   box-sizing: border-box !important;
 }
+
+
+.sheet-compact-toggle { 
+  cursor: pointer;
+  display: inline;
+  vertical-align: middle;
+}
+
+.sheet-compact-label { 
+  display: inline;
+  vertical-align: middle;
+  color: #aaa;
+  font-size: 10px;
+  cursor: pointer;
+  margin-left: 2px;
+}
+
+.sheet-header-section { display: block; }
+.sheet-compact-toggle:checked + .sheet-compact-label + .sheet-header-section { display: none; }
