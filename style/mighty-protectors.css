@@ -252,7 +252,6 @@
   box-sizing: border-box !important;
 }
 
-
 .sheet-compact-toggle { 
   cursor: pointer;
   opacity: 0.3;
@@ -270,3 +269,44 @@
 
 .sheet-header-section { display: block; }
 .sheet-compact-toggle:checked + .sheet-compact-label + .sheet-header-section { display: none; }
+
+/* Healing roll template - match default Roll20 style */
+.sheet-rolltemplate-healing .sheet-template-container {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.sheet-rolltemplate-healing h3 {
+    background: #7e2d8a;
+    color: #fff;
+    margin: 0;
+    padding: 5px 8px;
+    font-size: 14px;
+}
+
+.sheet-rolltemplate-healing div {
+    padding: 2px 8px;
+    margin: 0;
+    color: #000;
+    line-height: 1.5;
+}
+
+.sheet-rolltemplate-healing div:last-child {
+    padding-bottom: 6px;
+}
+
+/* Red roll/action buttons (HTH, Heal, saves, etc.) */
+.charsheet button.sheet-mp-rollbtn {
+  font-size: 9px !important;
+  font-weight: bold !important;
+  height: 20px !important;
+  line-height: 18px !important;
+  padding: 0 6px !important;
+  margin: 2px 0 !important;
+  background: #e63946 !important;
+  color: #fff !important;
+  border: 1px solid #a82531 !important;
+  border-radius: 3px !important;
+}

@@ -152,7 +152,7 @@
       <!-- MASS BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_mass"
         style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;"
-        value="&{template:default} {{name=@{character_name} makes a Mass roll}} {{Mass=[[@{mass}]]}}">Mass</button>
+        value="&{template:default} {{name=@{character_name} rolls Mass roll}} {{Mass=[[@{mass}]]}}">Mass</button>
         
       <input type="text" name="attr_mass"
         style="width:65px; flex-shrink:1; min-width:40px; background:#1e1e38; color:#eaeaea; border:1px solid #4a4070; padding:3px; text-align:center; box-sizing:border-box;"
@@ -166,7 +166,7 @@
       <!-- WEALTH BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_wealth"
         style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0 0 0 8px; background:#e63946; color:#fff; border:1px solid #2a2040;"
-        value="&{template:default} {{name=@{character_name} makes a Wealth roll}} {{Roll=[[@{wealth}]]}}">Wealth</button>
+        value="&{template:default} {{name=@{character_name} rolls Wealth roll}} {{Roll=[[@{wealth}]]}}">Wealth</button>
         
       <input type="text" name="attr_wealth" value="d4"
         style="width:60px; flex-shrink:1; min-width:40px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;"
@@ -175,7 +175,7 @@
       <!-- LUCK BUTTON (Styled Small) -->
       <button type="roll" class="mp-labellink" name="roll_luck"
         style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;"
-        value="&{template:default} {{name=@{character_name} makes a Luck roll}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}">Luck</button>
+        value="&{template:default} {{name=@{character_name} rolls Luck roll}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}">Luck</button>
         
       <input type="text" name="attr_luck" value="10"
         style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
@@ -230,7 +230,8 @@
           <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
             <span style="color:#aaa; font-size:10px;">Base HTH:</span>
             <input type="text" name="attr_hth_damage" readonly style="width:80px; flex-shrink:1; min-width:70px; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center;" title="Hand-to-Hand damage dice" />
-            <button type="roll" class="mp-labellink" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
+            <!-- <button type="roll" class="mp-labellink" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button> -->
+            <button type="roll" class="mp-labellink sheet-mp-rollbtn" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
             <span style="color:#aaa; font-size:10px;">Carry:</span>
             <input type="text" name="attr_carry_capacity" readonly style="width:120px; flex-shrink:1; min-width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="Carrying capacity in pounds" />
           </div>
@@ -244,7 +245,7 @@
         <td style="text-align:center;"><input type="text" name="attr_endurance_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
           <input type="text" name="attr_endurance_save" readonly style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="EN Save: Resist physical effects, poison, disease, fatigue" />
-          <button type="roll" class="mp-labellink" name="roll_endurance_save" title="Roll EN Save (d20 ≤ EN Save)" value="&{template:default} {{name=@{character_name} makes an EN Save}} {{Roll=[[1d20cs<@{endurance_save}cf>@{endurance_save}]]}} {{Target=[[@{endurance_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">EN</button>
+          <button type="roll" class="mp-labellink" name="roll_endurance_save" title="Roll EN Save (d20 ≤ EN Save)" value="&{template:default} {{name=@{character_name} rolls EN Save}} {{Roll=[[1d20cs<@{endurance_save}cf>@{endurance_save}]]}} {{Target=[[@{endurance_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">EN</button>
         </td>
         <td style="white-space:nowrap;">
           <span style="color:#aaa; font-size:10px; padding-left:8px;">Heal Rate:</span>
@@ -252,9 +253,9 @@
             <input type="hidden" name="attr_heal_base" value="0" />
             <input type="hidden" name="attr_heal_decimal" value="0" />
             <input type="hidden" name="attr_heal_decimal_target" value="1" />
-            <button type="action" name="act_heal" 
-              style="font-size:10px; font-weight:bold; height:20px; line-height:18px; padding:0 6px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px; cursor:pointer;" 
-              title="Roll daily healing">Heal</button>
+            <button type="action" class="mp-labellink sheet-mp-rollbtn" name="act_heal" 
+  style="font-size:9px; font-weight:bold; height:20px; line-height:18px; padding:0 6px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px;" 
+  title="Roll daily healing">Heal</button>
         </td>
       </tr>
       <!-- AG -->
@@ -281,7 +282,7 @@
           <input type="text" name="attr_agility_save" readonly
             style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;"
             title="AG Save: Dodge, balance, acrobatics, physical accuracy" />
-          <button type="roll" class="mp-labellink" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)" value="&{template:default} {{name=@{character_name} makes an AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">AG</button>
+          <button type="roll" class="mp-labellink" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)" value="&{template:default} {{name=@{character_name} rolls AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">AG</button>
         </td>
 
         <td style="white-space:nowrap;">
@@ -322,7 +323,7 @@
           <input type="text" name="attr_intelligence_save" readonly
             style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;"
             title="IN Save: Perception, knowledge, mental attacks" />
-          <button type="roll" class="mp-labellink" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)" value="&{template:default} {{name=@{character_name} makes an IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">IN</button>
+          <button type="roll" class="mp-labellink" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)" value="&{template:default} {{name=@{character_name} rolls IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">IN</button>
         </td>
 
         <td style="white-space:nowrap;">
@@ -346,7 +347,7 @@
         <td style="text-align:center;"><input type="text" name="attr_cool_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
           <input type="text" name="attr_cool_save" readonly style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="CL Save: Willpower, fear, emotional attacks, composure" />
-          <button type="roll" class="mp-labellink" name="roll_cool_save" title="Roll CL Save (d20 ≤ CL Save)" value="&{template:default} {{name=@{character_name} makes a CL Save}} {{Roll=[[1d20cs<@{cool_save}cf>@{cool_save}]]}} {{Target=[[@{cool_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">CL</button>
+          <button type="roll" class="mp-labellink" name="roll_cool_save" title="Roll CL Save (d20 ≤ CL Save)" value="&{template:default} {{name=@{character_name} rolls CL Save}} {{Roll=[[1d20cs<@{cool_save}cf>@{cool_save}]]}} {{Target=[[@{cool_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">CL</button>
         </td>
         <td style="white-space:nowrap;">
           <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
@@ -396,7 +397,7 @@
             <input type="text" name="attr_hits_score_max" readonly style="width:36px; background:#1e1e38; color:#50fa7b; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Hits" />
             <span style="color:#aaa; font-size:10px;">Current</span>
             <input type="text" name="attr_hits_score" style="width:36px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Current Hit points" />
-            <button type="roll" class="mp-labellink" name="roll_wakeup" value="&{template:default} {{name=@{character_name} makes a Wakeup roll}} {{Roll=[[1d20cs<@{hits_score}cf>@{hits_score}]]}} {{Target=[[@{hits_score}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px;" title="Roll current Hits or less to wake">Wake</button>
+            <button type="roll" class="mp-labellink" name="roll_wakeup" value="&{template:default} {{name=@{character_name} rolls Wakeup roll}} {{Roll=[[1d20cs<@{hits_score}cf>@{hits_score}]]}} {{Target=[[@{hits_score}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px;" title="Roll current Hits or less to wake">Wake</button>
           </div>
         </div>
         <!-- Right: Notes -->
@@ -1238,7 +1239,7 @@ var carryDisplay = [
             let rate = values.healing_rate || "0";
             let charName = values.character_name || "Character";
             
-            startRoll(`&{template:healing} {{name=${charName} Healing}} {{rate=${rate}}} {{roll=[[1d10]]}} {{decimal=${decimal}}} {{healed=[[0]]}} {{notes=Heal Power Points first, then Hit Points.}}`, function(results) {
+            startRoll(`&{template:healing} {{name=${charName} rolls Healing}} {{rate=${rate}}} {{roll=[[1d10]]}} {{decimal=${decimal}}} {{healed=[[0]]}} {{notes=Heal Power Points first, then Hit Points.}}`, function(results) {
                 let d10 = results.results.roll.result;
                 let bonus = (decimal > 0 && d10 <= decimal) ? 1 : 0;
                 let total = base + bonus;
