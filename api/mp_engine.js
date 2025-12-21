@@ -1,14 +1,15 @@
-/* Mighty Protectors Roll20 API Engine v2.6 (AP/Hardened/Invuln/PR/Range)
+/* Mighty Protectors Roll20 API Engine v2.7 (Separate PR/Charges columns)
  * Added Armor Piercing vs Hardened vs Invulnerability rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
- * PR cost auto-deducted from attacker
+ * PR cost auto-deducted from attacker (attack_cost column)
+ * Charges auto-deducted (1 per attack) from attack_charges column
  * Range uses edge-to-edge distance (adjacent tokens = 0")
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.6 FILE STARTING");
+log("MP ENGINE v2.7 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -100,30 +101,7 @@ MP.Engine = (function () {
     return isFinite(n) ? n : (dflt || 0);
   }
 
-  
-  function parseAttackCost(raw) {
-    const s = String(raw || "").trim();
-    if (!s) return { pr: 0, chg: 0 };
-
-    // Charges-only, like "6c"
-    let m = s.match(/^\s*(\d+)\s*c\s*$/i);
-    if (m) return { pr: 0, chg: num(m[1], 0) };
-
-    // Combined, like "2/6c" (or "2/6")
-    const parts = s.split("/");
-    const pr = num((parts[0] || "").trim(), 0);
-
-    let chg = 0;
-    if (parts.length > 1) {
-      const right = (parts[1] || "").trim();
-      const m2 = right.match(/^\s*(\d+)\s*c?\s*$/i);
-      if (m2) chg = num(m2[1], 0);
-    }
-
-    return { pr, chg };
-  }
-
-function esc(s) {
+  function esc(s) {
     return String(s || "").replace(/[<>"'&]/g, c => ({
       "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;"
     }[c]));
@@ -759,11 +737,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const snMaxBP = num(getAtkAttr("attack_max_bp"), 0);
     const snType = getAtkAttr("attack_snare_type") || "";
     
-    // Parse PR + charges cost from attack_cost field (handles "2", "6c", "2/6c", etc.)
-    const atkCostRaw = getAtkAttr("attack_cost") || fields.cost || "";
-    const cost = parseAttackCost(atkCostRaw);
-    const atkPR = cost.pr;
-    const atkChgCost = cost.chg;
+    // PR cost from dedicated attack_cost column (simple number)
+    const atkPR = num(getAtkAttr("attack_cost") || fields.cost || "", 0);
+    // Charges: if attack_charges field has a value, deduct 1 per attack
+    const atkChgRaw = getAtkAttr("attack_charges");
+    const hasCharges = (atkChgRaw !== undefined && String(atkChgRaw).trim() !== "");
+    const atkChgCost = hasCharges ? 1 : 0;
 
 
     let atkSaveAttr;
@@ -817,20 +796,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - atkPR));
     }
 
-    // Deduct attack charges cost from attacker (per-attack charges like "6c" or "2/6c")
+    // Deduct 1 charge per attack if Charges column has a value
     let chgDeducted = 0;
     if (atkChgCost > 0 && atkCharId && rowId) {
       const chgAttr = `repeating_attacks_${rowId}_attack_charges`;
-      const raw = getAttr(atkCharId, chgAttr);
-      if (raw === undefined || String(raw).trim() === "") {
-        sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Cost includes ${atkChgCost}c but this attack row has no Charges value. Add a number to the Charges field to enable deduction.`);
+      const chg0 = num(atkChgRaw, 0);
+      if (chg0 <= 0) {
+        sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: No charges remaining!`);
       } else {
-        const chg0 = num(raw, 0);
-        chgDeducted = Math.min(atkChgCost, chg0);
-        const chg1 = Math.max(0, chg0 - atkChgCost);
+        chgDeducted = 1;
+        const chg1 = chg0 - 1;
         setAttr(atkCharId, chgAttr, chg1);
-        if (chg0 < atkChgCost) {
-          sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Charges ran out (${chg0} < ${atkChgCost}). Set to 0.`);
+        if (chg1 === 0) {
+          sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Last charge used!`);
         }
       }
     }
@@ -2060,7 +2038,8 @@ function cmdAttackInfo(msg, args) {
   const dmgType = getAtk("attack_dmgtype") || "Kin";
   const dmgTypeFull = {Kin:"Kinetic", Eng:"Energy", Bio:"Biochemical", Ent:"Entropy", Psy:"Psychic", Oth:"Other"}[dmgType] || dmgType;
   const range = getAtk("attack_range") || "";
-  const cost = getAtk("attack_cost") || "";
+  const prCost = getAtk("attack_cost") || "";
+  const charges = getAtk("attack_charges") || "";
   const kb = getAtk("attack_kb") === "1" ? "Yes" : "No";
   const apRaw = getAtk("attack_ap") || "";
   const tohit = getAtk("attack_tohit") || "";
@@ -2105,7 +2084,8 @@ function cmdAttackInfo(msg, args) {
   if (tohit) out += `<div><span style="color:#aaa;">To-Hit:</span> <span style="color:#8be9fd;">${esc(tohit)}</span></div>`;
   if (mod !== "0") out += `<div><span style="color:#aaa;">Modifier:</span> ${esc(mod)}</div>`;
   if (range) out += `<div><span style="color:#aaa;">Range:</span> ${esc(range)}"</div>`;
-  if (cost) out += `<div><span style="color:#aaa;">Cost:</span> ${esc(cost)}</div>`;
+  if (prCost) out += `<div><span style="color:#aaa;">PR Cost:</span> ${esc(prCost)}</div>`;
+  if (charges) out += `<div><span style="color:#aaa;">Charges:</span> ${esc(charges)}</div>`;
   if (apRaw) out += `<div><span style="color:#bd93f9; font-weight:bold;">Armor Piercing:</span> ${apRaw === "ALL" ? "Ignores ALL protection" : "Ignores " + apRaw + " protection"}</div>`;
 
   if (specialType === "sav") {
@@ -3089,7 +3069,7 @@ function cmdStance(msg, args) {
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.6</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.7</b> Commands:<br/>
           <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
@@ -3126,11 +3106,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.6:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.7:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.6 READY");
+  log("MP ENGINE v2.7 READY");
 });
