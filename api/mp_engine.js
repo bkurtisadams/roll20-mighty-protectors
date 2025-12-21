@@ -419,6 +419,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return found ? found.get("current") : "";
   }
 
+  function setRepeatingAttackAttr(charId, rowId, shortName, value) {
+    const searchName = `repeating_attacks_${rowId}_${shortName}`.toLowerCase();
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    const found = attrs.find(a => a.get("name").toLowerCase() === searchName);
+    if (found) {
+      found.set("current", value);
+      return true;
+    }
+    return false;
+  }
+
   function rollExpr(s) {
     let str = String(s || "").replace(/\s+/g, "");
     if (!str) return 0;
@@ -741,8 +752,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkPR = num(getAtkAttr("attack_cost") || fields.cost || "", 0);
     // Charges: if attack_charges field has a value, deduct 1 per attack
     const atkChgRaw = getAtkAttr("attack_charges");
-    const hasCharges = (atkChgRaw !== undefined && String(atkChgRaw).trim() !== "");
+    const hasCharges = (atkChgRaw !== undefined && atkChgRaw !== null && String(atkChgRaw).trim() !== "");
     const atkChgCost = hasCharges ? 1 : 0;
+    log(`MP DEBUG: attack_charges raw="${atkChgRaw}" hasCharges=${hasCharges} atkChgCost=${atkChgCost}`);
 
 
     let atkSaveAttr;
@@ -799,14 +811,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Deduct 1 charge per attack if Charges column has a value
     let chgDeducted = 0;
     if (atkChgCost > 0 && atkCharId && rowId) {
-      const chgAttr = `repeating_attacks_${rowId}_attack_charges`;
       const chg0 = num(atkChgRaw, 0);
+      log(`MP DEBUG: Charges - raw="${atkChgRaw}" parsed=${chg0} rowId=${rowId}`);
       if (chg0 <= 0) {
         sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: No charges remaining!`);
       } else {
         chgDeducted = 1;
         const chg1 = chg0 - 1;
-        setAttr(atkCharId, chgAttr, chg1);
+        const setOk = setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
+        log(`MP DEBUG: Charges set ${chg0} -> ${chg1}, success=${setOk}`);
         if (chg1 === 0) {
           sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Last charge used!`);
         }
@@ -940,6 +953,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     if (chgDeducted > 0) {
       html += `<br/><span style="color:#333; font-size:10px;">Chg: -${chgDeducted}c</span>`;
+    }
+    // Debug: show charge info even if not deducted
+    if (atkChgRaw !== "" && chgDeducted === 0) {
+      html += `<br/><span style="color:#666; font-size:9px;">[DEBUG: charges="${atkChgRaw}" hasCharges=${hasCharges}]</span>`;
     }
 
     html += `</div>`;
