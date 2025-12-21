@@ -429,35 +429,50 @@
       <input type="checkbox" name="attr_query_other" value="1" title="Prompt for other modifiers" /><span style="color:#aaa; font-size:10px;">Other</span>
     </div>
 
-    <!-- Attacks Header -->
-    <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
-      <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
-        <th style="width:155px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
-        <th style="width:36px;"></th>
-        <th style="width:40px; text-align:center; padding:1px 1px;" title="Attack Type: Physical (AG) / Mental (IN) / Emotion (CL)">
-          <div style="line-height:9px;">Atk<br>Type</div>
-        </th>
-        <th style="width:28px; text-align:center; padding:2px 1px;" title="To-hit modifier">Mod</th>
-        <th style="width:34px; text-align:center; padding:1px 1px;" title="Target number to hit">
-  <div style="line-height:9px;">To<br>Hit</div>
-</th>
-        <th style="width:65px; text-align:center; padding:2px 1px;" title="Damage dice">Damage</th>
-        <!-- <th style="width:60px; text-align:center; padding:2px 1px;" title="Damage dice">DMG TEST</th> -->
-        <th style="width:30px; text-align:center; padding:2px 1px;" title="Range in inches">Rng</th>
-        <th style="width:40px; text-align:center; padding:1px 1px;" title="Damage Type">
-          <div style="line-height:9px;">Dmg<br>Type</div>
-        </th>
-        <th style="width:20px; text-align:center; padding:2px 1px;" title="Knockback">KB</th>
-        <th style="width:35px; text-align:center; padding:2px 1px;" title="Cost: PR, charges (6c), or both (2/6c)">Cost</th>
-        <th style="text-align:left; padding:2px 1px;" title="Special attacks use shorthand">Notes <button type="roll" name="roll_notes_help" value="&{template:mphelp} {{help=1}}" style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px;" title="Show shorthand help">?</button></th>
-      </tr>
-    </table>
+<!-- Attacks Header -->
+<table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
+  <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
+    <th style="width:145px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
+    <th style="width:36px;"></th>
+
+    <th style="width:40px; text-align:center; padding:1px 1px;" title="Attack Type: Physical (AG) / Mental (IN) / Emotion (CL)">
+      <div style="line-height:9px;">Atk<br>Type</div>
+    </th>
+
+    <th style="width:28px; text-align:center; padding:2px 1px;" title="To-hit modifier">Mod</th>
+
+    <th style="width:32px; text-align:center; padding:1px 1px;" title="Target number to hit">
+      <div style="line-height:9px;">To<br>Hit</div>
+    </th>
+
+    <th style="width:60px; text-align:center; padding:2px 1px;" title="Damage dice">Damage</th>
+
+    <th style="width:30px; text-align:center; padding:2px 1px;" title="Range in inches">Rng</th>
+
+    <th style="width:40px; text-align:center; padding:1px 1px;" title="Damage Type">
+      <div style="line-height:9px;">Dmg<br>Type</div>
+    </th>
+
+    <th style="width:20px; text-align:center; padding:2px 1px;" title="Knockback">KB</th>
+
+    <th style="width:26px; text-align:center; padding:2px 1px;" title="PR cost">PR</th>
+    <th style="width:26px; text-align:center; padding:2px 1px;" title="Charges remaining (for charge-based attacks)">Ch</th>
+
+    <th style="text-align:left; padding:2px 1px;" title="Special attacks use shorthand">
+      Notes
+      <button type="roll" name="roll_notes_help" value="&{template:mphelp} {{help=1}}"
+        style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px;"
+        title="Show shorthand help">?</button>
+    </th>
+  </tr>
+</table>
+
 
 <!-- Repeating Attacks -->
 <fieldset class="repeating_attacks" style="border:none; padding:0; margin:0;">
   <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
     <tr>
-      <td style="width:155px; padding:1px; vertical-align:middle;">
+      <td style="width:145px; padding:1px; vertical-align:middle;">
         <input type="text" name="attr_attack_name"
           style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
       </td>
@@ -489,17 +504,19 @@
           title="To-hit modifier" />
       </td>
 
-      <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_tohit" readonly
-          style="width:100%; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
-          title="Target number" />
-      </td>
+<td style="width:32px; text-align:center; padding:1px; vertical-align:middle;">
+  <input type="text" name="attr_attack_tohit" readonly
+    style="width:100%; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
+    title="Target number" />
+</td>
 
-      <td style="width:65px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_damage"
-          style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
-          title="Damage dice" />
-      </td>
+
+<td style="width:60px; text-align:center; padding:1px; vertical-align:middle;">
+  <input type="text" name="attr_attack_damage"
+    style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+    title="Damage dice" />
+</td>
+
 
       <td style="width:30px; text-align:center; padding:1px; vertical-align:middle;">
         <input type="text" name="attr_attack_range"
@@ -524,21 +541,27 @@
         <input type="checkbox" name="attr_attack_kb" value="1" checked="checked" title="Causes Knockback" />
       </td>
 
-      <td style="width:35px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_cost"
-          style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
-          title="PR, charges (6c), or both (2/6c)" />
-      </td>
+<td style="width:26px; text-align:center; padding:1px; vertical-align:middle;">
+  <input type="text" name="attr_attack_cost" maxlength="2"
+    style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+    title="PR cost (0–99)" />
+</td>
+
+<td style="width:26px; text-align:center; padding:1px; vertical-align:middle;">
+  <input type="text" name="attr_attack_charges" maxlength="2" inputmode="numeric" pattern="[0-9]*"
+    style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+    title="Charges remaining (0–99)" />
+</td>
 
       <td style="padding:1px; vertical-align:middle; overflow:hidden;">
         <div style="display:flex; gap:2px;">
           <input type="text" name="attr_attack_notes"
             style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;"
             title="Shorthand: sav:BC:mod:rec | snr:type:bp/max | ap:N" />
-          <button type="roll" name="roll_attack_info"
+          <!-- <button type="roll" name="roll_attack_info"
             value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
             style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
-            title="Show attack info">?</button>
+            title="Show attack info">?</button> -->
           
           <button type="roll" name="roll_macro_gen"
             value="&{template:mpmac} {{name=@{attack_name}}} {{compact=&amp;#38;&amp;#123;template:default&amp;#125;&amp;#10;&amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; attacks &amp;#42;&amp;#42;&amp;#64;&amp;#123;target&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; with &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_name&amp;#125;&amp;#42;&amp;#42;, needs &amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_tohit_num&amp;#125; - &amp;#63;&amp;#123;Defense&amp;#124;Physical,&amp;#64;&amp;#123;target&amp;#124;physical_def&amp;#125;&amp;#124;Mental/Emotion,&amp;#64;&amp;#123;target&amp;#124;mental_def&amp;#125;&amp;#125; + &amp;#63;&amp;#123;Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; to hit, d20=&amp;#91;&amp;#91;d20&amp;#93;&amp;#93;&amp;#10;Damage=&amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_damage&amp;#125; + &amp;#63;&amp;#123;Damage Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_dmgtype&amp;#125;&amp;#42;&amp;#42;, KB=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_kb_display&amp;#125;, Range=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_range&amp;#125;}}"
