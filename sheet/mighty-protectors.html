@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.23 (Damage type dropdown stores full names) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.24 (Protection: split Cost into PR + Ch columns) -->
 - Create default empty career row if none exist -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
@@ -628,7 +628,8 @@
         Oth
       </th>
 
-      <th style="width:35px; text-align:center; padding:1px;" title="Cost: PR, charges (6c), or both (2/6c)">Cost</th>
+      <th style="width:26px; text-align:center; padding:1px;" title="PR cost">PR</th>
+      <th style="width:26px; text-align:center; padding:1px;" title="Charges remaining (for charge-based protection)">Ch</th>
 
       <th style="text-align:left; padding:1px;">Notes</th>
     </tr>
@@ -645,7 +646,8 @@
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_entropy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_psychic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_other" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
-        <td style="width:35px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_cost" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="PR cost or charges (e.g., 2, 6c, 2/6c)" /></td>
+        <td style="width:26px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_pr" maxlength="2" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="PR cost (0–99)" /></td>
+        <td style="width:26px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_charges" maxlength="2" inputmode="numeric" pattern="[0-9]*" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Charges remaining (0–99)" /></td>
         <td style="padding:1px; vertical-align:middle; overflow:hidden;"><input type="text" name="attr_prot_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" /></td>
       </tr>
     </table>
