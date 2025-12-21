@@ -1,4 +1,5 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.22 (Add separate PR and Ch columns to attacks table) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.23 (Damage type dropdown stores full names) -->
+- Create default empty career row if none exist -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -527,12 +528,12 @@
         <select name="attr_attack_dmgtype"
           style="width:100%; height:20px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:0; font-size:10px; box-sizing:border-box;"
           title="Damage Type">
-          <option value="Kin" selected>Kin</option>
-          <option value="Eng">Eng</option>
-          <option value="Bio">Bio</option>
-          <option value="Ent">Ent</option>
-          <option value="Psy">Psy</option>
-          <option value="Oth">Oth</option>
+          <option value="Kinetic" selected>Kin</option>
+          <option value="Energy">Eng</option>
+          <option value="Biochemical">Bio</option>
+          <option value="Entropy">Ent</option>
+          <option value="Psychic">Psy</option>
+          <option value="Other">Oth</option>
         </select>
       </td>
 
@@ -1962,8 +1963,12 @@ function initAttackNotes() {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_dmgtype", "");
     getAttrs([eventInfo.sourceAttribute], function(v) {
       var typeMap = {
-        "Kin": "Kinetic", "Eng": "Energy", "Bio": "Biochemical",
-        "Ent": "Entropy", "Psy": "Psychic", "Oth": "Other"
+        "K": "Kinetic", "Kin": "Kinetic", "Kinetic": "Kinetic",
+        "E": "Energy", "Eng": "Energy", "Energy": "Energy",
+        "B": "Biochemical", "Bio": "Biochemical", "Biochemical": "Biochemical",
+        "Ent": "Entropy", "Entropy": "Entropy",
+        "P": "Psychic", "Psy": "Psychic", "Psychic": "Psychic",
+        "O": "Other", "Oth": "Other", "Other": "Other"
       };
       var full = typeMap[v[eventInfo.sourceAttribute]] || "Kinetic";
       var update = {};

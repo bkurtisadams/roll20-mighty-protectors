@@ -1,15 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.7 (Separate PR/Charges columns)
- * Added Armor Piercing vs Hardened vs Invulnerability rules
+/* Mighty Protectors Roll20 API Engine v2.9 (Damage type normalization)
+ * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
+ * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
- * PR cost auto-deducted from attacker (attack_cost column)
- * Charges auto-deducted (1 per attack) from attack_charges column
  * Range uses edge-to-edge distance (adjacent tokens = 0")
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.7 FILE STARTING");
+log("MP ENGINE v2.8 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -200,11 +199,12 @@ MP.Engine = (function () {
     if (!t || t === "none" || t === "no" || t === "n/a" || t === "no damage type" || t === "no dmg type" || t === "notype") {
       return null;
     }
-    if (t.includes("kinetic") || t === "kin") return "kinetic";
-    if (t.includes("energy") || t === "eng") return "energy";
+    if (t.includes("kinetic") || t === "kin" || t === "k") return "kinetic";
+    if (t.includes("energy") || t === "eng" || t === "e") return "energy";
     if (t.includes("entropy") || t === "ent") return "entropy";
-    if (t.includes("psychic") || t === "psy") return "psychic";
-    if (t.includes("bio") || t.includes("biochem")) return "bio";
+    if (t.includes("psychic") || t === "psy" || t === "p") return "psychic";
+    if (t.includes("bio") || t.includes("biochem") || t === "b") return "bio";
+    if (t === "o" || t === "oth" || t.includes("other")) return "other";
     return "other";
   }
 
@@ -695,7 +695,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkCharId = fields.atk;
     const defTokenId = fields.def;
     const rowId = fields.row;
-    const isPushing = (fields.push === "1");
+    const pushAmount = num(fields.push, 0);  // 0=no push, 2=normal, 4+=special ability
+    const isPushing = pushAmount > 0;
 
     const atkChar = getObj("character", atkCharId);
     const defTok = getObj("graphic", defTokenId);
@@ -729,8 +730,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkTypeCode = rawAtkType || "P";
     const atkType = getAtkAttr("attack_type") || "std";
     const atkMod = num(getAtkAttr("attack_mod"), 0);
-    const dmgTypeShort = getAtkAttr("attack_dmgtype") || "Kin";
-    const dmgTypeStr = {Kin:"Kinetic", Eng:"Energy", Bio:"Biochemical", Ent:"Entropy", Psy:"Psychic", Oth:"Other"}[dmgTypeShort] || fields.type || "Other";
+    const macroMod = num(fields.hitmod, 0);  // Extra modifier from macro
+    const dmgTypeRaw = (getAtkAttr("attack_dmgtype") || "Kin").toLowerCase();
+    const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
+    const dmgTypeStr = dmgTypeMap[dmgTypeRaw] || fields.type || "Other";
     // Allow save attacks to declare they have no damage type (e.g., Flash) so protection does not apply.
     const atkNotes = getAtkAttr("attack_notes") || "";
     const noDamageType = (atkType === "sav") && notesIndicateNoDamageType(atkNotes, atkName);
@@ -754,7 +757,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkChgRaw = getAtkAttr("attack_charges");
     const hasCharges = (atkChgRaw !== undefined && atkChgRaw !== null && String(atkChgRaw).trim() !== "");
     const atkChgCost = hasCharges ? 1 : 0;
-    log(`MP DEBUG: attack_charges raw="${atkChgRaw}" hasCharges=${hasCharges} atkChgCost=${atkChgCost}`);
 
 
     let atkSaveAttr;
@@ -783,7 +785,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rangeData = calculateRangeWithProfile(atkTok, defTok, atkCharId, defChar.id);
     const rangePenalty = rangeData.penalty;
     
-    const baseToHit = atkSave + 3 + atkMod + atkStancePenalty + rangePenalty;
+    const baseToHit = atkSave + 3 + atkMod + macroMod + atkStancePenalty + rangePenalty;
 
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
@@ -794,10 +796,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const targetTotal = baseToHit - defValue;
 
-    // Deduct push cost from attacker (2 Power)
+    // Deduct push cost from attacker
     if (isPushing && atkTok) {
       const atkPow0 = getResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
-      setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - 2));
+      setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - pushAmount));
     }
     
     // Deduct attack PR cost from attacker
@@ -812,14 +814,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let chgDeducted = 0;
     if (atkChgCost > 0 && atkCharId && rowId) {
       const chg0 = num(atkChgRaw, 0);
-      log(`MP DEBUG: Charges - raw="${atkChgRaw}" parsed=${chg0} rowId=${rowId}`);
       if (chg0 <= 0) {
         sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: No charges remaining!`);
       } else {
         chgDeducted = 1;
         const chg1 = chg0 - 1;
-        const setOk = setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
-        log(`MP DEBUG: Charges set ${chg0} -> ${chg1}, success=${setOk}`);
+        setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
         if (chg1 === 0) {
           sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Last charge used!`);
         }
@@ -861,7 +861,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       outcome, isCrit, isFumble, critResult, fumbleResult,
       damageTotal, dmgTypeStr, protKey, atkType,
       atkAP, saveBC, saveMod, recMod, snBP, snMaxBP, snType, causesKB,
-      isPushing, rangeData, created: Date.now(),
+      isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType
     };
 
@@ -882,12 +882,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defModLabel = defMod !== 0 ? `${defBase}${defMod >= 0 ? '+' : ''}${defMod}` : `${defBase}`;
     const atkPenaltyNote = atkStancePenalty !== 0 ? ` Stance:${atkStancePenalty}` : "";
     const rangePenaltyNote = rangePenalty !== 0 ? ` Rng:${rangePenalty}` : "";
+    const macroModNote = macroMod !== 0 ? ` Mod:${macroMod > 0 ? '+' : ''}${macroMod}` : "";
     const distNote = (rangeData && typeof rangeData.inches === "number") ? ` Dist:${rangeData.inches}"` : "";
 
     const baseToHitPreMods = atkSave + 3 + atkMod;  // Before stance, range, and defense
     let hoverBreakdown = `Base: ${baseToHitPreMods}-`;
     if (defValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${defValue}`;
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
+    if (macroMod !== 0) hoverBreakdown += `&#10;Mod: ${macroMod > 0 ? '+' : ''}${macroMod}`;
     // MP scale: 1" = 5 ft.
     // Always show range penalty in hover (format: Range: -1 (9"))
     if (rangeData && typeof rangeData.inches === "number") {
@@ -909,7 +911,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     hoverBreakdown += `&#10;Final: ${targetTotal}-`;
     html += `<br/><span style="color:#000; font-size:12px;" title="${hoverBreakdown}"><b>To-Hit: ${targetTotal}-</b></span> `;
-    html += `<span style="color:#333; font-size:10px;" title="${hoverBreakdown}">[${atkTypeLabel}] Roll:${roll} | ${defTypeLabel}:${defModLabel}${atkPenaltyNote}${rangePenaltyNote}${distNote}</span>`;
+    html += `<span style="color:#333; font-size:10px;" title="${hoverBreakdown}">[${atkTypeLabel}] Roll:${roll} | ${defTypeLabel}:${defModLabel}${atkPenaltyNote}${rangePenaltyNote}${macroModNote}${distNote}</span>`;
 
     if (isCrit && critResult) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Critical hit effect">⚡ ${esc(critResult.desc)}</span>`;
@@ -946,17 +948,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
     if (isPushing) {
-      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Pushing: +2 damage, costs 2 Power">⚡ PUSH!</span>`;
+      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Pushing: +${pushAmount} damage, costs ${pushAmount} Power">⚡ PUSH +${pushAmount}!</span>`;
     }
     if (prDeducted > 0) {
       html += `<br/><span style="color:#333; font-size:10px;">PR: -${prDeducted}</span>`;
     }
     if (chgDeducted > 0) {
       html += `<br/><span style="color:#333; font-size:10px;">Chg: -${chgDeducted}c</span>`;
-    }
-    // Debug: show charge info even if not deducted
-    if (atkChgRaw !== "" && chgDeducted === 0) {
-      html += `<br/><span style="color:#666; font-size:9px;">[DEBUG: charges="${atkChgRaw}" hasCharges=${hasCharges}]</span>`;
     }
 
     html += `</div>`;
@@ -966,9 +964,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (atkType === "std") {
         buttons = buildStandardAttackButtons(rollId, critResult, causesKB);
       } else if (atkType === "sav") {
-        buttons = buildSaveAttackButtons(rollId, critResult, isPushing);
+        buttons = buildSaveAttackButtons(rollId, critResult, pushAmount);
       } else if (atkType === "snr") {
-        buttons = buildSnareAttackButtons(rollId, critResult, isPushing);
+        buttons = buildSnareAttackButtons(rollId, critResult, pushAmount);
       }
     }
 
@@ -1026,7 +1024,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return buttons;
   }
 
-  function buildSaveAttackButtons(rollId, critResult, isPushing) {
+  function buildSaveAttackButtons(rollId, critResult, pushAmount) {
     const critType = critResult ? critResult.type : null;
     let critMod = 0;
     
@@ -1035,7 +1033,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       critMod = -3;
     }
     
-    const pushMod = isPushing ? -2 : 0;
+    const pushMod = pushAmount > 0 ? -pushAmount : 0;
     const totalMod = critMod + pushMod;
     
     let modLabel = "";
@@ -1049,7 +1047,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return buttons;
   }
 
-  function buildSnareAttackButtons(rollId, critResult, isPushing) {
+  function buildSnareAttackButtons(rollId, critResult, pushAmount) {
     const critType = critResult ? critResult.type : null;
     let snCritBonus = 0;
     
@@ -1058,7 +1056,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       snCritBonus = 2;
     }
     
-    const pushBonus = isPushing ? 2 : 0;
+    const pushBonus = pushAmount > 0 ? pushAmount : 0;
     const totalBonus = snCritBonus + pushBonus;
     
     let bonusLabel = "";
@@ -2052,8 +2050,9 @@ function cmdAttackInfo(msg, args) {
   const attackName = getAtk("attack_name") || "";
   const notes = getAtk("attack_notes") || "";
   const damage = getAtk("attack_damage") || "";
-  const dmgType = getAtk("attack_dmgtype") || "Kin";
-  const dmgTypeFull = {Kin:"Kinetic", Eng:"Energy", Bio:"Biochemical", Ent:"Entropy", Psy:"Psychic", Oth:"Other"}[dmgType] || dmgType;
+  const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
+  const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
+  const dmgTypeFull = dmgTypeMap[dmgTypeRaw] || dmgTypeRaw;
   const range = getAtk("attack_range") || "";
   const prCost = getAtk("attack_cost") || "";
   const charges = getAtk("attack_charges") || "";
@@ -2481,7 +2480,7 @@ function cmdStance(msg, args) {
       snMaxBP: 0,
       snType: "",
       causesKB: true,
-      isPushing: false,
+      isPushing: false, pushAmount: 0,
       created: Date.now()
     };
 
@@ -2597,7 +2596,7 @@ function cmdStance(msg, args) {
       snMaxBP: 0,
       snType: "",
       causesKB: true,
-      isPushing: false,
+      isPushing: false, pushAmount: 0,
       created: Date.now()
     };
 
@@ -2690,7 +2689,7 @@ function cmdStance(msg, args) {
       snMaxBP: 0,
       snType: "",
       causesKB: false,
-      isPushing: false,
+      isPushing: false, pushAmount: 0,
       created: Date.now()
     };
 
@@ -2753,7 +2752,7 @@ function cmdStance(msg, args) {
       snMaxBP: maxBp,
       snType: snType,
       causesKB: false,
-      isPushing: false,
+      isPushing: false, pushAmount: 0,
       created: Date.now()
     };
 
@@ -2970,6 +2969,134 @@ function cmdStance(msg, args) {
     return { cmd, args };
   }
 
+  // -------------------------
+  // QUICK ATTACK COMMAND
+  // -------------------------
+  // Usage: !mp atk N --atk TOKEN_ID --target TOKEN_ID [--mod N] [--push N]
+  // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0}
+  // Triggers existing mpattack roll template handler
+
+  function findAttackRowByIndex(charId, atkIndex) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    const numAttr = attrs.find(a => {
+      const name = a.get("name").toLowerCase();
+      if (!name.startsWith("repeating_attacks_") || !name.endsWith("_attack_num")) return false;
+      return a.get("current") === String(atkIndex);
+    });
+    if (!numAttr) return null;
+    const match = numAttr.get("name").match(/repeating_attacks_([^_]+)_attack_num/i);
+    return match ? match[1] : null;
+  }
+
+  function cmdQuickAttack(msg, args) {
+    const parts = msg.content.split(/\s+/);
+    const atkIndex = parseInt(parts[2], 10);
+    
+    if (!atkIndex || atkIndex < 1) {
+      return ch("MP", `/w gm Usage: <code>!mp atk N --atk &#64;{selected|token_id} --target &#64;{target|token_id}</code>`);
+    }
+
+    const atkTokenId = args.atk;
+    if (!atkTokenId) return ch("MP", `/w gm No attacker specified. Use --atk &#64;{selected|token_id}`);
+
+    const atkTok = getObj("graphic", atkTokenId);
+    if (!atkTok) return ch("MP", `/w gm Attacker token not found.`);
+
+    const atkChar = getCharFromToken(atkTok);
+    if (!atkChar) return ch("MP", `/w gm Attacker token not linked to character.`);
+    const atkCharId = atkChar.id;
+    const atkName = atkChar.get("name");
+
+    const defTokenId = args.target;
+    if (!defTokenId) return ch("MP", `/w gm No target specified. Use --target &#64;{target|token_id}`);
+
+    const defTok = getObj("graphic", defTokenId);
+    if (!defTok) return ch("MP", `/w gm Target token not found.`);
+
+    const defChar = getCharFromToken(defTok);
+    if (!defChar) return ch("MP", `/w gm Target token not linked to character.`);
+
+    // Find attack row
+    const rowId = findAttackRowByIndex(atkCharId, atkIndex);
+    if (!rowId) return ch("MP", `/w gm Attack #${atkIndex} not found for ${esc(atkName)}.`);
+
+    const getAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+
+    // Get attack attributes
+    const attackName = getAtk("attack_name") || `Attack ${atkIndex}`;
+    const damage = getAtk("attack_damage") || "0";
+    const tohitNum = num(getAtk("attack_tohit_num"), 10);
+    const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
+    const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
+    const dmgTypeFull = dmgTypeMap[dmgTypeRaw] || "Other";
+    const range = getAtk("attack_range") || "0";
+    const kbDisplay = getAtk("attack_kb_display") || "No";
+    const ap = getAtk("attack_ap") || "";
+    const pushAmount = num(args.push, 0);  // 0=no push, 2=normal, 4+=special
+    const hitMod = num(args.mod, 0);
+
+    // Build and send the roll template - this triggers handleMpAttack
+    const pushDmg = pushAmount > 0 ? `+${pushAmount}` : "";
+    
+    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
+
+    sendChat(`character|${atkCharId}`, rollMsg);
+  }
+
+  // -------------------------
+  // QUICK SAVE COMMAND
+  // -------------------------
+  // Usage: !mp sv BC [mod]
+  // Example: !mp sv EN, !mp sv AG +2
+
+  function cmdQuickSave(msg, args) {
+    const parts = msg.content.split(/\s+/);
+    const bcRaw = (parts[2] || "").toUpperCase();
+    const modRaw = parts[3] || "0";
+    const mod = num(modRaw.replace("+", ""), 0);
+
+    const validBC = ["EN", "AG", "IN", "CL"];
+    if (!validBC.includes(bcRaw)) {
+      return ch("MP", `/w gm Usage: <code>!mp sv BC [mod]</code> where BC = EN, AG, IN, or CL`);
+    }
+
+    const tok = getSelectedToken(msg);
+    if (!tok) return ch("MP", `/w gm Select your token first.`);
+
+    const char = getCharFromToken(tok);
+    if (!char) return ch("MP", `/w gm Token not linked to character.`);
+    const charId = char.id;
+    const charName = char.get("name");
+
+    const saveAttrMap = {
+      EN: "endurance_save",
+      AG: "agility_save",
+      IN: "intelligence_save",
+      CL: "cool_save"
+    };
+    const saveAttr = saveAttrMap[bcRaw];
+    const saveVal = getAttrNum(charId, saveAttr, 10);
+    const target = saveVal + mod;
+
+    const nat = randomInteger(20);
+    const success = (nat <= target);
+
+    let html = `<div style="background:#2b2b3d; border:2px solid ${success ? '#50fa7b' : '#e94560'}; border-radius:6px; padding:6px; font-family:Arial,sans-serif; font-size:12px; color:#eaeaea;">`;
+    html += `<div style="font-weight:bold; font-size:14px; color:#8be9fd; margin-bottom:4px;">${esc(charName)} - ${bcRaw} Save</div>`;
+    
+    html += `<div style="font-size:16px; font-weight:bold; color:${success ? '#50fa7b' : '#e94560'};">`;
+    if (nat === 1) html += `💥 CRITICAL SUCCESS!`;
+    else if (nat === 20) html += `💀 CRITICAL FAILURE!`;
+    else if (success) html += `✓ SUCCESS`;
+    else html += `✗ FAILURE`;
+    html += `</div>`;
+
+    html += `<div style="color:#aaa; font-size:11px;"><b>Target:</b> ${target}- (${saveVal}${mod !== 0 ? (mod > 0 ? '+' : '') + mod : ''}) | <b>Roll:</b> ${nat}</div>`;
+    html += `</div>`;
+
+    ch("MP", `/w gm ` + html);
+  }
+
   function cmdConfig(msg, args) {
     if (!playerIsGM(msg.playerid)) {
       return ch("MP", "/w " + msg.who + " Only GM can change config.");
@@ -3084,9 +3211,14 @@ function cmdStance(msg, args) {
       case "status": return cmdStatus(msg, args);
       case "info": return cmdInfo(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
+      case "atk": return cmdQuickAttack(msg, args);
+      case "sv": return cmdQuickSave(msg, args);
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.7</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.8</b> Commands:<br/>
+          <b>Quick Macros:</b><br/>
+          <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
+          <code>!mp sv BC [mod]</code> - Save (EN/AG/IN/CL)<br/>
           <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
@@ -3123,11 +3255,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.7:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.8:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.7 READY");
+  log("MP ENGINE v2.8 READY");
 });
