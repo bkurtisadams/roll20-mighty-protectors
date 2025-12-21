@@ -192,7 +192,7 @@
     <!-- EP Header Row - Reordered: Total, Starting, Earned, Available -->
     <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #2a2040;">
       <div style="display:flex; align-items:center; gap:4px;">
-        <input type="text" name="attr_total_eps" readonly style="width:36px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Total EPs spent on BCs and Abilities" />
+        <input type="text" name="attr_total_eps" readonly style="width:36px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Total CPs spent on BCs and Abilities" />
         <span style="color:#f4d03f; font-size:11px;">Total CPs</span>
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
@@ -803,6 +803,14 @@
         <div>• rec = Recovery modifier (optional)</div>
         <div style="color:#8be9fd;">Example: sav:EN:+5:-14</div>
       </div>
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:4px;">NO DAMAGE TYPE (SAVE)</div>
+      <div style="color:#aaa; margin-bottom:2px;">dtype:none</div>
+      <div style="margin-bottom:8px; font-size:11px;">
+        <div>• For special saves like Flash (no damage type)</div>
+        <div>• When present, protection/invulnerability do NOT modify the save TN</div>
+        <div style="color:#8be9fd;">Example: sav:EN:+5:-14; dtype:none</div>
+      </div>
+
       <div style="color:#f4d03f; font-weight:bold; margin-bottom:4px;">SNARE ATTACKS</div>
       <div style="color:#aaa; margin-bottom:2px;">snr:type:bp/max</div>
       <div style="margin-bottom:8px; font-size:11px;">

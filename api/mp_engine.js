@@ -100,7 +100,30 @@ MP.Engine = (function () {
     return isFinite(n) ? n : (dflt || 0);
   }
 
-  function esc(s) {
+  
+  function parseAttackCost(raw) {
+    const s = String(raw || "").trim();
+    if (!s) return { pr: 0, chg: 0 };
+
+    // Charges-only, like "6c"
+    let m = s.match(/^\s*(\d+)\s*c\s*$/i);
+    if (m) return { pr: 0, chg: num(m[1], 0) };
+
+    // Combined, like "2/6c" (or "2/6")
+    const parts = s.split("/");
+    const pr = num((parts[0] || "").trim(), 0);
+
+    let chg = 0;
+    if (parts.length > 1) {
+      const right = (parts[1] || "").trim();
+      const m2 = right.match(/^\s*(\d+)\s*c?\s*$/i);
+      if (m2) chg = num(m2[1], 0);
+    }
+
+    return { pr, chg };
+  }
+
+function esc(s) {
     return String(s || "").replace(/[<>"'&]/g, c => ({
       "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;"
     }[c]));
@@ -191,13 +214,38 @@ MP.Engine = (function () {
   }
 
   function typeToProtKey(typeStr) {
-    const t = String(typeStr || "").toLowerCase();
+    const raw = String(typeStr || "").trim();
+    const t = raw.toLowerCase();
+    // Some save attacks (e.g., Flash) explicitly have *no damage type*.
+    // In those cases, the rules say normal protection doesn't apply.
+    // Represent "no type" as null so callers can bypass protection.
+    if (!t || t === "none" || t === "no" || t === "n/a" || t === "no damage type" || t === "no dmg type" || t === "notype") {
+      return null;
+    }
     if (t.includes("kinetic") || t === "kin") return "kinetic";
     if (t.includes("energy") || t === "eng") return "energy";
     if (t.includes("entropy") || t === "ent") return "entropy";
     if (t.includes("psychic") || t === "psy") return "psychic";
     if (t.includes("bio") || t.includes("biochem")) return "bio";
     return "other";
+  }
+
+  // Heuristic: allow save attacks to opt into "no damage type" behavior via notes.
+  // Examples that will trigger this:
+  //   "dtype:none" / "dmgtype:none" / "no damage type" / "notype"
+  // Also includes a light fallback for common naming ("Flash") since that power explicitly has no type.
+  function notesIndicateNoDamageType(notes, attackLabel) {
+    const s = String(notes || "").toLowerCase();
+    const n = String(attackLabel || "").toLowerCase();
+
+    if (s.includes("dtype:none") || s.includes("dmgtype:none") || s.includes("no damage type") || s.includes("no dmg type") || s.includes("notype") || s.includes("no-type")) {
+      return true;
+    }
+    // Optional safety net for Flash-style saves when the GM hasn't added a flag yet.
+    if (n.includes("flash") && (s.includes("sav:") || s.includes("save"))) {
+      return true;
+    }
+    return false;
   }
 
   // Parse protection value - supports:
@@ -232,6 +280,7 @@ MP.Engine = (function () {
   // Sum protection, hardened, and invuln for a specific damage type
   // Returns { prot: total protection, hardened: total hardened, invuln: boolean }
   function sumProtectionWithHardened(charId, protKey) {
+    if (!protKey) return { prot: 0, hardened: 0, invuln: false };
     const re = new RegExp("^repeating_protection_.*_prot_" + protKey + "$");
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
     let totalProt = 0;
@@ -689,15 +738,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defName = defChar.get("name");
 
     const atkTypeCode = rawAtkType || "P";
+    const atkType = getAtkAttr("attack_type") || "std";
     const atkMod = num(getAtkAttr("attack_mod"), 0);
     const dmgTypeShort = getAtkAttr("attack_dmgtype") || "Kin";
     const dmgTypeStr = {Kin:"Kinetic", Eng:"Energy", Bio:"Biochemical", Ent:"Entropy", Psy:"Psychic", Oth:"Other"}[dmgTypeShort] || fields.type || "Other";
-    const protKey = typeToProtKey(dmgTypeStr);
+    // Allow save attacks to declare they have no damage type (e.g., Flash) so protection does not apply.
+    const atkNotes = getAtkAttr("attack_notes") || "";
+    const noDamageType = (atkType === "sav") && notesIndicateNoDamageType(atkNotes, atkName);
+    const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
     const range = getAtkAttr("attack_range") || fields.range || "-";
     const kbChecked = getAtkAttr("attack_kb");
     const causesKB = (kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes");
 
-    const atkType = getAtkAttr("attack_type") || "std";
     const atkAPRaw = getAtkAttr("attack_ap") || fields.ap || "";
     const atkAP = (atkAPRaw === "ALL" || atkAPRaw === "all") ? Infinity : num(atkAPRaw, 0);
     const saveBC = getAtkAttr("attack_save_bc") || "";
@@ -707,9 +759,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const snMaxBP = num(getAtkAttr("attack_max_bp"), 0);
     const snType = getAtkAttr("attack_snare_type") || "";
     
-    // Parse PR cost from attack_cost field (handles "2", "2/6c", etc.)
+    // Parse PR + charges cost from attack_cost field (handles "2", "6c", "2/6c", etc.)
     const atkCostRaw = getAtkAttr("attack_cost") || fields.cost || "";
-    const atkPR = num(atkCostRaw.split("/")[0], 0); // Get PR before any slash
+    const cost = parseAttackCost(atkCostRaw);
+    const atkPR = cost.pr;
+    const atkChgCost = cost.chg;
+
 
     let atkSaveAttr;
     if (atkTypeCode === "M") atkSaveAttr = "intelligence_save";
@@ -762,6 +817,24 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - atkPR));
     }
 
+    // Deduct attack charges cost from attacker (per-attack charges like "6c" or "2/6c")
+    let chgDeducted = 0;
+    if (atkChgCost > 0 && atkCharId && rowId) {
+      const chgAttr = `repeating_attacks_${rowId}_attack_charges`;
+      const raw = getAttr(atkCharId, chgAttr);
+      if (raw === undefined || String(raw).trim() === "") {
+        sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Cost includes ${atkChgCost}c but this attack row has no Charges value. Add a number to the Charges field to enable deduction.`);
+      } else {
+        const chg0 = num(raw, 0);
+        chgDeducted = Math.min(atkChgCost, chg0);
+        const chg1 = Math.max(0, chg0 - atkChgCost);
+        setAttr(atkCharId, chgAttr, chg1);
+        if (chg0 < atkChgCost) {
+          sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Charges ran out (${chg0} < ${atkChgCost}). Set to 0.`);
+        }
+      }
+    }
+
     // Determine outcome
     let outcome = "MISS";
     let isCrit = false;
@@ -797,7 +870,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       outcome, isCrit, isFumble, critResult, fumbleResult,
       damageTotal, dmgTypeStr, protKey, atkType,
       atkAP, saveBC, saveMod, recMod, snBP, snMaxBP, snType, causesKB,
-      isPushing, rangeData, created: Date.now()
+      isPushing, rangeData, created: Date.now(),
+      noDamageType
     };
 
     // Build output
@@ -885,6 +959,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     if (prDeducted > 0) {
       html += `<br/><span style="color:#333; font-size:10px;">PR: -${prDeducted}</span>`;
+    }
+    if (chgDeducted > 0) {
+      html += `<br/><span style="color:#333; font-size:10px;">Chg: -${chgDeducted}c</span>`;
     }
 
     html += `</div>`;
@@ -1397,8 +1474,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Critical mod (Solid Hit = -3 to save TN for save attacks)
     const critMod = num(args.critmod, 0);
 
-    // Final save TN = base + attack mod + protection + invuln + roll-with + crit mod
-    const tn = baseSave + num(rec.saveMod, 0) + Math.floor(prot) + invulnBonus + rwPaid + critMod;
+    // Vulnerability: for save attacks, "Vulnerable to <Type>" applies as a penalty to the save TN vs that damage type.
+    // We reuse getVulnerabilityMods() which encodes vulnerability as +N damage taken; for saves we apply -N.
+    const vulnData = (!rec.noDamageType && rec.dmgTypeStr) ? getVulnerabilityMods(defChar.id, rec.dmgTypeStr) : { protMod: 0, dmgMod: 0, notes: [] };
+    const vulnSaveMod = (vulnData && vulnData.dmgMod) ? -Math.abs(num(vulnData.dmgMod, 0)) : 0;
+
+
+    // Final save TN = base + attack mod + protection + invuln + roll-with + crit mod + vulnerability
+    const tn = baseSave + num(rec.saveMod, 0) + Math.floor(prot) + invulnBonus + rwPaid + critMod + vulnSaveMod;
 
     const d20 = randomInteger(20);
     const pass = (d20 !== CFG.FUMBLE_FAIL_NAT) && (d20 <= tn);
@@ -1414,10 +1497,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const msg_out =
       `<b>Save Attack</b> (${esc(rec.saveBC)}) vs <b>${esc(rec.defName)}</b><br/>` +
-      `Base: <b>${baseSave}</b> | Mod: <b>${rec.saveMod}</b> | Prot: <b>+${Math.floor(prot)}</b>` +
+      `Base: <b>${baseSave}</b> | Mod: <b>${rec.saveMod}</b> | Prot: <b>${rec.protKey ? ('+' + Math.floor(prot)) : '—'}</b>` +
       (invulnBonus > 0 ? ` | <span style="color:#d35400;">Invuln: <b>+${invulnBonus}</b></span>` : "") +
       (rwPaid > 0 ? ` | RW: <b>+${rwPaid}</b>` : "") +
       (critMod !== 0 ? ` | Crit: <b>${critMod}</b>` : "") +
+      (vulnSaveMod !== 0 ? ` | <span style="color:#e63946;">Vuln: <b>${vulnSaveMod}</b></span>` : "") +
       `<br/>Save TN: <b>${tn}-</b> | Roll: <b>${d20}</b> → <b style="color:${pass ? '#50fa7b' : '#e94560'}">${pass ? "SAVED" : "FAILED"}</b>` +
       (rwPaid > 0 ? `<br/>Power: ${pow0} → ${pow1}` : "") +
       statusLine;

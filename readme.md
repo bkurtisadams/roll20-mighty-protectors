@@ -18,7 +18,7 @@ Custom character sheet and API for running Mighty Protectors RPG in Roll20.
 ### API (Pro subscribers)
 1. Game Settings → API Scripts
 2. Create new script, paste contents of `api/mp_engine.js`
-3. Save - look for "MP ENGINE READY EVENT FIRED" in console
+3. Save (check the API console for: `MP ENGINE READY EVENT FIRED`)
 
 ## Sheet Features
 
@@ -26,10 +26,137 @@ Custom character sheet and API for running Mighty Protectors RPG in Roll20.
 - Repeating sections for Attacks, Protection, Abilities
 - Attack rolls with configurable query prompts (range, defense, stance, aim, etc.)
 - Roll + Confirm displayed for crit/fumble checking
-- Special attack notation in Notes field:
-  - `sav:EN:+5:-14` - Save attack (BC:mod:recovery)
-  - `snr:ice:9/15` - Snare attack (type:bp/maxbp)
-  - `ap:5` or `ap` - Armor piercing (amount or ALL)
+
+## Attack Notes Shorthand (IMPORTANT)
+
+The **Notes** field on each Attack can include shorthand tags. These tags change how the API interprets the attack.
+
+General format:
+- Tags are separated by spaces or semicolons.
+- Most tags are `key:value` or `key:value:value`.
+- Tags are case-insensitive.
+
+### 1) Save Attacks
+**Purpose:** A Save Attack forces targets to roll a save (EN/AG/IN/CL) instead of making a to-hit roll.
+
+**Format:**
+- `sav:<BC>:<mod>:<recovery>`
+  - `BC` = Save type (EN, AG, IN, CL)
+  - `mod` = Save modifier (e.g. `+5`, `-3`, `0`)
+  - `recovery` = Recovery modifier applied on between-round recovery saves (optional)
+
+**Examples:**
+- `sav:EN:+5:-14`
+- `sav:AG:0` (no recovery modifier)
+
+**Rules notes (API behavior):**
+- Normal save attacks: target protection/invulnerability can modify the save TN.
+- Roll-with (Power/10 max) can also modify the save TN (as per MP rules).
+
+#### Save Attacks with NO Damage Type (Flash-style)
+Some save attacks explicitly have **no Damage Type** (e.g., Flash). These should not use normal protection buckets.
+
+**Add one of these flags in Notes:**
+- `dtype:none` (recommended canonical tag)
+- `dmgtype:none`
+- `notype`
+- `no damage type`
+
+**Example (Flash):**
+- `sav:EN:+5:-14; dtype:none`
+
+**Effect:**
+- When `dtype:none` is present on a save attack, the API runs the save normally, but:
+  - **does NOT** add protection
+  - **does NOT** add invulnerability’s +8 vs saves
+
+(Protected Sense is not tracked by the sheet yet, so there is no mitigation applied beyond the save.)
+
+### 2) Snare Attacks
+**Purpose:** A Snare attack creates a Break Point (BP) that targets must beat to escape.
+
+**Format:**
+- `snr:<type>:<bp>/<maxbp>`
+  - `type` = `grp` (grapnel) or `ice` (or any label you use for your table)
+  - `bp` = Break Point
+  - `maxbp` = Maximum BP (optional)
+
+**Examples:**
+- `snr:ice:9/15`
+- `snr:grp:8`
+
+### 3) Armor Piercing (AP)
+**Purpose:** Reduce or ignore protection.
+
+**Formats:**
+- `ap:<N>` reduces target protection by N (Hardened negates AP 1:1 first)
+- `ap` ignores ALL protection & invulnerability (absolute AP)
+
+**Examples:**
+- `ap:5`
+- `ap`
+
+### 4) Other Notes Conventions (sheet/UI references)
+These are not “tags” that the API parses, but are common Notes conventions shown in the sheet UI:
+- Called shots, stance, aim, etc. are usually handled via roll queries on the sheet rather than Notes tags.
+
+## Common Recipes (Copy/Paste)
+
+These are “known-good” Notes patterns you can paste into an Attack row and then tweak numbers.
+
+### Flash (blinding burst, no Damage Type)
+Use when the power explicitly says “no damage type” (Flash-style).
+- Notes:
+  - `sav:EN:0:-12; dtype:none`
+- Tips:
+  - Put your per-attack PR cost (e.g. `2`) in the attack’s Cost field.
+  - Because Protected Sense isn’t tracked yet, mitigation is currently “save or eat it”.
+
+### Glare / Sensory Overload (normal typed save attack)
+Use when the effect is a save attack *and* it should benefit from normal protection buckets.
+- Notes:
+  - `sav:EN:-2:-12`
+- Example variants:
+  - Harder to resist: `sav:EN:-5:-14`
+  - Easier to resist: `sav:EN:+3:-10`
+
+### Standard “Save or Suffer” (poison, stun gas, fear, etc.)
+- Notes:
+  - `sav:EN:0:-12`
+- Typical mapping:
+  - EN for toxins, body shock, stunning shock
+  - CL for willpower/panic/terror
+  - IN for mental intrusion / confusion-style effects
+  - AG for reflex / dodge-the-cloud style effects (if your table uses AG saves that way)
+
+### Save Attack that *does* have a Damage Type (e.g., “Save for half damage”)
+If your table uses a save to reduce damage and it makes sense to use protection buckets:
+- Notes:
+  - `sav:EN:0:-12`
+- Then set the Attack’s Damage Type field appropriately on the row (Kin/Eng/Psy/Bio/Ent/Other).
+
+### Ice Snare (break point with a max)
+- Notes:
+  - `snr:ice:9/15`
+- Tips:
+  - Use `bp/maxbp` when the snare can “tighten” up to a cap.
+
+### Grapnel Snare (simple BP, no cap)
+- Notes:
+  - `snr:grp:8`
+
+### Armor Piercing bullets / blasts
+- Partial AP:
+  - `ap:5`
+- Absolute AP (ignore all protection/invuln):
+  - `ap`
+
+### “Armor Piercing + Save” combo (rare, but supported)
+If you have a save attack that also ignores protection (table-dependent):
+- Notes:
+  - `sav:EN:0:-12; ap:5`
+  - or `sav:EN:0:-12; ap`
+(Use carefully. In core MP, AP is usually discussed in the context of protection vs damage; if your power text doesn’t say it, don’t give it for free.)
 
 ## Color Scheme
 
