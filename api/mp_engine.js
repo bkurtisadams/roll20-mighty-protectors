@@ -1,4 +1,6 @@
-/* Mighty Protectors Roll20 API Engine v2.9 (Damage type normalization)
+/* Mighty Protectors Roll20 API Engine v2.11 (Round tracking for PR/charges)
+ * !mp round - Process per-round PR costs and charge decrements
+ * Only counts protection rows where prot_active="1" (C/P/V states)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
@@ -8,7 +10,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.8 FILE STARTING");
+log("MP ENGINE v2.11 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -256,19 +258,48 @@ MP.Engine = (function () {
 
 
   // Sum protection, hardened, and invuln for a specific damage type
+  // Only counts rows where prot_active = "1" (C, P, or V states)
   // Returns { prot: total protection, hardened: total hardened, invuln: boolean }
   function sumProtectionWithHardened(charId, protKey) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false };
-    const re = new RegExp("^repeating_protection_.*_prot_" + protKey + "$");
+    
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
     let totalProt = 0;
     let totalHardened = 0;
     let hasInvuln = false;
     
+    // Build a map of rowId -> { protValue, active }
+    const rowData = {};
+    const protRe = new RegExp("^repeating_protection_([^_]+)_prot_" + protKey + "$");
+    const activeRe = /^repeating_protection_([^_]+)_prot_active$/;
+    
     attrs.forEach(a => {
       const n = a.get("name");
-      if (re.test(n)) {
-        const parsed = parseProtValue(a.get("current"));
+      
+      // Check for protection value
+      const protMatch = protRe.exec(n);
+      if (protMatch) {
+        const rowId = protMatch[1];
+        rowData[rowId] = rowData[rowId] || {};
+        rowData[rowId].protValue = a.get("current");
+      }
+      
+      // Check for active flag
+      const activeMatch = activeRe.exec(n);
+      if (activeMatch) {
+        const rowId = activeMatch[1];
+        rowData[rowId] = rowData[rowId] || {};
+        rowData[rowId].active = a.get("current");
+      }
+    });
+    
+    // Sum only active rows
+    Object.keys(rowData).forEach(rowId => {
+      const row = rowData[rowId];
+      // Default to active if no prot_active attribute exists (backwards compatibility)
+      const isActive = row.active === "1" || row.active === undefined;
+      if (isActive && row.protValue) {
+        const parsed = parseProtValue(row.protValue);
         totalProt += parsed.prot;
         totalHardened += parsed.hardened;
         if (parsed.invuln) hasInvuln = true;
@@ -350,6 +381,23 @@ MP.Engine = (function () {
       byRow[rowId][field] = a.get("current");
     });
     return Object.values(byRow);
+  }
+
+  // Get all row IDs for a repeating section
+  function getRepeatingRowIds(charId, section) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const rowIds = new Set();
+    const prefix = "repeating_" + section + "_";
+    attrs.forEach(a => {
+      const n = a.get("name");
+      if (n.startsWith(prefix)) {
+        const parts = n.substring(prefix.length).split("_");
+        if (parts.length > 0) {
+          rowIds.add(parts[0]);
+        }
+      }
+    });
+    return Array.from(rowIds);
   }
 
   function getVulnerabilityMods(charId, damageType) {
@@ -1944,6 +1992,165 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
   // -------------------------
+  // ROUND TRACKING - PR/CHARGES
+  // -------------------------
+
+  /**
+   * Process round-start PR costs and charge decrements for all characters
+   * in Turn Order (or all tokens on page if Turn Order empty).
+   * Only processes active (P/V state) abilities with pr_type="rnd".
+   */
+  function cmdRound(msg) {
+    const pageId = Campaign().get("playerpageid");
+    const turnOrder = Campaign().get("turnorder");
+    let charIds = [];
+
+    // Get character IDs from Turn Order
+    if (turnOrder && turnOrder !== "[]") {
+      try {
+        const order = JSON.parse(turnOrder);
+        order.forEach(entry => {
+          if (entry.id && entry.id !== "-1") {
+            const tok = getObj("graphic", entry.id);
+            if (tok) {
+              const charId = tok.get("represents");
+              if (charId && !charIds.includes(charId)) {
+                charIds.push(charId);
+              }
+            }
+          }
+        });
+      } catch (e) {
+        console.error("[MP ERROR] Failed to parse Turn Order:", e);
+      }
+    }
+
+    // If no Turn Order, get all tokens on current page
+    if (charIds.length === 0) {
+      const tokens = findObjs({ _type: "graphic", _pageid: pageId, layer: "objects" });
+      tokens.forEach(tok => {
+        const charId = tok.get("represents");
+        if (charId && !charIds.includes(charId)) {
+          charIds.push(charId);
+        }
+      });
+    }
+
+    if (charIds.length === 0) {
+      return ch("MP", "/w gm <b>Round:</b> No characters found in Turn Order or on page.");
+    }
+
+    let report = [];
+    let warnings = [];
+
+    charIds.forEach(charId => {
+      const char = getObj("character", charId);
+      if (!char) return;
+
+      const charName = char.get("name");
+      let charCosts = [];
+      let totalPR = 0;
+
+      // Get current Power
+      let currentPower = getAttrNum(charId, CFG.POWER_ATTR, 0);
+
+      // Process Protection rows
+      const protRowIds = getRepeatingRowIds(charId, "protection");
+      protRowIds.forEach(rowId => {
+        const prefix = "repeating_protection_" + rowId + "_";
+        const act = getAttr(charId, prefix + "prot_act");
+        const prType = getAttr(charId, prefix + "prot_pr_type");
+        const active = getAttr(charId, prefix + "prot_active");
+
+        // Only process if active (P or V state) AND pr_type is "rnd"
+        if (active !== "1" || prType !== "rnd") return;
+
+        const name = getAttr(charId, prefix + "prot_name") || "Unnamed Protection";
+        const pr = parseInt(getAttr(charId, prefix + "prot_pr"), 10) || 0;
+        const charges = parseInt(getAttr(charId, prefix + "prot_charges"), 10);
+
+        if (pr > 0) {
+          totalPR += pr;
+          charCosts.push({ name, pr, type: "prot", rowId, prefix });
+        }
+
+        // Decrement charges if present
+        if (!isNaN(charges) && charges > 0) {
+          setAttr(charId, prefix + "prot_charges", charges - 1);
+          charCosts.push({ name, chargeDec: true });
+        }
+      });
+
+      // Process Ability rows
+      const abilRowIds = getRepeatingRowIds(charId, "abilities");
+      abilRowIds.forEach(rowId => {
+        const prefix = "repeating_abilities_" + rowId + "_";
+        const act = getAttr(charId, prefix + "ability_act");
+        const prType = getAttr(charId, prefix + "ability_pr_type");
+        const active = getAttr(charId, prefix + "ability_active");
+
+        // Only process if active (P or V state) AND pr_type is "rnd"
+        if (active !== "1" || prType !== "rnd") return;
+
+        const name = getAttr(charId, prefix + "ability_name") || "Unnamed Ability";
+        const pr = parseInt(getAttr(charId, prefix + "ability_pr"), 10) || 0;
+        const charges = parseInt(getAttr(charId, prefix + "ability_charges"), 10);
+
+        if (pr > 0) {
+          totalPR += pr;
+          charCosts.push({ name, pr, type: "abil", rowId, prefix });
+        }
+
+        // Decrement charges if present
+        if (!isNaN(charges) && charges > 0) {
+          setAttr(charId, prefix + "ability_charges", charges - 1);
+          charCosts.push({ name, chargeDec: true });
+        }
+      });
+
+      // Apply total PR cost
+      if (totalPR > 0) {
+        const newPower = currentPower - totalPR;
+        setAttr(charId, CFG.POWER_ATTR, newPower);
+
+        // Also update token bar if there's a token for this character
+        const tokens = findObjs({ _type: "graphic", _pageid: pageId, represents: charId });
+        tokens.forEach(tok => {
+          tok.set(CFG.POWER_BAR, newPower);
+        });
+
+        let costList = charCosts.filter(c => c.pr).map(c => `${c.name} (${c.pr})`).join(", ");
+        report.push(`<b>${esc(charName)}</b>: -${totalPR} PR (${costList}) → Power: ${newPower}`);
+
+        if (newPower <= 0) {
+          warnings.push(`<span style="color:#e94560"><b>${esc(charName)}</b> has reached 0 Power!</span>`);
+        }
+      }
+
+      // Report charge decrements
+      const chargeDecs = charCosts.filter(c => c.chargeDec);
+      if (chargeDecs.length > 0) {
+        const chargeList = chargeDecs.map(c => c.name).join(", ");
+        report.push(`<b>${esc(charName)}</b>: Charge decremented for: ${chargeList}`);
+      }
+    });
+
+    // Output report
+    let msg_out = "<b>⏱ Round Start Processing</b>";
+    if (report.length > 0) {
+      msg_out += "<br/>" + report.join("<br/>");
+    } else {
+      msg_out += "<br/><i>No per-round PR costs or charge decrements.</i>";
+    }
+
+    if (warnings.length > 0) {
+      msg_out += "<br/><b>⚠ Warnings:</b><br/>" + warnings.join("<br/>");
+    }
+
+    ch("MP", "/w gm " + msg_out);
+  }
+
+  // -------------------------
   // STANCE & COMBAT MODIFIERS
   // -------------------------
 
@@ -3209,13 +3416,14 @@ function cmdStance(msg, args) {
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
       case "status": return cmdStatus(msg, args);
+      case "round": return cmdRound(msg);
       case "info": return cmdInfo(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "atk": return cmdQuickAttack(msg, args);
       case "sv": return cmdQuickSave(msg, args);
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.8</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.11</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp sv BC [mod]</code> - Save (EN/AG/IN/CL)<br/>
@@ -3237,6 +3445,8 @@ function cmdStance(msg, args) {
           <code>!mp wakeup --target TOKID</code><br/>
           <code>!mp status --target TOKID</code><br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
 
+          <b>Round Tracking:</b><br/>
+          <code>!mp round</code> - Process per-round PR costs &amp; charges<br/>
           <b>Stances (Bar3):</b><br/>
           <code>!mp stance normal|def|full|offbal|N</code><br/>
           <code>!mp clearstances</code> - Clear all on page<br/>
@@ -3255,11 +3465,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.8:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.11:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.8 READY");
+  log("MP ENGINE v2.11 READY");
 });
