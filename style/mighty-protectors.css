@@ -376,3 +376,104 @@
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-power-input { color: #f4d03f !important; }
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-label { color: #e63946 !important; }
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-input { color: #e63946 !important; }
+/* Protection activation dropdown */
+.charsheet .sheet-prot-active-cb,
+.charsheet .sheet-prot-glow-cb {
+  display: none !important;
+}
+
+.charsheet .sheet-prot-act-sel {
+  width: 100% !important;
+  height: 20px !important;
+  padding: 0 2px !important;
+  margin: 0 !important;
+  background: #1a1a2e !important;
+  border: 1px solid #444 !important;
+  border-radius: 3px !important;
+  color: #555 !important;
+  font-size: 10px !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+/* C state - just brighter text, no glow */
+.charsheet .sheet-prot-active-cb:checked + .sheet-prot-glow-cb + .sheet-prot-act-sel {
+  color: #888 !important;
+}
+
+/* P or V state - yellow glow */
+.charsheet .sheet-prot-glow-cb:checked + .sheet-prot-act-sel {
+  color: #f4d03f !important;
+  border-color: #f4d03f !important;
+  box-shadow: 0 0 6px rgba(244, 208, 63, 0.5) !important;
+  background: #2a2a1e !important;
+}
+
+/* Attack activation dropdown */
+.charsheet .sheet-atk-active-cb,
+.charsheet .sheet-atk-glow-cb {
+  display: none !important;
+}
+
+.charsheet .sheet-atk-act-sel {
+  width: 100% !important;
+  height: 20px !important;
+  padding: 0 2px !important;
+  margin: 0 !important;
+  background: #1a1a2e !important;
+  border: 1px solid #444 !important;
+  border-radius: 3px !important;
+  color: #555 !important;
+  font-size: 10px !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+/* C state - just brighter text, no glow */
+.charsheet .sheet-atk-active-cb:checked + .sheet-atk-glow-cb + .sheet-atk-act-sel {
+  color: #888 !important;
+}
+
+/* P or V state - yellow glow */
+.charsheet .sheet-atk-glow-cb:checked + .sheet-atk-act-sel {
+  color: #f4d03f !important;
+  border-color: #f4d03f !important;
+  box-shadow: 0 0 6px rgba(244, 208, 63, 0.5) !important;
+  background: #2a2a1e !important;
+}
+
+/* Ability activation dropdown */
+.charsheet .sheet-ability-active-cb,
+.charsheet .sheet-ability-glow-cb {
+  display: none !important;
+}
+
+.charsheet .sheet-ability-act-sel {
+  width: 100% !important;
+  height: 20px !important;
+  padding: 0 2px !important;
+  margin: 0 !important;
+  background: #1a1a2e !important;
+  border: 1px solid #444 !important;
+  border-radius: 3px !important;
+  color: #555 !important;
+  font-size: 10px !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+/* C state - just brighter text, no glow */
+.charsheet .sheet-ability-active-cb:checked + .sheet-ability-glow-cb + .sheet-ability-act-sel {
+  color: #888 !important;
+}
+
+/* P or V state - yellow glow */
+.charsheet .sheet-ability-glow-cb:checked + .sheet-ability-act-sel {
+  color: #f4d03f !important;
+  border-color: #f4d03f !important;
+  box-shadow: 0 0 6px rgba(244, 208, 63, 0.5) !important;
+  background: #2a2a1e !important;
+}

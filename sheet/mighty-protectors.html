@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.24 (Protection: split Cost into PR + Ch columns) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.29 (Act column on Attacks/Abilities, narrower CP/IPs) -->
 - Create default empty career row if none exist -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
@@ -426,13 +426,15 @@
       <input type="checkbox" name="attr_query_aim" value="1" title="Prompt for aim bonus" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Aim</span>
       <input type="checkbox" name="attr_query_push" value="1" title="Prompt for push" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Push</span>
       <input type="checkbox" name="attr_query_multi" value="1" title="Prompt for multiple actions" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Multi</span>
+      <input type="checkbox" name="attr_query_hb" value="1" title="Prompt for hold back (reduce damage)" /><span style="color:#aaa; font-size:10px; margin-right:8px;">HB</span>
       <input type="checkbox" name="attr_query_other" value="1" title="Prompt for other modifiers" /><span style="color:#aaa; font-size:10px;">Other</span>
     </div>
 
 <!-- Attacks Header -->
 <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
   <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
-    <th style="width:145px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
+    <th style="width:130px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
+    <th style="width:34px; text-align:center; padding:1px;" title="C=Continual, P=Persistent (stays on if KO'd), V=Voluntary (off if KO'd), H=Held Back, Off=Inactive">Act</th>
     <th style="width:36px;"></th>
 
     <th style="width:40px; text-align:center; padding:1px 1px;" title="Attack Type: Physical (AG) / Mental (IN) / Emotion (CL)">
@@ -472,20 +474,32 @@
 <fieldset class="repeating_attacks" style="border:none; padding:0; margin:0;">
   <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
     <tr>
-      <td style="width:145px; padding:1px; vertical-align:middle;">
+      <td style="width:130px; padding:1px; vertical-align:middle;">
         <input type="text" name="attr_attack_name"
           style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
       </td>
 
+      <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="checkbox" name="attr_attack_active" value="1" class="sheet-atk-active-cb" />
+        <input type="checkbox" name="attr_attack_glow" value="1" class="sheet-atk-glow-cb" />
+        <select name="attr_attack_act" class="sheet-atk-act-sel" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">
+          <option value="C">C</option>
+          <option value="P">P</option>
+          <option value="V">V</option>
+          <option value="H">H</option>
+          <option value="Off" selected>Off</option>
+        </select>
+      </td>
+
       <td style="width:36px; text-align:center; padding:1px; vertical-align:middle; overflow:visible;">
-        <!-- NEW: per-row hidden RowID storage -->
+        <!-- per-row hidden RowID storage -->
         <input type="hidden" name="attr_attack_rowid" />
 
-        <!-- NEW: auto row number + display labels for info cards -->
+        <!-- auto row number + display labels for info cards -->
         <input type="hidden" name="attr_attack_num" />
         <input type="hidden" name="attr_attack_atk_full" />
 
-        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}+@{hb_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
       </td>
 
       <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
@@ -596,7 +610,8 @@
 <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
   <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
     <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
-      <th style="width:155px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
+      <th style="width:140px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
+      <th style="width:34px; text-align:center; padding:1px;" title="C=Continual, P=Persistent (stays on if KO'd), V=Voluntary (off if KO'd), H=Held Back, Off=Inactive">Act</th>
 
       <th style="width:32px; text-align:center; padding:1px;"
           title="Kinetic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
@@ -639,7 +654,19 @@
   <fieldset class="repeating_protection" style="border:none; padding:0; margin:0;">
     <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
       <tr>
-        <td style="width:155px; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" /></td>
+        <td style="width:140px; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" /></td>
+        <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
+          <input type="hidden" name="attr_prot_rowid" />
+          <input type="checkbox" name="attr_prot_active" value="1" class="sheet-prot-active-cb" />
+          <input type="checkbox" name="attr_prot_glow" value="1" class="sheet-prot-glow-cb" />
+          <select name="attr_prot_act" class="sheet-prot-act-sel" title="C=Continual, P=Persistent (stays on if KO'd), V=Voluntary (off if KO'd), H=Held Back, Off=Inactive">
+            <option value="C">C</option>
+            <option value="P">P</option>
+            <option value="V">V</option>
+            <option value="H">H</option>
+            <option value="Off" selected>Off</option>
+          </select>
+        </td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_kinetic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_energy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
         <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_bio" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
@@ -667,16 +694,28 @@
 </div>
     <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
       <tr style="font-size:10px; color:#888;">
-        <th style="width:40px; text-align:center;">CP</th>
-        <th style="width:40px; text-align:center;">IPs</th>
+        <th style="width:32px; text-align:center;">CP</th>
+        <th style="width:28px; text-align:center;">IPs</th>
+        <th style="width:34px; text-align:center;" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">Act</th>
         <th style="text-align:left;">Name / Notes</th>
       </tr>
     </table>
     <fieldset class="repeating_abilities" style="border:none; padding:0; margin:0;">
       <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
         <tr>
-          <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_cp" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-          <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_ip" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+          <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_cp" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_ip" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+          <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="checkbox" name="attr_ability_active" value="1" class="sheet-ability-active-cb" />
+            <input type="checkbox" name="attr_ability_glow" value="1" class="sheet-ability-glow-cb" />
+            <select name="attr_ability_act" class="sheet-ability-act-sel" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">
+              <option value="C">C</option>
+              <option value="P">P</option>
+              <option value="V">V</option>
+              <option value="H">H</option>
+              <option value="Off" selected>Off</option>
+            </select>
+          </td>
           <td style="padding:1px; vertical-align:middle;">
             <div style="display:flex; gap:2px;">
               <input type="text" name="attr_ability_name" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
@@ -750,6 +789,7 @@
 <input type="hidden" name="attr_push_query" value="" />
 <input type="hidden" name="attr_push_dmg_query" value="0" />
 <input type="hidden" name="attr_multi_query" value="0" />
+<input type="hidden" name="attr_hb_query" value="0" />
 <input type="hidden" name="attr_other_query" value="0" />
 
 <!-- ROLL TEMPLATE -->
@@ -1485,7 +1525,7 @@ var carryDisplay = [
   });
 
   function initQuerySettings() {
-    getAttrs(["query_range", "query_called", "query_def", "query_stance", "query_aim", "query_push", "query_multi", "query_other"], function(v) {
+    getAttrs(["query_range", "query_called", "query_def", "query_stance", "query_aim", "query_push", "query_multi", "query_hb", "query_other"], function(v) {
       var updates = {};
       updates.range_query = v.query_range === "1" ? "?{Range Penalty|0-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
       updates.multi_query = v.query_multi === "1" ? "?{Actions This Phase|1 Action,0|2 Actions,-3|3 Actions,-6|4 Actions,-9|5 Actions,-12}" : "0";
@@ -1495,12 +1535,13 @@ var carryDisplay = [
       updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";
       updates.push_query = v.query_push === "1" ? "?{Push? 2 PR|No,|Yes,1}" : "";
       updates.push_dmg_query = v.query_push === "1" ? "?{Push? 2 PR|No,0|Yes,2}" : "0";
+      updates.hb_query = v.query_hb === "1" ? "?{Hold Back (negative)|0}" : "0";
       updates.other_query = v.query_other === "1" ? "?{Other Mods|0}" : "0";
       setAttrs(updates);
     });
   }
 
-  on("change:query_range change:query_called change:query_def change:query_stance change:query_aim change:query_push change:query_multi change:query_other", function() {
+  on("change:query_range change:query_called change:query_def change:query_stance change:query_aim change:query_push change:query_multi change:query_hb change:query_other", function() {
     initQuerySettings();
   });
 
@@ -2297,4 +2338,114 @@ function initAbilityNotes() {
 }
 
 // Add initAbilityNotes() call to your sheet:opened handler
+
+// --- PROTECTION ROW ID SYNC ---
+function syncProtectionRowIds() {
+  getSectionIDs("repeating_protection", function(ids) {
+    if (!ids || !ids.length) return;
+    var updates = {};
+    ids.forEach(function(id) {
+      updates["repeating_protection_" + id + "_prot_rowid"] = id;
+    });
+    setAttrs(updates, { silent: true });
+  });
+}
+
+on("sheet:opened", syncProtectionRowIds);
+on("change:repeating_protection remove:repeating_protection", syncProtectionRowIds);
+
+// --- PROTECTION ACT STATE SYNC ---
+// Sets hidden checkboxes based on dropdown
+// prot_active: C, P, or V = active (for API protection calculation)
+// prot_glow: P or V only (for CSS visual effect - C doesn't glow, H is held back)
+on("change:repeating_protection:prot_act", function(eventInfo) {
+  var rowPrefix = eventInfo.sourceAttribute.replace("_prot_act", "");
+  getAttrs([eventInfo.sourceAttribute], function(v) {
+    var act = v[eventInfo.sourceAttribute] || "Off";
+    var update = {};
+    update[rowPrefix + "_prot_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
+    update[rowPrefix + "_prot_glow"] = (act === "P" || act === "V") ? "1" : "0";
+    setAttrs(update, { silent: true });
+  });
+});
+
+// Sync all protection rows on sheet open
+on("sheet:opened", function() {
+  getSectionIDs("repeating_protection", function(ids) {
+    if (!ids || !ids.length) return;
+    var attrList = ids.map(function(id) {
+      return "repeating_protection_" + id + "_prot_act";
+    });
+    getAttrs(attrList, function(values) {
+      var updates = {};
+      ids.forEach(function(id) {
+        var act = values["repeating_protection_" + id + "_prot_act"] || "Off";
+        updates["repeating_protection_" + id + "_prot_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
+        updates["repeating_protection_" + id + "_prot_glow"] = (act === "P" || act === "V") ? "1" : "0";
+      });
+      setAttrs(updates, { silent: true });
+    });
+  });
+});
+
+// --- ATTACK ACT STATE SYNC ---
+on("change:repeating_attacks:attack_act", function(eventInfo) {
+  var rowPrefix = eventInfo.sourceAttribute.replace("_attack_act", "");
+  getAttrs([eventInfo.sourceAttribute], function(v) {
+    var act = v[eventInfo.sourceAttribute] || "Off";
+    var update = {};
+    update[rowPrefix + "_attack_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
+    update[rowPrefix + "_attack_glow"] = (act === "P" || act === "V") ? "1" : "0";
+    setAttrs(update, { silent: true });
+  });
+});
+
+on("sheet:opened", function() {
+  getSectionIDs("repeating_attacks", function(ids) {
+    if (!ids || !ids.length) return;
+    var attrList = ids.map(function(id) {
+      return "repeating_attacks_" + id + "_attack_act";
+    });
+    getAttrs(attrList, function(values) {
+      var updates = {};
+      ids.forEach(function(id) {
+        var act = values["repeating_attacks_" + id + "_attack_act"] || "Off";
+        updates["repeating_attacks_" + id + "_attack_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
+        updates["repeating_attacks_" + id + "_attack_glow"] = (act === "P" || act === "V") ? "1" : "0";
+      });
+      setAttrs(updates, { silent: true });
+    });
+  });
+});
+
+// --- ABILITY ACT STATE SYNC ---
+on("change:repeating_abilities:ability_act", function(eventInfo) {
+  var rowPrefix = eventInfo.sourceAttribute.replace("_ability_act", "");
+  getAttrs([eventInfo.sourceAttribute], function(v) {
+    var act = v[eventInfo.sourceAttribute] || "Off";
+    var update = {};
+    update[rowPrefix + "_ability_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
+    update[rowPrefix + "_ability_glow"] = (act === "P" || act === "V") ? "1" : "0";
+    setAttrs(update, { silent: true });
+  });
+});
+
+on("sheet:opened", function() {
+  getSectionIDs("repeating_abilities", function(ids) {
+    if (!ids || !ids.length) return;
+    var attrList = ids.map(function(id) {
+      return "repeating_abilities_" + id + "_ability_act";
+    });
+    getAttrs(attrList, function(values) {
+      var updates = {};
+      ids.forEach(function(id) {
+        var act = values["repeating_abilities_" + id + "_ability_act"] || "Off";
+        updates["repeating_abilities_" + id + "_ability_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
+        updates["repeating_abilities_" + id + "_ability_glow"] = (act === "P" || act === "V") ? "1" : "0";
+      });
+      setAttrs(updates, { silent: true });
+    });
+  });
+});
+
 </script>
