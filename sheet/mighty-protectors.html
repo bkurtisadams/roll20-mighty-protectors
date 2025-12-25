@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v41.0 - Unified badge + dropdown pattern for Abilities, Attacks, Protections -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.5 - Fixed API conflict: activation uses attack_activation, API category uses attack_type -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -427,7 +427,8 @@
     <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
       <colgroup>
         <col style="width:130px;" /><!-- Name -->
-        <col style="width:24px;" /><!-- Badge -->
+        <col style="width:22px;" /><!-- Type indicator -->
+        <col style="width:48px;" /><!-- State/Use -->
         <col style="width:36px;" /><!-- Roll -->
         <col style="width:32px;" /><!-- Mod -->
         <col style="width:34px;" /><!-- Hit -->
@@ -442,7 +443,8 @@
       <thead>
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:left; padding:2px; color:#f4d03f;">Attacks</th>
-          <th style="text-align:center; padding:2px;" title="Type/State: ●=Continual ■=Persistent ◆=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
           <th style="padding:2px;"></th>
           <th style="text-align:center; padding:2px;" title="Modifier to hit roll">Mod</th>
           <th style="text-align:center; padding:2px;" title="Target number to hit (roll under)">To Hit</th>
@@ -461,15 +463,13 @@
     <fieldset class="repeating_attacks" style="border:none; padding:0; margin:0;">
       <input type="checkbox" name="attr_options_flag" class="sheet-options-flag" title="Toggle settings panel" />
 
-      <!-- Hidden checkboxes for activation state styling -->
-      <input type="checkbox" name="attr_attack_active" value="1" class="sheet-atk-active-cb" />
-      <input type="checkbox" name="attr_attack_glow" value="1" class="sheet-atk-glow-cb" />
-      <input type="checkbox" name="attr_attack_held" value="1" class="sheet-atk-held-cb" />
+      <!-- Hidden checkboxes moved inside indicator cell for CSS styling -->
 
       <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
         <colgroup>
           <col style="width:130px;" />
-          <col style="width:24px;" />
+          <col style="width:22px;" />
+          <col style="width:48px;" />
           <col style="width:36px;" />
           <col style="width:32px;" />
           <col style="width:34px;" />
@@ -486,13 +486,17 @@
             <input type="text" name="attr_attack_name" placeholder="Attack Name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
           </td>
           <td style="text-align:center; padding:1px;">
-            <!-- Hidden checkboxes for CSS styling -->
-            <input type="checkbox" name="attr_attack_type_c" class="sheet-atk-type-c-flag" value="1" />
-            <input type="checkbox" name="attr_attack_type_p" class="sheet-atk-type-p-flag" value="1" />
-            <input type="checkbox" name="attr_attack_type_v" class="sheet-atk-type-v-flag" value="1" />
-            <input type="checkbox" name="attr_attack_state_active" class="sheet-atk-state-active-flag" value="1" />
-            <!-- Visual badge (read-only indicator) -->
-            <span class="sheet-atk-badge-shape" title="Shape: ●=Continual ■=Persistent ◆=Voluntary | Color: Lit=Active, Dim=Off"></span>
+            <!-- Hidden checkboxes for CSS state coloring -->
+            <input type="checkbox" name="attr_attack_state_on" class="sheet-atk-state-on-flag" value="1" />
+            <input type="checkbox" name="attr_attack_activation_c" class="sheet-atk-activation-c-flag" value="1" />
+            <!-- Type indicator (C/P/V) colored by state -->
+            <input type="text" name="attr_attack_activation_ind" class="sheet-atk-activation-ind" disabled value="V" title="Type (set in settings)" />
+          </td>
+          <td style="text-align:center; padding:1px;">
+            <select name="attr_attack_state" class="sheet-attack-state-sel" title="Active=On, Off=Inactive">
+              <option value="Active">On</option>
+              <option value="Off" selected>Off</option>
+            </select>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="hidden" name="attr_attack_rowid" />
@@ -530,13 +534,9 @@
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_charges" maxlength="3" title="Charges remaining" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
           </td>
-          <td style="padding:1px;">
+          <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
               <input type="text" name="attr_attack_notes" title="Notes and modifier codes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" placeholder="sav:EN:+3, snr:ice:9/15" />
-              <select name="attr_attack_state" class="sheet-attack-state-sel" title="Active=On, Off=Inactive">
-                <option value="Active">On</option>
-                <option value="Off" selected>Off</option>
-              </select>
               <span class="sheet-cog-icon" title="Settings">y</span>
             </div>
           </td>
@@ -548,7 +548,7 @@
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <label>Type:</label>
-            <select name="attr_attack_type" title="C=Continual (always on), P=Persistent (stays on if KO), V=Voluntary (off if KO)" style="width:40px !important;">
+            <select name="attr_attack_activation" title="C=Continual (always on), P=Persistent (stays on), V=Voluntary (default)" style="width:36px !important;">
               <option value="C">C</option>
               <option value="P">P</option>
               <option value="V" selected>V</option>
@@ -614,7 +614,8 @@
     <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
       <colgroup>
         <col style="width:130px;" /><!-- Name -->
-        <col style="width:24px;" /><!-- Badge -->
+        <col style="width:22px;" /><!-- Type indicator -->
+        <col style="width:48px;" /><!-- State/Use -->
         <col style="width:34px;" /><!-- Kin -->
         <col style="width:34px;" /><!-- Eng -->
         <col style="width:34px;" /><!-- Bio -->
@@ -627,7 +628,8 @@
       <thead>
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:left; padding:2px; color:#f4d03f;">Protection</th>
-          <th style="text-align:center; padding:2px;" title="Type/State: ●=Continual ■=Persistent ◆=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
           <th style="text-align:center; padding:2px;" title="Kinetic protection (physical impact)">Kin</th>
           <th style="text-align:center; padding:2px;" title="Energy protection (heat, electricity, radiation, light)">Eng</th>
           <th style="text-align:center; padding:2px;" title="Biochemical protection (poison, disease, acid)">Bio</th>
@@ -644,15 +646,13 @@
       <input type="checkbox" name="attr_options_flag" class="sheet-options-flag" title="Toggle settings panel" />
       <input type="hidden" name="attr_prot_rowid" />
 
-      <!-- Hidden checkboxes for activation state styling -->
-      <input type="checkbox" name="attr_prot_active" value="1" class="sheet-prot-active-cb" />
-      <input type="checkbox" name="attr_prot_glow" value="1" class="sheet-prot-glow-cb" />
-      <input type="checkbox" name="attr_prot_held" value="1" class="sheet-prot-held-cb" />
+      <!-- Hidden checkboxes moved inside indicator cell for CSS styling -->
 
       <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
         <colgroup>
           <col style="width:130px;" />
-          <col style="width:24px;" />
+          <col style="width:22px;" />
+          <col style="width:48px;" />
           <col style="width:34px;" />
           <col style="width:34px;" />
           <col style="width:34px;" />
@@ -667,13 +667,17 @@
             <input type="text" name="attr_prot_name" placeholder="Protection Name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
           </td>
           <td style="text-align:center; padding:1px;">
-            <!-- Hidden checkboxes for CSS styling -->
-            <input type="checkbox" name="attr_prot_type_c" class="sheet-prot-type-c-flag" value="1" />
-            <input type="checkbox" name="attr_prot_type_p" class="sheet-prot-type-p-flag" value="1" />
-            <input type="checkbox" name="attr_prot_type_v" class="sheet-prot-type-v-flag" value="1" />
-            <input type="checkbox" name="attr_prot_state_active" class="sheet-prot-state-active-flag" value="1" />
-            <!-- Visual badge (read-only indicator) -->
-            <span class="sheet-prot-badge-shape" title="Shape: ●=Continual ■=Persistent ◆=Voluntary | Color: Lit=Active, Dim=Off"></span>
+            <!-- Hidden checkboxes for CSS state coloring -->
+            <input type="checkbox" name="attr_prot_state_on" class="sheet-prot-state-on-flag" value="1" />
+            <input type="checkbox" name="attr_prot_activation_c" class="sheet-prot-activation-c-flag" value="1" />
+            <!-- Type indicator (C/P/V) colored by state -->
+            <input type="text" name="attr_prot_activation_ind" class="sheet-prot-activation-ind" disabled value="V" title="Type (set in settings)" />
+          </td>
+          <td style="text-align:center; padding:1px;">
+            <select name="attr_prot_state" class="sheet-prot-state-sel" title="Active=On, Off=Inactive">
+              <option value="Active">On</option>
+              <option value="Off" selected>Off</option>
+            </select>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_prot_kinetic" value="0" title="Kinetic: 5=prot, 5h=hardened, 1/4=invuln, 5h/4=both" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -696,13 +700,9 @@
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_prot_pr" maxlength="2" title="Power Requirement" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
           </td>
-          <td style="padding:1px;">
+          <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
               <input type="text" name="attr_prot_notes" title="Notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" placeholder="Notes..." />
-              <select name="attr_prot_state" class="sheet-prot-state-sel" title="Active=On, Off=Inactive">
-                <option value="Active">On</option>
-                <option value="Off" selected>Off</option>
-              </select>
               <span class="sheet-cog-icon" title="Settings">y</span>
             </div>
           </td>
@@ -714,7 +714,7 @@
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <label>Type:</label>
-            <select name="attr_prot_type" title="C=Continual (always on), P=Persistent (stays on if KO), V=Voluntary (off if KO)" style="width:40px !important;">
+            <select name="attr_prot_activation" title="C=Continual (always on), P=Persistent (stays on), V=Voluntary (default)" style="width:36px !important;">
               <option value="C">C</option>
               <option value="P">P</option>
               <option value="V" selected>V</option>
@@ -749,14 +749,16 @@
       <colgroup>
         <col style="width:36px;" /><!-- CP -->
         <col style="width:32px;" /><!-- IP -->
-        <col style="width:22px;" /><!-- Act indicator -->
+        <col style="width:22px;" /><!-- Type indicator -->
+        <col style="width:55px;" /><!-- Use/State -->
         <col /><!-- Name -->
       </colgroup>
       <thead>
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:center; padding:2px;" title="Character Points (negative = weakness)">CP</th>
           <th style="text-align:center; padding:2px;" title="Inventing Points">IP</th>
-          <th style="text-align:center; padding:2px;" title="Type/State: ●=Continual ■=Persistent ◆=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Active=On, Held=Withheld, Off=Inactive">Use</th>
           <th style="text-align:left; padding:2px;">Name / Description <span style="color:#555; font-size:9px;">(click to send to chat)</span></th>
         </tr>
       </thead>
@@ -774,7 +776,8 @@
         <colgroup>
           <col style="width:36px;" />
           <col style="width:32px;" />
-          <col style="width:24px;" />
+          <col style="width:22px;" />
+          <col style="width:55px;" />
           <col />
         </colgroup>
         <tr>
@@ -785,22 +788,22 @@
             <input type="text" name="attr_ability_ip" value="0" title="Inventing Points" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
           </td>
           <td style="text-align:center; padding:1px;">
-            <!-- Hidden checkboxes for CSS styling -->
-            <input type="checkbox" name="attr_ability_type_c" class="sheet-type-c-flag" value="1" />
-            <input type="checkbox" name="attr_ability_type_p" class="sheet-type-p-flag" value="1" />
-            <input type="checkbox" name="attr_ability_type_v" class="sheet-type-v-flag" value="1" />
+            <!-- Hidden checkboxes for CSS state coloring (must be before indicator) -->
             <input type="checkbox" name="attr_ability_state_active" class="sheet-state-active-flag" value="1" />
             <input type="checkbox" name="attr_ability_state_held" class="sheet-state-held-flag" value="1" />
-            <!-- Visual badge (read-only indicator) -->
-            <span class="sheet-badge-shape" title="Shape: ●=Continual ■=Persistent ◆=Voluntary | Color: Lit=Active, Dim=Off"></span>
+            <!-- Type indicator (C/P/V) colored by state -->
+            <input type="text" name="attr_ability_type_ind" class="sheet-ability-type-ind" disabled value="V" title="Activation Type (set in Desc tab)" />
           </td>
-          <td style="padding:1px;">
+          <td style="text-align:center; padding:1px;">
+            <select name="attr_ability_state" class="sheet-ability-state-sel" title="Current State: Active (modifiers apply), Held (withheld), Off (inactive)">
+              <option value="Active">Active</option>
+              <option value="Held">Held</option>
+              <option value="Off" selected>Off</option>
+            </select>
+          </td>
+          <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
               <input type="text" name="attr_ability_name" placeholder="Ability name" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px 4px; box-sizing:border-box; font-size:10px;" />
-              <select name="attr_ability_state" class="sheet-ability-state-sel" title="Active=On, Off=Inactive">
-                <option value="Active">On</option>
-                <option value="Off" selected>Off</option>
-              </select>
               <span class="sheet-cog-icon" title="Settings">y</span>
             </div>
           </td>
@@ -2306,119 +2309,98 @@
 
   on("change:repeating_protection remove:repeating_protection", syncProtectionRowIds);
 
-  // Protection: Sync Type dropdown → type flag checkboxes for CSS styling
-  on("change:repeating_protection:prot_type", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_prot_type", "");
+  // ==================== ATTACK TYPE/STATE HANDLERS ====================
+
+  // Attack: Type dropdown → indicator text + type flag
+  on("change:repeating_attacks:attack_activation", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_activation", "");
     getAttrs([eventInfo.sourceAttribute], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
       var update = {};
-      update[rowPrefix + "_prot_type_c"] = (type === "C") ? "1" : "0";
-      update[rowPrefix + "_prot_type_p"] = (type === "P") ? "1" : "0";
-      update[rowPrefix + "_prot_type_v"] = (type === "V") ? "1" : "0";
-      // Continual protections are always active
-      if (type === "C") {
-        update[rowPrefix + "_prot_state"] = "Active";
-        update[rowPrefix + "_prot_state_active"] = "1";
-        update[rowPrefix + "_prot_active"] = "1";
-      }
-      setAttrs(update, { silent: true });
-    });
-  });
-
-  // Protection: Sync State dropdown → checkboxes for CSS styling
-  on("change:repeating_protection:prot_state", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_prot_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_prot_type"], function(v) {
-      var state = v[eventInfo.sourceAttribute] || "Off";
-      var type = v[rowPrefix + "_prot_type"] || "V";
-      var update = {};
-      // Continual types stay Active regardless of dropdown
-      if (type === "C") {
-        state = "Active";
-        update[rowPrefix + "_prot_state"] = "Active";
-      }
-      update[rowPrefix + "_prot_state_active"] = (state === "Active") ? "1" : "0";
-      update[rowPrefix + "_prot_active"] = (state === "Active") ? "1" : "0";
-      setAttrs(update, { silent: true });
-    });
-  });
-
-  // Attack: Sync Type dropdown → type flag checkboxes for CSS styling
-  on("change:repeating_attacks:attack_type", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_type", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var type = v[eventInfo.sourceAttribute] || "V";
-      var update = {};
-      update[rowPrefix + "_attack_type_c"] = (type === "C") ? "1" : "0";
-      update[rowPrefix + "_attack_type_p"] = (type === "P") ? "1" : "0";
-      update[rowPrefix + "_attack_type_v"] = (type === "V") ? "1" : "0";
-      // Continual attacks are always active
+      update[rowPrefix + "_attack_activation_ind"] = type;
+      update[rowPrefix + "_attack_activation_c"] = (type === "C") ? "1" : "0";
+      // Continual is always on
       if (type === "C") {
         update[rowPrefix + "_attack_state"] = "Active";
-        update[rowPrefix + "_attack_state_active"] = "1";
-        update[rowPrefix + "_attack_active"] = "1";
+        update[rowPrefix + "_attack_state_on"] = "1";
       }
       setAttrs(update, { silent: true });
     });
   });
 
-  // Attack: Sync State dropdown → checkboxes for CSS styling
+  // Attack: State dropdown → state flag
   on("change:repeating_attacks:attack_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_attack_type"], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_attack_activation"], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
-      var type = v[rowPrefix + "_attack_type"] || "V";
+      var type = v[rowPrefix + "_attack_activation"] || "V";
       var update = {};
-      // Continual types stay Active regardless of dropdown
+      // Continual stays on regardless of dropdown
       if (type === "C") {
         state = "Active";
         update[rowPrefix + "_attack_state"] = "Active";
       }
-      update[rowPrefix + "_attack_state_active"] = (state === "Active") ? "1" : "0";
-      update[rowPrefix + "_attack_active"] = (state === "Active") ? "1" : "0";
+      update[rowPrefix + "_attack_state_on"] = (state === "Active") ? "1" : "0";
       setAttrs(update, { silent: true });
     });
   });
 
-  // Sync Type dropdown → type flag checkboxes for CSS styling
+  // ==================== PROTECTION TYPE/STATE HANDLERS ====================
+
+  // Protection: Type dropdown → indicator text + type flag
+  on("change:repeating_protection:prot_activation", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_prot_activation", "");
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      var type = v[eventInfo.sourceAttribute] || "V";
+      var update = {};
+      update[rowPrefix + "_prot_activation_ind"] = type;
+      update[rowPrefix + "_prot_activation_c"] = (type === "C") ? "1" : "0";
+      // Continual is always on
+      if (type === "C") {
+        update[rowPrefix + "_prot_state"] = "Active";
+        update[rowPrefix + "_prot_state_on"] = "1";
+      }
+      setAttrs(update, { silent: true });
+    });
+  });
+
+  // Protection: State dropdown → state flag
+  on("change:repeating_protection:prot_state", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_prot_state", "");
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_prot_activation"], function(v) {
+      var state = v[eventInfo.sourceAttribute] || "Off";
+      var type = v[rowPrefix + "_prot_activation"] || "V";
+      var update = {};
+      // Continual stays on regardless of dropdown
+      if (type === "C") {
+        state = "Active";
+        update[rowPrefix + "_prot_state"] = "Active";
+      }
+      update[rowPrefix + "_prot_state_on"] = (state === "Active") ? "1" : "0";
+      setAttrs(update, { silent: true });
+    });
+  });
+
+  // Sync Type dropdown → type indicator
   on("change:repeating_abilities:ability_type", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_type", "");
     getAttrs([eventInfo.sourceAttribute], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
       var update = {};
-      // Set type flag checkboxes
-      update[rowPrefix + "_ability_type_c"] = (type === "C") ? "1" : "0";
-      update[rowPrefix + "_ability_type_p"] = (type === "P") ? "1" : "0";
-      update[rowPrefix + "_ability_type_v"] = (type === "V") ? "1" : "0";
-      // Continual abilities are always active
-      if (type === "C") {
-        update[rowPrefix + "_ability_state"] = "Active";
-        update[rowPrefix + "_ability_state_active"] = "1";
-        update[rowPrefix + "_ability_active"] = "1";
-      }
-      setAttrs(update, { silent: true }, function() {
-        recalcAbilityBonuses();
-      });
+      update[rowPrefix + "_ability_type_ind"] = type;
+      setAttrs(update, { silent: true });
     });
   });
 
   // Sync State dropdown → checkboxes for CSS coloring + recalc
   on("change:repeating_abilities:ability_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_ability_type"], function(v) {
+    getAttrs([eventInfo.sourceAttribute], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
-      var type = v[rowPrefix + "_ability_type"] || "V";
       var update = {};
-      
-      // Continual types stay Active regardless of dropdown
-      if (type === "C") {
-        state = "Active";
-        update[rowPrefix + "_ability_state"] = "Active";
-      }
-      
       // Set checkboxes for CSS styling
       update[rowPrefix + "_ability_state_active"] = (state === "Active") ? "1" : "0";
-      update[rowPrefix + "_ability_state_held"] = "0"; // Removed Held state
+      update[rowPrefix + "_ability_state_held"] = (state === "Held") ? "1" : "0";
       // Legacy compatibility
       update[rowPrefix + "_ability_active"] = (state === "Active") ? "1" : "0";
       setAttrs(update, { silent: true }, function() {
@@ -2484,61 +2466,53 @@
       setAttrs(updates);
     });
 
+    // Sync protection Type and State on sheet open
     getSectionIDs("repeating_protection", function(ids) {
       if (!ids || !ids.length) return;
       var attrList = [];
       ids.forEach(function(id) {
-        attrList.push("repeating_protection_" + id + "_prot_type");
+        attrList.push("repeating_protection_" + id + "_prot_activation");
         attrList.push("repeating_protection_" + id + "_prot_state");
       });
       getAttrs(attrList, function(values) {
         var updates = {};
         ids.forEach(function(id) {
-          var prefix = "repeating_protection_" + id + "_prot_";
-          var type = values[prefix + "type"] || "V";
-          var state = values[prefix + "state"] || "Off";
-          // Set type flag checkboxes
-          updates[prefix + "type_c"] = (type === "C") ? "1" : "0";
-          updates[prefix + "type_p"] = (type === "P") ? "1" : "0";
-          updates[prefix + "type_v"] = (type === "V") ? "1" : "0";
-          // Continual is always active
+          var type = values["repeating_protection_" + id + "_prot_activation"] || "V";
+          var state = values["repeating_protection_" + id + "_prot_state"] || "Off";
+          // Continual is always on
           if (type === "C") {
             state = "Active";
-            updates[prefix + "state"] = "Active";
+            updates["repeating_protection_" + id + "_prot_state"] = "Active";
           }
-          // Set state checkboxes
-          updates[prefix + "state_active"] = (state === "Active") ? "1" : "0";
-          updates[prefix + "active"] = (state === "Active") ? "1" : "0";
+          updates["repeating_protection_" + id + "_prot_activation_ind"] = type;
+          updates["repeating_protection_" + id + "_prot_activation_c"] = (type === "C") ? "1" : "0";
+          updates["repeating_protection_" + id + "_prot_state_on"] = (state === "Active") ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
       });
     });
 
+    // Sync attack Type and State on sheet open
     getSectionIDs("repeating_attacks", function(ids) {
       if (!ids || !ids.length) return;
       var attrList = [];
       ids.forEach(function(id) {
-        attrList.push("repeating_attacks_" + id + "_attack_type");
+        attrList.push("repeating_attacks_" + id + "_attack_activation");
         attrList.push("repeating_attacks_" + id + "_attack_state");
       });
       getAttrs(attrList, function(values) {
         var updates = {};
         ids.forEach(function(id) {
-          var prefix = "repeating_attacks_" + id + "_attack_";
-          var type = values[prefix + "type"] || "V";
-          var state = values[prefix + "state"] || "Off";
-          // Set type flag checkboxes
-          updates[prefix + "type_c"] = (type === "C") ? "1" : "0";
-          updates[prefix + "type_p"] = (type === "P") ? "1" : "0";
-          updates[prefix + "type_v"] = (type === "V") ? "1" : "0";
-          // Continual is always active
+          var type = values["repeating_attacks_" + id + "_attack_activation"] || "V";
+          var state = values["repeating_attacks_" + id + "_attack_state"] || "Off";
+          // Continual is always on
           if (type === "C") {
             state = "Active";
-            updates[prefix + "state"] = "Active";
+            updates["repeating_attacks_" + id + "_attack_state"] = "Active";
           }
-          // Set state checkboxes
-          updates[prefix + "state_active"] = (state === "Active") ? "1" : "0";
-          updates[prefix + "active"] = (state === "Active") ? "1" : "0";
+          updates["repeating_attacks_" + id + "_attack_activation_ind"] = type;
+          updates["repeating_attacks_" + id + "_attack_activation_c"] = (type === "C") ? "1" : "0";
+          updates["repeating_attacks_" + id + "_attack_state_on"] = (state === "Active") ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
       });
@@ -2558,18 +2532,9 @@
           var prefix = "repeating_abilities_" + id + "_ability_";
           var type = values[prefix + "type"] || "V";
           var state = values[prefix + "state"] || "Off";
-          // Set type flag checkboxes
-          updates[prefix + "type_c"] = (type === "C") ? "1" : "0";
-          updates[prefix + "type_p"] = (type === "P") ? "1" : "0";
-          updates[prefix + "type_v"] = (type === "V") ? "1" : "0";
-          // Continual is always active
-          if (type === "C") {
-            state = "Active";
-            updates[prefix + "state"] = "Active";
-          }
-          // Set state checkboxes
+          updates[prefix + "type_ind"] = type;
           updates[prefix + "state_active"] = (state === "Active") ? "1" : "0";
-          updates[prefix + "state_held"] = "0";
+          updates[prefix + "state_held"] = (state === "Held") ? "1" : "0";
           updates[prefix + "active"] = (state === "Active") ? "1" : "0";
         });
         setAttrs(updates, { silent: true });

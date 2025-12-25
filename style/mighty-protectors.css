@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v41.0 */
+/* Mighty Protectors Character Sheet CSS v42.5 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -308,12 +308,12 @@
   position: relative !important;
 }
 
-/* Hidden checkbox overlay for cog */
+/* Hidden checkbox overlay for cog - covers cog and dropdown area */
 .charsheet input.sheet-options-flag {
   position: absolute !important;
   top: 2px !important;
-  right: 4px !important;
-  width: 20px !important;
+  right: 50px !important;
+  width: 60px !important;
   height: 20px !important;
   opacity: 0 !important;
   cursor: pointer !important;
@@ -337,6 +337,18 @@
 
 .charsheet .sheet-cog-icon:hover { color: #888 !important; }
 
+/* State dropdowns - compact, in dedicated column */
+.charsheet .sheet-attack-state-sel,
+.charsheet .sheet-prot-state-sel {
+  width: 100% !important;
+  font-size: 9px !important;
+  padding: 0 2px !important;
+  background: #0d0d1a !important;
+  color: #eaeaea !important;
+  border: 1px solid #2a2040 !important;
+  height: 18px !important;
+}
+
 .charsheet input.sheet-options-flag:checked ~ * .sheet-cog-icon,
 .charsheet input.sheet-options-flag:checked ~ table .sheet-cog-icon {
   color: #f4d03f !important;
@@ -359,163 +371,126 @@
 }
 
 /* ========================================
-   ATTACK/PROTECTION BADGES
+   ACTIVATION TYPE INDICATORS
    ======================================== */
 
-/* Hide all state/type checkboxes */
+/* Hide all state/type flag checkboxes */
 .charsheet input.sheet-atk-active-cb,
 .charsheet input.sheet-atk-glow-cb,
 .charsheet input.sheet-atk-held-cb,
+.charsheet input.sheet-atk-continual-cb,
+.charsheet input.sheet-atk-state-on-flag,
+.charsheet input.sheet-atk-activation-c-flag,
 .charsheet input.sheet-prot-active-cb,
 .charsheet input.sheet-prot-glow-cb,
 .charsheet input.sheet-prot-held-cb,
+.charsheet input.sheet-prot-continual-cb,
+.charsheet input.sheet-prot-state-on-flag,
+.charsheet input.sheet-prot-activation-c-flag,
 .charsheet input.sheet-ability-active-cb,
 .charsheet input.sheet-ability-glow-cb,
 .charsheet input.sheet-ability-held-cb,
-.charsheet .sheet-atk-type-c-flag,
-.charsheet .sheet-atk-type-p-flag,
-.charsheet .sheet-atk-type-v-flag,
-.charsheet .sheet-atk-state-active-flag,
-.charsheet .sheet-prot-type-c-flag,
-.charsheet .sheet-prot-type-p-flag,
-.charsheet .sheet-prot-type-v-flag,
-.charsheet .sheet-prot-state-active-flag {
+.charsheet input.sheet-state-active-flag,
+.charsheet input.sheet-state-held-flag {
   display: none !important;
 }
 
-/* Attack badge shape - default: Voluntary diamond, Off state */
-.charsheet .sheet-atk-badge-shape {
-  display: inline-block !important;
-  width: 14px !important;
-  height: 14px !important;
-  background: #2a1a1a !important;
-  border: 2px solid #433 !important;
-  transform: rotate(45deg) !important;
-  border-radius: 2px !important;
-  vertical-align: middle !important;
-  box-sizing: border-box !important;
-}
-
-/* Protection badge shape - default: Voluntary diamond, Off state */
-.charsheet .sheet-prot-badge-shape {
-  display: inline-block !important;
-  width: 14px !important;
-  height: 14px !important;
-  background: #1a1a2a !important;
-  border: 2px solid #334 !important;
-  transform: rotate(45deg) !important;
-  border-radius: 2px !important;
-  vertical-align: middle !important;
-  box-sizing: border-box !important;
-}
-
-/* ---- ATTACK TYPE SHAPES ---- */
-
-/* Attack C - Circle, always lit red/orange */
-.charsheet .sheet-atk-type-c-flag:checked ~ .sheet-atk-badge-shape {
-  border-radius: 50% !important;
-  transform: none !important;
-  background: #c92727 !important;
-  border-color: #f44 !important;
-  box-shadow: 0 0 6px rgba(244, 68, 68, 0.6) !important;
-}
-
-/* Attack P - Square */
-.charsheet .sheet-atk-type-p-flag:checked ~ .sheet-atk-badge-shape {
-  border-radius: 2px !important;
-  transform: none !important;
-  background: #2a1a1a !important;
-  border-color: #433 !important;
-}
-
-/* Attack V - Diamond (default) */
-.charsheet .sheet-atk-type-v-flag:checked ~ .sheet-atk-badge-shape {
-  background: #2a1a1a !important;
-  border-color: #433 !important;
-}
-
-/* ---- ATTACK ACTIVE STATE ---- */
-
-/* Attack P Active - bright red */
-.charsheet .sheet-atk-type-p-flag:checked ~ .sheet-atk-state-active-flag:checked ~ .sheet-atk-badge-shape {
-  background: #e63946 !important;
-  border-color: #ff6b6b !important;
-  box-shadow: 0 0 6px rgba(230, 57, 70, 0.6) !important;
-}
-
-/* Attack V Active - bright red */
-.charsheet .sheet-atk-type-v-flag:checked ~ .sheet-atk-state-active-flag:checked ~ .sheet-atk-badge-shape {
-  background: #e63946 !important;
-  border-color: #ff6b6b !important;
-  box-shadow: 0 0 6px rgba(230, 57, 70, 0.6) !important;
-}
-
-/* Attack default Active (no type flag yet) */
-.charsheet .sheet-atk-state-active-flag:checked ~ .sheet-atk-badge-shape {
-  background: #e63946 !important;
-  border-color: #ff6b6b !important;
-  box-shadow: 0 0 6px rgba(230, 57, 70, 0.6) !important;
-}
-
-/* ---- PROTECTION TYPE SHAPES ---- */
-
-/* Protection C - Circle, always lit blue */
-.charsheet .sheet-prot-type-c-flag:checked ~ .sheet-prot-badge-shape {
-  border-radius: 50% !important;
-  transform: none !important;
-  background: #2755c9 !important;
-  border-color: #44f !important;
-  box-shadow: 0 0 6px rgba(68, 68, 244, 0.6) !important;
-}
-
-/* Protection P - Square */
-.charsheet .sheet-prot-type-p-flag:checked ~ .sheet-prot-badge-shape {
-  border-radius: 2px !important;
-  transform: none !important;
-  background: #1a1a2a !important;
-  border-color: #334 !important;
-}
-
-/* Protection V - Diamond (default) */
-.charsheet .sheet-prot-type-v-flag:checked ~ .sheet-prot-badge-shape {
-  background: #1a1a2a !important;
-  border-color: #334 !important;
-}
-
-/* ---- PROTECTION ACTIVE STATE ---- */
-
-/* Protection P Active - bright blue */
-.charsheet .sheet-prot-type-p-flag:checked ~ .sheet-prot-state-active-flag:checked ~ .sheet-prot-badge-shape {
-  background: #4a8aff !important;
-  border-color: #6db3f2 !important;
-  box-shadow: 0 0 6px rgba(109, 179, 242, 0.6) !important;
-}
-
-/* Protection V Active - bright blue */
-.charsheet .sheet-prot-type-v-flag:checked ~ .sheet-prot-state-active-flag:checked ~ .sheet-prot-badge-shape {
-  background: #4a8aff !important;
-  border-color: #6db3f2 !important;
-  box-shadow: 0 0 6px rgba(109, 179, 242, 0.6) !important;
-}
-
-/* Protection default Active (no type flag yet) */
-.charsheet .sheet-prot-state-active-flag:checked ~ .sheet-prot-badge-shape {
-  background: #4a8aff !important;
-  border-color: #6db3f2 !important;
-  box-shadow: 0 0 6px rgba(109, 179, 242, 0.6) !important;
-}
-
-/* State dropdowns - compact, next to gear */
-.charsheet .sheet-attack-state-sel,
-.charsheet .sheet-prot-state-sel {
-  width: 36px !important;
-  font-size: 9px !important;
-  padding: 0 2px !important;
-  background: #0d0d1a !important;
-  color: #eaeaea !important;
-  border: 1px solid #2a2040 !important;
+/* Base type indicator style (Off state - grey) */
+.charsheet input.sheet-atk-activation-ind,
+.charsheet input.sheet-prot-activation-ind,
+.charsheet input.sheet-ability-type-ind {
+  width: 18px !important;
   height: 18px !important;
-  flex-shrink: 0 !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  border-radius: 3px !important;
+  background: #333 !important;
+  color: #666 !important;
+  border: 1px solid #444 !important;
+  text-align: center !important;
+  padding: 0 !important;
+  cursor: default !important;
+}
+
+/* Attack: On state (P/V) - green */
+.charsheet .sheet-atk-state-on-flag:checked ~ input.sheet-atk-activation-ind {
+  background: #2d5a2d !important;
+  color: #8f8 !important;
+  border-color: #4a8a4a !important;
+  box-shadow: 0 0 4px rgba(80, 200, 80, 0.4) !important;
+}
+
+/* Attack: Continual (C) - orange, always on */
+.charsheet .sheet-atk-activation-c-flag:checked ~ input.sheet-atk-activation-ind {
+  background: #5a3a1d !important;
+  color: #ff8c42 !important;
+  border-color: #d35400 !important;
+  box-shadow: 0 0 4px rgba(211, 84, 0, 0.5) !important;
+}
+
+/* Protection: On state (P/V) - green */
+.charsheet .sheet-prot-state-on-flag:checked ~ input.sheet-prot-activation-ind {
+  background: #2d5a2d !important;
+  color: #8f8 !important;
+  border-color: #4a8a4a !important;
+  box-shadow: 0 0 4px rgba(80, 200, 80, 0.4) !important;
+}
+
+/* Protection: Continual (C) - orange, always on */
+.charsheet .sheet-prot-activation-c-flag:checked ~ input.sheet-prot-activation-ind {
+  background: #5a3a1d !important;
+  color: #ff8c42 !important;
+  border-color: #d35400 !important;
+  box-shadow: 0 0 4px rgba(211, 84, 0, 0.5) !important;
+}
+
+/* Ability: Active state - green */
+.charsheet .sheet-state-active-flag:checked ~ input.sheet-ability-type-ind {
+  background: #2d5a2d !important;
+  color: #8f8 !important;
+  border-color: #4a8a4a !important;
+  box-shadow: 0 0 4px rgba(80, 200, 80, 0.4) !important;
+}
+
+/* Ability: Held state - yellow */
+.charsheet .sheet-state-held-flag:checked ~ input.sheet-ability-type-ind {
+  background: #5a5a2d !important;
+  color: #ff8 !important;
+  border-color: #8a8a4a !important;
+  box-shadow: 0 0 4px rgba(200, 200, 80, 0.4) !important;
+}
+
+/* Legacy act-indicator for backwards compatibility */
+.charsheet input.sheet-act-indicator {
+  width: 18px !important;
+  height: 18px !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  border-radius: 3px !important;
+  background: #333 !important;
+  color: #666 !important;
+  border: 1px solid #444 !important;
+  text-align: center !important;
+  padding: 0 !important;
+  cursor: default !important;
+}
+
+/* Act dropdown styling (in panel) */
+.charsheet .sheet-atk-act-sel,
+.charsheet .sheet-prot-act-sel,
+.charsheet .sheet-ability-act-sel {
+  width: 100% !important;
+  height: 20px !important;
+  padding: 0 2px !important;
+  margin: 0 !important;
+  background: #1a1a2e !important;
+  border: 1px solid #444 !important;
+  border-radius: 3px !important;
+  color: #aaa !important;
+  font-size: 10px !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
 }
 
 /* ========================================
@@ -623,89 +598,52 @@
 }
 
 /* ========================================
-   ABILITY TYPE/STATE BADGE
+   ABILITY TYPE INDICATOR & STATE
    ======================================== */
 
-/* Hidden type and state checkboxes */
-.charsheet .sheet-type-c-flag,
-.charsheet .sheet-type-p-flag,
-.charsheet .sheet-type-v-flag,
+/* Type indicator (C/P/V) - default gray (Off state) */
+.charsheet .sheet-ability-type-ind {
+  width: 20px !important;
+  height: 20px !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  font-size: 11px !important;
+  border-radius: 3px !important;
+  border: 1px solid #3a3060 !important;
+  background: #2a2a3a !important;
+  color: #666 !important;
+  padding: 0 !important;
+}
+
+/* Hidden state checkboxes */
 .charsheet .sheet-state-active-flag,
 .charsheet .sheet-state-held-flag {
   display: none !important;
 }
 
-/* Badge shape - default: Voluntary diamond, Off state (dark) */
-.charsheet .sheet-badge-shape {
-  display: inline-block !important;
-  width: 14px !important;
-  height: 14px !important;
-  background: #1a2a1a !important;
-  border: 2px solid #343 !important;
-  transform: rotate(45deg) !important;
-  border-radius: 2px !important;
-  vertical-align: middle !important;
-  box-sizing: border-box !important;
+/* Active state = green (active checkbox checked, held not) */
+.charsheet .sheet-state-active-flag:checked ~ .sheet-ability-type-ind {
+  background: #1a3a1a !important;
+  color: #50fa7b !important;
+  border-color: #50fa7b !important;
 }
 
-/* ---- TYPE SHAPES ---- */
-
-/* Continual (C) - Circle, always lit gold */
-.charsheet .sheet-type-c-flag:checked ~ .sheet-badge-shape {
-  border-radius: 50% !important;
-  transform: none !important;
-  background: #c9a227 !important;
+/* Held state = yellow (held checkbox checked) */
+.charsheet .sheet-state-held-flag:checked ~ .sheet-ability-type-ind {
+  background: #3a3a1a !important;
+  color: #f4d03f !important;
   border-color: #f4d03f !important;
-  box-shadow: 0 0 6px rgba(244, 208, 63, 0.6) !important;
 }
 
-/* Persistent (P) - Square, off = dark blue */
-.charsheet .sheet-type-p-flag:checked ~ .sheet-badge-shape {
-  border-radius: 2px !important;
-  transform: none !important;
-  background: #1a1a2a !important;
-  border-color: #334 !important;
-}
-
-/* Voluntary (V) - Diamond (default), off = dark green */
-.charsheet .sheet-type-v-flag:checked ~ .sheet-badge-shape {
-  background: #1a2a1a !important;
-  border-color: #343 !important;
-}
-
-/* ---- ACTIVE STATE = LIT ---- */
-
-/* P Active - bright blue */
-.charsheet .sheet-type-p-flag:checked ~ .sheet-state-active-flag:checked ~ .sheet-badge-shape {
-  background: #4a8aff !important;
-  border-color: #6db3f2 !important;
-  box-shadow: 0 0 6px rgba(109, 179, 242, 0.6) !important;
-}
-
-/* V Active - bright green */
-.charsheet .sheet-type-v-flag:checked ~ .sheet-state-active-flag:checked ~ .sheet-badge-shape {
-  background: #50fa7b !important;
-  border-color: #7fff9b !important;
-  box-shadow: 0 0 6px rgba(80, 250, 123, 0.6) !important;
-}
-
-/* Default (no type flag yet) Active - bright green */
-.charsheet .sheet-state-active-flag:checked ~ .sheet-badge-shape {
-  background: #50fa7b !important;
-  border-color: #7fff9b !important;
-  box-shadow: 0 0 6px rgba(80, 250, 123, 0.6) !important;
-}
-
-/* State dropdown - compact, next to gear */
+/* State dropdown - compact */
 .charsheet .sheet-ability-state-sel {
-  width: 36px !important;
+  width: 52px !important;
   font-size: 9px !important;
-  padding: 0 2px !important;
+  padding: 1px 2px !important;
   background: #0d0d1a !important;
   color: #eaeaea !important;
   border: 1px solid #2a2040 !important;
-  height: 18px !important;
-  flex-shrink: 0 !important;
+  height: 20px !important;
 }
 
 /* ========================================
