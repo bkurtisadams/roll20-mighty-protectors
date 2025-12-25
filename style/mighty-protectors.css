@@ -1,6 +1,43 @@
-.sheet-rolltemplate-mpattack .inlinerollresult { background: transparent !important; border: none !important; padding: 0 !important; }
+/* Mighty Protectors Character Sheet CSS v39.0 */
 
-/* Mighty Protectors Title - Logo Style */
+/* ========================================
+   ROLL TEMPLATES
+   ======================================== */
+.sheet-rolltemplate-mpattack .inlinerollresult { 
+  background: transparent !important; 
+  border: none !important; 
+  padding: 0 !important; 
+}
+
+.sheet-rolltemplate-healing .sheet-template-container {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.sheet-rolltemplate-healing h3 {
+  background: #7e2d8a;
+  color: #fff;
+  margin: 0;
+  padding: 5px 8px;
+  font-size: 14px;
+}
+
+.sheet-rolltemplate-healing div {
+  padding: 2px 8px;
+  margin: 0;
+  color: #000;
+  line-height: 1.5;
+}
+
+.sheet-rolltemplate-healing div:last-child {
+  padding-bottom: 6px;
+}
+
+/* ========================================
+   TITLE STYLING
+   ======================================== */
 .mp-title {
   font-family: Impact, 'Arial Black', sans-serif !important;
   font-size: 28px !important;
@@ -24,280 +61,61 @@
   color: #ffd700 !important;
 }
 
-/* Roll + Action buttons */
+/* ========================================
+   BUTTON STYLING
+   ======================================== */
 .charsheet button[type="roll"],
-.charsheet button[type="action"]{
+.charsheet button[type="action"] {
   border-radius: 4px !important;
   transition: filter 120ms linear, box-shadow 120ms linear, transform 120ms linear !important;
   outline: none !important;
 }
 
-/* Hover: brighten + soft glow */
 .charsheet button[type="roll"]:hover,
-.charsheet button[type="action"]:hover{
+.charsheet button[type="action"]:hover {
   filter: brightness(1.35) saturate(1.25) !important;
   box-shadow:
     0 0 0 2px rgba(233, 69, 96, 0.40),
     0 0 10px rgba(233, 69, 96, 0.35) !important;
 }
 
-/* Focus */
 .charsheet button[type="roll"]:focus,
-.charsheet button[type="action"]:focus{
+.charsheet button[type="action"]:focus {
   filter: brightness(1.25) saturate(1.10) !important;
   box-shadow:
     0 0 0 3px rgba(244, 208, 63, 0.55),
     0 0 12px rgba(244, 208, 63, 0.35) !important;
 }
 
-/* Active */
 .charsheet button[type="roll"]:active,
-.charsheet button[type="action"]:active{
+.charsheet button[type="action"]:active {
   transform: translateY(1px) !important;
   filter: brightness(1.10) saturate(1.05) !important;
 }
 
-/* Disabled (native) */
-.charsheet button[disabled]{
+.charsheet button[disabled] {
   opacity: 0.45 !important;
   cursor: not-allowed !important;
   box-shadow: none !important;
   filter: none !important;
 }
 
-/* Repeating section controls: + Add / Modify */
-.charsheet .repcontrol button{
-  border-radius: 6px !important;
-  transition: filter 120ms linear, box-shadow 120ms linear, transform 120ms linear !important;
-}
-
-.charsheet .repcontrol button:hover{
-  filter: brightness(1.15) !important;
-  box-shadow: 0 0 0 2px rgba(244, 208, 63, 0.35), 0 0 10px rgba(244, 208, 63, 0.20) !important;
-}
-
-.charsheet .repcontrol button:active{
-  transform: translateY(1px) !important;
-}
-
-/* allow the tooltip to spill out of the flex row */
-.charsheet { overflow: visible !important; }
-
-.mp-leapwrap{
-  position: relative;
-  display: inline-block;
-}
-
-.mp-leaptip{
-  display: none;
-  position: absolute;
-  left: 50%;
-  top: 100%;
-  transform: translateX(-50%);
-  margin-top: 6px;
-
-  padding: 2px 6px;
-  border: 1px solid #c0c0c0;
-  background: #ffffe1;
-  color: #000;
-  font: 12px Arial, sans-serif;
-  white-space: nowrap;
-
-  border-radius: 2px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-  z-index: 9999;
-}
-
-.mp-leapwrap:hover .mp-leaptip{ display: inline-block; }
-
-/* if leap_distance is empty, don’t show a blank tooltip */
-.mp-leaptip:empty{ display:none; }
-
-/* Initiative button (cyan) - override red glow */
-.charsheet button[name="roll_initiative"]:hover{
+/* Initiative button - cyan glow */
+.charsheet button[name="roll_initiative"]:hover {
   filter: brightness(1.35) saturate(1.25) !important;
   box-shadow:
     0 0 0 2px rgba(139, 233, 253, 0.50),
     0 0 10px rgba(139, 233, 253, 0.45) !important;
 }
 
-.charsheet button[name="roll_initiative"]:focus{
+.charsheet button[name="roll_initiative"]:focus {
   filter: brightness(1.25) saturate(1.10) !important;
   box-shadow:
     0 0 0 3px rgba(139, 233, 253, 0.55),
     0 0 12px rgba(139, 233, 253, 0.35) !important;
 }
 
-/* Text-label roll buttons (Mass/Wealth/Luck) */
-.charsheet button.mp-labelroll[type="roll"]{
-  background: #0d0d1a !important;
-  color: #f4d03f !important;
-  border: 1px solid #333 !important;
-  padding: 2px 6px !important;
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  line-height: 16px !important;
-  height: 22px !important;
-}
-
-/* Hide Roll20's default d20 icon on these buttons */
-.charsheet button.mp-labelroll[type="roll"]::before{
-  content: "" !important;
-}
-
-/* Slight spacing so it reads like a label, not a big button */
-.charsheet button.mp-labelroll{
-  margin-right: 2px !important;
-}
-
-.charsheet input[name="attr_mass"],
-.charsheet input[name="attr_wealth"]{
-  width: 75px !important;   /* adjust to taste */
-  min-width: 65px !important;
-}
-
-/* Force label-roll buttons to use our font sizing (Roll20 sometimes overrides) */
-.charsheet button[type="roll"].mp-labellink{
-  font-size: 12px !important;
-  font-family: Arial, sans-serif !important;
-  font-weight: 700 !important;
-  line-height: 16px !important;
-
-  /* optional: stop weird shrinking */
-  letter-spacing: 0 !important;
-  text-transform: none !important;
-
-  /* keep it from collapsing */
-  min-height: 22px !important;
-}
-
-/* If Roll20 injects a <span> inside the button, force that too */
-.charsheet button[type="roll"].mp-labellink span{
-  font-size: 12px !important;
-  line-height: 16px !important;
-}
-
-/* Defense row: enforce column alignment across AG/IN */
-.charsheet .mp-defrow{
-  display: flex !important;
-  align-items: center !important;
-  gap: 6px !important;
-}
-
-/* Column 1: Modifier label (fixed width so inputs align) */
-.charsheet .mp-defmod-label{
-  display: inline-block !important;
-  width: 160px !important;   /* tweak if you need more/less */
-  font-size: 10px !important;
-  color: #aaa !important;
-}
-
-/* Column 2: Modifier input */
-.charsheet .mp-defmod-input{
-  width: 28px !important;
-  background: #0d0d1a !important;
-  color: #eaeaea !important;
-  border: 1px solid #333 !important;
-  padding: 2px !important;
-  text-align: center !important;
-  box-sizing: border-box !important;
-}
-
-/* Column 3: Total label (fixed width + GREEN text) */
-.charsheet .mp-deftotal-label{
-  display: inline-block !important;
-  width: 120px !important;   /* tweak to taste */
-  font-size: 10px !important;
-  color: #50fa7b !important; /* your requested green */
-  margin-left: 6px !important;
-}
-
-/* Column 4: Total input */
-.charsheet .mp-deftotal-input{
-  width: 30px !important;
-  background: #0d0d1a !important;
-  color: #f4d03f !important;
-  border: 1px solid #f4d03f !important;
-  padding: 2px !important;
-  text-align: center !important;
-  font-weight: bold !important;
-  box-sizing: border-box !important;
-}
-
-/* Target the container for the buttons */
-.charsheet .repcontrol {
-    min-height: 20px; /* Reduces the height of the row holding the buttons */
-    margin-top: 2px;
-}
-
-/* Target the Add and Modify buttons specifically */
-.charsheet .repcontrol .btn {
-    font-size: 10px !important; /* Smaller text */
-    padding: 1px 4px !important; /* Smaller clickable area */
-    line-height: 12px;           /* Tighter vertical spacing */
-    height: auto;                /* Let height adjust to the smaller font */
-    background-image: none;      /* Removes default gradient if you want flat color */
-    box-shadow: none;            /* Removes default 3D shadow */
-}
-
-/* BC Stat roll buttons - uniform size and alignment */
-.charsheet button[name="roll_hth"],
-.charsheet button[name="roll_endurance_save"],
-.charsheet button[name="roll_agility_save"],
-.charsheet button[name="roll_intelligence_save"],
-.charsheet button[name="roll_cool_save"] {
-  width: 45px !important;
-  min-width: 45px !important;
-  margin-right: 4px !important;
-  box-sizing: border-box !important;
-}
-
-.sheet-compact-toggle { 
-  cursor: pointer;
-  opacity: 0.3;
-  width: 10px;
-  height: 10px;
-}
-
-.sheet-compact-toggle:hover {
-  opacity: 1;
-}
-
-.sheet-compact-label { 
-  display: none !important;
-}
-
-.sheet-header-section { display: block; }
-.sheet-compact-toggle:checked ~ .sheet-header-section { display: none; }
-
-/* Healing roll template - match default Roll20 style */
-.sheet-rolltemplate-healing .sheet-template-container {
-    background: #fff;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    overflow: hidden;
-}
-
-.sheet-rolltemplate-healing h3 {
-    background: #7e2d8a;
-    color: #fff;
-    margin: 0;
-    padding: 5px 8px;
-    font-size: 14px;
-}
-
-.sheet-rolltemplate-healing div {
-    padding: 2px 8px;
-    margin: 0;
-    color: #000;
-    line-height: 1.5;
-}
-
-.sheet-rolltemplate-healing div:last-child {
-    padding-bottom: 6px;
-}
-
-/* Red roll/action buttons (HTH, Heal, saves, etc.) */
+/* Red roll/action buttons */
 .charsheet button.sheet-mp-rollbtn {
   font-size: 9px !important;
   font-weight: bold !important;
@@ -311,49 +129,114 @@
   border-radius: 3px !important;
 }
 
-/* BC table - make last column (derived values) flexible */
-.charsheet table[style*="table-layout:fixed"] td:last-child {
-  width: auto !important;
+/* Label-style roll buttons */
+.charsheet button[type="roll"].mp-labellink {
+  font-size: 12px !important;
+  font-family: Arial, sans-serif !important;
+  font-weight: 700 !important;
+  line-height: 16px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  min-height: 22px !important;
 }
 
-/* Flex containers in BC derived column - allow shrinking */
-.charsheet table td > div[style*="display:flex"],
-.charsheet table td > div[style*="display:inline-grid"] {
-  flex-wrap: wrap !important;
-  min-width: 0 !important;
+.charsheet button[type="roll"].mp-labellink span {
+  font-size: 12px !important;
+  line-height: 16px !important;
 }
 
-/* Inputs in BC derived column - allow flex shrinking */
-.charsheet table td input[name="attr_hth_damage"],
-.charsheet table td input[name="attr_carry_capacity"],
-.charsheet table td input[name="attr_healing_rate"],
-.charsheet table td input[name="attr_initiative_score"] {
-  flex: 1 1 auto !important;
-  min-width: 50px !important;
-  max-width: 100px !important;
+/* BC Stat roll buttons - uniform size */
+.charsheet button[name="roll_hth"],
+.charsheet button[name="roll_endurance_save"],
+.charsheet button[name="roll_agility_save"],
+.charsheet button[name="roll_intelligence_save"],
+.charsheet button[name="roll_cool_save"] {
+  width: 45px !important;
+  min-width: 45px !important;
+  margin-right: 4px !important;
+  box-sizing: border-box !important;
 }
 
-/* Defense grid rows - use flex instead for better responsiveness */
-.charsheet table td div[style*="inline-grid"] {
-  display: flex !important;
-  flex-wrap: wrap !important;
-  gap: 4px 6px !important;
+/* ========================================
+   REPEATING SECTION CONTROLS
+   ======================================== */
+.charsheet .repcontrol button {
+  border-radius: 6px !important;
+  transition: filter 120ms linear, box-shadow 120ms linear, transform 120ms linear !important;
 }
 
-/* Move/Power/Hits section - allow flex shrinking */
-.charsheet input[name="attr_move"],
-.charsheet input[name="attr_leap_total"] {
-  flex: 1 1 auto !important;
-  min-width: 50px !important;
+.charsheet .repcontrol button:hover {
+  filter: brightness(1.15) !important;
+  box-shadow: 0 0 0 2px rgba(244, 208, 63, 0.35), 0 0 10px rgba(244, 208, 63, 0.20) !important;
 }
 
-/* Notes textarea - ensure it fills available space */
-.charsheet textarea[name="attr_notes"] {
-  flex: 1 1 auto !important;
-  min-width: 100px !important;
+.charsheet .repcontrol button:active {
+  transform: translateY(1px) !important;
 }
 
-/* Power/Hits color toggle - tiny checkbox */
+.charsheet .repcontrol {
+  min-height: 20px;
+  margin-top: 2px;
+}
+
+.charsheet .repcontrol .btn {
+  font-size: 10px !important;
+  padding: 1px 4px !important;
+  line-height: 12px;
+  height: auto;
+  background-image: none;
+  box-shadow: none;
+}
+
+/* ========================================
+   LEAP TOOLTIP
+   ======================================== */
+.charsheet { overflow: visible !important; }
+
+.mp-leapwrap {
+  position: relative;
+  display: inline-block;
+}
+
+.mp-leaptip {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  padding: 2px 6px;
+  border: 1px solid #c0c0c0;
+  background: #ffffe1;
+  color: #000;
+  font: 12px Arial, sans-serif;
+  white-space: nowrap;
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  z-index: 9999;
+}
+
+.mp-leapwrap:hover .mp-leaptip { display: inline-block; }
+.mp-leaptip:empty { display: none; }
+
+/* ========================================
+   COMPACT MODE TOGGLE
+   ======================================== */
+.sheet-compact-toggle { 
+  cursor: pointer;
+  opacity: 0.3;
+  width: 10px;
+  height: 10px;
+}
+
+.sheet-compact-toggle:hover { opacity: 1; }
+.sheet-compact-label { display: none !important; }
+.sheet-header-section { display: block; }
+.sheet-compact-toggle:checked ~ .sheet-header-section { display: none; }
+
+/* ========================================
+   POWER/HITS COLOR TOGGLE
+   ======================================== */
 .charsheet input.sheet-color-toggle {
   width: 10px !important;
   height: 10px !important;
@@ -361,9 +244,7 @@
   cursor: pointer !important;
 }
 
-.charsheet input.sheet-color-toggle:hover {
-  opacity: 1 !important;
-}
+.charsheet input.sheet-color-toggle:hover { opacity: 1 !important; }
 
 /* Default: red Power, green Hits */
 .charsheet .sheet-power-label { color: #e63946; }
@@ -376,178 +257,58 @@
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-power-input { color: #f4d03f !important; }
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-label { color: #e63946 !important; }
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-input { color: #e63946 !important; }
-/* Protection activation dropdown */
-.charsheet .sheet-prot-active-cb,
-.charsheet .sheet-prot-glow-cb {
-  display: none !important;
-}
-
-.charsheet .sheet-prot-act-sel {
-  width: 100% !important;
-  height: 20px !important;
-  padding: 0 2px !important;
-  margin: 0 !important;
-  background: #1a1a2e !important;
-  border: 1px solid #444 !important;
-  border-radius: 3px !important;
-  color: #555 !important;
-  font-size: 10px !important;
-  cursor: pointer !important;
-  text-align: center !important;
-  box-sizing: border-box !important;
-}
-
-/* C state - just brighter text, no glow */
-.charsheet .sheet-prot-active-cb:checked + .sheet-prot-glow-cb + .sheet-prot-act-sel {
-  color: #888 !important;
-}
-
-/* P or V state - yellow glow */
-.charsheet .sheet-prot-glow-cb:checked + .sheet-prot-act-sel {
-  color: #f4d03f !important;
-  border-color: #f4d03f !important;
-  box-shadow: 0 0 6px rgba(244, 208, 63, 0.5) !important;
-  background: #2a2a1e !important;
-}
-
-/* Attack activation dropdown */
-.charsheet .sheet-atk-active-cb,
-.charsheet .sheet-atk-glow-cb {
-  display: none !important;
-}
-
-.charsheet .sheet-atk-act-sel {
-  width: 100% !important;
-  height: 20px !important;
-  padding: 0 2px !important;
-  margin: 0 !important;
-  background: #1a1a2e !important;
-  border: 1px solid #444 !important;
-  border-radius: 3px !important;
-  color: #555 !important;
-  font-size: 10px !important;
-  cursor: pointer !important;
-  text-align: center !important;
-  box-sizing: border-box !important;
-}
-
-/* C state - just brighter text, no glow */
-.charsheet .sheet-atk-active-cb:checked + .sheet-atk-glow-cb + .sheet-atk-act-sel {
-  color: #888 !important;
-}
-
-/* P or V state - yellow glow */
-.charsheet .sheet-atk-glow-cb:checked + .sheet-atk-act-sel {
-  color: #f4d03f !important;
-  border-color: #f4d03f !important;
-  box-shadow: 0 0 6px rgba(244, 208, 63, 0.5) !important;
-  background: #2a2a1e !important;
-}
-
-/* Ability activation dropdown */
-.charsheet .sheet-ability-active-cb,
-.charsheet .sheet-ability-glow-cb {
-  display: none !important;
-}
-
-.charsheet .sheet-ability-act-sel {
-  width: 100% !important;
-  height: 20px !important;
-  padding: 0 2px !important;
-  margin: 0 !important;
-  background: #1a1a2e !important;
-  border: 1px solid #444 !important;
-  border-radius: 3px !important;
-  color: #555 !important;
-  font-size: 10px !important;
-  cursor: pointer !important;
-  text-align: center !important;
-  box-sizing: border-box !important;
-}
-
-/* C state - just brighter text, no glow */
-.charsheet .sheet-ability-active-cb:checked + .sheet-ability-glow-cb + .sheet-ability-act-sel {
-  color: #888 !important;
-}
-
-/* P or V state - yellow glow */
-.charsheet .sheet-ability-glow-cb:checked + .sheet-ability-act-sel {
-  color: #f4d03f !important;
-  border-color: #f4d03f !important;
-  box-shadow: 0 0 6px rgba(244, 208, 63, 0.5) !important;
-  background: #2a2a1e !important;
-}
 
 /* ========================================
-   MAIN/SETUP TAB SYSTEM
+   LAYOUT RESPONSIVENESS
    ======================================== */
-
-/* Hide radio buttons */
-.charsheet .sheet-tab-main,
-.charsheet .sheet-tab-setup {
-  display: none !important;
+.charsheet table[style*="table-layout:fixed"] td:last-child {
+  width: auto !important;
 }
 
-/* Tab label container */
-.charsheet .sheet-tab-labels {
+.charsheet table td > div[style*="display:flex"],
+.charsheet table td > div[style*="display:inline-grid"] {
+  flex-wrap: wrap !important;
+  min-width: 0 !important;
+}
+
+.charsheet table td input[name="attr_hth_damage"],
+.charsheet table td input[name="attr_carry_capacity"],
+.charsheet table td input[name="attr_healing_rate"],
+.charsheet table td input[name="attr_initiative_score"] {
+  flex: 1 1 auto !important;
+  min-width: 50px !important;
+  max-width: 100px !important;
+}
+
+.charsheet table td div[style*="inline-grid"] {
   display: flex !important;
-  gap: 0 !important;
-  margin-bottom: 6px !important;
+  flex-wrap: wrap !important;
+  gap: 4px 6px !important;
 }
 
-/* Tab labels */
-.charsheet .sheet-tab-label-main,
-.charsheet .sheet-tab-label-setup {
-  padding: 4px 12px !important;
-  background: #151525 !important;
-  color: #888 !important;
-  border: 1px solid #2a2040 !important;
-  border-bottom: none !important;
-  cursor: pointer !important;
-  font-size: 11px !important;
-  font-weight: bold !important;
-  border-radius: 4px 4px 0 0 !important;
-  margin-right: -1px !important;
+.charsheet input[name="attr_move"],
+.charsheet input[name="attr_leap_total"] {
+  flex: 1 1 auto !important;
+  min-width: 50px !important;
 }
 
-/* Active tab styling */
-.charsheet .sheet-tab-main:checked ~ .sheet-tab-labels .sheet-tab-label-main,
-.charsheet .sheet-tab-setup:checked ~ .sheet-tab-labels .sheet-tab-label-setup {
-  background: #1e1e38 !important;
-  color: #f4d03f !important;
-  border-bottom: 1px solid #1e1e38 !important;
-}
-
-/* Default: Main tab visible, Setup tab hidden */
-.charsheet table.sheet-setup-cols {
-  display: none !important;
-}
-
-.charsheet table.sheet-main-cols {
-  display: table !important;
-}
-
-/* When Setup tab is selected: hide Main, show Setup */
-.charsheet .sheet-tab-setup:checked ~ .sheet-tab-content table.sheet-main-cols {
-  display: none !important;
-}
-
-.charsheet .sheet-tab-setup:checked ~ .sheet-tab-content table.sheet-setup-cols {
-  display: table !important;
+.charsheet textarea[name="attr_notes"] {
+  flex: 1 1 auto !important;
+  min-width: 100px !important;
 }
 
 /* ========================================
-   COMPACT EXPANDABLE ROW PANELS
+   EXPANDABLE ROW PANELS
    ======================================== */
 
-/* Container for each repeating row */
+/* Container positioning */
 .charsheet .repeating_attacks > div,
 .charsheet .repeating_protection > div,
 .charsheet .repeating_abilities > div {
   position: relative !important;
 }
 
-/* Hidden checkbox - positioned over the cog icon */
+/* Hidden checkbox overlay for cog */
 .charsheet input.sheet-options-flag {
   position: absolute !important;
   top: 2px !important;
@@ -560,7 +321,7 @@
   margin: 0 !important;
 }
 
-/* Cog icon styling */
+/* Cog icon */
 .charsheet .sheet-cog-icon {
   display: inline-flex !important;
   align-items: center !important;
@@ -574,18 +335,15 @@
   transition: color 0.15s, transform 0.15s !important;
 }
 
-.charsheet .sheet-cog-icon:hover {
-  color: #888 !important;
-}
+.charsheet .sheet-cog-icon:hover { color: #888 !important; }
 
-/* Cog rotates when panel open */
 .charsheet input.sheet-options-flag:checked ~ * .sheet-cog-icon,
 .charsheet input.sheet-options-flag:checked ~ table .sheet-cog-icon {
   color: #f4d03f !important;
   transform: rotate(90deg) !important;
 }
 
-/* Options panel - compact */
+/* Options panel */
 .charsheet .sheet-options-panel {
   display: none !important;
   background: #12121f !important;
@@ -593,6 +351,7 @@
   border-top: 2px solid #f4d03f !important;
   padding: 6px 8px !important;
   margin: 0 0 4px 0 !important;
+  position: relative !important;
 }
 
 .charsheet input.sheet-options-flag:checked ~ .sheet-options-panel {
@@ -603,7 +362,20 @@
    ACTIVATION INDICATOR
    ======================================== */
 
-/* Base indicator style - using disabled input */
+/* Hide all state checkboxes */
+.charsheet input.sheet-atk-active-cb,
+.charsheet input.sheet-atk-glow-cb,
+.charsheet input.sheet-atk-held-cb,
+.charsheet input.sheet-prot-active-cb,
+.charsheet input.sheet-prot-glow-cb,
+.charsheet input.sheet-prot-held-cb,
+.charsheet input.sheet-ability-active-cb,
+.charsheet input.sheet-ability-glow-cb,
+.charsheet input.sheet-ability-held-cb {
+  display: none !important;
+}
+
+/* Base indicator style */
 .charsheet input.sheet-act-indicator {
   width: 18px !important;
   height: 18px !important;
@@ -618,20 +390,7 @@
   cursor: default !important;
 }
 
-/* Hide the activation state checkboxes */
-.charsheet input.sheet-atk-active-cb,
-.charsheet input.sheet-atk-glow-cb,
-.charsheet input.sheet-atk-held-cb,
-.charsheet input.sheet-prot-active-cb,
-.charsheet input.sheet-prot-glow-cb,
-.charsheet input.sheet-prot-held-cb,
-.charsheet input.sheet-ability-active-cb,
-.charsheet input.sheet-ability-glow-cb,
-.charsheet input.sheet-ability-held-cb {
-  display: none !important;
-}
-
-/* Active state (C/P/V) - green */
+/* Active glow state (P/V) - green */
 .charsheet input.sheet-atk-glow-cb:checked ~ table input.sheet-act-indicator,
 .charsheet input.sheet-prot-glow-cb:checked ~ table input.sheet-act-indicator,
 .charsheet input.sheet-ability-glow-cb:checked ~ table input.sheet-act-indicator {
@@ -651,11 +410,27 @@
   box-shadow: 0 0 4px rgba(200, 200, 80, 0.4) !important;
 }
 
+/* Act dropdown styling (in panel) */
+.charsheet .sheet-atk-act-sel,
+.charsheet .sheet-prot-act-sel,
+.charsheet .sheet-ability-act-sel {
+  width: 100% !important;
+  height: 20px !important;
+  padding: 0 2px !important;
+  margin: 0 !important;
+  background: #1a1a2e !important;
+  border: 1px solid #444 !important;
+  border-radius: 3px !important;
+  color: #aaa !important;
+  font-size: 10px !important;
+  cursor: pointer !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
 /* ========================================
    PANEL LAYOUT
    ======================================== */
-
-/* Compact row layout */
 .charsheet .sheet-panel-row {
   display: flex !important;
   flex-wrap: wrap !important;
@@ -664,7 +439,6 @@
   margin-bottom: 4px !important;
 }
 
-/* Field groups */
 .charsheet .sheet-panel-field {
   display: flex !important;
   align-items: center !important;
@@ -703,7 +477,7 @@
   height: 20px !important;
 }
 
-/* Compact buttons */
+/* Panel buttons */
 .charsheet .sheet-panel-btn {
   font-size: 9px !important;
   padding: 2px 6px !important;
@@ -719,7 +493,7 @@
   color: #f4d03f !important;
 }
 
-/* Description - small textarea */
+/* Description textarea */
 .charsheet .sheet-panel-desc {
   width: 100% !important;
   height: 36px !important;
@@ -734,7 +508,7 @@
   font-family: inherit !important;
 }
 
-/* Help text - compact inline */
+/* Help text */
 .charsheet .sheet-panel-help {
   font-size: 9px !important;
   color: #666 !important;
@@ -756,4 +530,77 @@
   height: 14px !important;
   background: #444 !important;
   margin: 0 4px !important;
+}
+
+/* ========================================
+   ABILITY PANEL TABS
+   ======================================== */
+
+/* Radio buttons - positioned over their labels */
+.charsheet .sheet-ability-tab-radio {
+  position: absolute !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  z-index: 10 !important;
+  top: 6px !important;
+  height: 22px !important;
+  width: 45px !important;
+  margin: 0 !important;
+}
+
+.charsheet .sheet-ability-tab-desc { left: 8px !important; }
+.charsheet .sheet-ability-tab-stats { left: 53px !important; }
+.charsheet .sheet-ability-tab-bonus { left: 98px !important; }
+.charsheet .sheet-ability-tab-codes { left: 148px !important; }
+
+/* Tab bar */
+.charsheet .sheet-ability-tab-bar {
+  display: flex !important;
+  gap: 0 !important;
+  margin-bottom: 8px !important;
+  border-bottom: 1px solid #3a3060 !important;
+  position: relative !important;
+}
+
+/* Tab labels */
+.charsheet .sheet-ability-tab-label {
+  padding: 4px 10px !important;
+  background: #151525 !important;
+  color: #666 !important;
+  border: 1px solid #2a2040 !important;
+  border-bottom: none !important;
+  cursor: pointer !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  border-radius: 4px 4px 0 0 !important;
+  margin-right: -1px !important;
+  margin-bottom: -1px !important;
+}
+
+.charsheet .sheet-ability-tab-label:hover {
+  background: #1a1a2e !important;
+  color: #888 !important;
+}
+
+/* Active tab label styling */
+.charsheet .sheet-ability-tab-desc:checked ~ .sheet-ability-tab-bar .sheet-ability-tab-label-desc,
+.charsheet .sheet-ability-tab-stats:checked ~ .sheet-ability-tab-bar .sheet-ability-tab-label-stats,
+.charsheet .sheet-ability-tab-bonus:checked ~ .sheet-ability-tab-bar .sheet-ability-tab-label-bonus,
+.charsheet .sheet-ability-tab-codes:checked ~ .sheet-ability-tab-bar .sheet-ability-tab-label-codes {
+  background: #12121f !important;
+  color: #f4d03f !important;
+  border-bottom-color: #12121f !important;
+}
+
+/* Hide all tab content by default */
+.charsheet .sheet-ability-tab-content {
+  display: none !important;
+}
+
+/* Show active tab content */
+.charsheet .sheet-ability-tab-desc:checked ~ .sheet-ability-tab-content.sheet-ability-content-desc,
+.charsheet .sheet-ability-tab-stats:checked ~ .sheet-ability-tab-content.sheet-ability-content-stats,
+.charsheet .sheet-ability-tab-bonus:checked ~ .sheet-ability-tab-content.sheet-ability-content-bonus,
+.charsheet .sheet-ability-tab-codes:checked ~ .sheet-ability-tab-content.sheet-ability-content-codes {
+  display: block !important;
 }
