@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v39.0 - Tabbed Abilities panel with stat modifiers -->
+<!-- Mighty Protectors Roll20 Character Sheet v39.1 - Tabbed Abilities panel with stat modifiers -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -80,7 +80,7 @@
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
         <span style="color:#aaa; white-space:nowrap;">IP Mod:</span>
-        <input type="text" name="attr_ip_mod" value="0" style="width:25px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="+1 IP per CP in Inventing" />
+        <input type="text" name="attr_ip_mod" value="0" readonly style="width:25px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="From active abilities (Heightened Inventing, etc.)" />
       </div>
     </div>
 
@@ -217,7 +217,7 @@
       <!-- ST -->
       <tr>
         <td style="text-align:center; padding:2px;"><input type="text" name="attr_strength_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center;"><input type="text" name="attr_strength_mod" value="0" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_strength_mod" value="0" readonly title="From active abilities (Heightened/Reduced Strength)" style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" /></td>
         <td style="text-align:center; color:#e63946; font-weight:bold;" title="Strength - physical power, carrying capacity, HTH damage">ST</td>
         <td style="text-align:center;"><input type="text" name="attr_strength_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
@@ -237,7 +237,7 @@
       <!-- EN -->
       <tr>
         <td style="text-align:center; padding:2px;"><input type="text" name="attr_endurance_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center;"><input type="text" name="attr_endurance_mod" value="0" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_endurance_mod" value="0" readonly title="From active abilities (Heightened/Reduced Endurance)" style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" /></td>
         <td style="text-align:center; color:#e63946; font-weight:bold;" title="Endurance - stamina, healing rate, resistance to physical effects">EN</td>
         <td style="text-align:center;"><input type="text" name="attr_endurance_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
@@ -263,8 +263,8 @@
         </td>
 
         <td style="text-align:center;">
-          <input type="text" name="attr_agility_mod" value="0"
-            style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
+          <input type="text" name="attr_agility_mod" value="0" readonly title="From active abilities (Heightened/Reduced Agility)"
+            style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" />
         </td>
 
         <td style="text-align:center; color:#e63946; font-weight:bold;"
@@ -285,9 +285,9 @@
         <td style="white-space:nowrap;">
           <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Physical Defense Modifier:</span>
-            <input type="text" name="attr_physical_def_bonus" value="0"
-              style="width:34px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
-              title="Physical Defense Modifier" />
+            <input type="text" name="attr_physical_def_bonus" value="0" readonly
+              style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;"
+              title="From active abilities (Heightened Defense, etc.)" />
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Physical Def:</span>
             <input type="text" name="attr_physical_def" readonly
               style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #8be9fd; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
@@ -304,8 +304,8 @@
         </td>
 
         <td style="text-align:center;">
-          <input type="text" name="attr_intelligence_mod" value="0"
-            style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
+          <input type="text" name="attr_intelligence_mod" value="0" readonly title="From active abilities (Heightened/Reduced Intelligence)"
+            style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" />
         </td>
 
         <td style="text-align:center; color:#e63946; font-weight:bold;"
@@ -326,9 +326,9 @@
         <td style="white-space:nowrap;">
           <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Mental Defense Modifier:</span>
-            <input type="text" name="attr_mental_def_bonus" value="0"
-              style="width:34px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
-              title="Mental Defense Modifier" />
+            <input type="text" name="attr_mental_def_bonus" value="0" readonly
+              style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;"
+              title="From active abilities (Heightened Defense, etc.)" />
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Mental Def:</span>
             <input type="text" name="attr_mental_def" readonly
               style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #8be9fd; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
@@ -339,7 +339,7 @@
       <!-- CL -->
       <tr>
         <td style="text-align:center; padding:2px;"><input type="text" name="attr_cool_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center;"><input type="text" name="attr_cool_mod" value="0" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_cool_mod" value="0" readonly title="From active abilities (Heightened/Reduced Cool)" style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" /></td>
         <td style="text-align:center; color:#e63946; font-weight:bold;" title="Cool - composure, willpower, initiative">CL</td>
         <td style="text-align:center;"><input type="text" name="attr_cool_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
@@ -379,7 +379,7 @@
           <div class="sheet-power-row" style="display:flex; align-items:center; gap:4px;">
             <span class="sheet-power-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">POWER:</span>
             <span style="color:#aaa; font-size:10px;">Modifier</span>
-            <input type="text" name="attr_power_mod" class="sheet-power-input" value="0" style="width:28px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center;" title="Power modifier" />
+            <input type="text" name="attr_power_mod" class="sheet-power-input" value="0" readonly style="width:28px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center;" title="From active abilities (Heightened Power, etc.)" />
             <span style="color:#aaa; font-size:10px;">Maximum</span>
             <input type="text" name="attr_power_score_max" class="sheet-power-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Power" />
             <span style="color:#aaa; font-size:10px;">Current</span>
@@ -389,7 +389,7 @@
           <div class="sheet-hits-row" style="display:flex; align-items:center; gap:4px;">
             <span class="sheet-hits-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">HITS:</span>
             <span style="color:#aaa; font-size:10px;">Modifier</span>
-            <input type="text" name="attr_hits_mod" class="sheet-hits-input" value="0" style="width:28px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center;" title="Hits modifier" />
+            <input type="text" name="attr_hits_mod" class="sheet-hits-input" value="0" readonly style="width:28px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center;" title="From active abilities (Heightened Hits, etc.)" />
             <span style="color:#aaa; font-size:10px;">Maximum</span>
             <input type="text" name="attr_hits_score_max" class="sheet-hits-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Hits" />
             <span style="color:#aaa; font-size:10px;">Current</span>
@@ -785,18 +785,18 @@
 
       <!-- TABBED SETTINGS PANEL -->
       <div class="sheet-options-panel">
-        <!-- Tab radio buttons -->
+        <!-- Tab radios (hidden, positioned over labels) -->
         <input type="radio" name="attr_ability_tab" value="desc" class="sheet-ability-tab-radio sheet-ability-tab-desc" checked="checked" />
-        <input type="radio" name="attr_ability_tab" value="stats" class="sheet-ability-tab-radio sheet-ability-tab-stats" />
-        <input type="radio" name="attr_ability_tab" value="bonus" class="sheet-ability-tab-radio sheet-ability-tab-bonus" />
+        <input type="radio" name="attr_ability_tab" value="details" class="sheet-ability-tab-radio sheet-ability-tab-details" />
         <input type="radio" name="attr_ability_tab" value="codes" class="sheet-ability-tab-radio sheet-ability-tab-codes" />
+        <input type="radio" name="attr_ability_tab" value="help" class="sheet-ability-tab-radio sheet-ability-tab-help" />
         
-        <!-- Tab labels -->
+        <!-- Tab labels (visual only) -->
         <div class="sheet-ability-tab-bar">
-          <label class="sheet-ability-tab-label sheet-ability-tab-label-desc">Desc</label>
-          <label class="sheet-ability-tab-label sheet-ability-tab-label-stats">Stats</label>
-          <label class="sheet-ability-tab-label sheet-ability-tab-label-bonus">Bonus</label>
-          <label class="sheet-ability-tab-label sheet-ability-tab-label-codes">Codes</label>
+          <span class="sheet-ability-tab-label sheet-ability-tab-label-desc">Desc</span>
+          <span class="sheet-ability-tab-label sheet-ability-tab-label-details">Details</span>
+          <span class="sheet-ability-tab-label sheet-ability-tab-label-codes">Codes</span>
+          <span class="sheet-ability-tab-label sheet-ability-tab-label-help">Help</span>
         </div>
 
         <!-- DESC TAB CONTENT -->
@@ -840,85 +840,92 @@
           </div>
         </div>
 
-        <!-- STATS TAB CONTENT -->
-        <div class="sheet-ability-tab-content sheet-ability-content-stats">
-          <div style="color:#888; font-size:9px; margin-bottom:6px;">Heightened/Reduced Basic Characteristics (+ = Heightened, - = Reduced)</div>
+        <!-- DETAILS TAB CONTENT -->
+        <div class="sheet-ability-tab-content sheet-ability-content-details">
           <div class="sheet-panel-row">
+            <span style="color:#888; font-size:9px; width:24px;">BC:</span>
             <div class="sheet-panel-field">
-              <label>ST:</label>
-              <input type="text" name="attr_ability_st_mod" style="width:32px !important;" title="Strength modifier" />
+              <label>ST</label>
+              <input type="text" name="attr_ability_st_mod" style="width:28px !important;" title="Strength adjustment" />
             </div>
             <div class="sheet-panel-field">
-              <label>EN:</label>
-              <input type="text" name="attr_ability_en_mod" style="width:32px !important;" title="Endurance modifier" />
+              <label>EN</label>
+              <input type="text" name="attr_ability_en_mod" style="width:28px !important;" title="Endurance adjustment" />
             </div>
             <div class="sheet-panel-field">
-              <label>AG:</label>
-              <input type="text" name="attr_ability_ag_mod" style="width:32px !important;" title="Agility modifier" />
+              <label>AG</label>
+              <input type="text" name="attr_ability_ag_mod" style="width:28px !important;" title="Agility adjustment" />
             </div>
             <div class="sheet-panel-field">
-              <label>IN:</label>
-              <input type="text" name="attr_ability_in_mod" style="width:32px !important;" title="Intelligence modifier" />
+              <label>IN</label>
+              <input type="text" name="attr_ability_in_mod" style="width:28px !important;" title="Intelligence adjustment" />
             </div>
             <div class="sheet-panel-field">
-              <label>CL:</label>
-              <input type="text" name="attr_ability_cl_mod" style="width:32px !important;" title="Cool modifier" />
-            </div>
-          </div>
-          <div style="color:#555; font-size:9px; margin-top:6px;">Values are applied to character totals when ability is active (C/P/V).</div>
-        </div>
-
-        <!-- BONUS TAB CONTENT -->
-        <div class="sheet-ability-tab-content sheet-ability-content-bonus">
-          <div style="color:#888; font-size:9px; margin-bottom:6px;">Bonuses/Penalties to Derived Values (applied when active)</div>
-          <div class="sheet-panel-row">
-            <div class="sheet-panel-field">
-              <label>To Hit:</label>
-              <input type="text" name="attr_ability_tohit_mod" style="width:28px !important;" title="To-hit modifier" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Phys Def:</label>
-              <input type="text" name="attr_ability_physdef_mod" style="width:28px !important;" title="Physical Defense modifier" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Ment Def:</label>
-              <input type="text" name="attr_ability_mentdef_mod" style="width:28px !important;" title="Mental Defense modifier" />
+              <label>CL</label>
+              <input type="text" name="attr_ability_cl_mod" style="width:28px !important;" title="Cool adjustment" />
             </div>
           </div>
           <div class="sheet-panel-row" style="margin-top:4px;">
+            <span style="color:#888; font-size:9px; width:24px;">Combat:</span>
             <div class="sheet-panel-field">
-              <label>Power:</label>
-              <input type="text" name="attr_ability_power_mod" style="width:28px !important;" title="Power modifier" />
+              <label>To Hit</label>
+              <input type="text" name="attr_ability_tohit_mod" style="width:28px !important;" title="To-hit adjustment" />
             </div>
             <div class="sheet-panel-field">
-              <label>Hits:</label>
-              <input type="text" name="attr_ability_hits_mod" style="width:28px !important;" title="Hits modifier" />
+              <label>Phys Def</label>
+              <input type="text" name="attr_ability_physdef_mod" style="width:28px !important;" title="Physical Defense adjustment" />
             </div>
             <div class="sheet-panel-field">
-              <label>Inventing:</label>
-              <input type="text" name="attr_ability_inventing_mod" style="width:28px !important;" title="Inventing Points modifier" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Initiative:</label>
-              <input type="text" name="attr_ability_init_mod" style="width:28px !important;" title="Initiative modifier" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Luck:</label>
-              <input type="text" name="attr_ability_luck_mod" style="width:28px !important;" title="Luck modifier" />
+              <label>Ment Def</label>
+              <input type="text" name="attr_ability_mentdef_mod" style="width:28px !important;" title="Mental Defense adjustment" />
             </div>
           </div>
+          <div class="sheet-panel-row" style="margin-top:4px;">
+            <span style="color:#888; font-size:9px; width:24px;">Other:</span>
+            <div class="sheet-panel-field">
+              <label>Power</label>
+              <input type="text" name="attr_ability_power_mod" style="width:28px !important;" title="Power adjustment" />
+            </div>
+            <div class="sheet-panel-field">
+              <label>Hits</label>
+              <input type="text" name="attr_ability_hits_mod" style="width:28px !important;" title="Hits adjustment" />
+            </div>
+            <div class="sheet-panel-field">
+              <label>Inventing</label>
+              <input type="text" name="attr_ability_inventing_mod" style="width:28px !important;" title="Inventing Points adjustment" />
+            </div>
+          </div>
+          <div style="color:#555; font-size:9px; margin-top:6px;">Values applied when ability is active (C/P/V). Negative = penalty.</div>
         </div>
 
         <!-- CODES TAB CONTENT -->
         <div class="sheet-ability-tab-content sheet-ability-content-codes">
           <div style="color:#888; font-size:9px; margin-bottom:4px;">Effect Codes (for API automation)</div>
-          <input type="text" name="attr_ability_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="aura:d8:Energy:1, absorb:Fire:25, vuln:Kinetic:+2..." />
-          <div class="sheet-panel-help" style="margin-top:8px;">
-            <div><code>aura:Dmg:Type:PR</code> Damage aura field</div>
-            <div><code>absorb:Type:Limit</code> Absorption (1/4 dmg)</div>
+          <input type="text" name="attr_ability_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, absorb:Fire:25..." />
+        </div>
+
+        <!-- HELP TAB CONTENT -->
+        <div class="sheet-ability-tab-content sheet-ability-content-help">
+          <div class="sheet-panel-help" style="border:none; padding:0; margin:0;">
+            <div style="margin-bottom:6px;">
+              <span style="color:#f4d03f;">Activation:</span>
+              <span style="color:#aaa;">C</span>=Continual (always on) |
+              <span style="color:#aaa;">P</span>=Persistent (toggle) |
+              <span style="color:#aaa;">V</span>=Voluntary (per action) |
+              <span style="color:#aaa;">H</span>=Held |
+              <span style="color:#aaa;">Off</span>
+            </div>
+            <div style="margin-bottom:6px;">
+              <span style="color:#f4d03f;">Fields:</span>
+              <span style="color:#aaa;">PR</span>=Power cost |
+              <span style="color:#aaa;">Chg</span>=Charges |
+              <span style="color:#aaa;">Gear</span>=Can be disarmed/broken, can't Push
+            </div>
+            <div style="color:#f4d03f; margin-top:8px; margin-bottom:4px;">Effect Codes:</div>
+            <div><code>vuln:Type:+N</code> Vulnerability (extra damage taken)</div>
+            <div><code>absorb:Type:Limit</code> Absorption (heals from damage)</div>
             <div><code>reflect:Type:Limit</code> Reflection</div>
-            <div><code>vuln:Type:+N</code> Vulnerability (extra dmg)</div>
-            <div><code>attract:Type:-N</code> Attract (reduced def)</div>
+            <div><code>aura:Dmg:Type:PR</code> Damage aura</div>
           </div>
         </div>
       </div>
@@ -993,20 +1000,8 @@
 <!-- Hidden attributes for ability summary -->
 <input type="hidden" name="attr_abw_summary" value="" />
 
-<!-- Ability bonus totals (calculated from active abilities) -->
-<input type="hidden" name="attr_ability_st_bonus" value="0" />
-<input type="hidden" name="attr_ability_en_bonus" value="0" />
-<input type="hidden" name="attr_ability_ag_bonus" value="0" />
-<input type="hidden" name="attr_ability_in_bonus" value="0" />
-<input type="hidden" name="attr_ability_cl_bonus" value="0" />
+<!-- Ability to-hit bonus (calculated from active abilities) -->
 <input type="hidden" name="attr_ability_tohit_bonus" value="0" />
-<input type="hidden" name="attr_ability_physdef_bonus" value="0" />
-<input type="hidden" name="attr_ability_mentdef_bonus" value="0" />
-<input type="hidden" name="attr_ability_power_bonus" value="0" />
-<input type="hidden" name="attr_ability_hits_bonus" value="0" />
-<input type="hidden" name="attr_ability_inventing_bonus" value="0" />
-<input type="hidden" name="attr_ability_init_bonus" value="0" />
-<input type="hidden" name="attr_ability_luck_bonus" value="0" />
 
 <!-- ROLL TEMPLATES -->
 <rolltemplate class="sheet-rolltemplate-healing">
@@ -1427,24 +1422,23 @@
   }
 
   // ==================== ABILITY MODIFIER SYSTEM ====================
+  // Sums modifiers from all active abilities (Act = C/P/V) and writes to main sheet mod fields
 
   function recalcAbilityBonuses() {
     getSectionIDs("repeating_abilities", function(ids) {
       if (!ids || ids.length === 0) {
         setAttrs({
-          ability_st_bonus: 0,
-          ability_en_bonus: 0,
-          ability_ag_bonus: 0,
-          ability_in_bonus: 0,
-          ability_cl_bonus: 0,
-          ability_tohit_bonus: 0,
-          ability_physdef_bonus: 0,
-          ability_mentdef_bonus: 0,
-          ability_power_bonus: 0,
-          ability_hits_bonus: 0,
-          ability_inventing_bonus: 0,
-          ability_init_bonus: 0,
-          ability_luck_bonus: 0
+          strength_mod: 0,
+          endurance_mod: 0,
+          agility_mod: 0,
+          intelligence_mod: 0,
+          cool_mod: 0,
+          physical_def_bonus: 0,
+          mental_def_bonus: 0,
+          power_mod: 0,
+          hits_mod: 0,
+          ip_mod: 0,
+          ability_tohit_bonus: 0
         }, {silent: true}, function() {
           recalcAll();
         });
@@ -1466,16 +1460,13 @@
         attrList.push(prefix + "power_mod");
         attrList.push(prefix + "hits_mod");
         attrList.push(prefix + "inventing_mod");
-        attrList.push(prefix + "init_mod");
-        attrList.push(prefix + "luck_mod");
       });
 
       getAttrs(attrList, function(values) {
         var sums = {
           st: 0, en: 0, ag: 0, inv: 0, cl: 0,
           tohit: 0, physdef: 0, mentdef: 0,
-          power: 0, hits: 0, inventing: 0,
-          init: 0, luck: 0
+          power: 0, hits: 0, inventing: 0
         };
 
         ids.forEach(function(id) {
@@ -1494,25 +1485,22 @@
             sums.power += parseInt(values[prefix + "power_mod"]) || 0;
             sums.hits += parseInt(values[prefix + "hits_mod"]) || 0;
             sums.inventing += parseInt(values[prefix + "inventing_mod"]) || 0;
-            sums.init += parseInt(values[prefix + "init_mod"]) || 0;
-            sums.luck += parseInt(values[prefix + "luck_mod"]) || 0;
           }
         });
 
+        // Write directly to the main sheet mod fields (now read-only)
         setAttrs({
-          ability_st_bonus: sums.st,
-          ability_en_bonus: sums.en,
-          ability_ag_bonus: sums.ag,
-          ability_in_bonus: sums.inv,
-          ability_cl_bonus: sums.cl,
-          ability_tohit_bonus: sums.tohit,
-          ability_physdef_bonus: sums.physdef,
-          ability_mentdef_bonus: sums.mentdef,
-          ability_power_bonus: sums.power,
-          ability_hits_bonus: sums.hits,
-          ability_inventing_bonus: sums.inventing,
-          ability_init_bonus: sums.init,
-          ability_luck_bonus: sums.luck
+          strength_mod: sums.st,
+          endurance_mod: sums.en,
+          agility_mod: sums.ag,
+          intelligence_mod: sums.inv,
+          cool_mod: sums.cl,
+          physical_def_bonus: sums.physdef,
+          mental_def_bonus: sums.mentdef,
+          power_mod: sums.power,
+          hits_mod: sums.hits,
+          ip_mod: sums.inventing,
+          ability_tohit_bonus: sums.tohit
         }, {silent: true}, function() {
           recalcAll();
         });
@@ -1532,21 +1520,17 @@
      "change:repeating_abilities:ability_power_mod " +
      "change:repeating_abilities:ability_hits_mod " +
      "change:repeating_abilities:ability_inventing_mod " +
-     "change:repeating_abilities:ability_init_mod " +
-     "change:repeating_abilities:ability_luck_mod " +
      "remove:repeating_abilities", function() {
     recalcAbilityBonuses();
   });
 
-  // ==================== MAIN RECALC (WITH ABILITY BONUSES) ====================
+  // ==================== MAIN RECALC ====================
+  // BC mod fields now contain ability bonuses directly (written by recalcAbilityBonuses)
 
   function recalcAll() {
     getAttrs([
       "strength_cost", "endurance_cost", "agility_cost", "intelligence_cost", "cool_cost",
       "strength_mod", "endurance_mod", "agility_mod", "intelligence_mod", "cool_mod",
-      "ability_st_bonus", "ability_en_bonus", "ability_ag_bonus", "ability_in_bonus", "ability_cl_bonus",
-      "ability_physdef_bonus", "ability_mentdef_bonus",
-      "ability_power_bonus", "ability_hits_bonus",
       "physical_def_bonus", "mental_def_bonus",
       "weight", "power_mod", "hits_mod", "power_score", "power_score_max", "hits_score", "hits_score_max"
     ], function(values) {
@@ -1556,28 +1540,22 @@
       var inBase = parseInt(values.intelligence_cost) || 0;
       var clBase = parseInt(values.cool_cost) || 0;
       
+      // Mod fields now contain ability bonuses directly
       var stMod = parseInt(values.strength_mod) || 0;
       var enMod = parseInt(values.endurance_mod) || 0;
       var agMod = parseInt(values.agility_mod) || 0;
       var inMod = parseInt(values.intelligence_mod) || 0;
       var clMod = parseInt(values.cool_mod) || 0;
-
-      var stAbility = parseInt(values.ability_st_bonus) || 0;
-      var enAbility = parseInt(values.ability_en_bonus) || 0;
-      var agAbility = parseInt(values.ability_ag_bonus) || 0;
-      var inAbility = parseInt(values.ability_in_bonus) || 0;
-      var clAbility = parseInt(values.ability_cl_bonus) || 0;
       
-      var st = stBase + stMod + stAbility;
-      var en = enBase + enMod + enAbility;
-      var ag = agBase + agMod + agAbility;
-      var inv = inBase + inMod + inAbility;
-      var cl = clBase + clMod + clAbility;
+      var st = stBase + stMod;
+      var en = enBase + enMod;
+      var ag = agBase + agMod;
+      var inv = inBase + inMod;
+      var cl = clBase + clMod;
       
-      var physBonusManual = parseInt(values.physical_def_bonus) || 0;
-      var mentBonusManual = parseInt(values.mental_def_bonus) || 0;
-      var physBonusAbility = parseInt(values.ability_physdef_bonus) || 0;
-      var mentBonusAbility = parseInt(values.ability_mentdef_bonus) || 0;
+      // Defense bonus fields now contain ability bonuses directly
+      var physBonus = parseInt(values.physical_def_bonus) || 0;
+      var mentBonus = parseInt(values.mental_def_bonus) || 0;
       
       var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
       var weight = parseInt(weightRaw) || 1;
@@ -1601,13 +1579,12 @@
       
       var ipBase = Math.ceil(inv / 2);
       
-      var powerModManual = parseInt(values.power_mod) || 0;
-      var hitsModManual = parseInt(values.hits_mod) || 0;
-      var powerAbility = parseInt(values.ability_power_bonus) || 0;
-      var hitsAbility = parseInt(values.ability_hits_bonus) || 0;
+      // Power/Hits mod fields now contain ability bonuses directly
+      var powerMod = parseInt(values.power_mod) || 0;
+      var hitsMod = parseInt(values.hits_mod) || 0;
       
-      var newPowerMax = powerBase + powerModManual + powerAbility;
-      var newHitsMax = Math.max(1, hitsBase + hitsModManual + hitsAbility);
+      var newPowerMax = powerBase + powerMod;
+      var newHitsMax = Math.max(1, hitsBase + hitsMod);
       
       var oldPowerMax = parseInt(values.power_score_max) || 0;
       var oldHitsMax = parseInt(values.hits_score_max) || 0;
@@ -1625,9 +1602,9 @@
         intelligence_save: inSave,
         cool_save: clSave,
         physical_def_base: physDefBase,
-        physical_def: physDefBase + physBonusManual + physBonusAbility,
+        physical_def: physDefBase + physBonus,
         mental_def_base: mentDefBase,
-        mental_def: mentDefBase + mentBonusManual + mentBonusAbility,
+        mental_def: mentDefBase + mentBonus,
         carry_capacity: carryDisplay[stIdx],
         hth_damage: hthTable[stIdx],
         healing_rate: (healTable[enIdx] / 10).toFixed(1),
@@ -1695,45 +1672,10 @@
     });
   });
 
-  on("change:power_mod", function(eventInfo) {
-    var prevValue = parseInt(eventInfo.previousValue) || 0;
-    var newValue = parseInt(eventInfo.newValue) || 0;
-    var delta = newValue - prevValue;
-    
-    getAttrs(["power_base", "power_score", "ability_power_bonus"], function(v) {
-      var powerBase = parseInt(v.power_base) || 0;
-      var powerScore = parseInt(v.power_score) || 0;
-      var powerAbility = parseInt(v.ability_power_bonus) || 0;
-      var newPowerMax = powerBase + newValue + powerAbility;
-      var newPowerScore = Math.max(0, Math.min(newPowerMax, powerScore + delta));
-      
-      setAttrs({
-        power_score_max: newPowerMax,
-        power_score: newPowerScore
-      });
-    });
-  });
+  // power_mod and hits_mod are now read-only, written by recalcAbilityBonuses
+  // No change handlers needed for them
 
-  on("change:hits_mod", function(eventInfo) {
-    var prevValue = parseInt(eventInfo.previousValue) || 0;
-    var newValue = parseInt(eventInfo.newValue) || 0;
-    var delta = newValue - prevValue;
-    
-    getAttrs(["hits_base", "hits_score", "ability_hits_bonus"], function(v) {
-      var hitsBase = parseInt(v.hits_base) || 0;
-      var hitsScore = parseInt(v.hits_score) || 0;
-      var hitsAbility = parseInt(v.ability_hits_bonus) || 0;
-      var newHitsMax = Math.max(1, hitsBase + newValue + hitsAbility);
-      var newHitsScore = Math.max(1, Math.min(newHitsMax, hitsScore + delta));
-      
-      setAttrs({
-        hits_score_max: newHitsMax,
-        hits_score: newHitsScore
-      });
-    });
-  });
-
-  on("change:strength_cost change:endurance_cost change:agility_cost change:intelligence_cost change:cool_cost change:strength_mod change:endurance_mod change:agility_mod change:intelligence_mod change:cool_mod change:physical_def_bonus change:mental_def_bonus", function() {
+  on("change:strength_cost change:endurance_cost change:agility_cost change:intelligence_cost change:cool_cost", function() {
     recalcAll();
   });
 
@@ -1754,19 +1696,18 @@
   });
 
   on("clicked:reset_initiative", function() {
-    getAttrs(["cool_cost", "cool_mod", "ability_cl_bonus"], function(v) {
-      var cl = (parseInt(v.cool_cost) || 0) + (parseInt(v.cool_mod) || 0) + (parseInt(v.ability_cl_bonus) || 0);
+    getAttrs(["cool_cost", "cool_mod"], function(v) {
+      var cl = (parseInt(v.cool_cost) || 0) + (parseInt(v.cool_mod) || 0);
       var clIdx = clampIndex(cl);
       setAttrs({ initiative_score: hthTable[clIdx] });
     });
   });
 
   on("clicked:reset_move", function() {
-    getAttrs(["strength_cost", "strength_mod", "endurance_cost", "endurance_mod", "agility_cost", "agility_mod",
-              "ability_st_bonus", "ability_en_bonus", "ability_ag_bonus"], function(v) {
-      var st = (parseInt(v.strength_cost) || 0) + (parseInt(v.strength_mod) || 0) + (parseInt(v.ability_st_bonus) || 0);
-      var en = (parseInt(v.endurance_cost) || 0) + (parseInt(v.endurance_mod) || 0) + (parseInt(v.ability_en_bonus) || 0);
-      var ag = (parseInt(v.agility_cost) || 0) + (parseInt(v.agility_mod) || 0) + (parseInt(v.ability_ag_bonus) || 0);
+    getAttrs(["strength_cost", "strength_mod", "endurance_cost", "endurance_mod", "agility_cost", "agility_mod"], function(v) {
+      var st = (parseInt(v.strength_cost) || 0) + (parseInt(v.strength_mod) || 0);
+      var en = (parseInt(v.endurance_cost) || 0) + (parseInt(v.endurance_mod) || 0);
+      var ag = (parseInt(v.agility_cost) || 0) + (parseInt(v.agility_mod) || 0);
       setAttrs({ move: Math.round((st + en + ag) / 3) + '"' });
     });
   });
@@ -2178,12 +2119,12 @@
   on("change:repeating_abilities remove:repeating_abilities", rebuildABWSummary);
 
   function calcBaseIPs() {
-    getAttrs(["intelligence_score", "ip_mod", "ability_inventing_bonus"], function(v) {
+    getAttrs(["intelligence_score", "ip_mod"], function(v) {
       var inScore = parseInt(v.intelligence_score, 10) || 0;
       var baseIP = Math.ceil(inScore / 2);
       var ipMod = parseInt(v.ip_mod, 10) || 0;
-      var inventingAbility = parseInt(v.ability_inventing_bonus, 10) || 0;
-      var totalIPs = baseIP + ipMod + inventingAbility;
+      // ip_mod now contains ability inventing bonus directly
+      var totalIPs = baseIP + ipMod;
       setAttrs({
         base_ip: baseIP,
         invention_points: totalIPs
@@ -2193,9 +2134,7 @@
     });
   }
 
-  on("change:ability_inventing_bonus", function() {
-    calcBaseIPs();
-  });
+  // ip_mod is now written by recalcAbilityBonuses, no separate handler needed
 
   function calcSecurityClearance() {
     getAttrs(["use_security", "intelligence_save", "cool_save", "ep_earned"], function(v) {
@@ -2216,15 +2155,15 @@
   });
 
   function calcInventingPts() {
-    getAttrs(["invention_points_base", "invention_points_bonus", "ability_inventing_bonus"], function(v) {
+    getAttrs(["invention_points_base", "ip_mod"], function(v) {
       var base = parseInt(v.invention_points_base) || 0;
-      var bonus = parseInt(v.invention_points_bonus) || 0;
-      var abilityBonus = parseInt(v.ability_inventing_bonus) || 0;
-      setAttrs({ invention_points: base + bonus + abilityBonus });
+      // ip_mod now contains ability inventing bonus directly
+      var ipMod = parseInt(v.ip_mod) || 0;
+      setAttrs({ invention_points: base + ipMod });
     });
   }
 
-  on("change:invention_points_base change:invention_points_bonus", function() {
+  on("change:invention_points_base", function() {
     calcInventingPts();
     calcIPTotals();
   });
@@ -2399,9 +2338,10 @@
       }
     });
 
-    getAttrs(["initiative_score", "cool_cost", "cool_mod", "ability_cl_bonus"], function(v) {
+    // Initialize initiative if empty
+    getAttrs(["initiative_score", "cool_cost", "cool_mod"], function(v) {
       if (!v.initiative_score || v.initiative_score === "") {
-        var cl = (parseInt(v.cool_cost) || 0) + (parseInt(v.cool_mod) || 0) + (parseInt(v.ability_cl_bonus) || 0);
+        var cl = (parseInt(v.cool_cost) || 0) + (parseInt(v.cool_mod) || 0);
         var clIdx = clampIndex(cl);
         setAttrs({ initiative_score: hthTable[clIdx] });
       }
@@ -2485,1064 +2425,6 @@
 
   on("change:intelligence_score change:ip_mod", function() {
     calcBaseIPs();
-  });
-
-</script>
-
-<!-- SHEET WORKERS -->
-<script type="text/worker">
-  // ==================== COMPLETE BC LOOKUP TABLES (0-98) ====================
-  
-  var carryValues = [
-    8,10,12,15,20,24,30,40,48,60,80,96,120,160,192,240,320,384,480,640,768,
-    960,1280,1536,1920,2560,3072,3840,5120,6144,7680,10240,12288,15360,20480,24576,
-    30720,40960,49152,61440,81920,98304,122880,163840,196608,245760,327680,393216,
-    491520,655360,786432,983040,1310720,1572864,1966080,2621440,3145728,3932160,
-    5242880,6291456,7864320,10485760,12582912,15728640,20971520,25165824,31457280,
-    41943040,50331648,62914560,83886080,100663296,125829120,167772160,201326592,
-    251658240,335544320,402653184,503316480,671088640,805306368,1006632960,
-    1342177280,1610612736,2013265920,2684354560,3221225472,4026531840,
-    5368709120,6442450944,8053063680,10737418240,12884901888,16106127360,
-    21474836480,25769803776,32212254720,42949672960,51539607552
-  ];
-
-  var carryDisplay = [
-    "8","10","12","15","20","24","30","40","48","60","80","96","120","160","192","240","320","384","480","640","768",
-    "960","1,280","1,536","1,920","2,560","3,072","3,840","5,120","6,144","7,680","10,240","12,288","15,360","20,480","24,576",
-    "30,720","40,960","49,152","61,440","81,920","98,304","122,880","163,840","196,608","245,760","327,680","393,216",
-    "491,520","655,360","786,432","983,040","1,310,720","1,572,864","1,966,080","2,621,440","3,145,728","3,932,160",
-    "5,242,880","6,291,456","7,864,320","10,485,760","12,582,912","15,728,640","20,971,520","25,165,824","31,457,280",
-    "41,943,040","50,331,648","62,914,560","83,886,080","100,663,296","125,829,120","167,772,160","201,326,592",
-    "251,658,240","335,544,320","402,653,184","503,316,480","671,088,640","805,306,368","1,006,632,960",
-    "1,342,177,280","1,610,612,736","2,013,265,920","2,684,354,560","3,221,225,472","4,026,531,840",
-    "5,368,709,120","6,442,450,944","8,053,063,680","10,737,418,240","12,884,901,888","16,106,127,360",
-    "21,474,836,480","25,769,803,776","32,212,254,720","42,949,672,960","51,539,607,552"
-  ];
-  
-  var hthTable = [
-    "1d2-1","1d2-1","1d2-1","1d2","1d2","1d2","1d3","1d3","1d3","1d4","1d4","1d4",
-    "1d6","1d6","1d6","1d6+1","1d6+1","1d6+1","1d8+1","1d8+1","1d8+1",
-    "1d10+1","1d10+1","1d10+1","2d6","2d6","2d6","1d6+1d8","1d6+1d8","1d6+1d8",
-    "2d8","2d8","2d8","1d8+1d10","1d8+1d10","1d8+1d10","2d10","2d10","2d10",
-    "1d10+1d12","1d10+1d12","1d10+1d12","2d12","2d12","2d12","3d8","3d8","3d8",
-    "2d8+1d10","2d8+1d10","2d8+1d10","1d8+2d10","1d8+2d10","1d8+2d10","3d10","3d10","3d10",
-    "2d10+1d12","2d10+1d12","2d10+1d12","1d10+2d12","1d10+2d12","1d10+2d12","3d12","3d12","3d12",
-    "3d12+1","3d12+1","3d12+1","3d12+2","3d12+2","3d12+2","4d10","4d10","4d10",
-    "3d10+1d12","3d10+1d12","3d10+1d12","2d10+2d12","2d10+2d12","2d10+2d12","1d10+3d12","1d10+3d12","1d10+3d12",
-    "4d12","4d12","4d12","4d12+1","4d12+1","4d12+1","5d10","5d10","5d10",
-    "4d10+1d12","4d10+1d12","4d10+1d12","3d10+2d12","3d10+2d12","3d10+2d12"
-  ];
-  
-  var saveTable = [
-    6,7,7,8,8,8,9,9,9,10,10,10,11,11,11,11,11,11,12,12,12,
-    12,12,12,13,13,13,13,13,13,14,14,14,14,14,14,15,15,15,
-    15,15,15,16,16,16,16,16,16,17,17,17,17,17,17,18,18,18,
-    18,18,18,19,19,19,19,19,19,20,20,20,20,20,20,21,21,21,
-    21,21,21,22,22,22,22,22,22,23,23,23,23,23,23,24,24,24,
-    24,24,24,25,25,25
-  ];
-  
-  var hpSTTable = [
-    -3,-3,-3,-2,-2,-2,0,0,0,1,1,1,3,3,3,5,5,5,6,6,6,
-    8,8,8,10,10,10,12,12,12,14,14,14,16,16,16,17,17,17,
-    19,19,19,21,21,21,23,23,23,25,25,25,27,27,27,28,28,28,
-    30,30,30,32,32,32,34,34,34,36,36,36,38,38,38,39,39,39,
-    41,41,41,43,43,43,45,45,45,47,47,47,48,48,48,50,50,50,
-    52,52,52,54,54,54
-  ];
-  
-  var hpENTable = [
-    -5,-5,-5,-3,-3,-3,-1,-1,-1,1,1,1,3,3,3,6,6,6,8,8,8,
-    10,10,10,13,13,13,15,15,15,17,17,17,20,20,20,22,22,22,
-    25,25,25,27,27,27,29,29,29,32,32,32,34,34,34,36,36,36,
-    39,39,39,41,41,41,43,43,43,46,46,46,48,48,48,50,50,50,
-    53,53,53,55,55,55,58,58,58,60,60,60,62,62,62,65,65,65,
-    67,67,67,69,69,69
-  ];
-  
-  var hpAGTable = [
-    -2,-2,-2,-1,-1,-1,0,0,0,1,1,1,2,2,2,3,3,3,5,5,5,
-    6,6,6,7,7,7,8,8,8,9,9,9,10,10,10,12,12,12,
-    13,13,13,14,14,14,15,15,15,16,16,16,17,17,17,19,19,19,
-    20,20,20,21,21,21,22,22,22,23,23,23,25,25,25,26,26,26,
-    27,27,27,28,28,28,29,29,29,30,30,30,32,32,32,33,33,33,
-    34,34,34,35,35,35
-  ];
-  
-  var hpCLTable = [
-    -1,-1,-1,0,0,0,1,1,1,1,1,1,2,2,2,3,3,3,3,3,3,
-    3,3,3,4,4,4,5,5,5,5,5,5,6,6,6,6,6,6,
-    7,7,7,7,7,7,8,8,8,9,9,9,9,9,9,10,10,10,
-    10,10,10,11,11,11,12,12,12,12,12,12,13,13,13,13,13,13,
-    14,14,14,15,15,15,15,15,15,16,16,16,16,16,16,17,17,17,
-    17,17,17,18,18,18
-  ];
-  
-  var healTable = [
-    2,3,5,5,5,5,8,8,8,10,10,10,16,16,16,22,22,22,28,28,28,
-    34,34,34,39,39,39,45,45,45,51,51,51,57,57,57,63,63,63,
-    69,69,69,75,75,75,81,81,81,87,87,87,92,92,92,98,98,98,
-    104,104,104,110,110,110,116,116,116,122,122,122,128,128,128,134,134,134,
-    140,140,140,145,145,145,151,151,151,157,157,157,163,163,163,169,169,169,
-    175,175,175,181,181,181
-  ];
-
-  function clampIndex(val) {
-    var v = parseInt(val) || 0;
-    return Math.max(0, Math.min(98, v));
-  }
-  
-  function findClosestCarryIndex(targetWeight) {
-    var closestIdx = 0;
-    var closestDiff = Math.abs(carryValues[0] - targetWeight);
-    for (var i = 1; i < carryValues.length; i++) {
-      var diff = Math.abs(carryValues[i] - targetWeight);
-      if (diff < closestDiff) {
-        closestDiff = diff;
-        closestIdx = i;
-      }
-    }
-    return closestIdx;
-  }
-
-  function formatNumber(num) {
-    var parts = num.toString().split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return parts.join('.');
-  }
-
-  // ==================== ABILITY MODIFIER SYSTEM ====================
-
-  function recalcAbilityBonuses() {
-    getSectionIDs("repeating_abilities", function(ids) {
-      if (!ids || ids.length === 0) {
-        setAttrs({
-          ability_st_bonus: 0,
-          ability_en_bonus: 0,
-          ability_ag_bonus: 0,
-          ability_in_bonus: 0,
-          ability_cl_bonus: 0,
-          ability_tohit_bonus: 0,
-          ability_physdef_bonus: 0,
-          ability_mentdef_bonus: 0,
-          ability_power_bonus: 0,
-          ability_hits_bonus: 0,
-          ability_inventing_bonus: 0,
-          ability_init_bonus: 0,
-          ability_luck_bonus: 0
-        }, {silent: true}, function() {
-          recalcAll();
-        });
-        return;
-      }
-
-      var attrList = [];
-      ids.forEach(function(id) {
-        var prefix = "repeating_abilities_" + id + "_ability_";
-        attrList.push(prefix + "act");
-        attrList.push(prefix + "st_mod");
-        attrList.push(prefix + "en_mod");
-        attrList.push(prefix + "ag_mod");
-        attrList.push(prefix + "in_mod");
-        attrList.push(prefix + "cl_mod");
-        attrList.push(prefix + "tohit_mod");
-        attrList.push(prefix + "physdef_mod");
-        attrList.push(prefix + "mentdef_mod");
-        attrList.push(prefix + "power_mod");
-        attrList.push(prefix + "hits_mod");
-        attrList.push(prefix + "inventing_mod");
-        attrList.push(prefix + "init_mod");
-        attrList.push(prefix + "luck_mod");
-      });
-
-      getAttrs(attrList, function(values) {
-        var sums = {
-          st: 0, en: 0, ag: 0, inv: 0, cl: 0,
-          tohit: 0, physdef: 0, mentdef: 0,
-          power: 0, hits: 0, inventing: 0,
-          init: 0, luck: 0
-        };
-
-        ids.forEach(function(id) {
-          var prefix = "repeating_abilities_" + id + "_ability_";
-          var act = values[prefix + "act"] || "Off";
-
-          if (act === "C" || act === "P" || act === "V") {
-            sums.st += parseInt(values[prefix + "st_mod"]) || 0;
-            sums.en += parseInt(values[prefix + "en_mod"]) || 0;
-            sums.ag += parseInt(values[prefix + "ag_mod"]) || 0;
-            sums.inv += parseInt(values[prefix + "in_mod"]) || 0;
-            sums.cl += parseInt(values[prefix + "cl_mod"]) || 0;
-            sums.tohit += parseInt(values[prefix + "tohit_mod"]) || 0;
-            sums.physdef += parseInt(values[prefix + "physdef_mod"]) || 0;
-            sums.mentdef += parseInt(values[prefix + "mentdef_mod"]) || 0;
-            sums.power += parseInt(values[prefix + "power_mod"]) || 0;
-            sums.hits += parseInt(values[prefix + "hits_mod"]) || 0;
-            sums.inventing += parseInt(values[prefix + "inventing_mod"]) || 0;
-            sums.init += parseInt(values[prefix + "init_mod"]) || 0;
-            sums.luck += parseInt(values[prefix + "luck_mod"]) || 0;
-          }
-        });
-
-        setAttrs({
-          ability_st_bonus: sums.st,
-          ability_en_bonus: sums.en,
-          ability_ag_bonus: sums.ag,
-          ability_in_bonus: sums.inv,
-          ability_cl_bonus: sums.cl,
-          ability_tohit_bonus: sums.tohit,
-          ability_physdef_bonus: sums.physdef,
-          ability_mentdef_bonus: sums.mentdef,
-          ability_power_bonus: sums.power,
-          ability_hits_bonus: sums.hits,
-          ability_inventing_bonus: sums.inventing,
-          ability_init_bonus: sums.init,
-          ability_luck_bonus: sums.luck
-        }, {silent: true}, function() {
-          recalcAll();
-        });
-      });
-    });
-  }
-
-  on("change:repeating_abilities:ability_act " +
-     "change:repeating_abilities:ability_st_mod " +
-     "change:repeating_abilities:ability_en_mod " +
-     "change:repeating_abilities:ability_ag_mod " +
-     "change:repeating_abilities:ability_in_mod " +
-     "change:repeating_abilities:ability_cl_mod " +
-     "change:repeating_abilities:ability_tohit_mod " +
-     "change:repeating_abilities:ability_physdef_mod " +
-     "change:repeating_abilities:ability_mentdef_mod " +
-     "change:repeating_abilities:ability_power_mod " +
-     "change:repeating_abilities:ability_hits_mod " +
-     "change:repeating_abilities:ability_inventing_mod " +
-     "change:repeating_abilities:ability_init_mod " +
-     "change:repeating_abilities:ability_luck_mod " +
-     "remove:repeating_abilities", function() {
-    recalcAbilityBonuses();
-  });
-
-  // ==================== MAIN RECALC (WITH ABILITY BONUSES) ====================
-
-  function recalcAll() {
-    getAttrs([
-      "strength_cost", "endurance_cost", "agility_cost", "intelligence_cost", "cool_cost",
-      "strength_mod", "endurance_mod", "agility_mod", "intelligence_mod", "cool_mod",
-      "ability_st_bonus", "ability_en_bonus", "ability_ag_bonus", "ability_in_bonus", "ability_cl_bonus",
-      "ability_physdef_bonus", "ability_mentdef_bonus",
-      "ability_power_bonus", "ability_hits_bonus",
-      "physical_def_bonus", "mental_def_bonus",
-      "weight", "power_mod", "hits_mod", "power_score", "power_score_max", "hits_score", "hits_score_max"
-    ], function(values) {
-      var stBase = parseInt(values.strength_cost) || 0;
-      var enBase = parseInt(values.endurance_cost) || 0;
-      var agBase = parseInt(values.agility_cost) || 0;
-      var inBase = parseInt(values.intelligence_cost) || 0;
-      var clBase = parseInt(values.cool_cost) || 0;
-      
-      var stMod = parseInt(values.strength_mod) || 0;
-      var enMod = parseInt(values.endurance_mod) || 0;
-      var agMod = parseInt(values.agility_mod) || 0;
-      var inMod = parseInt(values.intelligence_mod) || 0;
-      var clMod = parseInt(values.cool_mod) || 0;
-
-      var stAbility = parseInt(values.ability_st_bonus) || 0;
-      var enAbility = parseInt(values.ability_en_bonus) || 0;
-      var agAbility = parseInt(values.ability_ag_bonus) || 0;
-      var inAbility = parseInt(values.ability_in_bonus) || 0;
-      var clAbility = parseInt(values.ability_cl_bonus) || 0;
-      
-      var st = stBase + stMod + stAbility;
-      var en = enBase + enMod + enAbility;
-      var ag = agBase + agMod + agAbility;
-      var inv = inBase + inMod + inAbility;
-      var cl = clBase + clMod + clAbility;
-      
-      var physBonusManual = parseInt(values.physical_def_bonus) || 0;
-      var mentBonusManual = parseInt(values.mental_def_bonus) || 0;
-      var physBonusAbility = parseInt(values.ability_physdef_bonus) || 0;
-      var mentBonusAbility = parseInt(values.ability_mentdef_bonus) || 0;
-      
-      var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
-      var weight = parseInt(weightRaw) || 1;
-      
-      var stIdx = clampIndex(st);
-      var enIdx = clampIndex(en);
-      var agIdx = clampIndex(ag);
-      var inIdx = clampIndex(inv);
-      var clIdx = clampIndex(cl);
-
-      var enSave = saveTable[enIdx];
-      var agSave = saveTable[agIdx];
-      var inSave = saveTable[inIdx];
-      var clSave = saveTable[clIdx];
-
-      var physDefBase = agSave - 10;
-      var mentDefBase = inSave - 10;
-      
-      var hitsBase = hpSTTable[stIdx] + hpENTable[enIdx] + hpAGTable[agIdx] + hpCLTable[clIdx];
-      var powerBase = st + en + ag + inv;
-      
-      var ipBase = Math.ceil(inv / 2);
-      
-      var powerModManual = parseInt(values.power_mod) || 0;
-      var hitsModManual = parseInt(values.hits_mod) || 0;
-      var powerAbility = parseInt(values.ability_power_bonus) || 0;
-      var hitsAbility = parseInt(values.ability_hits_bonus) || 0;
-      
-      var newPowerMax = powerBase + powerModManual + powerAbility;
-      var newHitsMax = Math.max(1, hitsBase + hitsModManual + hitsAbility);
-      
-      var oldPowerMax = parseInt(values.power_score_max) || 0;
-      var oldHitsMax = parseInt(values.hits_score_max) || 0;
-      var curPower = values.power_score;
-      var curHits = values.hits_score;
-
-      var updates = {
-        strength_score: st,
-        endurance_score: en,
-        agility_score: ag,
-        intelligence_score: inv,
-        cool_score: cl,
-        endurance_save: enSave,
-        agility_save: agSave,
-        intelligence_save: inSave,
-        cool_save: clSave,
-        physical_def_base: physDefBase,
-        physical_def: physDefBase + physBonusManual + physBonusAbility,
-        mental_def_base: mentDefBase,
-        mental_def: mentDefBase + mentBonusManual + mentBonusAbility,
-        carry_capacity: carryDisplay[stIdx],
-        hth_damage: hthTable[stIdx],
-        healing_rate: (healTable[enIdx] / 10).toFixed(1),
-        base_ip: ipBase,
-        leap_base: formatNumber((carryValues[stIdx] / weight).toFixed(1)),
-        power_base: powerBase,
-        hits_base: Math.max(1, hitsBase),
-        power_score_max: newPowerMax,
-        hits_score_max: newHitsMax
-      };
-      
-      if (curPower === "" || curPower === undefined || parseInt(curPower) === oldPowerMax) {
-        updates.power_score = newPowerMax;
-      }
-      if (curHits === "" || curHits === undefined || parseInt(curHits) === oldHitsMax) {
-        updates.hits_score = newHitsMax;
-      }
-      
-      setAttrs(updates);
-
-      var moveVal = Math.round((st + en + ag) / 3);
-      getAttrs(["move"], function(mv) {
-        var curMove = (mv.move || "").trim();
-        if (!curMove || curMove.endsWith('"')) {
-          setAttrs({ move: moveVal + '"' });
-        }
-      });
-
-      getAttrs(["leap_base", "leap_mult"], function(lv) {
-        var base = parseFloat((lv.leap_base || "0").replace(/,/g, '')) || 0;
-        var mult = parseInt(lv.leap_mult) || 1;
-        setAttrs({ leap_total: formatNumber((base * mult).toFixed(1)) });
-      });
-      
-      calcIPTotals();
-    });
-  }
-
-  on("clicked:heal", function() {
-    getAttrs(["character_name", "healing_rate", "heal_base", "heal_decimal"], function(values) {
-      var base = parseInt(values.heal_base) || 0;
-      var decimal = parseInt(values.heal_decimal) || 0;
-      var rate = values.healing_rate || "0";
-      var charName = values.character_name || "Character";
-      
-      startRoll("&{template:healing} {{name=" + charName + " rolls Healing}} {{rate=" + rate + "}} {{roll=[[1d10]]}} {{decimal=" + decimal + "}} {{healed=[[0]]}} {{notes=Heal Power Points first, then Hit Points.}}", function(results) {
-        var d10 = results.results.roll.result;
-        var bonus = (decimal > 0 && d10 <= decimal) ? 1 : 0;
-        var total = base + bonus;
-        
-        finishRoll(results.rollId, {
-          healed: total
-        });
-      });
-    });
-  });
-
-  on("change:healing_rate sheet:opened", function() {
-    getAttrs(["healing_rate"], function(values) {
-      var rate = parseFloat(values.healing_rate) || 0;
-      setAttrs({
-        heal_base: Math.floor(rate),
-        heal_decimal: Math.round((rate % 1) * 10)
-      });
-    });
-  });
-
-  on("change:power_mod", function(eventInfo) {
-    var prevValue = parseInt(eventInfo.previousValue) || 0;
-    var newValue = parseInt(eventInfo.newValue) || 0;
-    var delta = newValue - prevValue;
-    
-    getAttrs(["power_base", "power_score", "ability_power_bonus"], function(v) {
-      var powerBase = parseInt(v.power_base) || 0;
-      var powerScore = parseInt(v.power_score) || 0;
-      var powerAbility = parseInt(v.ability_power_bonus) || 0;
-      var newPowerMax = powerBase + newValue + powerAbility;
-      var newPowerScore = Math.max(0, Math.min(newPowerMax, powerScore + delta));
-      
-      setAttrs({
-        power_score_max: newPowerMax,
-        power_score: newPowerScore
-      });
-    });
-  });
-
-  on("change:hits_mod", function(eventInfo) {
-    var prevValue = parseInt(eventInfo.previousValue) || 0;
-    var newValue = parseInt(eventInfo.newValue) || 0;
-    var delta = newValue - prevValue;
-    
-    getAttrs(["hits_base", "hits_score", "ability_hits_bonus"], function(v) {
-      var hitsBase = parseInt(v.hits_base) || 0;
-      var hitsScore = parseInt(v.hits_score) || 0;
-      var hitsAbility = parseInt(v.ability_hits_bonus) || 0;
-      var newHitsMax = Math.max(1, hitsBase + newValue + hitsAbility);
-      var newHitsScore = Math.max(1, Math.min(newHitsMax, hitsScore + delta));
-      
-      setAttrs({
-        hits_score_max: newHitsMax,
-        hits_score: newHitsScore
-      });
-    });
-  });
-
-  on("change:strength_cost change:endurance_cost change:agility_cost change:intelligence_cost change:cool_cost change:strength_mod change:endurance_mod change:agility_mod change:intelligence_mod change:cool_mod change:physical_def_bonus change:mental_def_bonus", function() {
-    recalcAll();
-  });
-
-  on("change:weight", function() {
-    getAttrs(["weight"], function(values) {
-      var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
-      var weight = parseInt(weightRaw) || 1;
-      
-      var weightFormatted = formatNumber(weight);
-      var halfWeight = weight / 2;
-      var idx = findClosestCarryIndex(halfWeight);
-      setAttrs({ 
-        weight: weightFormatted,
-        mass: hthTable[idx] 
-      });
-    });
-    recalcAll();
-  });
-
-  on("clicked:reset_initiative", function() {
-    getAttrs(["cool_cost", "cool_mod", "ability_cl_bonus"], function(v) {
-      var cl = (parseInt(v.cool_cost) || 0) + (parseInt(v.cool_mod) || 0) + (parseInt(v.ability_cl_bonus) || 0);
-      var clIdx = clampIndex(cl);
-      setAttrs({ initiative_score: hthTable[clIdx] });
-    });
-  });
-
-  on("clicked:reset_move", function() {
-    getAttrs(["strength_cost", "strength_mod", "endurance_cost", "endurance_mod", "agility_cost", "agility_mod",
-              "ability_st_bonus", "ability_en_bonus", "ability_ag_bonus"], function(v) {
-      var st = (parseInt(v.strength_cost) || 0) + (parseInt(v.strength_mod) || 0) + (parseInt(v.ability_st_bonus) || 0);
-      var en = (parseInt(v.endurance_cost) || 0) + (parseInt(v.endurance_mod) || 0) + (parseInt(v.ability_en_bonus) || 0);
-      var ag = (parseInt(v.agility_cost) || 0) + (parseInt(v.agility_mod) || 0) + (parseInt(v.ability_ag_bonus) || 0);
-      setAttrs({ move: Math.round((st + en + ag) / 3) + '"' });
-    });
-  });
-
-  on("change:leap_mult", function() {
-    getAttrs(["leap_base", "leap_mult"], function(lv) {
-      var base = parseFloat((lv.leap_base || "0").replace(/,/g, '')) || 0;
-      var mult = parseInt(lv.leap_mult) || 1;
-      setAttrs({ leap_total: formatNumber((base * mult).toFixed(1)) });
-    });
-  });
-
-  function formatIntWithCommas(n) {
-    var s = String(Math.round(n));
-    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  }
-
-  function calcLeapDistance() {
-    getAttrs(["leap_total"], function(v) {
-      var leapStr = (v.leap_total || "0").replace(/,/g, "");
-      var leapInches = parseFloat(leapStr) || 0;
-      var feet = leapInches * 5;
-      var miles = feet / 5280;
-      var display = "";
-      if (feet >= 2640) {
-        display = miles.toFixed(1) + " mi";
-      } else if (feet > 0) {
-        display = formatIntWithCommas(feet) + " ft";
-      }
-      setAttrs({ leap_distance: display });
-    });
-  }
-
-  on("change:leap_total sheet:opened", calcLeapDistance);
-
-  function calcIPTotals() {
-    getSectionIDs("repeating_abilities", function(abilityIDs) {
-      var attrList = ["base_ip", "ip_mod", "ability_inventing_bonus"];
-      abilityIDs.forEach(function(id) {
-        attrList.push("repeating_abilities_" + id + "_ability_ip");
-      });
-      
-      getAttrs(attrList, function(values) {
-        var baseIP = parseInt(values.base_ip) || 0;
-        var ipMod = parseInt(values.ip_mod) || 0;
-        var inventingAbility = parseInt(values.ability_inventing_bonus) || 0;
-        var ipTotal = baseIP + ipMod + inventingAbility;
-        
-        var ipUsed = 0;
-        abilityIDs.forEach(function(id) {
-          ipUsed += parseInt(values["repeating_abilities_" + id + "_ability_ip"]) || 0;
-        });
-        var ipRemaining = ipTotal - ipUsed;
-        setAttrs({
-          ip_total: ipTotal,
-          ip_used: ipUsed,
-          ip_remaining: ipRemaining
-        });
-      });
-    });
-  }
-
-  on("change:base_ip change:ip_mod change:ability_inventing_bonus change:repeating_abilities:ability_ip remove:repeating_abilities", function() {
-    calcIPTotals();
-  });
-
-  function calcTotalEPs() {
-    getSectionIDs("repeating_abilities", function(abilityIDs) {
-      var attrList = ["strength_cost", "endurance_cost", "agility_cost", "intelligence_cost", "cool_cost", "starting_eps", "ep_earned"];
-      abilityIDs.forEach(function(id) {
-        attrList.push("repeating_abilities_" + id + "_ability_cp");
-      });
-      
-      getAttrs(attrList, function(values) {
-        var bcTotal = (parseInt(values.strength_cost)||0) + (parseInt(values.endurance_cost)||0) + 
-                      (parseInt(values.agility_cost)||0) + (parseInt(values.intelligence_cost)||0) + (parseInt(values.cool_cost)||0);
-        
-        var abilityTotal = 0;
-        abilityIDs.forEach(function(id) {
-          abilityTotal += parseInt(values["repeating_abilities_" + id + "_ability_cp"]) || 0;
-        });
-        
-        var totalEPs = bcTotal + abilityTotal;
-        var startingEPs = parseInt(values.starting_eps) || 0;
-        var earnedEPs = parseInt(values.ep_earned) || 0;
-        var available = (startingEPs + earnedEPs) - totalEPs;
-        
-        setAttrs({
-          total_eps: totalEPs,
-          ep_available: available,
-          bc_score: Math.floor(totalEPs / 5) + 10,
-          ability_cap: Math.floor(totalEPs / 5),
-          dot_cap: (Math.floor(totalEPs / 12.5) + 3) * 2 + 3,
-          break_score: Math.floor(totalEPs / 25) + 5,
-          take_score: Math.floor(totalEPs / 25) + 6,
-          disarm_score: Math.floor(totalEPs / 25) + 3
-        });
-      });
-    });
-  }
-
-  on("change:strength_cost change:endurance_cost change:agility_cost change:intelligence_cost change:cool_cost change:starting_eps change:ep_earned change:repeating_abilities:ability_cp remove:repeating_abilities", function() {
-    calcTotalEPs();
-  });
-
-  function initQuerySettings() {
-    getAttrs(["query_range", "query_called", "query_def", "query_stance", "query_aim", "query_pushhb", "query_multi", "query_other"], function(v) {
-      var updates = {};
-      updates.range_query = v.query_range === "1" ? "?{Range Penalty|0-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
-      updates.multi_query = v.query_multi === "1" ? "?{Actions This Phase|1 Action,0|2 Actions,-3|3 Actions,-6|4 Actions,-9|5 Actions,-12}" : "0";
-      updates.called_query = v.query_called === "1" ? "?{Called Shot|None,0|Head,-6|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3}" : "0";
-      updates.def_query = v.query_def === "1" ? "?{Target Defense|0}" : "0";
-      updates.stance_query = v.query_stance === "1" ? "?{Target Stance|None,0|Defensive,3|Full Defense,6}" : "0";
-      updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";
-      updates.pushhb_query = v.query_pushhb === "1" ? "?{Push (+2 dmg, 2 PR) or Hold Back (-dmg)|Neither,0|Push,2|Hold Back -1,-1|Hold Back -2,-2|Hold Back -3,-3|Hold Back -4,-4|Hold Back -5,-5}" : "0";
-      updates.other_query = v.query_other === "1" ? "?{Other Mods|0}" : "0";
-      setAttrs(updates);
-    });
-  }
-
-  on("change:query_range change:query_called change:query_def change:query_stance change:query_aim change:query_pushhb change:query_multi change:query_other", function() {
-    initQuerySettings();
-  });
-
-  // ==================== ATTACK TO-HIT (WITH ABILITY BONUS) ====================
-
-  function recalcAttackToHits() {
-    getAttrs(["agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus"], function(v) {
-      var agSave = parseInt(v.agility_save) || 6;
-      var inSave = parseInt(v.intelligence_save) || 6;
-      var clSave = parseInt(v.cool_save) || 6;
-      var tohitAbility = parseInt(v.ability_tohit_bonus) || 0;
-
-      getSectionIDs("repeating_attacks", function(ids) {
-        if (ids.length === 0) return;
-
-        var attrList = [];
-        ids.forEach(function(id) {
-          attrList.push("repeating_attacks_" + id + "_attack_atk");
-          attrList.push("repeating_attacks_" + id + "_attack_mod");
-        });
-
-        getAttrs(attrList, function(atkValues) {
-          var updates = {};
-          ids.forEach(function(id) {
-            var atkType = atkValues["repeating_attacks_" + id + "_attack_atk"] || "P";
-            var mod = parseInt(atkValues["repeating_attacks_" + id + "_attack_mod"]) || 0;
-            var baseSave = atkType === "M" ? inSave : (atkType === "E" ? clSave : agSave);
-            var tohitNum = baseSave + 3 + mod + tohitAbility;
-            updates["repeating_attacks_" + id + "_attack_tohit"] = tohitNum + "-";
-            updates["repeating_attacks_" + id + "_attack_tohit_num"] = tohitNum;
-          });
-          setAttrs(updates);
-        });
-      });
-    });
-  }
-
-  on("change:ability_tohit_bonus", function() {
-    recalcAttackToHits();
-  });
-
-  on("change:repeating_attacks:attack_atk change:repeating_attacks:attack_mod", function(eventInfo) {
-    getAttrs(["agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus"], function(v) {
-      var agSave = parseInt(v.agility_save) || 6;
-      var inSave = parseInt(v.intelligence_save) || 6;
-      var clSave = parseInt(v.cool_save) || 6;
-      var tohitAbility = parseInt(v.ability_tohit_bonus) || 0;
-      
-      var srcAttr = eventInfo.sourceAttribute;
-      var rowPrefix = srcAttr.replace(/_attack_atk$/, "").replace(/_attack_mod$/, "");
-      
-      getAttrs([rowPrefix + "_attack_atk", rowPrefix + "_attack_mod"], function(atkV) {
-        var atkType = atkV[rowPrefix + "_attack_atk"] || "P";
-        var mod = parseInt(atkV[rowPrefix + "_attack_mod"]) || 0;
-        var baseSave = atkType === "M" ? inSave : (atkType === "E" ? clSave : agSave);
-        var tohitNum = baseSave + 3 + mod + tohitAbility;
-        var update = {};
-        update[rowPrefix + "_attack_tohit"] = tohitNum + "-";
-        update[rowPrefix + "_attack_tohit_num"] = tohitNum;
-        setAttrs(update);
-      });
-    });
-  });
-
-  on("change:repeating_attacks:attack_name", function(eventInfo) {
-    var srcAttr = eventInfo.sourceAttribute;
-    var rowPrefix = srcAttr.replace(/_attack_name$/, "");
-    
-    getAttrs([rowPrefix + "_attack_tohit", "agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus"], function(v) {
-      if (!v[rowPrefix + "_attack_tohit"] || v[rowPrefix + "_attack_tohit"] === "") {
-        var agSave = parseInt(v.agility_save) || 6;
-        var tohitAbility = parseInt(v.ability_tohit_bonus) || 0;
-        var tohitNum = agSave + 3 + tohitAbility;
-        var update = {};
-        update[rowPrefix + "_attack_tohit"] = tohitNum + "-";
-        update[rowPrefix + "_attack_tohit_num"] = tohitNum;
-        setAttrs(update);
-      }
-    });
-  });
-
-  on("change:agility_save change:intelligence_save change:cool_save", function() {
-    recalcAttackToHits();
-  });
-
-  on("change:repeating_attacks:attack_kb", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_kb", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var kbVal = v[eventInfo.sourceAttribute] === "1" ? "Yes" : "No";
-      var update = {};
-      update[rowPrefix + "_attack_kb_display"] = kbVal;
-      setAttrs(update);
-    });
-  });
-
-  function initAttackKBDisplays() {
-    getSectionIDs("repeating_attacks", function(ids) {
-      if (ids.length === 0) return;
-      var attrList = [];
-      ids.forEach(function(id) {
-        attrList.push("repeating_attacks_" + id + "_attack_kb");
-      });
-      getAttrs(attrList, function(values) {
-        var updates = {};
-        ids.forEach(function(id) {
-          var kbVal = values["repeating_attacks_" + id + "_attack_kb"] === "1" ? "Yes" : "No";
-          updates["repeating_attacks_" + id + "_attack_kb_display"] = kbVal;
-        });
-        setAttrs(updates);
-      });
-    });
-  }
-
-  on("change:repeating_attacks:attack_notes", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_notes", "");
-    
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var notes = (v[eventInfo.sourceAttribute] || "").toLowerCase();
-      var updates = {};
-      
-      updates[rowPrefix + "_attack_type"] = "std";
-      updates[rowPrefix + "_attack_save_bc"] = "";
-      updates[rowPrefix + "_attack_save_mod"] = "";
-      updates[rowPrefix + "_attack_recovery"] = "";
-      updates[rowPrefix + "_attack_snare_type"] = "";
-      updates[rowPrefix + "_attack_bp"] = "";
-      updates[rowPrefix + "_attack_max_bp"] = "";
-      updates[rowPrefix + "_attack_ap"] = "";
-      
-      var savMatch = notes.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
-      if (savMatch) {
-        updates[rowPrefix + "_attack_type"] = "sav";
-        updates[rowPrefix + "_attack_save_bc"] = savMatch[1].toUpperCase();
-        updates[rowPrefix + "_attack_save_mod"] = savMatch[2];
-        if (savMatch[3]) {
-          updates[rowPrefix + "_attack_recovery"] = savMatch[3];
-        }
-      }
-      
-      var snrMatch = notes.match(/snr:(grp|ice):(\d+)\/?(\d+)?/);
-      if (snrMatch) {
-        updates[rowPrefix + "_attack_type"] = "snr";
-        updates[rowPrefix + "_attack_snare_type"] = snrMatch[1].toUpperCase();
-        updates[rowPrefix + "_attack_bp"] = snrMatch[2];
-        updates[rowPrefix + "_attack_max_bp"] = snrMatch[3] || snrMatch[2];
-      }
-      
-      var apMatch = notes.match(/ap:?(\d+)?/);
-      if (apMatch) {
-        updates[rowPrefix + "_attack_ap"] = apMatch[1] || "ALL";
-      }
-      
-      setAttrs(updates);
-    });
-  });
-
-  function initAttackNotes() {
-    getSectionIDs("repeating_attacks", function(ids) {
-      if (ids.length === 0) return;
-      var attrList = [];
-      ids.forEach(function(id) {
-        attrList.push("repeating_attacks_" + id + "_attack_notes");
-      });
-      getAttrs(attrList, function(values) {
-        var updates = {};
-        ids.forEach(function(id) {
-          var prefix = "repeating_attacks_" + id;
-          var notes = (values[prefix + "_attack_notes"] || "").toLowerCase();
-          
-          updates[prefix + "_attack_type"] = "std";
-          updates[prefix + "_attack_save_bc"] = "";
-          updates[prefix + "_attack_save_mod"] = "";
-          updates[prefix + "_attack_recovery"] = "";
-          updates[prefix + "_attack_snare_type"] = "";
-          updates[prefix + "_attack_bp"] = "";
-          updates[prefix + "_attack_max_bp"] = "";
-          updates[prefix + "_attack_ap"] = "";
-          
-          var savMatch = notes.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
-          if (savMatch) {
-            updates[prefix + "_attack_type"] = "sav";
-            updates[prefix + "_attack_save_bc"] = savMatch[1].toUpperCase();
-            updates[prefix + "_attack_save_mod"] = savMatch[2];
-            if (savMatch[3]) {
-              updates[prefix + "_attack_recovery"] = savMatch[3];
-            }
-          }
-          
-          var snrMatch = notes.match(/snr:(grp|ice):(\d+)\/?(\d+)?/);
-          if (snrMatch) {
-            updates[prefix + "_attack_type"] = "snr";
-            updates[prefix + "_attack_snare_type"] = snrMatch[1].toUpperCase();
-            updates[prefix + "_attack_bp"] = snrMatch[2];
-            updates[prefix + "_attack_max_bp"] = snrMatch[3] || snrMatch[2];
-          }
-          
-          var apMatch = notes.match(/ap:?(\d+)?/);
-          if (apMatch) {
-            updates[prefix + "_attack_ap"] = apMatch[1] || "ALL";
-          }
-        });
-        setAttrs(updates);
-      });
-    });
-  }
-
-  on("change:repeating_attacks:attack_dmgtype", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_dmgtype", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var typeMap = {
-        "K": "Kinetic", "Kin": "Kinetic", "Kinetic": "Kinetic",
-        "E": "Energy", "Eng": "Energy", "Energy": "Energy",
-        "B": "Biochemical", "Bio": "Biochemical", "Biochemical": "Biochemical",
-        "Ent": "Entropy", "Entropy": "Entropy",
-        "P": "Psychic", "Psy": "Psychic", "Psychic": "Psychic",
-        "O": "Other", "Oth": "Other", "Other": "Other"
-      };
-      var full = typeMap[v[eventInfo.sourceAttribute]] || "Kinetic";
-      var update = {};
-      update[rowPrefix + "_attack_dmgtype_full"] = full;
-      setAttrs(update);
-    });
-  });
-
-  function syncAttackRowMeta() {
-    getSectionIDs("repeating_attacks", function(ids) {
-      if (!ids || !ids.length) return;
-      var atkAttrs = ids.map(function(id) { return "repeating_attacks_" + id + "_attack_atk"; });
-      getAttrs(atkAttrs, function(values) {
-        var typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
-        var updates = {};
-        ids.forEach(function(id, index) {
-          updates["repeating_attacks_" + id + "_attack_rowid"] = id;
-          updates["repeating_attacks_" + id + "_attack_num"] = String(index + 1);
-          updates["repeating_attacks_" + id + "_attack_idx"] = String(index);
-          var code = values["repeating_attacks_" + id + "_attack_atk"] || "P";
-          updates["repeating_attacks_" + id + "_attack_atk_full"] = typeMap[code] || "Physical";
-        });
-        setAttrs(updates, { silent: true });
-      });
-    });
-  }
-
-  on("change:repeating_attacks remove:repeating_attacks", syncAttackRowMeta);
-
-  on("change:repeating_attacks:attack_atk", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_atk", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
-      var code = v[eventInfo.sourceAttribute] || "P";
-      var update = {};
-      update[rowPrefix + "_attack_atk_full"] = typeMap[code] || "Physical";
-      setAttrs(update);
-    });
-  });
-
-  function rebuildABWSummary() {
-    getSectionIDs("repeating_abilities", function(ids) {
-      if (!ids || !ids.length) {
-        setAttrs({ abw_summary: "<b>Abilities</b><br>None<br><br><b>Weaknesses</b><br>None" });
-        return;
-      }
-      var attrList = [];
-      ids.forEach(function(id) {
-        attrList.push("repeating_abilities_" + id + "_ability_name");
-        attrList.push("repeating_abilities_" + id + "_ability_cp");
-        attrList.push("repeating_abilities_" + id + "_ability_ip");
-      });
-      getAttrs(attrList, function(v) {
-        var abilities = [];
-        var weaknesses = [];
-        ids.forEach(function(id) {
-          var name = (v["repeating_abilities_" + id + "_ability_name"] || "").trim();
-          var cp = parseFloat(v["repeating_abilities_" + id + "_ability_cp"]) || 0;
-          var ip = parseFloat(v["repeating_abilities_" + id + "_ability_ip"]) || 0;
-          if (!name && cp === 0 && ip === 0) return;
-          var label = name || "(unnamed)";
-          var line = label + " (CP " + cp + (ip ? (", IP " + ip) : "") + ")";
-          if (cp < 0) weaknesses.push(line);
-          else abilities.push(line);
-        });
-        function fmt(arr) {
-          if (!arr.length) return "None";
-          return arr.map(function(s) { return "• " + s; }).join("<br>");
-        }
-        var summary = "<b>Abilities</b><br>" + fmt(abilities) + "<br><br><b>Weaknesses</b><br>" + fmt(weaknesses);
-        setAttrs({ abw_summary: summary });
-      });
-    });
-  }
-
-  on("change:repeating_abilities remove:repeating_abilities", rebuildABWSummary);
-
-  function calcSecurityClearance() {
-    getAttrs(["use_security", "intelligence_save", "cool_save", "ep_earned"], function(v) {
-      if (v.use_security !== "1") {
-        setAttrs({ security_clearance: "" });
-        return;
-      }
-      var inSave = parseInt(v.intelligence_save) || 6;
-      var clSave = parseInt(v.cool_save) || 6;
-      var earnedEPs = parseInt(v.ep_earned) || 0;
-      var secClr = inSave + clSave + Math.floor(earnedEPs / 5) - 20;
-      setAttrs({ security_clearance: Math.max(1, Math.min(20, secClr)) });
-    });
-  }
-
-  on("change:use_security change:intelligence_save change:cool_save change:ep_earned", function() {
-    calcSecurityClearance();
-  });
-
-  function syncProtectionRowIds() {
-    getSectionIDs("repeating_protection", function(ids) {
-      if (!ids || !ids.length) return;
-      var updates = {};
-      ids.forEach(function(id) {
-        updates["repeating_protection_" + id + "_prot_rowid"] = id;
-      });
-      setAttrs(updates, { silent: true });
-    });
-  }
-
-  on("change:repeating_protection remove:repeating_protection", syncProtectionRowIds);
-
-  on("change:repeating_protection:prot_act", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_prot_act", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var act = v[eventInfo.sourceAttribute] || "Off";
-      var update = {};
-      update[rowPrefix + "_prot_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
-      update[rowPrefix + "_prot_glow"] = (act === "P" || act === "V") ? "1" : "0";
-      update[rowPrefix + "_prot_held"] = (act === "H") ? "1" : "0";
-      update[rowPrefix + "_prot_act_ind"] = (act === "Off") ? "O" : act;
-      setAttrs(update, { silent: true });
-    });
-  });
-
-  on("change:repeating_attacks:attack_act", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_act", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var act = v[eventInfo.sourceAttribute] || "Off";
-      var update = {};
-      update[rowPrefix + "_attack_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
-      update[rowPrefix + "_attack_glow"] = (act === "P" || act === "V") ? "1" : "0";
-      update[rowPrefix + "_attack_held"] = (act === "H") ? "1" : "0";
-      update[rowPrefix + "_attack_act_ind"] = (act === "Off") ? "O" : act;
-      setAttrs(update, { silent: true });
-    });
-  });
-
-  on("change:repeating_abilities:ability_act", function(eventInfo) {
-    var rowPrefix = eventInfo.sourceAttribute.replace("_ability_act", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var act = v[eventInfo.sourceAttribute] || "Off";
-      var update = {};
-      update[rowPrefix + "_ability_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
-      update[rowPrefix + "_ability_glow"] = (act === "P" || act === "V") ? "1" : "0";
-      update[rowPrefix + "_ability_held"] = (act === "H") ? "1" : "0";
-      update[rowPrefix + "_ability_act_ind"] = (act === "Off") ? "O" : act;
-      setAttrs(update, { silent: true });
-    });
-  });
-
-  // ==================== SHEET:OPENED - MASTER INIT ====================
-
-  on("sheet:opened", function() {
-    recalcAbilityBonuses();
-    recalcAll();
-    calcTotalEPs();
-    calcSecurityClearance();
-    calcIPTotals();
-    initQuerySettings();
-    recalcAttackToHits();
-    initAttackKBDisplays();
-    initAttackNotes();
-    syncAttackRowMeta();
-    syncProtectionRowIds();
-    rebuildABWSummary();
-
-    getSectionIDs("repeating_careers", function(ids) {
-      if (ids.length === 0) {
-        var newRowId = generateRowID();
-        setAttrs({
-          ["repeating_careers_" + newRowId + "_career_name"]: ""
-        });
-      }
-    });
-
-    getAttrs(["initiative_score", "cool_cost", "cool_mod", "ability_cl_bonus"], function(v) {
-      if (!v.initiative_score || v.initiative_score === "") {
-        var cl = (parseInt(v.cool_cost) || 0) + (parseInt(v.cool_mod) || 0) + (parseInt(v.ability_cl_bonus) || 0);
-        var clIdx = clampIndex(cl);
-        setAttrs({ initiative_score: hthTable[clIdx] });
-      }
-    });
-
-    getAttrs(["weight", "power_score", "power_score_max", "hits_score", "hits_score_max"], function(values) {
-      var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
-      var weight = parseInt(weightRaw) || 1;
-      var halfWeight = weight / 2;
-      var idx = findClosestCarryIndex(halfWeight);
-      var updates = { mass: hthTable[idx] };
-      
-      if (values.weight !== formatNumber(weight)) {
-        updates.weight = formatNumber(weight);
-      }
-      
-      if (values.power_score === "" || values.power_score === undefined) {
-        updates.power_score = values.power_score_max;
-      }
-      if (values.hits_score === "" || values.hits_score === undefined) {
-        updates.hits_score = values.hits_score_max;
-      }
-      
-      setAttrs(updates);
-    });
-
-    getSectionIDs("repeating_protection", function(ids) {
-      if (!ids || !ids.length) return;
-      var attrList = ids.map(function(id) {
-        return "repeating_protection_" + id + "_prot_act";
-      });
-      getAttrs(attrList, function(values) {
-        var updates = {};
-        ids.forEach(function(id) {
-          var act = values["repeating_protection_" + id + "_prot_act"] || "Off";
-          updates["repeating_protection_" + id + "_prot_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
-          updates["repeating_protection_" + id + "_prot_glow"] = (act === "P" || act === "V") ? "1" : "0";
-          updates["repeating_protection_" + id + "_prot_held"] = (act === "H") ? "1" : "0";
-          updates["repeating_protection_" + id + "_prot_act_ind"] = (act === "Off") ? "O" : act;
-        });
-        setAttrs(updates, { silent: true });
-      });
-    });
-
-    getSectionIDs("repeating_attacks", function(ids) {
-      if (!ids || !ids.length) return;
-      var attrList = ids.map(function(id) {
-        return "repeating_attacks_" + id + "_attack_act";
-      });
-      getAttrs(attrList, function(values) {
-        var updates = {};
-        ids.forEach(function(id) {
-          var act = values["repeating_attacks_" + id + "_attack_act"] || "Off";
-          updates["repeating_attacks_" + id + "_attack_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
-          updates["repeating_attacks_" + id + "_attack_glow"] = (act === "P" || act === "V") ? "1" : "0";
-          updates["repeating_attacks_" + id + "_attack_held"] = (act === "H") ? "1" : "0";
-          updates["repeating_attacks_" + id + "_attack_act_ind"] = (act === "Off") ? "O" : act;
-        });
-        setAttrs(updates, { silent: true });
-      });
-    });
-
-    getSectionIDs("repeating_abilities", function(ids) {
-      if (!ids || !ids.length) return;
-      var attrList = ids.map(function(id) {
-        return "repeating_abilities_" + id + "_ability_act";
-      });
-      getAttrs(attrList, function(values) {
-        var updates = {};
-        ids.forEach(function(id) {
-          var act = values["repeating_abilities_" + id + "_ability_act"] || "Off";
-          updates["repeating_abilities_" + id + "_ability_active"] = (act === "C" || act === "P" || act === "V") ? "1" : "0";
-          updates["repeating_abilities_" + id + "_ability_glow"] = (act === "P" || act === "V") ? "1" : "0";
-          updates["repeating_abilities_" + id + "_ability_held"] = (act === "H") ? "1" : "0";
-          updates["repeating_abilities_" + id + "_ability_act_ind"] = (act === "Off") ? "O" : act;
-        });
-        setAttrs(updates, { silent: true });
-      });
-    });
   });
 
 </script>
