@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.34 (Main/Setup tabs for powers) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.35 (workinig dropdown cog for generated rows) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -419,10 +419,7 @@
     <label class="sheet-tab-label-setup" for="mp-tab-setup">Setup</label>
   </div>
 
-  <!-- Tabbed Content Wrapper -->
-  <div class="sheet-tab-content">
-
-  <!-- ATTACKS -->
+  <!-- ==================== ATTACKS SECTION ==================== -->
   <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
 
     <!-- Combat Query Settings -->
@@ -440,239 +437,327 @@
       <input type="checkbox" name="attr_query_other" value="1" title="Prompt for other modifiers" /><span style="color:#aaa; font-size:10px;">Other</span>
     </div>
 
-<!-- Attacks Header - Main Tab -->
-<table class="sheet-main-cols" style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
-  <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
-    <th style="width:120px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
-    <th style="width:34px; text-align:center; padding:1px;" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">Act</th>
-    <th style="width:36px;"></th>
-    <th style="width:32px; text-align:center; padding:1px;" title="To-hit modifier">Mod</th>
-    <th style="width:32px; text-align:center; padding:1px 1px;" title="Target number to hit">
-      <div style="line-height:9px;">To<br>Hit</div>
-    </th>
-    <th style="width:55px; text-align:center; padding:2px 1px;" title="Damage dice">Dmg</th>
-    <th style="width:28px; text-align:center; padding:2px 1px;" title="Range in inches">Rng</th>
-    <th style="width:36px; text-align:center; padding:1px 1px;" title="Damage Type">
-      <div style="line-height:9px;">Dmg<br>Type</div>
-    </th>
-    <th style="width:24px; text-align:center; padding:1px;" title="Causes Knockback">KB</th>
-    <th style="width:26px; text-align:center; padding:1px;" title="Power Requirement">PR</th>
-    <th style="width:26px; text-align:center; padding:1px;" title="Charges">Ch</th>
-    <th style="text-align:left; padding:1px;" title="Notes">Notes</th>
-  </tr>
-</table>
-
-<!-- Attacks Header - Setup Tab -->
-<table class="sheet-setup-cols" style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
-  <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
-    <th style="width:120px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
-    <th style="width:28px; text-align:center; padding:1px;" title="Gear (can be broken/disarmed)">Gr</th>
-    <th style="width:28px; text-align:center; padding:1px;" title="Autofire rate (2-7)">AF</th>
-    <th style="width:32px; text-align:center; padding:1px;" title="Area Effect diameter">Area</th>
-    <th style="width:28px; text-align:center; padding:1px;" title="Armor Piercing">AP</th>
-    <th style="width:36px; text-align:center; padding:1px;" title="Duration">Dur</th>
-    <th style="text-align:left; padding:1px;" title="Other modifiers (shorthand)">Mods</th>
-  </tr>
-</table>
-
-
-<!-- Repeating Attacks -->
-<fieldset class="repeating_attacks" style="border:none; padding:0; margin:0;">
-  <!-- Main Tab Row -->
-  <table class="sheet-main-cols" style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
-    <tr>
-      <td style="width:120px; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
-      </td>
-      <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="checkbox" name="attr_attack_active" value="1" class="sheet-atk-active-cb" />
-        <input type="checkbox" name="attr_attack_glow" value="1" class="sheet-atk-glow-cb" />
-        <select name="attr_attack_act" class="sheet-atk-act-sel" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">
-          <option value="C">C</option>
-          <option value="P">P</option>
-          <option value="V">V</option>
-          <option value="H">H</option>
-          <option value="Off" selected>Off</option>
-        </select>
-      </td>
-      <td style="width:36px; text-align:center; padding:1px; vertical-align:middle; overflow:visible;">
-        <input type="hidden" name="attr_attack_rowid" />
-        <input type="hidden" name="attr_attack_num" />
-        <input type="hidden" name="attr_attack_atk_full" />
-        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}+@{hb_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
-      </td>
-      <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_mod" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="To-hit modifier" />
-      </td>
-      <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_tohit" readonly style="width:100%; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" title="Target number" />
-      </td>
-      <td style="width:55px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_damage" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Damage dice" />
-      </td>
-      <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_range" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Range in inches" />
-      </td>
-      <td style="width:36px; text-align:center; padding:1px; vertical-align:middle;">
-        <select name="attr_attack_dmgtype" style="width:100%; height:20px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:0; font-size:10px; box-sizing:border-box;" title="Damage Type">
-          <option value="Kinetic" selected>Kin</option>
-          <option value="Energy">Eng</option>
-          <option value="Biochemical">Bio</option>
-          <option value="Entropy">Ent</option>
-          <option value="Psychic">Psy</option>
-          <option value="Other">Oth</option>
-        </select>
-      </td>
-      <td style="width:24px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="checkbox" name="attr_attack_kb" value="1" checked="checked" title="Causes Knockback" />
-      </td>
-      <td style="width:26px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_cost" maxlength="3" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="PR cost" />
-      </td>
-      <td style="width:26px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_charges" maxlength="3" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Charges" />
-      </td>
-      <td style="padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" title="Notes" />
-      </td>
-    </tr>
-  </table>
-
-  <!-- Setup Tab Row -->
-  <table class="sheet-setup-cols" style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
-    <tr>
-      <td style="width:120px; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
-      </td>
-      <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="checkbox" name="attr_attack_gear" value="1" title="Gear (can be broken/disarmed)" />
-      </td>
-      <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_autofire" maxlength="1" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Autofire rate 2-7" />
-      </td>
-      <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_area" maxlength="4" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Area Effect diameter" placeholder="5&quot;" />
-      </td>
-      <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_ap" maxlength="2" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Armor Piercing" />
-      </td>
-      <td style="width:36px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_duration" maxlength="5" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Duration (e.g. 3rnd, 1min)" />
-      </td>
-      <td style="padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_mods" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" title="Other modifiers (COND, CONC, BRKD, CARR, IND, etc.)" placeholder="COND, CONC, etc." />
-      </td>
-    </tr>
-  </table>
-
-  <!-- Hidden attributes for roll calculation -->
-  <input type="hidden" name="attr_attack_tohit_num" value="9" />
-  <input type="hidden" name="attr_attack_kb_display" value="Yes" />
-  <input type="hidden" name="attr_attack_dmgtype_full" value="Kinetic" />
-  <input type="hidden" name="attr_attack_atk" value="P" />
-  <input type="hidden" name="attr_attack_pr_type" value="-" />
-
-  <!-- Hidden attributes for special attacks -->
-  <input type="hidden" name="attr_attack_idx" />
-  <input type="hidden" name="attr_attack_type" value="std" />
-  <input type="hidden" name="attr_attack_save_bc" value="" />
-  <input type="hidden" name="attr_attack_save_mod" value="" />
-  <input type="hidden" name="attr_attack_recovery" value="" />
-  <input type="hidden" name="attr_attack_snare_type" value="" />
-  <input type="hidden" name="attr_attack_bp" value="" />
-  <input type="hidden" name="attr_attack_max_bp" value="" />
-</fieldset>
-
-</div>
-
-  <!-- PROTECTION Header - Main Tab -->
-<div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
-  <table class="sheet-main-cols" style="width:100%; border-collapse:collapse; table-layout:fixed;">
-    <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
-      <th style="width:110px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
-      <th style="width:34px; text-align:center; padding:1px;" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">Act</th>
-      <th style="width:28px; text-align:center; padding:1px;" title="Kinetic">Kin</th>
-      <th style="width:28px; text-align:center; padding:1px;" title="Energy">Eng</th>
-      <th style="width:28px; text-align:center; padding:1px;" title="Biochemical">Bio</th>
-      <th style="width:28px; text-align:center; padding:1px;" title="Entropy">Ent</th>
-      <th style="width:28px; text-align:center; padding:1px;" title="Psychic">Psy</th>
-      <th style="width:28px; text-align:center; padding:1px;" title="Other">Oth</th>
-      <th style="width:26px; text-align:center; padding:1px;" title="Power Requirement">PR</th>
-      <th style="width:26px; text-align:center; padding:1px;" title="Charges">Ch</th>
-      <th style="text-align:left; padding:1px;" title="Notes">Notes</th>
-    </tr>
-  </table>
-
-  <!-- PROTECTION Header - Setup Tab -->
-  <table class="sheet-setup-cols" style="width:100%; border-collapse:collapse; table-layout:fixed;">
-    <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
-      <th style="width:110px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
-      <th style="width:28px; text-align:center; padding:1px;" title="Gear (can be broken/disarmed)">Gr</th>
-      <th style="width:32px; text-align:center; padding:1px;" title="Hardened points (resist AP)">Hard</th>
-      <th style="text-align:left; padding:1px;" title="Other modifiers (shorthand)">Mods</th>
-    </tr>
-  </table>
-
-  <!-- PROTECTION (Repeating) -->
-  <fieldset class="repeating_protection" style="border:none; padding:0; margin:0;">
-    <!-- Main Tab Row -->
-    <table class="sheet-main-cols" style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
-      <tr>
-        <td style="width:110px; padding:1px; vertical-align:middle;">
-          <input type="text" name="attr_prot_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
-        </td>
-        <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
-          <input type="hidden" name="attr_prot_rowid" />
-          <input type="checkbox" name="attr_prot_active" value="1" class="sheet-prot-active-cb" />
-          <input type="checkbox" name="attr_prot_glow" value="1" class="sheet-prot-glow-cb" />
-          <select name="attr_prot_act" class="sheet-prot-act-sel" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">
-            <option value="C">C</option>
-            <option value="P">P</option>
-            <option value="V">V</option>
-            <option value="H">H</option>
-            <option value="Off" selected>Off</option>
-          </select>
-        </td>
-        <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_kinetic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Kinetic protection" /></td>
-        <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_energy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Energy protection" /></td>
-        <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_bio" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Biochemical protection" /></td>
-        <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_entropy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Entropy protection" /></td>
-        <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_psychic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Psychic protection" /></td>
-        <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_other" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Other protection" /></td>
-        <td style="width:26px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_pr" maxlength="3" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="PR cost" /></td>
-        <td style="width:26px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_charges" maxlength="3" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Charges" /></td>
-        <td style="padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" title="Notes" /></td>
+    <!-- Attacks Header -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
+      <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
+        <th style="width:130px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
+        <th style="width:34px; text-align:center; padding:1px;" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">Act</th>
+        <th style="width:36px;"></th>
+        <th style="width:40px; text-align:center; padding:1px;" title="Attack type">Type</th>
+        <th style="width:28px; text-align:center; padding:1px;" title="To-hit modifier">Mod</th>
+        <th style="width:32px; text-align:center; padding:1px;" title="Target number to hit">To Hit</th>
+        <th style="width:55px; text-align:center; padding:1px;" title="Damage dice">Dmg</th>
+        <th style="width:28px; text-align:center; padding:1px;" title="Range in inches">Rng</th>
+        <th style="width:40px; text-align:center; padding:1px;" title="Damage Type">Type</th>
+        <th style="width:24px; text-align:center; padding:1px;" title="Causes Knockback">KB</th>
+        <th style="width:26px; text-align:center; padding:1px;" title="Power Requirement">PR</th>
+        <th style="text-align:left; padding:1px;" title="Notes & Settings">Notes</th>
       </tr>
     </table>
 
-    <!-- Setup Tab Row -->
-    <table class="sheet-setup-cols" style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
-      <tr>
-        <td style="width:110px; padding:1px; vertical-align:middle;">
-          <input type="text" name="attr_prot_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
-        </td>
-        <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
-          <input type="checkbox" name="attr_prot_gear" value="1" title="Gear (can be broken/disarmed)" />
-        </td>
-        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;">
-          <input type="text" name="attr_prot_hardened" maxlength="2" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Hardened points (resists AP)" />
-        </td>
-        <td style="padding:1px; vertical-align:middle;">
-          <input type="text" name="attr_prot_mods" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" title="Other modifiers (PART, ABLT, etc.)" placeholder="PART, ABLT, etc." />
-        </td>
+    <!-- Repeating Attacks -->
+    <fieldset class="repeating_attacks" style="border:none; padding:0; margin:0;">
+      <!-- Hidden checkbox for panel toggle - MUST be first child -->
+      <input type="checkbox" name="attr_options_flag" class="sheet-options-flag" title="Toggle settings panel" />
+
+      <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
+        <tr>
+          <td style="width:130px; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_attack_name" placeholder="Attack Name"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
+          </td>
+
+          <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="checkbox" name="attr_attack_active" value="1" class="sheet-atk-active-cb" />
+            <input type="checkbox" name="attr_attack_glow" value="1" class="sheet-atk-glow-cb" />
+            <select name="attr_attack_act" class="sheet-atk-act-sel" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">
+              <option value="C">C</option>
+              <option value="P">P</option>
+              <option value="V">V</option>
+              <option value="H">H</option>
+              <option value="Off" selected>Off</option>
+            </select>
+          </td>
+
+          <td style="width:36px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="hidden" name="attr_attack_rowid" />
+            <input type="hidden" name="attr_attack_num" />
+            <input type="hidden" name="attr_attack_atk_full" />
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}+@{hb_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{description=@{description}}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px; border-radius:3px;">Roll</button>
+          </td>
+
+          <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
+            <select name="attr_attack_atk"
+              style="width:100%; height:20px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:0; font-size:10px; box-sizing:border-box;"
+              title="Physical (AG) / Mental (IN) / Emotion (CL)">
+              <option value="P" selected>Phys</option>
+              <option value="M">Ment</option>
+              <option value="E">Emot</option>
+            </select>
+          </td>
+
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_attack_mod" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+              title="To-hit modifier" />
+          </td>
+
+          <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_attack_tohit" readonly
+              style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
+              title="Target number" />
+          </td>
+
+          <td style="width:55px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_attack_damage"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+              title="Damage dice" />
+          </td>
+
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_attack_range"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+              title="Range in inches" />
+          </td>
+
+          <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
+            <select name="attr_attack_dmgtype"
+              style="width:100%; height:20px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:0; font-size:10px; box-sizing:border-box;"
+              title="Damage Type">
+              <option value="Kinetic" selected>Kin</option>
+              <option value="Energy">Eng</option>
+              <option value="Biochemical">Bio</option>
+              <option value="Entropy">Ent</option>
+              <option value="Psychic">Psy</option>
+              <option value="Other">Oth</option>
+            </select>
+          </td>
+
+          <td style="width:24px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="checkbox" name="attr_attack_kb" value="1" checked="checked" title="Causes Knockback" />
+          </td>
+
+          <td style="width:26px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_attack_cost" maxlength="2"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+              title="PR cost" />
+          </td>
+
+          <td style="padding:1px; vertical-align:middle;">
+            <div style="display:flex; align-items:center; gap:2px;">
+              <input type="text" name="attr_attack_notes"
+                style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;"
+                title="Notes (ap:N, sav:BC:mod, snr:type:bp)" placeholder="ap:5, sav:EN:+3" />
+              <span class="sheet-cog-icon" title="Settings">y</span>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- EXPANDABLE SETTINGS PANEL -->
+      <div class="sheet-options-panel">
+        <div class="sheet-options-header">
+          <span class="sheet-options-title">Attack Settings</span>
+          <div>
+            <button type="roll" name="roll_attack_info" class="sheet-panel-btn"
+              value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}} {{description=@{description}}}"
+              title="Show Info">Info</button>
+            <button type="roll" name="roll_macro_gen" class="sheet-panel-btn"
+              value="&{template:mpmac} {{name=@{attack_name}}} {{compact=&amp;#38;&amp;#123;template:default&amp;#125; {{name=@{character_name} attacks with @{attack_name}}}}}"
+              title="Generate Macro">Macro</button>
+          </div>
+        </div>
+
+        <div class="sheet-options-row">
+          <div class="sheet-options-field">
+            <label>Charges:</label>
+            <input type="text" name="attr_attack_charges" maxlength="3" style="width:35px !important;" title="Charges remaining" />
+          </div>
+          <div class="sheet-options-field">
+            <input type="checkbox" name="attr_attack_gear" value="1" title="Gear (can be broken/disarmed)" />
+            <label>Gear</label>
+          </div>
+          <div class="sheet-options-field">
+            <label>Autofire:</label>
+            <input type="text" name="attr_attack_autofire" maxlength="1" style="width:25px !important;" title="Autofire rate (2-7)" />
+          </div>
+          <div class="sheet-options-field">
+            <label>Area:</label>
+            <input type="text" name="attr_attack_area" style="width:35px !important;" title="Area Effect diameter" />
+          </div>
+          <div class="sheet-options-field">
+            <label>Duration:</label>
+            <input type="text" name="attr_attack_duration" style="width:45px !important;" title="Duration" />
+          </div>
+        </div>
+
+        <div style="margin-bottom:8px;">
+          <span style="color:#aaa; font-size:10px; display:block; margin-bottom:4px;">Description / Special Effects:</span>
+          <textarea name="attr_description" class="sheet-desc-area" placeholder="Flavor text, visual description, or special rules..."></textarea>
+        </div>
+
+        <div class="sheet-options-help">
+          <strong style="color:#f4d03f;">Modifier Codes (Notes field):</strong><br>
+          <code>ap:N</code> Armor Piercing (ap:5 or ap for full)<br>
+          <code>sav:BC:mod:rec</code> Save Attack (sav:EN:+5:-14)<br>
+          <code>snr:type:bp/max</code> Snare (snr:ice:9/15)
+        </div>
+      </div>
+
+      <!-- Hidden attributes -->
+      <input type="hidden" name="attr_attack_tohit_num" value="9" />
+      <input type="hidden" name="attr_attack_kb_display" value="Yes" />
+      <input type="hidden" name="attr_attack_dmgtype_full" value="Kinetic" />
+      <input type="hidden" name="attr_attack_idx" />
+      <input type="hidden" name="attr_attack_type" value="std" />
+      <input type="hidden" name="attr_attack_save_bc" value="" />
+      <input type="hidden" name="attr_attack_save_mod" value="" />
+      <input type="hidden" name="attr_attack_recovery" value="" />
+      <input type="hidden" name="attr_attack_snare_type" value="" />
+      <input type="hidden" name="attr_attack_bp" value="" />
+      <input type="hidden" name="attr_attack_max_bp" value="" />
+      <input type="hidden" name="attr_attack_ap" value="" />
+    </fieldset>
+  </div>
+
+
+  <!-- ==================== PROTECTION SECTION ==================== -->
+  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+    <!-- Protection Header -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
+      <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
+        <th style="width:130px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
+        <th style="width:34px; text-align:center; padding:1px;" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">Act</th>
+        <th style="width:28px; text-align:center; padding:1px;" title="Kinetic">Kin</th>
+        <th style="width:28px; text-align:center; padding:1px;" title="Energy">Eng</th>
+        <th style="width:28px; text-align:center; padding:1px;" title="Biochemical">Bio</th>
+        <th style="width:28px; text-align:center; padding:1px;" title="Entropy">Ent</th>
+        <th style="width:28px; text-align:center; padding:1px;" title="Psychic">Psy</th>
+        <th style="width:28px; text-align:center; padding:1px;" title="Other">Oth</th>
+        <th style="width:26px; text-align:center; padding:1px;" title="Power Requirement">PR</th>
+        <th style="text-align:left; padding:1px;" title="Notes & Settings">Notes</th>
       </tr>
     </table>
 
-    <!-- Hidden attributes -->
-    <input type="hidden" name="attr_prot_pr_type" value="-" />
-  </fieldset>
-</div>
+    <!-- Repeating Protection -->
+    <fieldset class="repeating_protection" style="border:none; padding:0; margin:0;">
+      <!-- Hidden checkbox for panel toggle -->
+      <input type="checkbox" name="attr_options_flag" class="sheet-options-flag" title="Toggle settings panel" />
+      <input type="hidden" name="attr_prot_rowid" />
 
-  <!-- ABILITIES / WEAKNESSES -->
+      <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
+        <tr>
+          <td style="width:130px; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_prot_name" placeholder="Protection Name"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
+          </td>
+
+          <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="checkbox" name="attr_prot_active" value="1" class="sheet-prot-active-cb" />
+            <input type="checkbox" name="attr_prot_glow" value="1" class="sheet-prot-glow-cb" />
+            <select name="attr_prot_act" class="sheet-prot-act-sel" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">
+              <option value="C">C</option>
+              <option value="P">P</option>
+              <option value="V">V</option>
+              <option value="H">H</option>
+              <option value="Off" selected>Off</option>
+            </select>
+          </td>
+
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_prot_kinetic" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+              title="Kinetic Protection (use 'h' suffix for Hardened, e.g. 5h)" />
+          </td>
+
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_prot_energy" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+              title="Energy Protection" />
+          </td>
+
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_prot_bio" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+              title="Biochemical Protection" />
+          </td>
+
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_prot_entropy" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+              title="Entropy Protection" />
+          </td>
+
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_prot_psychic" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+              title="Psychic Protection" />
+          </td>
+
+          <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_prot_other" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+              title="Other Protection" />
+          </td>
+
+          <td style="width:26px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_prot_pr" maxlength="2"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+              title="PR cost" />
+          </td>
+
+          <td style="padding:1px; vertical-align:middle;">
+            <div style="display:flex; align-items:center; gap:2px;">
+              <input type="text" name="attr_prot_notes"
+                style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;"
+                title="Notes" placeholder="Notes..." />
+              <span class="sheet-cog-icon" title="Settings">y</span>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- EXPANDABLE SETTINGS PANEL -->
+      <div class="sheet-options-panel">
+        <div class="sheet-options-header">
+          <span class="sheet-options-title">Protection Settings</span>
+        </div>
+
+        <div class="sheet-options-row">
+          <div class="sheet-options-field">
+            <label>Charges:</label>
+            <input type="text" name="attr_prot_charges" maxlength="3" style="width:35px !important;" title="Charges remaining" />
+          </div>
+          <div class="sheet-options-field">
+            <input type="checkbox" name="attr_prot_gear" value="1" title="Gear (can be broken/disarmed)" />
+            <label>Gear</label>
+          </div>
+          <div class="sheet-options-field">
+            <label>Hardened:</label>
+            <input type="text" name="attr_prot_hardened" style="width:30px !important;" title="Hardened points (resist AP)" />
+          </div>
+        </div>
+
+        <div style="margin-bottom:8px;">
+          <span style="color:#aaa; font-size:10px; display:block; margin-bottom:4px;">Description:</span>
+          <textarea name="attr_description" class="sheet-desc-area" placeholder="Effect details, visual description, or special modifiers..."></textarea>
+        </div>
+
+        <div class="sheet-options-help">
+          <strong style="color:#f4d03f;">Special Entries:</strong><br>
+          <strong>Invulnerability:</strong> Enter "1/4" in damage columns, put "Invulnerability" in name<br>
+          <strong>Hardened:</strong> Add 'h' suffix to value (e.g. "5h") to resist Armor Piercing
+        </div>
+      </div>
+    </fieldset>
+  </div>
+
+
+  <!-- ==================== ABILITIES / WEAKNESSES SECTION ==================== -->
   <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:5px;">
       <div style="color:#f4d03f; font-weight:bold;">
-        Abilities / Weaknesses <span style="color:#666; font-size:10px;">(use negative CPs for weaknesses, max -20)</span>
+        Abilities / Weaknesses <span style="color:#666; font-size:10px;">(negative CPs = weaknesses, max -20)</span>
       </div>
       <button type="roll" name="roll_abw_summary"
         value="&{template:mpabw} {{name=@{character_name}: Abilities & Weaknesses}} {{body=@{abw_summary}}}"
@@ -680,82 +765,34 @@
         title="Send all Abilities/Weaknesses to chat">All</button>
     </div>
 
-    <!-- Abilities Header - Main Tab: CP, IP, Name -->
-    <table class="sheet-main-cols" style="width:100%; border-collapse:collapse; table-layout:fixed;">
-      <colgroup>
-        <col style="width:36px;" />
-        <col style="width:32px;" />
-        <col />
-      </colgroup>
-      <tr style="font-size:10px; color:#888;">
-        <th style="text-align:center;">CP</th>
-        <th style="text-align:center;" title="Inventing Points">IP</th>
+    <!-- Abilities Header -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
+      <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
+        <th style="width:36px; text-align:center;" title="Character Points">CP</th>
+        <th style="width:32px; text-align:center;" title="Inventing Points">IP</th>
+        <th style="width:34px; text-align:center;" title="Activation state">Act</th>
         <th style="text-align:left;">Name</th>
       </tr>
     </table>
 
-    <!-- Abilities Header - Setup Tab: Act, Name, PR, Ch, Notes, Gear, Area, Dur, Mods -->
-    <table class="sheet-setup-cols" style="width:100%; border-collapse:collapse; table-layout:fixed;">
-      <colgroup>
-        <col style="width:36px;" />
-        <col style="width:140px;" />
-        <col style="width:30px;" />
-        <col style="width:30px;" />
-        <col style="width:80px;" />
-        <col style="width:24px;" />
-        <col style="width:32px;" />
-        <col style="width:36px;" />
-        <col />
-      </colgroup>
-      <tr style="font-size:10px; color:#888;">
-        <th style="text-align:center;" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">Act</th>
-        <th style="text-align:left;">Name</th>
-        <th style="text-align:center;" title="Power Requirement">PR</th>
-        <th style="text-align:center;" title="Charges">Ch</th>
-        <th style="text-align:left;" title="Notes">Notes</th>
-        <th style="text-align:center;" title="Gear (can be broken/disarmed)">Gr</th>
-        <th style="text-align:center;" title="Area Effect diameter">Area</th>
-        <th style="text-align:center;" title="Duration">Dur</th>
-        <th style="text-align:left;" title="Other modifiers (shorthand)">Mods</th>
-      </tr>
-    </table>
-
+    <!-- Repeating Abilities -->
     <fieldset class="repeating_abilities" style="border:none; padding:0; margin:0;">
-      <!-- Main Tab Row: CP, IP, Name -->
-      <table class="sheet-main-cols" style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
-        <colgroup>
-          <col style="width:36px;" />
-          <col style="width:32px;" />
-          <col />
-        </colgroup>
-        <tr>
-          <td style="text-align:center; padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_cp" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
-          </td>
-          <td style="text-align:center; padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_ip" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Inventing Points" />
-          </td>
-          <td style="padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
-          </td>
-        </tr>
-      </table>
+      <!-- Hidden checkbox for panel toggle -->
+      <input type="checkbox" name="attr_options_flag" class="sheet-options-flag" title="Toggle settings panel" />
 
-      <!-- Setup Tab Row: Act, Name, PR, Ch, Notes, Gear, Area, Dur, Mods -->
-      <table class="sheet-setup-cols" style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
-        <colgroup>
-          <col style="width:36px;" />
-          <col style="width:140px;" />
-          <col style="width:30px;" />
-          <col style="width:30px;" />
-          <col style="width:80px;" />
-          <col style="width:24px;" />
-          <col style="width:32px;" />
-          <col style="width:36px;" />
-          <col />
-        </colgroup>
+      <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
         <tr>
-          <td style="text-align:center; padding:1px; vertical-align:middle;">
+          <td style="width:36px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_ability_cp" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
+          </td>
+
+          <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;">
+            <input type="text" name="attr_ability_ip" value="0"
+              style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
+          </td>
+
+          <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
             <input type="checkbox" name="attr_ability_active" value="1" class="sheet-ability-active-cb" />
             <input type="checkbox" name="attr_ability_glow" value="1" class="sheet-ability-glow-cb" />
             <select name="attr_ability_act" class="sheet-ability-act-sel" title="C=Continual, P=Persistent, V=Voluntary, H=Held Back, Off=Inactive">
@@ -766,35 +803,72 @@
               <option value="Off" selected>Off</option>
             </select>
           </td>
+
           <td style="padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
-          </td>
-          <td style="text-align:center; padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_pr" maxlength="3" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="PR cost" />
-          </td>
-          <td style="text-align:center; padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_charges" maxlength="3" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Charges" />
-          </td>
-          <td style="padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" title="Notes" />
-          </td>
-          <td style="text-align:center; padding:1px; vertical-align:middle;">
-            <input type="checkbox" name="attr_ability_gear" value="1" title="Gear (can be broken/disarmed)" />
-          </td>
-          <td style="text-align:center; padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_area" maxlength="4" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Area Effect diameter" placeholder="5&quot;" />
-          </td>
-          <td style="text-align:center; padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_duration" maxlength="5" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="Duration (e.g. 3rnd, 1min)" />
-          </td>
-          <td style="padding:1px; vertical-align:middle;">
-            <input type="text" name="attr_ability_mods" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" title="Other modifiers" placeholder="CONC, BRKD, etc." />
+            <div style="display:flex; align-items:center; gap:2px;">
+              <input type="text" name="attr_ability_name" placeholder="Ability Name"
+                style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
+              <span class="sheet-cog-icon" title="Settings">y</span>
+            </div>
           </td>
         </tr>
       </table>
 
-      <!-- Hidden attributes for ability tracking -->
-      <input type="hidden" name="attr_ability_pr_type" value="-" />
+      <!-- EXPANDABLE SETTINGS PANEL -->
+      <div class="sheet-options-panel">
+        <div class="sheet-options-header">
+          <span class="sheet-options-title">Ability Details</span>
+          <button type="roll" name="roll_ability_info" class="sheet-panel-btn"
+            value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{description=@{description}}}"
+            title="Show Info">Info</button>
+        </div>
+
+        <div class="sheet-options-row">
+          <div class="sheet-options-field">
+            <label>PR:</label>
+            <input type="text" name="attr_ability_pr" maxlength="2" style="width:30px !important;" title="Power Requirement" />
+          </div>
+          <div class="sheet-options-field">
+            <label>Charges:</label>
+            <input type="text" name="attr_ability_charges" maxlength="3" style="width:35px !important;" title="Charges" />
+          </div>
+          <div class="sheet-options-field">
+            <input type="checkbox" name="attr_ability_gear" value="1" title="Gear (can be broken/disarmed)" />
+            <label>Gear</label>
+          </div>
+          <div class="sheet-options-field">
+            <label>Area:</label>
+            <input type="text" name="attr_ability_area" style="width:35px !important;" title="Area Effect" />
+          </div>
+          <div class="sheet-options-field">
+            <label>Duration:</label>
+            <input type="text" name="attr_ability_duration" style="width:45px !important;" title="Duration" />
+          </div>
+        </div>
+
+        <div style="margin-bottom:8px;">
+          <span style="color:#aaa; font-size:10px; display:block; margin-bottom:4px;">Description & Rules:</span>
+          <textarea name="attr_description" class="sheet-desc-area" placeholder="Full ability rules text, modifiers, or flavor..."></textarea>
+        </div>
+
+        <div style="margin-bottom:8px;">
+          <span style="color:#aaa; font-size:10px; display:block; margin-bottom:4px;">Effect Codes:</span>
+          <input type="text" name="attr_ability_notes" placeholder="aura:d8:Energy:1, absorb:Fire:25, autofire:3"
+            style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px; font-size:10px; box-sizing:border-box;" />
+        </div>
+
+        <div class="sheet-options-help">
+          <strong style="color:#f4d03f;">Effect Codes:</strong><br>
+          <code>aura:Dmg:Type:PR</code> Ability Field<br>
+          <code>absorb:Type:Limit:Effect</code> Absorption<br>
+          <code>reflect:Type:Limit</code> Reflection<br>
+          <code>autofire:N</code> Autofire rate<br>
+          <code>duration:time:escape</code> Duration effect<br>
+          <code>contact:Attack</code> or <code>carrier:Attack</code> Linked attacks
+        </div>
+      </div>
+
+      <!-- Hidden attributes -->
       <input type="hidden" name="attr_ability_mod_type" value="" />
       <input type="hidden" name="attr_ability_aura_damage" value="" />
       <input type="hidden" name="attr_ability_aura_dtype" value="" />
@@ -814,8 +888,7 @@
     </fieldset>
   </div>
 
-  </div><!-- End Tabbed Content Wrapper -->
-
+  
   <!-- CAPS & COMBAT FOOTER - Single Row -->
   <div style="background:#1e1e38; padding:6px 8px; border-radius:4px;">
     <div style="display:flex; flex-wrap:wrap; gap:4px 12px; font-size:11px; align-items:center;">

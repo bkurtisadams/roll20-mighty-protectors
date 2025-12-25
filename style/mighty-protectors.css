@@ -535,3 +535,195 @@
 .charsheet .sheet-tab-setup:checked ~ .sheet-tab-content table.sheet-setup-cols {
   display: table !important;
 }
+
+/* ========================================
+   EXPANDABLE ROW PANELS (Cog Toggle)
+   ======================================== */
+
+/* Container for each repeating row - needs relative positioning */
+.charsheet .repeating_attacks > div,
+.charsheet .repeating_protection > div,
+.charsheet .repeating_abilities > div {
+  position: relative !important;
+}
+
+/* Hidden checkbox - positioned over the cog icon area */
+.charsheet input.sheet-options-flag {
+  position: absolute !important;
+  top: 2px !important;
+  right: 4px !important;
+  width: 20px !important;
+  height: 20px !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  z-index: 10 !important;
+  margin: 0 !important;
+}
+
+/* Cog icon styling */
+.charsheet .sheet-cog-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  font-family: 'Pictos' !important;
+  font-size: 14px !important;
+  color: #555 !important;
+  cursor: pointer !important;
+  transition: color 0.15s, transform 0.15s !important;
+}
+
+.charsheet .sheet-cog-icon:hover {
+  color: #888 !important;
+}
+
+/* Cog icon when panel is open */
+.charsheet input.sheet-options-flag:checked ~ * .sheet-cog-icon,
+.charsheet input.sheet-options-flag:checked ~ table .sheet-cog-icon {
+  color: #f4d03f !important;
+  transform: rotate(90deg) !important;
+}
+
+/* Options panel - hidden by default */
+.charsheet .sheet-options-panel {
+  display: none !important;
+  background: #151525 !important;
+  border: 1px solid #3a3060 !important;
+  border-top: 2px solid #f4d03f !important;
+  border-radius: 0 0 4px 4px !important;
+  padding: 10px !important;
+  margin: 0 0 6px 0 !important;
+}
+
+/* Show panel when checkbox is checked */
+.charsheet input.sheet-options-flag:checked ~ .sheet-options-panel {
+  display: block !important;
+}
+
+/* Panel header row */
+.charsheet .sheet-options-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-bottom: 8px !important;
+  padding-bottom: 6px !important;
+  border-bottom: 1px solid #2a2040 !important;
+}
+
+.charsheet .sheet-options-title {
+  color: #f4d03f !important;
+  font-weight: bold !important;
+  font-size: 12px !important;
+}
+
+/* Panel buttons */
+.charsheet .sheet-panel-btn {
+  font-size: 9px !important;
+  padding: 3px 8px !important;
+  background: #2a2040 !important;
+  color: #8be9fd !important;
+  border: 1px solid #444 !important;
+  border-radius: 3px !important;
+  cursor: pointer !important;
+  margin-left: 4px !important;
+}
+
+.charsheet .sheet-panel-btn:hover {
+  background: #3a3060 !important;
+  color: #f4d03f !important;
+}
+
+/* Panel grid for form fields */
+.charsheet .sheet-options-grid {
+  display: grid !important;
+  grid-template-columns: auto 1fr !important;
+  gap: 6px 10px !important;
+  align-items: center !important;
+  margin-bottom: 8px !important;
+}
+
+.charsheet .sheet-options-grid label {
+  color: #aaa !important;
+  font-size: 10px !important;
+  text-align: right !important;
+}
+
+.charsheet .sheet-options-grid input,
+.charsheet .sheet-options-grid select {
+  background: #0d0d1a !important;
+  color: #eaeaea !important;
+  border: 1px solid #2a2040 !important;
+  padding: 3px 6px !important;
+  font-size: 11px !important;
+  border-radius: 2px !important;
+}
+
+/* Description textarea in panels */
+.charsheet .sheet-desc-area {
+  width: 100% !important;
+  min-height: 60px !important;
+  background: #0d0d1a !important;
+  color: #eaeaea !important;
+  border: 1px solid #2a2040 !important;
+  border-radius: 3px !important;
+  padding: 6px !important;
+  font-size: 11px !important;
+  resize: vertical !important;
+  box-sizing: border-box !important;
+}
+
+/* Help text in panels */
+.charsheet .sheet-options-help {
+  background: #1a1428 !important;
+  padding: 6px 8px !important;
+  border-radius: 3px !important;
+  margin-top: 8px !important;
+  font-size: 10px !important;
+  color: #888 !important;
+  line-height: 1.5 !important;
+}
+
+.charsheet .sheet-options-help code {
+  background: #0d0d1a !important;
+  padding: 1px 4px !important;
+  border-radius: 2px !important;
+  color: #8be9fd !important;
+  font-family: monospace !important;
+}
+
+/* Inline field groups in panels */
+.charsheet .sheet-options-row {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px 16px !important;
+  align-items: center !important;
+  margin-bottom: 8px !important;
+}
+
+.charsheet .sheet-options-field {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.charsheet .sheet-options-field label {
+  color: #aaa !important;
+  font-size: 10px !important;
+  white-space: nowrap !important;
+}
+
+.charsheet .sheet-options-field input[type="text"],
+.charsheet .sheet-options-field input[type="number"] {
+  width: 50px !important;
+  background: #0d0d1a !important;
+  color: #eaeaea !important;
+  border: 1px solid #2a2040 !important;
+  padding: 2px 4px !important;
+  text-align: center !important;
+  font-size: 11px !important;
+}
+
+.charsheet .sheet-options-field input[type="checkbox"] {
+  margin: 0 !important;
+}
