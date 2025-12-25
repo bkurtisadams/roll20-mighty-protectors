@@ -599,6 +599,62 @@
   display: block !important;
 }
 
+/* ========================================
+   ACTIVATION INDICATOR
+   ======================================== */
+
+/* Base indicator style - using disabled input */
+.charsheet input.sheet-act-indicator {
+  width: 18px !important;
+  height: 18px !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  border-radius: 3px !important;
+  background: #333 !important;
+  color: #666 !important;
+  border: 1px solid #444 !important;
+  text-align: center !important;
+  padding: 0 !important;
+  cursor: default !important;
+}
+
+/* Hide the activation state checkboxes */
+.charsheet input.sheet-atk-active-cb,
+.charsheet input.sheet-atk-glow-cb,
+.charsheet input.sheet-atk-held-cb,
+.charsheet input.sheet-prot-active-cb,
+.charsheet input.sheet-prot-glow-cb,
+.charsheet input.sheet-prot-held-cb,
+.charsheet input.sheet-ability-active-cb,
+.charsheet input.sheet-ability-glow-cb,
+.charsheet input.sheet-ability-held-cb {
+  display: none !important;
+}
+
+/* Active state (C/P/V) - green */
+.charsheet input.sheet-atk-glow-cb:checked ~ table input.sheet-act-indicator,
+.charsheet input.sheet-prot-glow-cb:checked ~ table input.sheet-act-indicator,
+.charsheet input.sheet-ability-glow-cb:checked ~ table input.sheet-act-indicator {
+  background: #2d5a2d !important;
+  color: #8f8 !important;
+  border-color: #4a8a4a !important;
+  box-shadow: 0 0 4px rgba(80, 200, 80, 0.4) !important;
+}
+
+/* Held state (H) - yellow */
+.charsheet input.sheet-atk-held-cb:checked ~ table input.sheet-act-indicator,
+.charsheet input.sheet-prot-held-cb:checked ~ table input.sheet-act-indicator,
+.charsheet input.sheet-ability-held-cb:checked ~ table input.sheet-act-indicator {
+  background: #5a5a2d !important;
+  color: #ff8 !important;
+  border-color: #8a8a4a !important;
+  box-shadow: 0 0 4px rgba(200, 200, 80, 0.4) !important;
+}
+
+/* ========================================
+   PANEL LAYOUT
+   ======================================== */
+
 /* Compact row layout */
 .charsheet .sheet-panel-row {
   display: flex !important;
@@ -644,7 +700,7 @@
   border: 1px solid #2a2040 !important;
   padding: 1px 2px !important;
   font-size: 10px !important;
-  height: 18px !important;
+  height: 20px !important;
 }
 
 /* Compact buttons */
