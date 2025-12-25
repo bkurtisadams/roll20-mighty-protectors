@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.5 - Fixed API conflict: activation uses attack_activation, API category uses attack_type -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.6 - Simplified Push/Hold Back query to single number input -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -418,7 +418,7 @@
       <input type="checkbox" name="attr_query_def" value="1" title="Prompt for target defense" /><span style="color:#aaa; margin-right:8px;">Def</span>
       <input type="checkbox" name="attr_query_stance" value="1" title="Prompt for stance modifier" /><span style="color:#aaa; margin-right:8px;">Stance</span>
       <input type="checkbox" name="attr_query_aim" value="1" title="Prompt for aim bonus" /><span style="color:#aaa; margin-right:8px;">Aim</span>
-      <input type="checkbox" name="attr_query_pushhb" value="1" title="Push: +2 dmg/-2 save TN/+2 BP, costs 2 PR (not for Gear). Hold Back: -N dmg or +N to save TN." /><span style="color:#aaa; margin-right:8px;">Push/HB</span>
+      <input type="checkbox" name="attr_query_pushhb" value="1" title="Push: adds damage - Hold Back: reduces damage" /><span style="color:#aaa; margin-right:8px;">Push/HB</span>
       <input type="checkbox" name="attr_query_multi" value="1" title="Prompt for multiple action penalty" /><span style="color:#aaa; margin-right:8px;">Multi</span>
       <input type="checkbox" name="attr_query_other" value="1" title="Prompt for other modifiers" /><span style="color:#aaa;">Other</span>
     </div>
@@ -1855,7 +1855,8 @@
       updates.def_query = v.query_def === "1" ? "?{Target Defense|0}" : "0";
       updates.stance_query = v.query_stance === "1" ? "?{Target Stance|None,0|Defensive,3|Full Defense,6}" : "0";
       updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";
-      updates.pushhb_query = v.query_pushhb === "1" ? "?{Push (+2 dmg, 2 PR) or Hold Back (-dmg)|Neither,0|Push,2|Hold Back -1,-1|Hold Back -2,-2|Hold Back -3,-3|Hold Back -4,-4|Hold Back -5,-5}" : "0";
+      updates.pushhb_query = v.query_pushhb === "1" ? "?{Push/Hold Back|0}" : "0";
+      updates.push_query = updates.pushhb_query;
       updates.other_query = v.query_other === "1" ? "?{Other Mods|0}" : "0";
       setAttrs(updates);
     });
