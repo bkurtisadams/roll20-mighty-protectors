@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.6 - Simplified Push/Hold Back query to single number input -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.7 - Fix attack row layout: wider Roll/Damage columns, narrower Use, stacked Dmg Type header, constrained row height -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -428,13 +428,13 @@
       <colgroup>
         <col style="width:130px;" /><!-- Name -->
         <col style="width:22px;" /><!-- Type indicator -->
-        <col style="width:48px;" /><!-- State/Use -->
-        <col style="width:36px;" /><!-- Roll -->
+        <col style="width:36px;" /><!-- State/Use -->
+        <col style="width:42px;" /><!-- Roll -->
         <col style="width:32px;" /><!-- Mod -->
         <col style="width:34px;" /><!-- Hit -->
-        <col style="width:50px;" /><!-- Damage -->
+        <col style="width:70px;" /><!-- Damage -->
         <col style="width:30px;" /><!-- Rng -->
-        <col style="width:40px;" /><!-- DType -->
+        <col style="width:34px;" /><!-- DType -->
         <col style="width:24px;" /><!-- KB -->
         <col style="width:26px;" /><!-- PR -->
         <col style="width:28px;" /><!-- Ch -->
@@ -450,7 +450,7 @@
           <th style="text-align:center; padding:2px;" title="Target number to hit (roll under)">To Hit</th>
           <th style="text-align:center; padding:2px;" title="Damage dice/formula">Damage</th>
           <th style="text-align:center; padding:2px;" title="Range in inches (1&quot; = 5 ft)">Rng</th>
-          <th style="text-align:center; padding:2px;" title="Damage Type: Kinetic/Energy/Bio/Entropy/Psychic/Other">Type</th>
+          <th style="text-align:center; padding:2px; line-height:1.1;" title="Damage Type: Kinetic/Energy/Bio/Entropy/Psychic/Other">Dmg<br>Type</th>
           <th style="text-align:center; padding:2px;" title="Causes Knockback">KB</th>
           <th style="text-align:center; padding:2px;" title="Power Requirement per use">PR</th>
           <th style="text-align:center; padding:2px;" title="Charges remaining">Ch</th>
@@ -469,13 +469,13 @@
         <colgroup>
           <col style="width:130px;" />
           <col style="width:22px;" />
-          <col style="width:48px;" />
           <col style="width:36px;" />
+          <col style="width:42px;" />
           <col style="width:32px;" />
           <col style="width:34px;" />
-          <col style="width:50px;" />
+          <col style="width:70px;" />
           <col style="width:30px;" />
-          <col style="width:40px;" />
+          <col style="width:34px;" />
           <col style="width:24px;" />
           <col style="width:26px;" />
           <col style="width:28px;" />
@@ -516,7 +516,7 @@
             <input type="text" name="attr_attack_range" title="Range in inches" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
           </td>
           <td style="text-align:center; padding:1px;">
-            <select name="attr_attack_dmgtype" title="Damage Type" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; font-size:9px; padding:1px;">
+            <select name="attr_attack_dmgtype" title="Damage Type" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; font-size:9px; padding:0; height:18px;">
               <option value="Kinetic" selected>Kin</option>
               <option value="Energy">Eng</option>
               <option value="Biochemical">Bio</option>
