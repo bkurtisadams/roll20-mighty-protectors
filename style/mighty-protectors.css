@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.12 */
+/* Mighty Protectors Character Sheet CSS v42.14 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -358,12 +358,23 @@
 /* Options panel */
 .charsheet .sheet-options-panel {
   display: none !important;
-  background: #12121f !important;
-  border: 1px solid #3a3060 !important;
+  background: #151528 !important;
+  border: 1px solid #4a4070 !important;
   border-top: 2px solid #f4d03f !important;
   padding: 6px 8px !important;
   margin: 0 0 4px 0 !important;
   position: relative !important;
+}
+
+.charsheet .sheet-options-panel label {
+  color: #ccc !important;
+}
+
+.charsheet .sheet-options-panel select,
+.charsheet .sheet-options-panel input[type="text"] {
+  background: #12121f !important;
+  color: #eaeaea !important;
+  border: 1px solid #3a3060 !important;
 }
 
 .charsheet input.sheet-options-flag:checked ~ .sheet-options-panel {
