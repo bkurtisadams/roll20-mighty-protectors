@@ -1,14 +1,18 @@
-/* Mighty Protectors Roll20 API Engine v2.10 (Autofire command)
+/* Mighty Protectors Roll20 API Engine v2.12 (Duplicate token warning, damage validation)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
  * Range uses edge-to-edge distance (adjacent tokens = 0")
+ * v2.11: Fixed range calculation to account for page snapping_increment
+ * v2.12: Warns and stops attack if duplicate tokens exist on map
+ *        Added damage field validation (rejects non-dice text)
+ *        Added !mp debug tokens/deltoken commands
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.10 FILE STARTING");
+log("MP ENGINE v2.12 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -507,8 +511,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const pageId = atkTok.get("_pageid");
     const page = getObj("page", pageId);
 
-    // Roll20 grid is always 70px per cell
-    const gridPx = 70;
+    // Roll20 base grid is 70px, scaled by snapping_increment
+    const snapping = page ? (parseFloat(page.get("snapping_increment")) || 1) : 1;
+    const gridPx = 70 * snapping;
 
     // Get center positions and token sizes
     const ax = atkTok.get("left");
@@ -770,9 +775,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Check if attacker is in Defensive stance (bar3 = 3) - they take -3 to hit
     // Check if attacker is in Full Defense (bar3 = 6) - they cannot attack
-    // Find attacker token on same page as defender to avoid cross-page distance issues
+    // Find attacker token on same page as defender
     const defPageId = defTok.get("_pageid");
-    const atkTok = findObjs({ _type: "graphic", represents: atkCharId, _pageid: defPageId })[0];
+    const atkTokCandidates = findObjs({ _type: "graphic", represents: atkCharId, _pageid: defPageId });
+    if (atkTokCandidates.length > 1) {
+      ch("MP", `/w gm <div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkChar.get("name"))}</b> has ${atkTokCandidates.length} tokens on this map! Delete duplicates before attacking.</div>`);
+      return;
+    }
+    const atkTok = atkTokCandidates[0];
     const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
     
     // Block attacks in Full Defense
@@ -786,6 +796,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Calculate range from token positions (4.7.3)
     const rangeData = calculateRangeWithProfile(atkTok, defTok, atkCharId, defChar.id);
     const rangePenalty = rangeData.penalty;
+    
+    // DEBUG: Log token positions for range troubleshooting
+    if (atkTok && defTok) {
+      const page = getObj("page", defTok.get("_pageid"));
+      const snap = page ? page.get("snapping_increment") : "?";
+      log(`MP RANGE DEBUG: atk(${atkTok.get("left")},${atkTok.get("top")}) def(${defTok.get("left")},${defTok.get("top")}) snap:${snap} => ${rangeData.inches}"`);
+    }
     
     const baseToHit = atkSave + 3 + atkMod + macroMod + atkStancePenalty + rangePenalty;
 
@@ -2289,6 +2306,7 @@ function cmdStance(msg, args) {
     const page = getObj("page", tok1.get("_pageid"));
     const scaleNum = page ? page.get("scale_number") : "?";
     const scaleUnit = page ? page.get("scale_units") : "?";
+    const snapIncr = page ? page.get("snapping_increment") : "?";
     
     let msg_out = `<b>Range Check</b><br/>`;
     msg_out += `${esc(name1)} → ${esc(name2)}<br/>`;
@@ -2296,7 +2314,7 @@ function cmdStance(msg, args) {
     msg_out += `<span style="font-size:10px; color:#888;">`;
     msg_out += `T1: ${Math.round(tok1.get("left"))}x${Math.round(tok1.get("top"))} (${tok1.get("width")}x${tok1.get("height")})<br/>`;
     msg_out += `T2: ${Math.round(tok2.get("left"))}x${Math.round(tok2.get("top"))} (${tok2.get("width")}x${tok2.get("height")})<br/>`;
-    msg_out += `Page: ${scaleNum} ${scaleUnit}/sq</span><br/>`;
+    msg_out += `Page: ${scaleNum} ${scaleUnit}/sq, snap:${snapIncr}</span><br/>`;
     
     if (rangeData.profileAdjusted) {
       msg_out += `Profiles: ${rangeData.atkProfile} / ${rangeData.defProfile}<br/>`;
@@ -3026,7 +3044,12 @@ function cmdStance(msg, args) {
 
     // Get attack attributes
     const attackName = getAtk("attack_name") || `Attack ${atkIndex}`;
-    const damage = getAtk("attack_damage") || "0";
+    const damageRaw = getAtk("attack_damage") || "0";
+    // Validate damage is a dice expression (numbers, d, +, -, spaces only)
+    const damage = /^[\d\s+\-d*()]+$/i.test(damageRaw) ? damageRaw : "0";
+    if (damage === "0" && damageRaw !== "0" && damageRaw !== "") {
+      ch("MP", `/w gm ⚠️ Invalid damage formula "${esc(damageRaw)}" - using 0`);
+    }
     const tohitNum = num(getAtk("attack_tohit_num"), 10);
     const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
     const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
@@ -3149,7 +3172,12 @@ function cmdStance(msg, args) {
 
     // Get attack attributes
     const attackName = getAtk("attack_name") || `Attack ${atkIndexOrRate}`;
-    const damage = getAtk("attack_damage") || "0";
+    const damageRaw = getAtk("attack_damage") || "0";
+    // Validate damage is a dice expression (numbers, d, +, -, spaces only)
+    const damage = /^[\d\s+\-d*()]+$/i.test(damageRaw) ? damageRaw : "0";
+    if (damage === "0" && damageRaw !== "0" && damageRaw !== "") {
+      ch("MP", `/w gm ⚠️ Invalid damage formula "${esc(damageRaw)}" - using 0`);
+    }
     const tohitNum = num(getAtk("attack_tohit_num"), 10);
     const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
     const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
@@ -3332,9 +3360,64 @@ function cmdStance(msg, args) {
       case "atk": return cmdQuickAttack(msg, args);
       case "autofire": return cmdAutofire(msg, args);
       case "sv": return cmdQuickSave(msg, args);
+      case "debug":
+        const debugArg = msg.content.split(/\s+/)[2];
+        if (debugArg === "tokens") {
+          // Search current player page only
+          const pageId = Campaign().get("playerpageid");
+          const page = getObj("page", pageId);
+          const pageName = page ? page.get("name") : "unknown";
+          const tokens = findObjs({_type:"graphic", _pageid:pageId, _subtype:"token"});
+          const byChar = {};
+          tokens.forEach(t => {
+            const r = t.get("represents");
+            if (r) {
+              byChar[r] = byChar[r] || [];
+              byChar[r].push(t);
+            }
+          });
+          let out = `<b>Token Report (${esc(pageName)}):</b><br/>`;
+          Object.keys(byChar).forEach(k => {
+            const c = getObj("character", k);
+            const name = c ? c.get("name") : k;
+            const toks = byChar[k];
+            if (toks.length > 1) {
+              out += `<span style="color:#ff6b6b;">⚠️ ${esc(name)} - ${toks.length} tokens:</span><br/>`;
+            } else {
+              out += `${esc(name)}:<br/>`;
+            }
+            toks.forEach(t => {
+              out += `&nbsp;&nbsp;(${Math.round(t.get("left"))}, ${Math.round(t.get("top"))}) ${t.get("layer")}<br/>`;
+            });
+          });
+          return ch("MP", "/w gm " + out);
+        }
+        if (debugArg === "deltoken") {
+          const coords = msg.content.split(/\s+/)[3];
+          if (!coords || !coords.includes(",")) {
+            return ch("MP", "/w gm Usage: <code>!mp debug deltoken X,Y</code>");
+          }
+          const [xStr, yStr] = coords.split(",");
+          const x = parseInt(xStr), y = parseInt(yStr);
+          ch("MP", `/w gm Looking for token near (${x}, ${y})...`);
+          // Search ALL pages, not just player page
+          const tokens = findObjs({_type:"graphic", _subtype:"token"});
+          const match = tokens.find(t => Math.abs(t.get("left") - x) < 50 && Math.abs(t.get("top") - y) < 50);
+          if (match) {
+            const c = getObj("character", match.get("represents"));
+            const name = c ? c.get("name") : "Unknown";
+            const pageid = match.get("_pageid");
+            const page = getObj("page", pageid);
+            const pageName = page ? page.get("name") : "unknown page";
+            match.remove();
+            return ch("MP", `/w gm ✅ Deleted ${esc(name)} token at (${x}, ${y}) on page "${esc(pageName)}"`);
+          }
+          return ch("MP", `/w gm ❌ No token found near (${x}, ${y}) on any page`);
+        }
+        return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.10</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.12</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -3375,11 +3458,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.8:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.12:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.8 READY");
+  log("MP ENGINE v2.12 READY");
 });

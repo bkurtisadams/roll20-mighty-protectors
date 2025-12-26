@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.16 - Add legacy migration with career duplication fix -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.17 - Attack settings UI overhaul: clearer dropdowns, dedicated Save/Snare rows -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -544,70 +544,149 @@
         </tr>
       </table>
 
-      <!-- SETTINGS PANEL -->
+<!-- SETTINGS PANEL -->
       <div class="sheet-options-panel">
+        <!-- Row 1: Activation, Attack Type, Gear, AP, AF, Area, Duration -->
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
-            <label>Type:</label>
-            <select name="attr_attack_activation" title="C=Continual, P=Persistent, V=Voluntary, S=Siphoned" style="width:36px !important;">
-              <option value="C">C</option>
-              <option value="P">P</option>
-              <option value="V" selected>V</option>
-              <option value="S">S</option>
+            <label>Activation:</label>
+            <select name="attr_attack_activation" title="When/how this ability activates" style="width:150px !important;">
+              <option value="C">C - Continual (always on)</option>
+              <option value="P">P - Persistent (stays if KO)</option>
+              <option value="V" selected>V - Voluntary (off if KO)</option>
+              <option value="S">S - Siphoned (temporary)</option>
             </select>
           </div>
           <div class="sheet-panel-field">
             <label>Attack:</label>
-            <select name="attr_attack_atk" title="Physical (AG save) / Mental (IN save) / Emotion (CL save)" style="width:50px !important;">
-              <option value="P" selected>Phys</option>
-              <option value="M">Ment</option>
-              <option value="E">Emot</option>
+            <select name="attr_attack_atk" title="Determines which BC is used for to-hit" style="width:115px !important;">
+              <option value="P" selected>Physical (uses AG)</option>
+              <option value="M">Mental (uses IN)</option>
+              <option value="E">Emotion (uses CL)</option>
             </select>
           </div>
           <div class="sheet-panel-field">
-            <input type="checkbox" name="attr_attack_gear" value="1" title="Gear-based (can be broken/disarmed, can't Push)" />
-            <label>Gear</label>
+            <input type="checkbox" name="attr_attack_gear" value="1" title="Gear-based: Can be broken/disarmed, cannot Push" />
+            <label title="Gear-based: Can be broken/disarmed, cannot Push">Gear</label>
+          </div>
+        </div>
+
+        <!-- Row 2: AP, AF, Area, Duration, Info button -->
+        <div class="sheet-panel-row">
+          <div class="sheet-panel-field">
+            <label title="Armor Piercing: Points of protection ignored (number or ALL)">AP:</label>
+            <input type="text" name="attr_attack_ap" style="width:28px !important;" title="Armor Piercing: Points of protection ignored (number or ALL)" />
           </div>
           <div class="sheet-panel-field">
-            <label title="Armor Piercing - points of protection ignored">AP:</label>
-            <input type="text" name="attr_attack_ap" style="width:28px !important;" title="Armor Piercing (number or ALL)" />
+            <label title="Autofire: Rate of fire 2-7">AF:</label>
+            <input type="text" name="attr_attack_autofire" maxlength="1" style="width:20px !important;" title="Autofire: Rate of fire 2-7" />
           </div>
           <div class="sheet-panel-field">
-            <label title="Autofire rate">AF:</label>
-            <input type="text" name="attr_attack_autofire" maxlength="1" style="width:20px !important;" title="Autofire rate 2-7" />
+            <label title="Area Effect: Diameter in inches">Area:</label>
+            <input type="text" name="attr_attack_area" style="width:28px !important;" title="Area Effect: Diameter in inches" />
           </div>
           <div class="sheet-panel-field">
-            <label>Area:</label>
-            <input type="text" name="attr_attack_area" style="width:28px !important;" title="Area effect diameter in inches" />
-          </div>
-          <div class="sheet-panel-field">
-            <label>Dur:</label>
-            <input type="text" name="attr_attack_duration" style="width:35px !important;" title="Duration" />
+            <label title="Duration: How long the effect lasts">Duration:</label>
+            <input type="text" name="attr_attack_duration" style="width:50px !important;" title="Duration: How long the effect lasts" />
           </div>
           <span class="sheet-panel-divider"></span>
           <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{name=@{attack_name}}} {{row=@{attack_rowid}}}" title="Show attack details">Info</button>
         </div>
-        <textarea name="attr_description" class="sheet-panel-desc" placeholder="Description / special rules..."></textarea>
+
+        <!-- Row 3: Save Attack -->
+        <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_is_save" value="1" class="sheet-atk-save-flag" title="This is a Save Attack (target rolls to resist)" />
+            <label title="This is a Save Attack (target rolls to resist)" style="color:#f4d03f;">Save Attack</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Basic Characteristic the target saves against">BC:</label>
+            <select name="attr_attack_save_bc" title="Basic Characteristic the target saves against" style="width:45px !important;">
+              <option value="">--</option>
+              <option value="EN">EN</option>
+              <option value="AG">AG</option>
+              <option value="IN">IN</option>
+              <option value="CL">CL</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Modifier to the initial save (from CP table)">Save:</label>
+            <input type="text" name="attr_attack_save_mod" style="width:32px !important;" title="Modifier to the initial save (from CP table)" placeholder="0" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Modifier to recovery saves (usually harder)">Rec:</label>
+            <input type="text" name="attr_attack_save_rec" style="width:32px !important;" title="Modifier to recovery saves (usually harder)" placeholder="-12" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Time between recovery save attempts">Rec Time:</label>
+            <select name="attr_attack_save_rec_time" title="Time between recovery save attempts" style="width:80px !important;">
+              <option value="1 phase">1 Phase</option>
+              <option value="1 round" selected>1 Round</option>
+              <option value="2 rounds">2 Rounds</option>
+              <option value="3 rounds">3 Rounds</option>
+              <option value="1 minute">1 Minute</option>
+              <option value="5 minutes">5 Minutes</option>
+              <option value="20 minutes">20 Minutes</option>
+              <option value="1 hour">1 Hour</option>
+              <option value="3 hours">3 Hours</option>
+              <option value="10 hours">10 Hours</option>
+              <option value="1.5 days">1.5 Days</option>
+              <option value="1.5 weeks">1.5 Weeks</option>
+              <option value="1 month">1 Month</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_no_damage" value="1" title="No damage - save effect only (e.g., Fear, Flash, Paralysis)" />
+            <label title="No damage - save effect only (e.g., Fear, Flash, Paralysis)">No Dmg</label>
+          </div>
+        </div>
+
+        <!-- Row 4: Snare Attack -->
+        <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_is_snare" value="1" class="sheet-atk-snare-flag" title="This is a Snare Attack (traps/immobilizes target)" />
+            <label title="This is a Snare Attack (traps/immobilizes target)" style="color:#f4d03f;">Snare Attack</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Type of snare">Type:</label>
+            <select name="attr_attack_snare_type" title="Type of snare" style="width:70px !important;">
+              <option value="">--</option>
+              <option value="Ice">Ice</option>
+              <option value="Grapnel">Grapnel</option>
+              <option value="Web">Web</option>
+              <option value="Energy">Energy</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Break Point - target must roll HTH >= this to escape">BP:</label>
+            <input type="text" name="attr_attack_bp" style="width:28px !important;" title="Break Point - target must roll HTH >= this to escape" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Maximum Break Point (BP increases +2 per additional hit)">Max:</label>
+            <input type="text" name="attr_attack_max_bp" style="width:28px !important;" title="Maximum Break Point (BP increases +2 per additional hit)" />
+          </div>
+        </div>
+
+        <!-- Description -->
+        <textarea name="attr_description" class="sheet-panel-desc" placeholder="Description / special rules..." style="margin-top:4px;"></textarea>
+
+        <!-- Help text (simplified since UI handles most cases now) -->
         <div class="sheet-panel-help">
-          <code>sav:BC:mod:rec</code> Save Attack | <code>snr:type:bp/max</code> Snare | <code>dtype:none</code> No damage type
+          Notes shorthand still works: <code>sav:BC:mod:rec</code> | <code>snr:type:bp/max</code> | <code>dtype:none</code>
         </div>
       </div>
 
       <!-- Hidden attributes -->
-      <input type="hidden" name="attr_attack_tohit_num" value="9" />
-      <input type="hidden" name="attr_attack_kb_display" value="Yes" />
-      <input type="hidden" name="attr_attack_dmgtype_full" value="Kinetic" />
-      <input type="hidden" name="attr_attack_atk_full" value="Physical" />
-      <input type="hidden" name="attr_attack_idx" />
-      <input type="hidden" name="attr_attack_type" value="std" />
-      <input type="hidden" name="attr_attack_save_bc" value="" />
-      <input type="hidden" name="attr_attack_save_mod" value="" />
-      <input type="hidden" name="attr_attack_recovery" value="" />
-      <input type="hidden" name="attr_attack_snare_type" value="" />
-      <input type="hidden" name="attr_attack_bp" value="" />
-      <input type="hidden" name="attr_attack_max_bp" value="" />
-    </fieldset>
-  </div>
+            <input type="hidden" name="attr_attack_tohit_num" value="9" />
+            <input type="hidden" name="attr_attack_kb_display" value="Yes" />
+            <input type="hidden" name="attr_attack_dmgtype_full" value="Kinetic" />
+            <input type="hidden" name="attr_attack_atk_full" value="Physical" />
+            <input type="hidden" name="attr_attack_idx" />
+            <input type="hidden" name="attr_attack_type" value="std" />
+            <input type="hidden" name="attr_attack_recovery" value="" />
+          </fieldset>
+        </div>
 
 
   <!-- ==================== PROTECTION SECTION ==================== -->
