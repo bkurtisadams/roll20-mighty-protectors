@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.14 - Settings panel background adjusted to #151528 -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.15 - Add Ability Field settings to Protection: checkbox, damage type, KB; Roll button disabled when not ability field -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -689,7 +689,8 @@
             </select>
           </td>
           <td style="text-align:center; padding:1px;">
-            <button type="roll" name="roll_prot_damage" value="&{template:mpprotection} {{name=@{character_name} - @{prot_name}}} {{damage=[[@{prot_damage}]]}} {{pr=@{prot_pr}}}" style="background:#3498db; color:#fff; border:none; padding:2px 4px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <input type="checkbox" name="attr_prot_afield" class="sheet-prot-afield-flag" value="1" />
+            <button type="roll" name="roll_prot_damage" class="sheet-prot-roll-btn" value="&{template:mpprotection} {{name=@{character_name} - @{prot_name}}} {{damage=[[@{prot_damage}]]}} {{dtype=@{prot_dmgtype}}} {{kb=@{prot_kb_display}}} {{pr=@{prot_pr}}}" style="background:#3498db; color:#fff; border:none; padding:2px 4px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_prot_damage" title="Ability Field damage dice" placeholder="" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box; font-size:9px;" />
@@ -741,6 +742,27 @@
             <label>Gear</label>
           </div>
           <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_prot_afield" value="1" title="This is an Ability Field (has damage roll)" />
+            <label>Ability Field</label>
+          </div>
+        </div>
+        <div class="sheet-panel-row">
+          <div class="sheet-panel-field">
+            <label>Dmg Type:</label>
+            <select name="attr_prot_dmgtype" title="Ability Field damage type" style="width:44px !important;">
+              <option value="Kinetic" selected>Kin</option>
+              <option value="Energy">Eng</option>
+              <option value="Biochemical">Bio</option>
+              <option value="Entropy">Ent</option>
+              <option value="Psychic">Psy</option>
+              <option value="Other">Oth</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_prot_kb" value="1" title="Ability Field causes Knockback" />
+            <label>KB</label>
+          </div>
+          <div class="sheet-panel-field">
             <label>Chg:</label>
             <input type="text" name="attr_prot_charges" maxlength="3" style="width:28px !important;" title="Charges remaining" />
           </div>
@@ -750,6 +772,7 @@
           Values: <code>5</code>=prot | <code>5h</code>=hardened | <code>1/4</code>=invuln | <code>5h/4</code>=both
         </div>
       </div>
+      <input type="hidden" name="attr_prot_kb_display" value="" />
     </fieldset>
   </div>
 
@@ -1276,6 +1299,8 @@
       <div style="color:#f4d03f; font-weight:bold; font-size:14px; margin-bottom:6px;">{{name}}</div>
       <div style="display:flex; gap:12px; flex-wrap:wrap;">
         <span><span style="color:#aaa;">Damage:</span> <span style="color:#ff6b6b; font-weight:bold; font-size:16px;">{{damage}}</span></span>
+        {{#dtype}}<span><span style="color:#aaa;">Type:</span> <span style="color:#fff;">{{dtype}}</span></span>{{/dtype}}
+        {{#kb}}<span><span style="color:#aaa;">KB:</span> <span style="color:#fff;">{{kb}}</span></span>{{/kb}}
         {{#pr}}<span><span style="color:#aaa;">PR:</span> <span style="color:#fff;">{{pr}}</span></span>{{/pr}}
       </div>
     </div>
@@ -2411,6 +2436,17 @@
         update[rowPrefix + "_prot_state"] = "Active";
       }
       update[rowPrefix + "_prot_state_on"] = (state === "Active") ? "1" : "0";
+      setAttrs(update, { silent: true });
+    });
+  });
+
+  // Protection: KB checkbox → kb_display for roll template
+  on("change:repeating_protection:prot_kb", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_prot_kb", "");
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      var kb = v[eventInfo.sourceAttribute] || "0";
+      var update = {};
+      update[rowPrefix + "_prot_kb_display"] = (kb === "1") ? "Yes" : "";
       setAttrs(update, { silent: true });
     });
   });

@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.14 */
+/* Mighty Protectors Character Sheet CSS v42.15 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -400,6 +400,7 @@
 .charsheet input.sheet-prot-state-on-flag,
 .charsheet input.sheet-prot-activation-c-flag,
 .charsheet input.sheet-prot-activation-s-flag,
+.charsheet input.sheet-prot-afield-flag,
 .charsheet input.sheet-ability-active-cb,
 .charsheet input.sheet-ability-glow-cb,
 .charsheet input.sheet-ability-held-cb,
@@ -473,6 +474,20 @@
   color: #c88fff !important;
   border-color: #8040c0 !important;
   box-shadow: 0 0 4px rgba(128, 64, 192, 0.5) !important;
+}
+
+/* Protection Roll button - disabled by default (no ability field) */
+.charsheet button.sheet-prot-roll-btn {
+  background: #444 !important;
+  color: #666 !important;
+  cursor: not-allowed !important;
+}
+
+/* Protection Roll button - enabled when Ability Field is checked */
+.charsheet .sheet-prot-afield-flag:checked ~ button.sheet-prot-roll-btn {
+  background: #3498db !important;
+  color: #fff !important;
+  cursor: pointer !important;
 }
 
 /* Ability: Active state - green */
