@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.15 - Add Ability Field settings to Protection: checkbox, damage type, KB; Roll button disabled when not ability field -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.16 - Add legacy migration with career duplication fix -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -1512,6 +1512,161 @@
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return parts.join('.');
   }
+
+  // ==================== LEGACY MIGRATION (v42.16) ====================
+  // Migrates data from old sheet formats to the new repeating sections
+  // Fixed: Career duplication bug - now skips careers if identical to skills
+  // 
+  // INSERT THIS BLOCK into your sheet workers, right after the lookup tables
+  // and BEFORE the "ABILITY MODIFIER SYSTEM" section.
+
+  on("sheet:opened", function() {
+    getAttrs(["migrated_v42", "migrated_from_old"], function(v) {
+      if (v.migrated_v42 === "1") return;
+      
+      var alreadyMigratedRepeating = (v.migrated_from_old === "1");
+      
+      var oldAttrs = [
+        "identity-name", "skills", "careers", "origin", "origin_type", "group",
+        "starting_cps", "xp_earned", "exp_base", "exp_earned"
+      ];
+      if (!alreadyMigratedRepeating) {
+        for (var i = 1; i <= 16; i++) {
+          oldAttrs.push("ability" + i + "_desc", "ability" + i + "_cost");
+        }
+        ["one", "two", "three"].forEach(function(slot) {
+          oldAttrs.push("attack_" + slot, "damage_" + slot, "damagetype_" + slot, 
+                        "tohit_" + slot, "knockback_" + slot);
+        });
+        ["one", "two", "three"].forEach(function(slot) {
+          oldAttrs.push("protection_" + slot, "kenetic_" + slot, "kinetic_" + slot, "energy_" + slot,
+                        "entropy_" + slot, "bio_" + slot, "psychic_" + slot, "other_" + slot);
+        });
+      }
+      
+      getAttrs(oldAttrs, function(old) {
+        var updates = {};
+        var hasOldData = false;
+        
+        // True ID migration
+        if (old["identity-name"] && old["identity-name"].trim()) {
+          updates["true_id"] = old["identity-name"];
+          hasOldData = true;
+        }
+        
+        // Career migration from "skills" field
+        if (old["skills"] && old["skills"].trim()) {
+          var careerRowId = generateRowID();
+          updates["repeating_careers_" + careerRowId + "_career_name"] = old["skills"];
+          hasOldData = true;
+        }
+        
+        // Career migration from "careers" field - FIX: skip if identical to skills
+        if (old["careers"] && old["careers"].trim() && old["careers"] !== old["skills"]) {
+          var careerRowId2 = generateRowID();
+          updates["repeating_careers_" + careerRowId2 + "_career_name"] = old["careers"];
+          hasOldData = true;
+        }
+        
+        // Origin migration
+        if (old["origin_type"] && old["origin_type"].trim()) {
+          updates["origin"] = old["origin_type"];
+          hasOldData = true;
+        } else if (old["origin"] && old["origin"].trim()) {
+          updates["origin"] = old["origin"];
+          hasOldData = true;
+        }
+        
+        // Group migration
+        if (old["group"] && old["group"].trim()) {
+          updates["group"] = old["group"];
+          hasOldData = true;
+        }
+        
+        // Starting CPs migration
+        if (old["starting_cps"] && old["starting_cps"].trim()) {
+          updates["starting_eps"] = old["starting_cps"];
+          hasOldData = true;
+        } else if (old["exp_base"]) {
+          var expBase = String(old["exp_base"]).trim();
+          if (expBase) {
+            updates["starting_eps"] = expBase;
+            hasOldData = true;
+          }
+        }
+        
+        // Earned XP migration
+        if (old["xp_earned"] && old["xp_earned"].trim()) {
+          updates["ep_earned"] = old["xp_earned"];
+          hasOldData = true;
+        } else if (old["exp_earned"]) {
+          var expEarned = String(old["exp_earned"]).trim();
+          if (expEarned) {
+            updates["ep_earned"] = expEarned;
+            hasOldData = true;
+          }
+        }
+        
+        // Repeating sections migration (only if not already done)
+        if (!alreadyMigratedRepeating) {
+          // Abilities migration (ability1-16)
+          for (var i = 1; i <= 16; i++) {
+            var desc = old["ability" + i + "_desc"];
+            var cost = old["ability" + i + "_cost"];
+            var descStr = (desc === null || desc === undefined) ? "" : String(desc).trim();
+            if (descStr) {
+              hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_abilities_" + rowId + "_ability_name"] = descStr;
+              updates["repeating_abilities_" + rowId + "_ability_cp"] = (cost === null || cost === undefined) ? "0" : String(cost);
+            }
+          }
+          
+          // Attacks migration (attack_one/two/three)
+          ["one", "two", "three"].forEach(function(slot) {
+            var name = old["attack_" + slot];
+            if (name && name.trim()) {
+              hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_attacks_" + rowId + "_attack_name"] = name;
+              updates["repeating_attacks_" + rowId + "_attack_damage"] = old["damage_" + slot] || "";
+              updates["repeating_attacks_" + rowId + "_attack_dmgtype"] = old["damagetype_" + slot] || "";
+              updates["repeating_attacks_" + rowId + "_attack_tohit"] = old["tohit_" + slot] || "";
+              var kbVal = String(old["knockback_" + slot] || "").toLowerCase().trim();
+              updates["repeating_attacks_" + rowId + "_attack_kb"] = (kbVal === "yes" || kbVal === "y" || kbVal === "1" || kbVal === "true") ? "1" : "0";
+            }
+          });
+          
+          // Protection migration (protection_one/two/three)
+          ["one", "two", "three"].forEach(function(slot) {
+            var name = old["protection_" + slot];
+            if (name && name.trim()) {
+              hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_protection_" + rowId + "_prot_name"] = name;
+              var kineticVal = old["kinetic_" + slot] || old["kenetic_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_kinetic"] = kineticVal;
+              updates["repeating_protection_" + rowId + "_prot_energy"] = old["energy_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_bio"] = old["bio_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_entropy"] = old["entropy_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_psychic"] = old["psychic_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_other"] = old["other_" + slot] || "0";
+            }
+          });
+        }
+        
+        // Mark migration complete
+        updates["migrated_v42"] = "1";
+        updates["migrated_from_old"] = "1";
+        setAttrs(updates);
+        if (hasOldData) {
+          console.log("Mighty Protectors: Migrated character from old sheet format");
+        }
+      });
+    });
+  });
+
+  // ==================== END LEGACY MIGRATION ====================
 
   // ==================== ABILITY MODIFIER SYSTEM ====================
   // Sums modifiers from all active abilities (Act = C/P/V) and writes to main sheet mod fields
