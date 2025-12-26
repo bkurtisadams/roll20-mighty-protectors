@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.7 - Fix attack row layout: wider Roll/Damage columns, narrower Use, stacked Dmg Type header, constrained row height -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.9 - Fix Use column width (was truncating On/Off) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -428,13 +428,13 @@
       <colgroup>
         <col style="width:130px;" /><!-- Name -->
         <col style="width:22px;" /><!-- Type indicator -->
-        <col style="width:36px;" /><!-- State/Use -->
-        <col style="width:42px;" /><!-- Roll -->
+        <col style="width:44px;" /><!-- State/Use -->
+        <col style="width:40px;" /><!-- Roll -->
         <col style="width:32px;" /><!-- Mod -->
         <col style="width:34px;" /><!-- Hit -->
-        <col style="width:70px;" /><!-- Damage -->
+        <col style="width:68px;" /><!-- Damage -->
         <col style="width:30px;" /><!-- Rng -->
-        <col style="width:34px;" /><!-- DType -->
+        <col style="width:36px;" /><!-- DType -->
         <col style="width:24px;" /><!-- KB -->
         <col style="width:26px;" /><!-- PR -->
         <col style="width:28px;" /><!-- Ch -->
@@ -443,7 +443,7 @@
       <thead>
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:left; padding:2px; color:#f4d03f;">Attacks</th>
-          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary, S=Siphoned"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
           <th style="padding:2px;"></th>
           <th style="text-align:center; padding:2px;" title="Modifier to hit roll">Mod</th>
@@ -469,13 +469,13 @@
         <colgroup>
           <col style="width:130px;" />
           <col style="width:22px;" />
-          <col style="width:36px;" />
-          <col style="width:42px;" />
+          <col style="width:44px;" />
+          <col style="width:40px;" />
           <col style="width:32px;" />
           <col style="width:34px;" />
-          <col style="width:70px;" />
+          <col style="width:68px;" />
           <col style="width:30px;" />
-          <col style="width:34px;" />
+          <col style="width:36px;" />
           <col style="width:24px;" />
           <col style="width:26px;" />
           <col style="width:28px;" />
@@ -489,6 +489,7 @@
             <!-- Hidden checkboxes for CSS state coloring -->
             <input type="checkbox" name="attr_attack_state_on" class="sheet-atk-state-on-flag" value="1" />
             <input type="checkbox" name="attr_attack_activation_c" class="sheet-atk-activation-c-flag" value="1" />
+            <input type="checkbox" name="attr_attack_activation_s" class="sheet-atk-activation-s-flag" value="1" />
             <!-- Type indicator (C/P/V) colored by state -->
             <input type="text" name="attr_attack_activation_ind" class="sheet-atk-activation-ind" disabled value="V" title="Type (set in settings)" />
           </td>
@@ -548,10 +549,11 @@
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <label>Type:</label>
-            <select name="attr_attack_activation" title="C=Continual (always on), P=Persistent (stays on), V=Voluntary (default)" style="width:36px !important;">
+            <select name="attr_attack_activation" title="C=Continual, P=Persistent, V=Voluntary, S=Siphoned" style="width:36px !important;">
               <option value="C">C</option>
               <option value="P">P</option>
               <option value="V" selected>V</option>
+              <option value="S">S</option>
             </select>
           </div>
           <div class="sheet-panel-field">
@@ -628,7 +630,7 @@
       <thead>
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:left; padding:2px; color:#f4d03f;">Protection</th>
-          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary, S=Siphoned"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
           <th style="text-align:center; padding:2px;" title="Kinetic protection (physical impact)">Kin</th>
           <th style="text-align:center; padding:2px;" title="Energy protection (heat, electricity, radiation, light)">Eng</th>
@@ -670,7 +672,8 @@
             <!-- Hidden checkboxes for CSS state coloring -->
             <input type="checkbox" name="attr_prot_state_on" class="sheet-prot-state-on-flag" value="1" />
             <input type="checkbox" name="attr_prot_activation_c" class="sheet-prot-activation-c-flag" value="1" />
-            <!-- Type indicator (C/P/V) colored by state -->
+            <input type="checkbox" name="attr_prot_activation_s" class="sheet-prot-activation-s-flag" value="1" />
+            <!-- Type indicator (C/P/V/S) colored by state -->
             <input type="text" name="attr_prot_activation_ind" class="sheet-prot-activation-ind" disabled value="V" title="Type (set in settings)" />
           </td>
           <td style="text-align:center; padding:1px;">
@@ -714,10 +717,11 @@
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <label>Type:</label>
-            <select name="attr_prot_activation" title="C=Continual (always on), P=Persistent (stays on), V=Voluntary (default)" style="width:36px !important;">
+            <select name="attr_prot_activation" title="C=Continual, P=Persistent, V=Voluntary, S=Siphoned" style="width:36px !important;">
               <option value="C">C</option>
               <option value="P">P</option>
               <option value="V" selected>V</option>
+              <option value="S">S</option>
             </select>
           </div>
           <div class="sheet-panel-field">
@@ -757,7 +761,7 @@
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:center; padding:2px;" title="Character Points (negative = weakness)">CP</th>
           <th style="text-align:center; padding:2px;" title="Inventing Points">IP</th>
-          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary, S=Siphoned"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Held=Withheld, Off=Inactive">Use</th>
           <th style="text-align:left; padding:2px;">Name / Description <span style="color:#555; font-size:9px;">(click to send to chat)</span></th>
         </tr>
@@ -791,7 +795,8 @@
             <!-- Hidden checkboxes for CSS state coloring (must be before indicator) -->
             <input type="checkbox" name="attr_ability_state_active" class="sheet-state-active-flag" value="1" />
             <input type="checkbox" name="attr_ability_state_held" class="sheet-state-held-flag" value="1" />
-            <!-- Type indicator (C/P/V) colored by state -->
+            <input type="checkbox" name="attr_ability_type_s" class="sheet-ability-type-s-flag" value="1" />
+            <!-- Type indicator (C/P/V/S) colored by state -->
             <input type="text" name="attr_ability_type_ind" class="sheet-ability-type-ind" disabled value="V" title="Activation Type (set in Desc tab)" />
           </td>
           <td style="text-align:center; padding:1px;">
@@ -832,10 +837,11 @@
           <div class="sheet-panel-row" style="margin-top:6px;">
             <div class="sheet-panel-field">
               <label>Type:</label>
-              <select name="attr_ability_type" title="C=Continual (always on), P=Persistent (toggle, stays on if KO), V=Voluntary (toggle, off if KO)" style="width:40px !important;">
+              <select name="attr_ability_type" title="C=Continual, P=Persistent, V=Voluntary, S=Siphoned" style="width:40px !important;">
                 <option value="C">C</option>
                 <option value="P">P</option>
                 <option value="V" selected>V</option>
+                <option value="S">S</option>
               </select>
             </div>
             <div class="sheet-panel-field">
@@ -2320,8 +2326,9 @@
       var update = {};
       update[rowPrefix + "_attack_activation_ind"] = type;
       update[rowPrefix + "_attack_activation_c"] = (type === "C") ? "1" : "0";
-      // Continual is always on
-      if (type === "C") {
+      update[rowPrefix + "_attack_activation_s"] = (type === "S") ? "1" : "0";
+      // Continual is always on, Siphoned is always on (temporary)
+      if (type === "C" || type === "S") {
         update[rowPrefix + "_attack_state"] = "Active";
         update[rowPrefix + "_attack_state_on"] = "1";
       }
@@ -2336,8 +2343,8 @@
       var state = v[eventInfo.sourceAttribute] || "Off";
       var type = v[rowPrefix + "_attack_activation"] || "V";
       var update = {};
-      // Continual stays on regardless of dropdown
-      if (type === "C") {
+      // Continual and Siphoned stay on regardless of dropdown
+      if (type === "C" || type === "S") {
         state = "Active";
         update[rowPrefix + "_attack_state"] = "Active";
       }
@@ -2356,8 +2363,9 @@
       var update = {};
       update[rowPrefix + "_prot_activation_ind"] = type;
       update[rowPrefix + "_prot_activation_c"] = (type === "C") ? "1" : "0";
-      // Continual is always on
-      if (type === "C") {
+      update[rowPrefix + "_prot_activation_s"] = (type === "S") ? "1" : "0";
+      // Continual and Siphoned are always on
+      if (type === "C" || type === "S") {
         update[rowPrefix + "_prot_state"] = "Active";
         update[rowPrefix + "_prot_state_on"] = "1";
       }
@@ -2372,8 +2380,8 @@
       var state = v[eventInfo.sourceAttribute] || "Off";
       var type = v[rowPrefix + "_prot_activation"] || "V";
       var update = {};
-      // Continual stays on regardless of dropdown
-      if (type === "C") {
+      // Continual and Siphoned stay on regardless of dropdown
+      if (type === "C" || type === "S") {
         state = "Active";
         update[rowPrefix + "_prot_state"] = "Active";
       }
@@ -2382,13 +2390,20 @@
     });
   });
 
-  // Sync Type dropdown → type indicator
+  // Sync Type dropdown → type indicator + S flag
   on("change:repeating_abilities:ability_type", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_type", "");
     getAttrs([eventInfo.sourceAttribute], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
       var update = {};
       update[rowPrefix + "_ability_type_ind"] = type;
+      update[rowPrefix + "_ability_type_s"] = (type === "S") ? "1" : "0";
+      // Siphoned is always active (temporary)
+      if (type === "S") {
+        update[rowPrefix + "_ability_state"] = "Active";
+        update[rowPrefix + "_ability_state_active"] = "1";
+        update[rowPrefix + "_ability_state_held"] = "0";
+      }
       setAttrs(update, { silent: true });
     });
   });
@@ -2396,9 +2411,15 @@
   // Sync State dropdown → checkboxes for CSS coloring + recalc
   on("change:repeating_abilities:ability_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_state", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_ability_type"], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
+      var type = v[rowPrefix + "_ability_type"] || "V";
       var update = {};
+      // Siphoned stays active regardless of dropdown
+      if (type === "S") {
+        state = "Active";
+        update[rowPrefix + "_ability_state"] = "Active";
+      }
       // Set checkboxes for CSS styling
       update[rowPrefix + "_ability_state_active"] = (state === "Active") ? "1" : "0";
       update[rowPrefix + "_ability_state_held"] = (state === "Held") ? "1" : "0";
@@ -2480,13 +2501,14 @@
         ids.forEach(function(id) {
           var type = values["repeating_protection_" + id + "_prot_activation"] || "V";
           var state = values["repeating_protection_" + id + "_prot_state"] || "Off";
-          // Continual is always on
-          if (type === "C") {
+          // Continual and Siphoned are always on
+          if (type === "C" || type === "S") {
             state = "Active";
             updates["repeating_protection_" + id + "_prot_state"] = "Active";
           }
           updates["repeating_protection_" + id + "_prot_activation_ind"] = type;
           updates["repeating_protection_" + id + "_prot_activation_c"] = (type === "C") ? "1" : "0";
+          updates["repeating_protection_" + id + "_prot_activation_s"] = (type === "S") ? "1" : "0";
           updates["repeating_protection_" + id + "_prot_state_on"] = (state === "Active") ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
@@ -2506,13 +2528,14 @@
         ids.forEach(function(id) {
           var type = values["repeating_attacks_" + id + "_attack_activation"] || "V";
           var state = values["repeating_attacks_" + id + "_attack_state"] || "Off";
-          // Continual is always on
-          if (type === "C") {
+          // Continual and Siphoned are always on
+          if (type === "C" || type === "S") {
             state = "Active";
             updates["repeating_attacks_" + id + "_attack_state"] = "Active";
           }
           updates["repeating_attacks_" + id + "_attack_activation_ind"] = type;
           updates["repeating_attacks_" + id + "_attack_activation_c"] = (type === "C") ? "1" : "0";
+          updates["repeating_attacks_" + id + "_attack_activation_s"] = (type === "S") ? "1" : "0";
           updates["repeating_attacks_" + id + "_attack_state_on"] = (state === "Active") ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
@@ -2533,7 +2556,13 @@
           var prefix = "repeating_abilities_" + id + "_ability_";
           var type = values[prefix + "type"] || "V";
           var state = values[prefix + "state"] || "Off";
+          // Siphoned is always active
+          if (type === "S") {
+            state = "Active";
+            updates[prefix + "state"] = "Active";
+          }
           updates[prefix + "type_ind"] = type;
+          updates[prefix + "type_s"] = (type === "S") ? "1" : "0";
           updates[prefix + "state_active"] = (state === "Active") ? "1" : "0";
           updates[prefix + "state_held"] = (state === "Held") ? "1" : "0";
           updates[prefix + "active"] = (state === "Active") ? "1" : "0";

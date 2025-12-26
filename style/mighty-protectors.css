@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.7 */
+/* Mighty Protectors Character Sheet CSS v42.9 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -381,17 +381,20 @@
 .charsheet input.sheet-atk-continual-cb,
 .charsheet input.sheet-atk-state-on-flag,
 .charsheet input.sheet-atk-activation-c-flag,
+.charsheet input.sheet-atk-activation-s-flag,
 .charsheet input.sheet-prot-active-cb,
 .charsheet input.sheet-prot-glow-cb,
 .charsheet input.sheet-prot-held-cb,
 .charsheet input.sheet-prot-continual-cb,
 .charsheet input.sheet-prot-state-on-flag,
 .charsheet input.sheet-prot-activation-c-flag,
+.charsheet input.sheet-prot-activation-s-flag,
 .charsheet input.sheet-ability-active-cb,
 .charsheet input.sheet-ability-glow-cb,
 .charsheet input.sheet-ability-held-cb,
 .charsheet input.sheet-state-active-flag,
-.charsheet input.sheet-state-held-flag {
+.charsheet input.sheet-state-held-flag,
+.charsheet input.sheet-ability-type-s-flag {
   display: none !important;
 }
 
@@ -428,6 +431,14 @@
   box-shadow: 0 0 4px rgba(211, 84, 0, 0.5) !important;
 }
 
+/* Attack: Siphoned (S) - purple, temporary */
+.charsheet .sheet-atk-activation-s-flag:checked ~ input.sheet-atk-activation-ind {
+  background: #3d2d5a !important;
+  color: #c88fff !important;
+  border-color: #8040c0 !important;
+  box-shadow: 0 0 4px rgba(128, 64, 192, 0.5) !important;
+}
+
 /* Protection: On state (P/V) - green */
 .charsheet .sheet-prot-state-on-flag:checked ~ input.sheet-prot-activation-ind {
   background: #2d5a2d !important;
@@ -444,6 +455,14 @@
   box-shadow: 0 0 4px rgba(211, 84, 0, 0.5) !important;
 }
 
+/* Protection: Siphoned (S) - purple, temporary */
+.charsheet .sheet-prot-activation-s-flag:checked ~ input.sheet-prot-activation-ind {
+  background: #3d2d5a !important;
+  color: #c88fff !important;
+  border-color: #8040c0 !important;
+  box-shadow: 0 0 4px rgba(128, 64, 192, 0.5) !important;
+}
+
 /* Ability: Active state - green */
 .charsheet .sheet-state-active-flag:checked ~ input.sheet-ability-type-ind {
   background: #2d5a2d !important;
@@ -458,6 +477,14 @@
   color: #ff8 !important;
   border-color: #8a8a4a !important;
   box-shadow: 0 0 4px rgba(200, 200, 80, 0.4) !important;
+}
+
+/* Ability: Siphoned (S) - purple, temporary */
+.charsheet .sheet-ability-type-s-flag:checked ~ input.sheet-ability-type-ind {
+  background: #3d2d5a !important;
+  color: #c88fff !important;
+  border-color: #8040c0 !important;
+  box-shadow: 0 0 4px rgba(128, 64, 192, 0.5) !important;
 }
 
 /* Legacy act-indicator for backwards compatibility */
