@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.9 - Fix Use column width (was truncating On/Off) -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.12 - Fix Protection row: Roll before Dmg, restore column widths -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -491,7 +491,7 @@
             <input type="checkbox" name="attr_attack_activation_c" class="sheet-atk-activation-c-flag" value="1" />
             <input type="checkbox" name="attr_attack_activation_s" class="sheet-atk-activation-s-flag" value="1" />
             <!-- Type indicator (C/P/V) colored by state -->
-            <input type="text" name="attr_attack_activation_ind" class="sheet-atk-activation-ind" disabled value="V" title="Type (set in settings)" />
+            <input type="text" name="attr_attack_activation_ind" class="sheet-atk-activation-ind" readonly value="V" title="Type (set in settings)" />
           </td>
           <td style="text-align:center; padding:1px;">
             <select name="attr_attack_state" class="sheet-attack-state-sel" title="Active=On, Off=Inactive">
@@ -617,7 +617,9 @@
       <colgroup>
         <col style="width:130px;" /><!-- Name -->
         <col style="width:22px;" /><!-- Type indicator -->
-        <col style="width:48px;" /><!-- State/Use -->
+        <col style="width:44px;" /><!-- State/Use -->
+        <col style="width:36px;" /><!-- Roll -->
+        <col style="width:50px;" /><!-- Dmg -->
         <col style="width:34px;" /><!-- Kin -->
         <col style="width:34px;" /><!-- Eng -->
         <col style="width:34px;" /><!-- Bio -->
@@ -632,6 +634,8 @@
           <th style="text-align:left; padding:2px; color:#f4d03f;">Protection</th>
           <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary, S=Siphoned"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
+          <th style="padding:2px;"></th>
+          <th style="text-align:center; padding:2px;" title="Damage dice for Ability Field">Dmg</th>
           <th style="text-align:center; padding:2px;" title="Kinetic protection (physical impact)">Kin</th>
           <th style="text-align:center; padding:2px;" title="Energy protection (heat, electricity, radiation, light)">Eng</th>
           <th style="text-align:center; padding:2px;" title="Biochemical protection (poison, disease, acid)">Bio</th>
@@ -654,7 +658,9 @@
         <colgroup>
           <col style="width:130px;" />
           <col style="width:22px;" />
-          <col style="width:48px;" />
+          <col style="width:44px;" />
+          <col style="width:36px;" />
+          <col style="width:50px;" />
           <col style="width:34px;" />
           <col style="width:34px;" />
           <col style="width:34px;" />
@@ -674,13 +680,19 @@
             <input type="checkbox" name="attr_prot_activation_c" class="sheet-prot-activation-c-flag" value="1" />
             <input type="checkbox" name="attr_prot_activation_s" class="sheet-prot-activation-s-flag" value="1" />
             <!-- Type indicator (C/P/V/S) colored by state -->
-            <input type="text" name="attr_prot_activation_ind" class="sheet-prot-activation-ind" disabled value="V" title="Type (set in settings)" />
+            <input type="text" name="attr_prot_activation_ind" class="sheet-prot-activation-ind" readonly value="V" title="Type (set in settings)" />
           </td>
           <td style="text-align:center; padding:1px;">
             <select name="attr_prot_state" class="sheet-prot-state-sel" title="Active=On, Off=Inactive">
               <option value="Active">On</option>
               <option value="Off" selected>Off</option>
             </select>
+          </td>
+          <td style="text-align:center; padding:1px;">
+            <button type="roll" name="roll_prot_damage" value="&{template:mpprotection} {{name=@{character_name} - @{prot_name}}} {{damage=[[@{prot_damage}]]}} {{pr=@{prot_pr}}}" style="background:#3498db; color:#fff; border:none; padding:2px 4px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+          </td>
+          <td style="text-align:center; padding:1px;">
+            <input type="text" name="attr_prot_damage" title="Ability Field damage dice" placeholder="" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box; font-size:9px;" />
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_prot_kinetic" value="0" title="Kinetic: 5=prot, 5h=hardened, 1/4=invuln, 5h/4=both" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -797,7 +809,7 @@
             <input type="checkbox" name="attr_ability_state_held" class="sheet-state-held-flag" value="1" />
             <input type="checkbox" name="attr_ability_type_s" class="sheet-ability-type-s-flag" value="1" />
             <!-- Type indicator (C/P/V/S) colored by state -->
-            <input type="text" name="attr_ability_type_ind" class="sheet-ability-type-ind" disabled value="V" title="Activation Type (set in Desc tab)" />
+            <input type="text" name="attr_ability_type_ind" class="sheet-ability-type-ind" readonly value="V" title="Activation Type (set in Desc tab)" />
           </td>
           <td style="text-align:center; padding:1px;">
             <select name="attr_ability_state" class="sheet-ability-state-sel" title="Current State: Active (modifiers apply), Held (withheld), Off (inactive)">
@@ -1253,6 +1265,19 @@
     <div style="background:#bd93f9; color:#000; font-weight:bold; padding:6px 10px;">{{name}}</div>
     <div style="padding:8px 10px; color:#eaeaea; line-height:1.35;">
       {{body}}
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpprotection">
+  <div style="background:#2b2b3d; border:2px solid #3498db; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#3498db; color:#fff; font-weight:bold; padding:6px 10px;">ABILITY FIELD</div>
+    <div style="padding:8px 10px; color:#eaeaea;">
+      <div style="color:#f4d03f; font-weight:bold; font-size:14px; margin-bottom:6px;">{{name}}</div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <span><span style="color:#aaa;">Damage:</span> <span style="color:#ff6b6b; font-weight:bold; font-size:16px;">{{damage}}</span></span>
+        {{#pr}}<span><span style="color:#aaa;">PR:</span> <span style="color:#fff;">{{pr}}</span></span>{{/pr}}
+      </div>
     </div>
   </div>
 </rolltemplate>

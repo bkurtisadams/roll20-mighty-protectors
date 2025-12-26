@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.9 */
+/* Mighty Protectors Character Sheet CSS v42.12 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -413,6 +413,7 @@
   text-align: center !important;
   padding: 0 !important;
   cursor: default !important;
+  pointer-events: none !important;
 }
 
 /* Attack: On state (P/V) - green */
