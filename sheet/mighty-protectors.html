@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.18 - Fix: Save attack fields now persist (removed unconditional reset in sheet workers) -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.18.1 - Fix: Save attack fields persist; robust career migration -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -1592,9 +1592,10 @@
     return parts.join('.');
   }
 
-  // ==================== LEGACY MIGRATION (v42.16) ====================
+  // ==================== LEGACY MIGRATION (v42.18) ====================
   // Migrates data from old sheet formats to the new repeating sections
-  // Fixed: Career duplication bug - now skips careers if identical to skills
+  // v42.16: Fixed career duplication bug - now skips careers if identical to skills
+  // v42.18: Robust career comparison (whitespace/case insensitive)
   // 
   // INSERT THIS BLOCK into your sheet workers, right after the lookup tables
   // and BEFORE the "ABILITY MODIFIER SYSTEM" section.
@@ -1633,18 +1634,29 @@
           hasOldData = true;
         }
         
-        // Career migration from "skills" field
-        if (old["skills"] && old["skills"].trim()) {
-          var careerRowId = generateRowID();
-          updates["repeating_careers_" + careerRowId + "_career_name"] = old["skills"];
-          hasOldData = true;
-        }
-        
-        // Career migration from "careers" field - FIX: skip if identical to skills
-        if (old["careers"] && old["careers"].trim() && old["careers"] !== old["skills"]) {
-          var careerRowId2 = generateRowID();
-          updates["repeating_careers_" + careerRowId2 + "_career_name"] = old["careers"];
-          hasOldData = true;
+        // Career migration with robust normalization (whitespace/case insensitive comparison)
+        if (!alreadyMigratedRepeating) {
+          var normCareer = function(s) {
+            return String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
+          };
+          var skillCareer = String(old["skills"] || "").trim();
+          var otherCareer = String(old["careers"] || "").trim();
+
+          if (skillCareer) {
+            var careerRowId = generateRowID();
+            updates["repeating_careers_" + careerRowId + "_career_name"] = skillCareer;
+            hasOldData = true;
+          }
+          if (otherCareer && normCareer(otherCareer) !== normCareer(skillCareer)) {
+            var careerRowId2 = generateRowID();
+            updates["repeating_careers_" + careerRowId2 + "_career_name"] = otherCareer;
+            hasOldData = true;
+          }
+
+          // Mark that we've migrated legacy repeating-style data
+          if (skillCareer || otherCareer) {
+            updates["migrated_from_old"] = "1";
+          }
         }
         
         // Origin migration
