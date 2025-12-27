@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.17 - Attack settings UI overhaul: clearer dropdowns, dedicated Save/Snare rows -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.18 - Fix: Save attack fields now persist (removed unconditional reset in sheet workers) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -2273,14 +2273,8 @@
       var notes = (v[eventInfo.sourceAttribute] || "").toLowerCase();
       var updates = {};
       
-      updates[rowPrefix + "_attack_type"] = "std";
-      updates[rowPrefix + "_attack_save_bc"] = "";
-      updates[rowPrefix + "_attack_save_mod"] = "";
-      updates[rowPrefix + "_attack_recovery"] = "";
-      updates[rowPrefix + "_attack_snare_type"] = "";
-      updates[rowPrefix + "_attack_bp"] = "";
-      updates[rowPrefix + "_attack_max_bp"] = "";
-      updates[rowPrefix + "_attack_ap"] = "";
+      // Only update fields when we find matching patterns in notes
+      // This preserves manual UI entries when notes don't contain parseable patterns
       
       var savMatch = notes.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
       if (savMatch) {
@@ -2305,7 +2299,9 @@
         updates[rowPrefix + "_attack_ap"] = apMatch[1] || "ALL";
       }
       
-      setAttrs(updates);
+      if (Object.keys(updates).length > 0) {
+        setAttrs(updates);
+      }
     });
   });
 
@@ -2322,14 +2318,8 @@
           var prefix = "repeating_attacks_" + id;
           var notes = (values[prefix + "_attack_notes"] || "").toLowerCase();
           
-          updates[prefix + "_attack_type"] = "std";
-          updates[prefix + "_attack_save_bc"] = "";
-          updates[prefix + "_attack_save_mod"] = "";
-          updates[prefix + "_attack_recovery"] = "";
-          updates[prefix + "_attack_snare_type"] = "";
-          updates[prefix + "_attack_bp"] = "";
-          updates[prefix + "_attack_max_bp"] = "";
-          updates[prefix + "_attack_ap"] = "";
+          // Only update fields when we find matching patterns in notes
+          // This preserves manual UI entries when notes don't contain parseable patterns
           
           var savMatch = notes.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
           if (savMatch) {
@@ -2354,7 +2344,9 @@
             updates[prefix + "_attack_ap"] = apMatch[1] || "ALL";
           }
         });
-        setAttrs(updates);
+        if (Object.keys(updates).length > 0) {
+          setAttrs(updates);
+        }
       });
     });
   }

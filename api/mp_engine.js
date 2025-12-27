@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.12 (Duplicate token warning, damage validation)
+/* Mighty Protectors Roll20 API Engine v2.13 (Enhanced Save Attacks with Conditions)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
@@ -7,12 +7,18 @@
  * v2.12: Warns and stops attack if duplicate tokens exist on map
  *        Added damage field validation (rejects non-dice text)
  *        Added !mp debug tokens/deltoken commands
+ * v2.13: Enhanced save attack processing
+ *        - Condition tracking on tokens (paralyzed, mind control, etc.)
+ *        - Status markers for active conditions
+ *        - Recovery timing support (1 phase, 1 round, etc.)
+ *        - New attributes: attack_is_save, attack_save_rec, attack_save_rec_time, attack_no_damage
+ *        - Commands: !mp conditions, !mp clearcondition
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.12 FILE STARTING");
+log("MP ENGINE v2.13 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -86,9 +92,54 @@ MP.Engine = (function () {
   state.MP_Engine = state.MP_Engine || {
     pending: {},
     snares: {},
+    conditions: {},  // Token conditions: { tokenId: [{ type, sourceAtk, saveTN, recTN, recTime, marker, created, effectDesc, atkCharId }] }
     autoroll: true,
     enabled: true
   };
+  
+  // Ensure conditions exists for existing state
+  if (!state.MP_Engine.conditions) state.MP_Engine.conditions = {};
+
+  // Status markers for save attack conditions
+  const CONDITION_MARKERS = {
+    paralyzed: "half-heart",
+    mind_control: "chained-heart",
+    emotion_control: "broken-heart",
+    dazzled: "bleeding-eye",
+    blinded: "interdiction",
+    transmuted: "chemical-bolt",
+    poisoned: "death-zone",
+    damaging_poison: "death-zone",
+    feared: "screaming",
+    generic: "padlock"
+  };
+
+  // Map attack names/types to condition types
+  function inferConditionType(atkName, saveBC, dmgType) {
+    const name = String(atkName || "").toLowerCase();
+    const bc = String(saveBC || "").toUpperCase();
+    const dtype = String(dmgType || "").toLowerCase();
+    
+    if (name.includes("paralys") || name.includes("paralyz")) return "paralyzed";
+    if (name.includes("paralytic")) return "paralyzed";  // Paralytic Poison
+    if (name.includes("mind control")) return "mind_control";
+    if (name.includes("emotion") || name.includes("fear")) return "emotion_control";
+    if (name.includes("dazzle") || name.includes("flash") || name.includes("blind")) return "dazzled";
+    if (name.includes("transmut")) return "transmuted";
+    if (name.includes("damaging") && name.includes("poison")) return "damaging_poison";
+    if (name.includes("poison") || name.includes("venom")) return "poisoned";
+    
+    // Infer from BC if name didn't match
+    if (bc === "IN" && dtype.includes("psych")) return "mind_control";
+    if (bc === "EN" && dtype.includes("entrop")) return "paralyzed";
+    
+    return "generic";
+  }
+  
+  // Check if condition deals damage on failed recovery
+  function conditionDealsDamage(condType) {
+    return condType === "damaging_poison";
+  }
 
   // -------------------------
   // UTILITY FUNCTIONS
@@ -739,9 +790,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const dmgTypeRaw = (getAtkAttr("attack_dmgtype") || "Kin").toLowerCase();
     const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
     const dmgTypeStr = dmgTypeMap[dmgTypeRaw] || fields.type || "Other";
+    
+    // Save attack attributes (new v2.13 fields) - defined early for use in noDamageType
+    const isSaveAttack = (getAtkAttr("attack_is_save") === "1") || (atkType === "sav");
+    const saveBC = getAtkAttr("attack_save_bc") || "";
+    const saveMod = num(getAtkAttr("attack_save_mod"), 0);
+    const recMod = num(getAtkAttr("attack_save_rec") || getAtkAttr("attack_recovery"), 0);  // Support both old and new attr names
+    const recTime = getAtkAttr("attack_save_rec_time") || "1 round";
+    const noDamage = (getAtkAttr("attack_no_damage") === "1");
+    
     // Allow save attacks to declare they have no damage type (e.g., Flash) so protection does not apply.
     const atkNotes = getAtkAttr("attack_notes") || "";
-    const noDamageType = (atkType === "sav") && notesIndicateNoDamageType(atkNotes, atkName);
+    const noDamageType = isSaveAttack && notesIndicateNoDamageType(atkNotes, atkName);
     const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
     const range = getAtkAttr("attack_range") || fields.range || "-";
     const kbChecked = getAtkAttr("attack_kb");
@@ -749,9 +809,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const atkAPRaw = getAtkAttr("attack_ap") || fields.ap || "";
     const atkAP = (atkAPRaw === "ALL" || atkAPRaw === "all") ? Infinity : num(atkAPRaw, 0);
-    const saveBC = getAtkAttr("attack_save_bc") || "";
-    const saveMod = num(getAtkAttr("attack_save_mod"), 0);
-    const recMod = num(getAtkAttr("attack_recovery"), 0);
+    
     const snBP = num(getAtkAttr("attack_bp"), 0);
     const snMaxBP = num(getAtkAttr("attack_max_bp"), 0);
     const snType = getAtkAttr("attack_snare_type") || "";
@@ -879,7 +937,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       defCharId: defChar.id, defName, rowId, nat, roll, confirm, targetTotal,
       outcome, isCrit, isFumble, critResult, fumbleResult,
       damageTotal, dmgTypeStr, protKey, atkType,
-      atkAP, saveBC, saveMod, recMod, snBP, snMaxBP, snType, causesKB,
+      atkAP, isSaveAttack, saveBC, saveMod, recMod, recTime, noDamage,
+      snBP, snMaxBP, snType, causesKB,
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType
     };
@@ -980,12 +1039,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     let buttons = "";
     if (outcome === "HIT" || outcome === "CRIT") {
-      if (atkType === "std") {
-        buttons = buildStandardAttackButtons(rollId, critResult, causesKB);
-      } else if (atkType === "sav") {
-        buttons = buildSaveAttackButtons(rollId, critResult, pushAmount);
+      // Check isSaveAttack flag first (from checkbox), then fall back to atkType dropdown
+      if (isSaveAttack) {
+        buttons = buildSaveAttackButtons(rollId, critResult, pushAmount, noDamage);
       } else if (atkType === "snr") {
         buttons = buildSnareAttackButtons(rollId, critResult, pushAmount);
+      } else {
+        // Default to standard attack
+        buttons = buildStandardAttackButtons(rollId, critResult, causesKB);
       }
     }
 
@@ -1043,7 +1104,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return buttons;
   }
 
-  function buildSaveAttackButtons(rollId, critResult, pushAmount) {
+  function buildSaveAttackButtons(rollId, critResult, pushAmount, noDamage) {
     const critType = critResult ? critResult.type : null;
     let critMod = 0;
     
@@ -1465,7 +1526,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
 
     const saveAttr = bcToSaveAttr(rec.saveBC);
-    if (!saveAttr) return ch("MP", `/w gm <b>MP:</b> Save BC "${rec.saveBC}" not valid.`);
+    if (!saveAttr) {
+      return ch("MP", `/w gm <b>MP:</b> Save BC "${rec.saveBC || "(not set)"}" not valid. Set the Save BC field (EN/AG/IN/CL) on the attack.`);
+    }
 
     const baseSave = getAttrNum(defChar.id, saveAttr, 10);
 
@@ -1496,15 +1559,69 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const tn = baseSave + num(rec.saveMod, 0) + Math.floor(prot) + invulnBonus + rwPaid + critMod + vulnSaveMod;
 
     const d20 = randomInteger(20);
-    const pass = (d20 !== CFG.FUMBLE_FAIL_NAT) && (d20 <= tn);
+    const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
+    const pass = !isFumble && (d20 <= tn);
 
-    // Recovery TN (4.9)
+    // Recovery TN (4.9) - apply recovery modifier
     const recTN = tn + num(rec.recMod, 0);
+    const recTime = rec.recTime || "1 round";
 
     let statusLine = "";
+    let conditionApplied = false;
+    
     if (!pass) {
-      statusLine = `<br/><span style="color:#e94560">Effect applies! Recovery TN: <b>${recTN}-</b></span>`;
-      statusLine += `<br/>[Recovery Roll](!mp recover --target ${rec.defTokenId} --bc ${rec.saveBC} --tn ${recTN})`;
+      // Determine condition type and marker
+      const condType = inferConditionType(rec.atkName, rec.saveBC, rec.dmgTypeStr);
+      const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
+      
+      // Check for fumble = permanent effect (Flash)
+      const isPermanent = isFumble && rec.atkName.toLowerCase().includes("flash");
+      
+      // For Damaging Poison, store the damage info for recurring damage
+      const hasDamage = conditionDealsDamage(condType);
+      
+      // Create condition record
+      const condition = {
+        type: condType,
+        sourceAtk: rec.atkName,
+        atkCharId: rec.atkCharId,
+        saveBC: rec.saveBC,
+        saveTN: tn,
+        recTN: recTN,
+        recTime: recTime,
+        marker: marker,
+        created: Date.now(),
+        permanent: isPermanent,
+        effectDesc: getConditionDesc(condType, rec.atkName),
+        // For damaging conditions (Damaging Poison)
+        damage: hasDamage ? rec.damageTotal : 0,
+        dmgType: hasDamage ? rec.dmgTypeStr : null,
+        protKey: hasDamage ? rec.protKey : null
+      };
+      
+      // Add to conditions tracking
+      if (!state.MP_Engine.conditions[rec.defTokenId]) {
+        state.MP_Engine.conditions[rec.defTokenId] = [];
+      }
+      state.MP_Engine.conditions[rec.defTokenId].push(condition);
+      conditionApplied = true;
+      
+      // Apply status marker
+      defTok.set("status_" + marker, true);
+      
+      // Build status line
+      const condLabel = condType.replace(/_/g, " ").toUpperCase();
+      statusLine = `<br/><span style="color:#e94560; font-weight:bold;">⚠️ ${condLabel}!</span>`;
+      if (hasDamage) {
+        statusLine += `<br/><span style="font-size:11px;">Takes <b>${rec.damageTotal}</b> ${rec.dmgTypeStr} dmg each failed save</span>`;
+      }
+      statusLine += `<br/><span style="font-size:11px;">Recovery: ${rec.saveBC} save at <b>${recTN}-</b> every <b>${recTime}</b></span>`;
+      
+      if (isPermanent) {
+        statusLine += `<br/><span style="color:#ff0000; font-weight:bold;">💀 FUMBLE - Effect is PERMANENT!</span>`;
+      } else {
+        statusLine += `<br/>[Recovery Roll](!mp recover --target ${rec.defTokenId} --idx ${state.MP_Engine.conditions[rec.defTokenId].length - 1})`;
+      }
     }
 
     const msg_out =
@@ -1514,33 +1631,192 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       (rwPaid > 0 ? ` | RW: <b>+${rwPaid}</b>` : "") +
       (critMod !== 0 ? ` | Crit: <b>${critMod}</b>` : "") +
       (vulnSaveMod !== 0 ? ` | <span style="color:#e63946;">Vuln: <b>${vulnSaveMod}</b></span>` : "") +
-      `<br/>Save TN: <b>${tn}-</b> | Roll: <b>${d20}</b> → <b style="color:${pass ? '#50fa7b' : '#e94560'}">${pass ? "SAVED" : "FAILED"}</b>` +
+      `<br/>Save TN: <b>${tn}-</b> | Roll: <b>${d20}</b>${isFumble ? " (FUMBLE)" : ""} → <b style="color:${pass ? '#50fa7b' : '#e94560'}">${pass ? "SAVED" : "FAILED"}</b>` +
       (rwPaid > 0 ? `<br/>Power: ${pow0} → ${pow1}` : "") +
       statusLine;
 
     ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
   }
+  
+  // Get human-readable condition description
+  function getConditionDesc(condType, atkName) {
+    switch (condType) {
+      case "paralyzed": return "Paralyzed - immobile, cannot act";
+      case "mind_control": return "Mind Controlled - must obey commands";
+      case "emotion_control": return "Emotion Controlled - strong imposed emotion";
+      case "dazzled": return "Dazzled - vision impaired (-2 levels)";
+      case "blinded": return "Blinded - cannot see";
+      case "transmuted": return "Transmuted - form altered";
+      case "poisoned": return "Poisoned - ongoing effect";
+      case "damaging_poison": return "Damaging Poison - takes damage each failed save";
+      case "feared": return "Feared - strong fear imposed";
+      default: return `Affected by ${atkName}`;
+    }
+  }
 
   function cmdRecover(msg, args) {
     const tokId = args.target;
-    const bc = args.bc;
-    const tn = num(args.tn, 10);
+    const condIdx = num(args.idx, -1);  // Index into conditions array
+    
+    // Legacy support: allow --bc and --tn for manual recovery rolls
+    const manualBC = args.bc;
+    const manualTN = num(args.tn, 0);
 
     const tok = getObj("graphic", tokId);
     const char = getCharFromToken(tok);
     if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
 
+    // Get condition if using indexed system
+    const conditions = state.MP_Engine.conditions[tokId] || [];
+    let cond = null;
+    let tn = manualTN;
+    let bc = manualBC;
+    let recTime = "1 round";
+    
+    if (condIdx >= 0 && condIdx < conditions.length) {
+      cond = conditions[condIdx];
+      if (cond.permanent) {
+        return ch("MP", `/w gm <b>MP:</b> This condition is <b>PERMANENT</b> and cannot be recovered from naturally.`);
+      }
+      tn = cond.recTN;
+      bc = cond.saveBC;
+      recTime = cond.recTime;
+    } else if (!manualBC || manualTN <= 0) {
+      return ch("MP", `/w gm <b>MP:</b> No condition found or invalid parameters.`);
+    }
+
     const d20 = randomInteger(20);
-    const pass = (d20 !== 20) && (d20 <= tn);
+    const isFumble = (d20 === 20);
+    const pass = !isFumble && (d20 <= tn);
 
-    let msg_out = `<b>Recovery Roll</b> (${esc(char.get("name"))})<br/>` +
-      `TN: <b>${tn}-</b> | Roll: <b>${d20}</b> → <b>${pass ? "RECOVERED" : "Still affected"}</b>`;
+    let msg_out = `<b>Recovery Roll</b> (${esc(char.get("name"))})`;
+    if (cond) {
+      msg_out += `<br/><span style="font-size:11px;">${esc(cond.effectDesc)} from ${esc(cond.sourceAtk)}</span>`;
+    }
+    msg_out += `<br/>TN: <b>${tn}-</b> (${bc}) | Roll: <b>${d20}</b> → <b style="color:${pass ? '#50fa7b' : '#e94560'}">${pass ? "RECOVERED!" : "Still affected"}</b>`;
 
-    if (!pass) {
-      msg_out += `<br/>[Try Again](!mp recover --target ${tokId} --bc ${bc} --tn ${tn})`;
+    if (pass && cond) {
+      // Remove the condition
+      conditions.splice(condIdx, 1);
+      state.MP_Engine.conditions[tokId] = conditions;
+      
+      // Remove marker if no other conditions use it
+      const markerStillUsed = conditions.some(c => c.marker === cond.marker);
+      if (!markerStillUsed) {
+        tok.set("status_" + cond.marker, false);
+      }
+      
+      msg_out += `<br/><span style="color:#50fa7b;">Condition cleared!</span>`;
+    } else if (!pass) {
+      // Handle damaging conditions (Damaging Poison)
+      if (cond && cond.damage > 0) {
+        // Get protection against damage type
+        const prot = cond.protKey ? sumProtection(char.id, cond.protKey) : 0;
+        const afterProt = Math.max(0, cond.damage - prot);
+        
+        if (afterProt > 0) {
+          const hits0 = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+          const hits1 = Math.max(0, hits0 - afterProt);
+          setResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+          
+          msg_out += `<br/><span style="color:#e94560;">Takes <b>${afterProt}</b> ${cond.dmgType || "Biochemical"} damage!</span>`;
+          msg_out += ` (${cond.damage} - ${prot} prot = ${afterProt})`;
+          msg_out += `<br/>Hits: ${hits0} → ${hits1}`;
+          
+          if (hits1 <= 0) {
+            msg_out += `<br/><span style="color:#ff0000; font-weight:bold;">💀 INCAPACITATED!</span>`;
+            tok.set("status_dead", true);
+          }
+        } else {
+          msg_out += `<br/><span style="font-size:11px;">Damage blocked by ${prot} ${cond.dmgType || "Biochemical"} protection</span>`;
+        }
+      }
+      
+      msg_out += `<br/><span style="font-size:11px;">Next attempt: ${recTime}</span>`;
+      if (cond) {
+        msg_out += `<br/>[Try Again](!mp recover --target ${tokId} --idx ${condIdx})`;
+      } else {
+        msg_out += `<br/>[Try Again](!mp recover --target ${tokId} --bc ${bc} --tn ${tn})`;
+      }
     }
 
     ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+  }
+
+  // -------------------------
+  // CONDITION MANAGEMENT
+  // -------------------------
+  
+  function cmdConditions(msg, args) {
+    const tokId = args.target;
+    const tok = getObj("graphic", tokId);
+    const char = getCharFromToken(tok);
+    
+    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+    
+    const conditions = state.MP_Engine.conditions[tokId] || [];
+    
+    if (conditions.length === 0) {
+      return ch("MP", `/w gm <b>${esc(char.get("name"))}</b> has no active conditions.`);
+    }
+    
+    let msg_out = `<b>Conditions on ${esc(char.get("name"))}</b>`;
+    
+    conditions.forEach((cond, idx) => {
+      const condLabel = cond.type.replace(/_/g, " ").toUpperCase();
+      msg_out += `<br/><br/><b>${idx + 1}. ${condLabel}</b>`;
+      msg_out += `<br/><span style="font-size:11px;">Source: ${esc(cond.sourceAtk)}</span>`;
+      msg_out += `<br/><span style="font-size:11px;">Recovery: ${cond.saveBC} at ${cond.recTN}- every ${cond.recTime}</span>`;
+      if (cond.permanent) {
+        msg_out += `<br/><span style="color:#ff0000; font-size:11px;">⚠️ PERMANENT</span>`;
+      } else {
+        msg_out += `<br/>[Recovery Roll](!mp recover --target ${tokId} --idx ${idx}) `;
+        msg_out += `[Remove](!mp clearcondition --target ${tokId} --idx ${idx})`;
+      }
+    });
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+  }
+  
+  function cmdClearCondition(msg, args) {
+    const tokId = args.target;
+    const condIdx = num(args.idx, -1);
+    const clearAll = (args.all === "1");
+    
+    const tok = getObj("graphic", tokId);
+    const char = getCharFromToken(tok);
+    
+    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+    
+    const conditions = state.MP_Engine.conditions[tokId] || [];
+    
+    if (clearAll) {
+      // Remove all markers
+      conditions.forEach(cond => {
+        tok.set("status_" + cond.marker, false);
+      });
+      state.MP_Engine.conditions[tokId] = [];
+      return ch("MP", `/w gm All conditions cleared from <b>${esc(char.get("name"))}</b>.`);
+    }
+    
+    if (condIdx < 0 || condIdx >= conditions.length) {
+      return ch("MP", `/w gm <b>MP:</b> Invalid condition index.`);
+    }
+    
+    const cond = conditions[condIdx];
+    const condLabel = cond.type.replace(/_/g, " ");
+    
+    // Remove the condition
+    conditions.splice(condIdx, 1);
+    state.MP_Engine.conditions[tokId] = conditions;
+    
+    // Remove marker if no other conditions use it
+    const markerStillUsed = conditions.some(c => c.marker === cond.marker);
+    if (!markerStillUsed) {
+      tok.set("status_" + cond.marker, false);
+    }
+    
+    ch("MP", `/w gm <b>${esc(char.get("name"))}</b>: ${condLabel} condition removed.`);
   }
 
   // -------------------------
@@ -1945,12 +2221,24 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const powMax = getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
 
     const snare = state.MP_Engine.snares[tokId];
+    const conditions = state.MP_Engine.conditions[tokId] || [];
 
     let msg_out = `<b>${esc(char.get("name"))} Status</b><br/>` +
       `Hits: <b>${hits}/${hitsMax}</b> | Power: <b>${pow}/${powMax}</b>`;
 
     if (snare) {
       msg_out += `<br/>Snared: <b>${snare.type}</b> (BP ${snare.bp || "N/A"}) by ${snare.source}`;
+    }
+    
+    if (conditions.length > 0) {
+      msg_out += `<br/><b>Conditions:</b>`;
+      conditions.forEach((cond, idx) => {
+        const condLabel = cond.type.replace(/_/g, " ");
+        msg_out += `<br/>• ${condLabel}`;
+        if (cond.permanent) msg_out += ` (PERMANENT)`;
+        else msg_out += ` [Rec: ${cond.recTN}-]`;
+      });
+      msg_out += `<br/>[View Details](!mp conditions --target ${tokId})`;
     }
 
     if (hits <= 0) {
@@ -3341,6 +3629,8 @@ function cmdStance(msg, args) {
       case "limbsave": return cmdLimbSave(msg, args);
       case "save": return cmdSave(msg, args);
       case "recover": return cmdRecover(msg, args);
+      case "conditions": return cmdConditions(msg, args);
+      case "clearcondition": return cmdClearCondition(msg, args);
       case "snare": return cmdSnare(msg, args);
       case "break": return cmdBreak(msg, args);
       case "kb": return cmdKnockback(msg, args);
@@ -3417,7 +3707,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.12</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.13</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -3426,7 +3716,9 @@ function cmdStance(msg, args) {
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
           <code>!mp save --id ID --rollwith N --critmod N</code><br/>
-          <code>!mp recover --target TOKID --bc BC --tn N</code><br/>
+          <code>!mp recover --target TOKID --idx N</code> - Recovery for condition #N<br/>
+          <code>!mp conditions --target TOKID</code> - List active conditions<br/>
+          <code>!mp clearcondition --target TOKID --idx N</code> - Clear condition #N<br/>
           <code>!mp snare --id ID --bonus N</code><br/>
           <code>!mp break --target TOKID --push 0|1</code><br/>
           <code>!mp kb --id ID</code><br/>
@@ -3458,11 +3750,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.12:</b> Loaded. Type <code>!mp test</code> for debug commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.13:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
-  return { CFG, CRIT_TYPES, FUMBLE_TYPES, rollExpr };
+  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.12 READY");
+  log("MP ENGINE v2.13 READY");
 });
