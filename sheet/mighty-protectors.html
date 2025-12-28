@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.39 - Add damage sub-type fields and restructure settings panels -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.40 - Sub-Type dropdowns for attacks and protection -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -601,8 +601,43 @@
             <input type="text" name="attr_attack_duration" style="width:40px !important;" title="Duration: How long the effect lasts" />
           </div>
           <div class="sheet-panel-field">
-            <label title="Damage sub-type (Heat, Sonics, Poison, etc.)">Sub:</label>
-            <input type="text" name="attr_attack_subtype" style="width:60px !important;" title="Damage sub-type (Heat, Electricity, Radiation, Light, Sonics, Vibration, Blunt, Sharp, Disease, Poison, Venom, Cold, Gas, etc.)" placeholder="Heat" />
+            <label title="Damage sub-type">Sub:</label>
+            <select name="attr_attack_subtype" title="Damage sub-type (blank = general type)" style="width:80px !important;">
+              <option value="" selected>-- None --</option>
+              <optgroup label="Kinetic">
+                <option value="blunt">Blunt</option>
+                <option value="sharp">Sharp</option>
+                <option value="sonics">Sonics</option>
+                <option value="vibration">Vibration</option>
+                <option value="high pressure">High Pressure</option>
+                <option value="low pressure">Low Pressure</option>
+              </optgroup>
+              <optgroup label="Energy">
+                <option value="heat">Heat</option>
+                <option value="electricity">Electricity</option>
+                <option value="radiation">Radiation</option>
+                <option value="light">Light</option>
+                <option value="electromagnetics">Electromagnetics</option>
+              </optgroup>
+              <optgroup label="Biochemical">
+                <option value="disease">Disease</option>
+                <option value="poison">Poison</option>
+                <option value="venom">Venom</option>
+              </optgroup>
+              <optgroup label="Entropy">
+                <option value="cold">Cold</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="gas">Gas</option>
+                <option value="gravity">Gravity</option>
+                <option value="disintegration">Disintegration</option>
+                <option value="transmutation">Transmutation</option>
+                <option value="healing">Healing</option>
+                <option value="asphyxiation">Asphyxiation</option>
+                <option value="drowning">Drowning</option>
+                <option value="time">Time</option>
+              </optgroup>
+            </select>
           </div>
           <span class="sheet-panel-divider"></span>
           <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{name=@{attack_name}}} {{row=@{attack_rowid}}}" title="Show attack details">Info</button>
@@ -820,7 +855,7 @@
         <!-- Row 0: Description -->
         <textarea name="attr_description" class="sheet-panel-desc" style="height:60px !important;" placeholder="Description, special rules, notes..."></textarea>
 
-        <!-- Row 1: Type, Coverage, Gear, Broken -->
+        <!-- Row 1: Type, Sub-Type, Coverage, Gear, Broken -->
         <div class="sheet-panel-row" style="margin-top:6px;">
           <div class="sheet-panel-field">
             <label>Type:</label>
@@ -828,6 +863,45 @@
               <option value="C">C - Always on</option>
               <option value="P">P - Stays if KO</option>
               <option value="V" selected>V - Off if KO</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Damage sub-type (blank = full damage type)">Sub:</label>
+            <select name="attr_prot_subtype" title="Damage sub-type this protection applies to. Blank = covers full damage type." style="width:90px !important;">
+              <option value="" selected>-- Full Type --</option>
+              <optgroup label="Kinetic">
+                <option value="blunt">Blunt</option>
+                <option value="sharp">Sharp</option>
+                <option value="sonics">Sonics</option>
+                <option value="vibration">Vibration</option>
+                <option value="high pressure">High Pressure</option>
+                <option value="low pressure">Low Pressure</option>
+              </optgroup>
+              <optgroup label="Energy">
+                <option value="heat">Heat</option>
+                <option value="electricity">Electricity</option>
+                <option value="radiation">Radiation</option>
+                <option value="light">Light</option>
+                <option value="electromagnetics">Electromagnetics</option>
+              </optgroup>
+              <optgroup label="Biochemical">
+                <option value="disease">Disease</option>
+                <option value="poison">Poison</option>
+                <option value="venom">Venom</option>
+              </optgroup>
+              <optgroup label="Entropy">
+                <option value="cold">Cold</option>
+              </optgroup>
+              <optgroup label="Other">
+                <option value="gas">Gas</option>
+                <option value="gravity">Gravity</option>
+                <option value="disintegration">Disintegration</option>
+                <option value="transmutation">Transmutation</option>
+                <option value="healing">Healing</option>
+                <option value="asphyxiation">Asphyxiation</option>
+                <option value="drowning">Drowning</option>
+                <option value="time">Time</option>
+              </optgroup>
             </select>
           </div>
           <div class="sheet-panel-field">
@@ -848,7 +922,7 @@
           </div>
         </div>
 
-        <!-- Row 2: Shield, Sub-Type -->
+        <!-- Row 2: Shield -->
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_prot_shield" value="1" title="This is a Shield" />
@@ -861,11 +935,6 @@
           <div class="sheet-panel-field">
             <label title="Shield Breakpoint">BP:</label>
             <input type="text" name="attr_prot_shield_bp" maxlength="3" style="width:28px !important;" title="Shield Breakpoint (damage to break)" />
-          </div>
-          <span class="sheet-panel-divider"></span>
-          <div class="sheet-panel-field">
-            <label title="Damage sub-type this protection applies to (blank = full type)">Sub-Type:</label>
-            <input type="text" name="attr_prot_subtype" style="width:80px !important;" title="Damage sub-type (Heat, Electricity, Radiation, Sonics, etc.). Blank = full damage type. Comma-separate for multiple." placeholder="Heat,Radiation" />
           </div>
         </div>
 
