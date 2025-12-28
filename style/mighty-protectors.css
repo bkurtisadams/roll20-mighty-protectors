@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.31 */
+/* Mighty Protectors Character Sheet CSS v42.36 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -379,6 +379,12 @@
 
 .charsheet input.sheet-options-flag:checked ~ .sheet-options-panel {
   display: block !important;
+}
+
+/* Codes input - full width */
+.charsheet .sheet-options-panel input.sheet-codes-input {
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 /* ========================================

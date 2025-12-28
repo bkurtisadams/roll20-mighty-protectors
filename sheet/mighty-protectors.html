@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.35 - Add KBR to Mass roll -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.36 - Fix Codes input to fill row width -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -1046,9 +1046,9 @@
         </div>
 
         <!-- Row 4: Codes -->
-        <div style="display:flex; align-items:center; gap:6px; margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
-          <label style="color:#888; font-size:9px; white-space:nowrap;" title="Effect Codes for API automation">Codes:</label>
-          <input type="text" name="attr_ability_notes" style="flex:1; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, absorb:Fire:25..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR" />
+        <div style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
+          <label style="color:#888; font-size:9px; display:block; margin-bottom:2px;" title="Effect Codes for API automation">Codes:</label>
+          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, absorb:Fire:25..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR" />
         </div>
 
         <!-- Send to Chat button -->
