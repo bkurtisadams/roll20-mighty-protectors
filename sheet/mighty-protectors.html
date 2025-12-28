@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.28 - Adjust profile/weight row spacing, bullet separator -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.29 - Ability panel mods override main sheet, parseMultiplier helper -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -1736,6 +1736,25 @@
   // ==================== ABILITY MODIFIER SYSTEM ====================
   // Sums modifiers from all active abilities (Act = C/P/V) and writes to main sheet mod fields
 
+  // Helper to parse multiplier strings like "x2", "/6", "×8", "÷4", "2", "0.5"
+  function parseMultiplier(str) {
+    if (!str || str === "" || str === "1" || str === "x1" || str === "×1") return 1;
+    str = String(str).trim().toLowerCase();
+    // Handle division format: /6, ÷6
+    if (str.charAt(0) === '/' || str.charAt(0) === '÷') {
+      var divisor = parseFloat(str.substring(1));
+      return (divisor && divisor !== 0) ? (1 / divisor) : 1;
+    }
+    // Handle multiplication format: x2, ×2, *2
+    if (str.charAt(0) === 'x' || str.charAt(0) === '×' || str.charAt(0) === '*') {
+      var mult = parseFloat(str.substring(1));
+      return mult || 1;
+    }
+    // Plain number
+    var num = parseFloat(str);
+    return num || 1;
+  }
+
   function recalcAbilityBonuses() {
     getSectionIDs("repeating_abilities", function(ids) {
       if (!ids || ids.length === 0) {
@@ -1750,7 +1769,11 @@
           power_mod: 0,
           hits_mod: 0,
           ip_mod: 0,
-          ability_tohit_bonus: 0
+          ability_tohit_bonus: 0,
+          profile: 1,
+          weight_mult: 1,
+          initiative_mod: 0,
+          kb_resistance: 0
         }, {silent: true}, function() {
           recalcAll();
         });
@@ -1772,13 +1795,18 @@
         attrList.push(prefix + "power_mod");
         attrList.push(prefix + "hits_mod");
         attrList.push(prefix + "inventing_mod");
+        attrList.push(prefix + "profile_mod");
+        attrList.push(prefix + "weight_mod");
+        attrList.push(prefix + "init_mod");
+        attrList.push(prefix + "kbres_mod");
       });
 
       getAttrs(attrList, function(values) {
         var sums = {
           st: 0, en: 0, ag: 0, inv: 0, cl: 0,
           tohit: 0, physdef: 0, mentdef: 0,
-          power: 0, hits: 0, inventing: 0
+          power: 0, hits: 0, inventing: 0,
+          profile: 1, weight: 1, init: 0, kbres: 0
         };
 
         ids.forEach(function(id) {
@@ -1798,10 +1826,15 @@
             sums.power += parseInt(values[prefix + "power_mod"]) || 0;
             sums.hits += parseInt(values[prefix + "hits_mod"]) || 0;
             sums.inventing += parseInt(values[prefix + "inventing_mod"]) || 0;
+            // Profile and weight are multipliers - multiply them together
+            sums.profile *= parseMultiplier(values[prefix + "profile_mod"]);
+            sums.weight *= parseMultiplier(values[prefix + "weight_mod"]);
+            sums.init += parseInt(values[prefix + "init_mod"]) || 0;
+            sums.kbres += parseInt(values[prefix + "kbres_mod"]) || 0;
           }
         });
 
-        // Write directly to the main sheet mod fields (now read-only)
+        // Write directly to the main sheet mod fields
         setAttrs({
           strength_mod: sums.st,
           endurance_mod: sums.en,
@@ -1813,7 +1846,11 @@
           power_mod: sums.power,
           hits_mod: sums.hits,
           ip_mod: sums.inventing,
-          ability_tohit_bonus: sums.tohit
+          ability_tohit_bonus: sums.tohit,
+          profile: sums.profile,
+          weight_mult: sums.weight,
+          initiative_mod: sums.init,
+          kb_resistance: sums.kbres
         }, {silent: true}, function() {
           recalcAll();
         });
@@ -1833,6 +1870,10 @@
      "change:repeating_abilities:ability_power_mod " +
      "change:repeating_abilities:ability_hits_mod " +
      "change:repeating_abilities:ability_inventing_mod " +
+     "change:repeating_abilities:ability_profile_mod " +
+     "change:repeating_abilities:ability_weight_mod " +
+     "change:repeating_abilities:ability_init_mod " +
+     "change:repeating_abilities:ability_kbres_mod " +
      "remove:repeating_abilities", function() {
     recalcAbilityBonuses();
   });
