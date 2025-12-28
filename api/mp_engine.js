@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.14 (Save Attack Improvements)
+/* Mighty Protectors Roll20 API Engine v2.15 (Snare BP dice formula support)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
@@ -831,9 +831,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkAPRaw = getAtkAttr("attack_ap") || fields.ap || "";
     const atkAP = (atkAPRaw === "ALL" || atkAPRaw === "all") ? Infinity : num(atkAPRaw, 0);
     
-    const snBP = num(getAtkAttr("attack_bp"), 0);
+    // Snare BP is a dice formula (e.g., "2d8", "d10+d12"), not a static number
+    const snBP = String(getAtkAttr("attack_bp") || "").trim();
     const snMaxBP = num(getAtkAttr("attack_max_bp"), 0);
     const snType = getAtkAttr("attack_snare_type") || "";
+    const isSnareAttack = (getAtkAttr("attack_is_snare") === "1") || (atkType === "snr");
     
     // PR cost from dedicated attack_cost column (simple number)
     // Skip if nopr flag is set (autofire handles costs upfront)
@@ -1064,7 +1066,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Check isSaveAttack flag first (from checkbox), then fall back to atkType dropdown
       if (isSaveAttack) {
         buttons = buildSaveAttackButtons(rollId, critResult, pushAmount, noDamage);
-      } else if (atkType === "snr") {
+      } else if (isSnareAttack) {
         buttons = buildSnareAttackButtons(rollId, critResult, pushAmount);
       } else {
         // Default to standard attack
@@ -1945,22 +1947,38 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defTok = getObj("graphic", rec.defTokenId);
     if (!defTok) return ch("MP", `/w gm <b>MP:</b> Target token missing.`);
 
-    let bp = Math.max(0, num(rec.snBP, 0)) + bonusBP;
-    const maxBp = Math.max(bp, num(rec.snMaxBP, 0));
-
+    // snBP can be a dice formula (Ice: "2d8") or fixed number (Grapnel: "6")
+    const bpFormula = String(rec.snBP || "0").trim();
+    const maxBp = Math.max(1, num(rec.snMaxBP, 0));
+    
     // Check for existing snare - stack bonus per 4.10
     const existing = state.MP_Engine.snares[defTok.id];
     if (existing) {
-      bp = Math.min(existing.bp + CFG.SNARE_STACK_BONUS, existing.maxBp);
-      state.MP_Engine.snares[defTok.id].bp = bp;
+      const newBp = Math.min(existing.bp + CFG.SNARE_STACK_BONUS, existing.maxBp);
+      const oldBp = existing.bp;
+      state.MP_Engine.snares[defTok.id].bp = newBp;
       ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") +
         `<b>Snare Stacked on ${esc(rec.defName)}</b><br/>` +
-        `BP increased: <b>${existing.bp - CFG.SNARE_STACK_BONUS} → ${bp}</b> (max ${existing.maxBp})`);
+        `BP increased: <b>${oldBp} → ${newBp}</b> (max ${existing.maxBp})`);
       return;
     }
 
+    // Roll the BP formula (rollExpr handles both "6" and "2d8")
+    let rolledBP = rollExpr(bpFormula) + bonusBP;
+    // Cap at max
+    const cappedBP = maxBp > 0 ? Math.min(rolledBP, maxBp) : rolledBP;
+    
+    // Show roll details
+    const isFormula = /d/i.test(bpFormula);
+    let bpDisplay = isFormula 
+      ? `${bpFormula} = <b>${rolledBP - bonusBP}</b>${bonusBP > 0 ? ` +${bonusBP} = <b>${rolledBP}</b>` : ""}`
+      : `<b>${rolledBP}</b>`;
+    if (rolledBP > cappedBP) {
+      bpDisplay += ` (capped to ${cappedBP})`;
+    }
+
     state.MP_Engine.snares[defTok.id] = {
-      bp,
+      bp: cappedBP,
       maxBp,
       type: rec.snType || "Snare",
       source: rec.atkName,
@@ -1971,7 +1989,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") +
       `<b>Snare Applied to ${esc(rec.defName)}</b><br/>` +
-      `Type: <b>${esc(rec.snType || "Snare")}</b> | BP: <b>${bp}</b> / Max: <b>${maxBp}</b>` +
+      `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
+      `BP: ${bpDisplay} | Max: <b>${maxBp}</b>` +
       `<br/>[Break Free](!mp break --target ${defTok.id})`);
   }
 

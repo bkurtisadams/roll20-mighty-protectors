@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.20 - Flatten ability tabs to rows, add Init/KB Res/Profile mods, remove Siphoned activation type, standardize activation dropdowns -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.21 - Snare BP field accepts dice formula (Ice) or fixed number (Grapnel) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -536,7 +536,7 @@
           </td>
           <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
-              <input type="text" name="attr_attack_notes" title="Notes and modifier codes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" placeholder="sav:EN:+3, snr:ice:9/15" />
+              <input type="text" name="attr_attack_notes" title="Notes and modifier codes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" placeholder="sav:EN:+3, snr:ice:2d8/18" />
               <span class="sheet-cog-icon" title="Settings">y</span>
             </div>
           </td>
@@ -657,12 +657,12 @@
             </select>
           </div>
           <div class="sheet-panel-field">
-            <label title="Break Point - target must roll HTH >= this to escape">BP:</label>
-            <input type="text" name="attr_attack_bp" style="width:28px !important;" title="Break Point - target must roll HTH >= this to escape" />
+            <label title="Break Point dice formula - rolled when snare hits (e.g., d6, 2d8, d10+d12)">BP:</label>
+            <input type="text" name="attr_attack_bp" style="width:50px !important;" title="Break Point dice formula - rolled when snare hits (e.g., d6, 2d8, d10+d12)" placeholder="2d8" />
           </div>
           <div class="sheet-panel-field">
-            <label title="Maximum Break Point (BP increases +2 per additional hit)">Max:</label>
-            <input type="text" name="attr_attack_max_bp" style="width:28px !important;" title="Maximum Break Point (BP increases +2 per additional hit)" />
+            <label title="Maximum Break Point (caps initial roll and stacking)">Max:</label>
+            <input type="text" name="attr_attack_max_bp" style="width:28px !important;" title="Maximum Break Point (caps initial roll and stacking)" />
           </div>
         </div>
 
@@ -1206,10 +1206,11 @@
       <div style="color:#f4d03f; font-weight:bold; margin-bottom:4px;">SNARE ATTACKS</div>
       <div style="color:#aaa; margin-bottom:2px;">snr:type:bp/max</div>
       <div style="margin-bottom:8px; font-size:11px;">
-        <div>• type = grp (grapnel) or ice</div>
-        <div>• bp = Break Point</div>
+        <div>• type = grapnel, ice, web, energy, other</div>
+        <div>• bp = Break Point (number or dice formula)</div>
         <div>• max = Max BP (optional)</div>
-        <div style="color:#8be9fd;">Example: snr:ice:9/15</div>
+        <div style="color:#8be9fd;">Grapnel: snr:grapnel:6/12</div>
+        <div style="color:#8be9fd;">Ice Blast: snr:ice:2d8/18</div>
       </div>
       <div style="color:#bd93f9; font-weight:bold; margin-bottom:4px;">ARMOR PIERCING</div>
       <div style="color:#aaa; margin-bottom:2px;">ap or ap:N</div>
@@ -2261,12 +2262,15 @@
         }
       }
       
-      var snrMatch = notes.match(/snr:(grp|ice):(\d+)\/?(\d+)?/);
+      var snrMatch = notes.match(/snr:(grp|grapnel|ice|web|energy|other):([^\/\s,]+)\/?(\d+)?/i);
       if (snrMatch) {
-        updates[rowPrefix + "_attack_type"] = "snr";
-        updates[rowPrefix + "_attack_snare_type"] = snrMatch[1].toUpperCase();
+        updates[rowPrefix + "_attack_is_snare"] = "1";
+        var snType = snrMatch[1].toLowerCase();
+        if (snType === "grp") snType = "Grapnel";
+        else snType = snType.charAt(0).toUpperCase() + snType.slice(1);
+        updates[rowPrefix + "_attack_snare_type"] = snType;
         updates[rowPrefix + "_attack_bp"] = snrMatch[2];
-        updates[rowPrefix + "_attack_max_bp"] = snrMatch[3] || snrMatch[2];
+        updates[rowPrefix + "_attack_max_bp"] = snrMatch[3] || "";
       }
       
       var apMatch = notes.match(/ap:?(\d+)?/);
@@ -2306,12 +2310,15 @@
             }
           }
           
-          var snrMatch = notes.match(/snr:(grp|ice):(\d+)\/?(\d+)?/);
+          var snrMatch = notes.match(/snr:(grp|grapnel|ice|web|energy|other):([^\/\s,]+)\/?(\d+)?/i);
           if (snrMatch) {
-            updates[prefix + "_attack_type"] = "snr";
-            updates[prefix + "_attack_snare_type"] = snrMatch[1].toUpperCase();
+            updates[prefix + "_attack_is_snare"] = "1";
+            var snType = snrMatch[1].toLowerCase();
+            if (snType === "grp") snType = "Grapnel";
+            else snType = snType.charAt(0).toUpperCase() + snType.slice(1);
+            updates[prefix + "_attack_snare_type"] = snType;
             updates[prefix + "_attack_bp"] = snrMatch[2];
-            updates[prefix + "_attack_max_bp"] = snrMatch[3] || snrMatch[2];
+            updates[prefix + "_attack_max_bp"] = snrMatch[3] || "";
           }
           
           var apMatch = notes.match(/ap:?(\d+)?/);
