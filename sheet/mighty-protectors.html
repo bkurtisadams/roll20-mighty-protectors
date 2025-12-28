@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.23 - Compact ability modifier rows, move Profile to row 3 -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.25 - Add weight multiplier, remove readonly from modifier fields, cyan styling -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -80,7 +80,7 @@
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
         <span style="color:#aaa; white-space:nowrap;">IP Mod:</span>
-        <input type="text" name="attr_ip_mod" value="0" readonly style="width:25px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="From active abilities (Heightened Inventing, etc.)" />
+        <input type="text" name="attr_ip_mod" value="0" style="width:25px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Heightened Inventing, etc.)" />
       </div>
     </div>
 
@@ -140,13 +140,17 @@
 
       <span style="color:#888; font-size:10px;" title="Profile affects range penalties">Profile:</span>
       <input type="text" name="attr_profile" value="1"
-        style="width:45px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        style="width:45px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
         title="Profile (default 1). Size affects range penalties." />
 
       <span style="color:#aaa; font-size:11px;">Weight</span>
       <input type="text" name="attr_weight" value="0"
         style="width:70px; flex-shrink:1; min-width:55px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" />
       <span style="color:#888; font-size:10px;">lbs</span>
+      <span style="color:#888; font-size:10px;" title="Weight multiplier from Size Change">x</span>
+      <input type="text" name="attr_weight_mult" value="1"
+        style="width:35px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        title="Weight multiplier from Size Change (e.g., x8, /6)" />
 
       <!-- MASS BUTTON -->
       <button type="roll" class="mp-labellink" name="roll_mass"
@@ -159,7 +163,7 @@
 
       <span style="color:#888; font-size:10px;" title="KB Resistance: Bonus to Mass roll vs Knockback">KBR:</span>
       <input type="text" name="attr_kb_resistance" value="0"
-        style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
         title="Knockback Resistance bonus (from Inertia)" />
 
       <!-- WEALTH BUTTON -->
@@ -217,7 +221,7 @@
       <!-- ST -->
       <tr>
         <td style="text-align:center; padding:2px;"><input type="text" name="attr_strength_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center;"><input type="text" name="attr_strength_mod" value="0" readonly title="From active abilities (Heightened/Reduced Strength)" style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_strength_mod" value="0" title="From active abilities (Heightened/Reduced Strength)" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
         <td style="text-align:center; color:#e63946; font-weight:bold;" title="Strength - physical power, carrying capacity, HTH damage">ST</td>
         <td style="text-align:center;"><input type="text" name="attr_strength_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
@@ -237,7 +241,7 @@
       <!-- EN -->
       <tr>
         <td style="text-align:center; padding:2px;"><input type="text" name="attr_endurance_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center;"><input type="text" name="attr_endurance_mod" value="0" readonly title="From active abilities (Heightened/Reduced Endurance)" style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_endurance_mod" value="0" title="From active abilities (Heightened/Reduced Endurance)" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
         <td style="text-align:center; color:#e63946; font-weight:bold;" title="Endurance - stamina, healing rate, resistance to physical effects">EN</td>
         <td style="text-align:center;"><input type="text" name="attr_endurance_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
@@ -263,8 +267,8 @@
         </td>
 
         <td style="text-align:center;">
-          <input type="text" name="attr_agility_mod" value="0" readonly title="From active abilities (Heightened/Reduced Agility)"
-            style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" />
+          <input type="text" name="attr_agility_mod" value="0" title="From active abilities (Heightened/Reduced Agility)"
+            style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
         </td>
 
         <td style="text-align:center; color:#e63946; font-weight:bold;"
@@ -285,8 +289,8 @@
         <td style="white-space:nowrap;">
           <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Physical Defense Modifier:</span>
-            <input type="text" name="attr_physical_def_bonus" value="0" readonly
-              style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;"
+            <input type="text" name="attr_physical_def_bonus" value="0"
+              style="width:34px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
               title="From active abilities (Heightened Defense, etc.)" />
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Physical Def:</span>
             <input type="text" name="attr_physical_def" readonly
@@ -304,8 +308,8 @@
         </td>
 
         <td style="text-align:center;">
-          <input type="text" name="attr_intelligence_mod" value="0" readonly title="From active abilities (Heightened/Reduced Intelligence)"
-            style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" />
+          <input type="text" name="attr_intelligence_mod" value="0" title="From active abilities (Heightened/Reduced Intelligence)"
+            style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
         </td>
 
         <td style="text-align:center; color:#e63946; font-weight:bold;"
@@ -326,8 +330,8 @@
         <td style="white-space:nowrap;">
           <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Mental Defense Modifier:</span>
-            <input type="text" name="attr_mental_def_bonus" value="0" readonly
-              style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;"
+            <input type="text" name="attr_mental_def_bonus" value="0"
+              style="width:34px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
               title="From active abilities (Heightened Defense, etc.)" />
             <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Mental Def:</span>
             <input type="text" name="attr_mental_def" readonly
@@ -339,7 +343,7 @@
       <!-- CL -->
       <tr>
         <td style="text-align:center; padding:2px;"><input type="text" name="attr_cool_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
-        <td style="text-align:center;"><input type="text" name="attr_cool_mod" value="0" readonly title="From active abilities (Heightened/Reduced Cool)" style="width:100%; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_cool_mod" value="0" title="From active abilities (Heightened/Reduced Cool)" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
         <td style="text-align:center; color:#e63946; font-weight:bold;" title="Cool - composure, willpower, initiative">CL</td>
         <td style="text-align:center;"><input type="text" name="attr_cool_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
@@ -368,7 +372,7 @@
             <input type="text" name="attr_move" style="width:100px; flex-shrink:1; min-width:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; font-size:11px;" title="Ground movement in inches" />
             <button type="action" name="act_reset_move" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to (ST+EN+AG)/3">↺</button>
             <span style="color:#aaa; font-size:11px; margin-left:4px;">Leap Multiplier:</span>
-            <input type="text" name="attr_leap_mult" value="1" style="width:35px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" title="Super Leap multiplier" />
+            <input type="text" name="attr_leap_mult" value="1" style="width:35px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Super Leap multiplier" />
             <span style="color:#aaa; font-size:11px;">Max Leap:</span>
             <span class="mp-leapwrap">
               <input type="text" name="attr_leap_total" readonly style="width:95px; flex-shrink:1; min-width:50px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; font-size:10px;" />
@@ -379,7 +383,7 @@
           <div class="sheet-power-row" style="display:flex; align-items:center; gap:4px;">
             <span class="sheet-power-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">POWER:</span>
             <span style="color:#aaa; font-size:10px;">Modifier</span>
-            <input type="text" name="attr_power_mod" class="sheet-power-input" value="0" readonly style="width:28px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center;" title="From active abilities (Heightened Power, etc.)" />
+            <input type="text" name="attr_power_mod" class="sheet-power-input" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Heightened Power, etc.)" />
             <span style="color:#aaa; font-size:10px;">Maximum</span>
             <input type="text" name="attr_power_score_max" class="sheet-power-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Power" />
             <span style="color:#aaa; font-size:10px;">Current</span>
@@ -389,7 +393,7 @@
           <div class="sheet-hits-row" style="display:flex; align-items:center; gap:4px;">
             <span class="sheet-hits-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">HITS:</span>
             <span style="color:#aaa; font-size:10px;">Modifier</span>
-            <input type="text" name="attr_hits_mod" class="sheet-hits-input" value="0" readonly style="width:28px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center;" title="From active abilities (Heightened Hits, etc.)" />
+            <input type="text" name="attr_hits_mod" class="sheet-hits-input" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Heightened Hits, etc.)" />
             <span style="color:#aaa; font-size:10px;">Maximum</span>
             <input type="text" name="attr_hits_score_max" class="sheet-hits-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Hits" />
             <span style="color:#aaa; font-size:10px;">Current</span>
@@ -970,36 +974,36 @@
           <span style="color:#888; font-size:9px;">BC:</span>
           <div class="sheet-panel-field">
             <label>ST</label>
-            <input type="text" name="attr_ability_st_mod" style="width:24px !important;" title="Strength adjustment" />
+            <input type="text" name="attr_ability_st_mod" class="sheet-mod-input" style="width:24px !important;" title="Strength adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>EN</label>
-            <input type="text" name="attr_ability_en_mod" style="width:24px !important;" title="Endurance adjustment" />
+            <input type="text" name="attr_ability_en_mod" class="sheet-mod-input" style="width:24px !important;" title="Endurance adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>AG</label>
-            <input type="text" name="attr_ability_ag_mod" style="width:24px !important;" title="Agility adjustment" />
+            <input type="text" name="attr_ability_ag_mod" class="sheet-mod-input" style="width:24px !important;" title="Agility adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>IN</label>
-            <input type="text" name="attr_ability_in_mod" style="width:24px !important;" title="Intelligence adjustment" />
+            <input type="text" name="attr_ability_in_mod" class="sheet-mod-input" style="width:24px !important;" title="Intelligence adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>CL</label>
-            <input type="text" name="attr_ability_cl_mod" style="width:24px !important;" title="Cool adjustment" />
+            <input type="text" name="attr_ability_cl_mod" class="sheet-mod-input" style="width:24px !important;" title="Cool adjustment" />
           </div>
           <span class="sheet-panel-divider"></span>
           <div class="sheet-panel-field">
             <label>To Hit</label>
-            <input type="text" name="attr_ability_tohit_mod" style="width:24px !important;" title="To-hit adjustment" />
+            <input type="text" name="attr_ability_tohit_mod" class="sheet-mod-input" style="width:24px !important;" title="To-hit adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>Phys Def</label>
-            <input type="text" name="attr_ability_physdef_mod" style="width:24px !important;" title="Physical Defense adjustment" />
+            <input type="text" name="attr_ability_physdef_mod" class="sheet-mod-input" style="width:24px !important;" title="Physical Defense adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>Ment Def</label>
-            <input type="text" name="attr_ability_mentdef_mod" style="width:24px !important;" title="Mental Defense adjustment" />
+            <input type="text" name="attr_ability_mentdef_mod" class="sheet-mod-input" style="width:24px !important;" title="Mental Defense adjustment" />
           </div>
         </div>
 
@@ -1007,27 +1011,31 @@
         <div class="sheet-panel-row" style="margin-top:4px; gap:4px 8px !important;">
           <div class="sheet-panel-field">
             <label>Profile</label>
-            <input type="text" name="attr_ability_profile_mod" style="width:24px !important;" title="Profile adjustment (size change)" />
+            <input type="text" name="attr_ability_profile_mod" class="sheet-mod-input" style="width:28px !important;" title="Profile multiplier (e.g., x2, /6)" placeholder="x1" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Weight</label>
+            <input type="text" name="attr_ability_weight_mod" class="sheet-mod-input" style="width:28px !important;" title="Weight multiplier (e.g., x8, /6)" placeholder="x1" />
           </div>
           <div class="sheet-panel-field">
             <label>Init</label>
-            <input type="text" name="attr_ability_init_mod" style="width:24px !important;" title="Initiative adjustment" />
+            <input type="text" name="attr_ability_init_mod" class="sheet-mod-input" style="width:24px !important;" title="Initiative adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>KB Res</label>
-            <input type="text" name="attr_ability_kbres_mod" style="width:24px !important;" title="Knockback Resistance adjustment" />
+            <input type="text" name="attr_ability_kbres_mod" class="sheet-mod-input" style="width:24px !important;" title="Knockback Resistance adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>Power</label>
-            <input type="text" name="attr_ability_power_mod" style="width:24px !important;" title="Power adjustment" />
+            <input type="text" name="attr_ability_power_mod" class="sheet-mod-input" style="width:24px !important;" title="Power adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>Hits</label>
-            <input type="text" name="attr_ability_hits_mod" style="width:24px !important;" title="Hits adjustment" />
+            <input type="text" name="attr_ability_hits_mod" class="sheet-mod-input" style="width:24px !important;" title="Hits adjustment" />
           </div>
           <div class="sheet-panel-field">
             <label>Inventing</label>
-            <input type="text" name="attr_ability_inventing_mod" style="width:24px !important;" title="Inventing Points adjustment" />
+            <input type="text" name="attr_ability_inventing_mod" class="sheet-mod-input" style="width:24px !important;" title="Inventing Points adjustment" />
           </div>
         </div>
 
@@ -1040,7 +1048,7 @@
         <!-- Send to Chat button -->
         <div style="margin-top:8px;">
           <button type="roll" name="roll_ability_chat" class="sheet-panel-btn" 
-            value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{type=@{ability_type}}} {{state=@{ability_state}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{pr=@{ability_pr}}} {{desc=@{ability_desc}}} {{st=@{ability_st_mod}}} {{en=@{ability_en_mod}}} {{ag=@{ability_ag_mod}}} {{in=@{ability_in_mod}}} {{cl=@{ability_cl_mod}}} {{tohit=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{profile=@{ability_profile_mod}}} {{init=@{ability_init_mod}}} {{kbres=@{ability_kbres_mod}}} {{power=@{ability_power_mod}}} {{hits=@{ability_hits_mod}}} {{inventing=@{ability_inventing_mod}}}"
+            value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{type=@{ability_type}}} {{state=@{ability_state}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{pr=@{ability_pr}}} {{desc=@{ability_desc}}} {{st=@{ability_st_mod}}} {{en=@{ability_en_mod}}} {{ag=@{ability_ag_mod}}} {{in=@{ability_in_mod}}} {{cl=@{ability_cl_mod}}} {{tohit=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{profile=@{ability_profile_mod}}} {{weight=@{ability_weight_mod}}} {{init=@{ability_init_mod}}} {{kbres=@{ability_kbres_mod}}} {{power=@{ability_power_mod}}} {{hits=@{ability_hits_mod}}} {{inventing=@{ability_inventing_mod}}}"
             style="font-size:9px; padding:2px 8px;" title="Send ability details to chat">Send to Chat</button>
         </div>
       </div>

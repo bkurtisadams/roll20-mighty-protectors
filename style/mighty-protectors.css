@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.20 */
+/* Mighty Protectors Character Sheet CSS v42.25 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -579,6 +579,11 @@
   padding: 2px 4px !important;
   text-align: center !important;
   font-size: 10px !important;
+}
+
+/* Modifier inputs - cyan color to indicate calculated/contributable */
+.charsheet .sheet-mod-input {
+  color: #8be9fd !important;
 }
 
 .charsheet .sheet-panel-field input[type="checkbox"] {
