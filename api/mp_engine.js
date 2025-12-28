@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.17 (Adaptation support)
+/* Mighty Protectors Roll20 API Engine v2.18 (Area Effect support)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -27,12 +27,19 @@
  *        - +5 bonus to saves vs adapted damage type
  *        - 'Other' damage type: 100% immunity
  *        - Stacks with Invulnerability (apply invuln first, then adapt)
+ * v2.18: Area Effect support
+ *        - Area attacks get +6 (immobile) and 0 defense (per 4.7.2)
+ *        - Auto-detect tokens in radius, escape buttons for players
+ *        - Shield block option (damage vs shield BP)
+ *        - Coverage reduction: Light=25%, Heavy=50%, Full=100%
+ *        - Scatter on miss: ceil((range/20) * failMargin)
+ *        - Commands: areaescape, areashield, arearollnpcs, areaforceall, areadamageall
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.17 FILE STARTING");
+log("MP ENGINE v2.18 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -105,6 +112,7 @@ MP.Engine = (function () {
   // State
   state.MP_Engine = state.MP_Engine || {
     pending: {},
+    pendingArea: {},  // Pending area effects: { rollId: { damage, damageType, radius, centerX, centerY, pageId, tokens: {}, timestamp, timeout } }
     snares: {},
     conditions: {},  // Token conditions: { tokenId: [{ type, sourceAtk, saveTN, recTN, recTime, marker, created, effectDesc, atkCharId }] }
     autoroll: true,
@@ -113,6 +121,8 @@ MP.Engine = (function () {
   
   // Ensure conditions exists for existing state
   if (!state.MP_Engine.conditions) state.MP_Engine.conditions = {};
+  // Ensure pendingArea exists for existing state
+  if (!state.MP_Engine.pendingArea) state.MP_Engine.pendingArea = {};
 
   // Status markers for save attack conditions
   const CONDITION_MARKERS = {
@@ -387,8 +397,186 @@ MP.Engine = (function () {
     return sumProtectionWithHardened(charId, protKey).invuln;
   }
 
+  // --- Area Effect Functions ---
   
-  // --- Vulnerability automation (Weakness: Vulnerability) -----------------
+  // Get all tokens within radius of a center point
+  // Returns array of { token, distance, charId, name, controller }
+  function getTokensInRadius(pageId, centerX, centerY, radiusInches) {
+    const page = getObj("page", pageId);
+    if (!page) return [];
+    
+    const snap = page.get("snapping_increment") || 1;
+    const pixelsPerInch = 70 * snap;  // 70 pixels per grid square at snap=1
+    const radiusPx = radiusInches * pixelsPerInch;
+    
+    const tokens = findObjs({ _type: "graphic", _pageid: pageId, _subtype: "token", layer: "objects" }) || [];
+    const results = [];
+    
+    tokens.forEach(tok => {
+      const charId = tok.get("represents");
+      if (!charId) return;  // Skip tokens not linked to characters
+      
+      const char = getObj("character", charId);
+      if (!char) return;
+      
+      const tx = tok.get("left");
+      const ty = tok.get("top");
+      const dx = tx - centerX;
+      const dy = ty - centerY;
+      const distPx = Math.sqrt(dx * dx + dy * dy);
+      const distInches = distPx / pixelsPerInch;
+      
+      if (distInches <= radiusInches) {
+        // Get controller for whisper targeting
+        const controlledBy = char.get("controlledby") || "";
+        const controller = controlledBy.includes("all") ? "all" : (controlledBy.split(",")[0] || "gm");
+        
+        results.push({
+          token: tok,
+          tokenId: tok.id,
+          charId: charId,
+          name: char.get("name"),
+          distance: distInches,
+          controller: controller
+        });
+      }
+    });
+    
+    return results;
+  }
+  
+  // Calculate distance to edge of area effect (for escape TN calculation)
+  function calculateDistanceToEdge(distanceFromCenter, radius) {
+    const distToEdge = radius - distanceFromCenter;
+    return Math.max(1, Math.ceil(distToEdge));  // Minimum 1"
+  }
+  
+  // Sum protection with coverage reduction for area effects
+  // coverage: "full" (100%), "heavy" (50%), "light" (25%)
+  // Returns { prot, hardened, invuln, adapt } with coverage-adjusted values
+  function sumProtectionWithCoverage(charId, protKey, isAreaEffect) {
+    if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
+    
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    let totalProt = 0;
+    let totalHardened = 0;
+    let hasInvuln = false;
+    let hasAdapt = false;
+    
+    // Get all protection row IDs
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const match = n.match(/^repeating_protection_([^_]+)_/);
+      if (match) rowIds.add(match[1]);
+    });
+    
+    rowIds.forEach(rowId => {
+      // Check if this row is broken
+      const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+      if (brokenAttr && brokenAttr.get("current") === "1") return;  // Skip broken rows
+      
+      // Check if this row is active (state = Active)
+      const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+      if (stateAttr && stateAttr.get("current") === "Off") return;  // Skip inactive rows
+      
+      // Get protection value for this damage type
+      const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
+      if (!protAttr) return;
+      
+      const parsed = parseProtValue(protAttr.get("current"));
+      if (parsed.invuln) hasInvuln = true;
+      if (parsed.adapt) hasAdapt = true;
+      
+      // Get coverage for area effect reduction
+      let coverageMult = 1;
+      if (isAreaEffect) {
+        const coverageAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_coverage`);
+        const coverage = coverageAttr ? coverageAttr.get("current") : "full";
+        if (coverage === "light") {
+          coverageMult = 0.25;
+        } else if (coverage === "heavy") {
+          coverageMult = 0.5;
+        }
+      }
+      
+      // Apply coverage and round up
+      const adjustedProt = Math.ceil(parsed.prot * coverageMult);
+      const adjustedHardened = Math.ceil(parsed.hardened * coverageMult);
+      
+      totalProt += adjustedProt;
+      totalHardened += adjustedHardened;
+    });
+    
+    return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln, adapt: hasAdapt };
+  }
+  
+  // Get character's shield data (if they have one)
+  // Returns { hasShield, defense, bp, rowId, name } or null
+  function getShieldData(charId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    
+    // Get all protection row IDs
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const match = n.match(/^repeating_protection_([^_]+)_/);
+      if (match) rowIds.add(match[1]);
+    });
+    
+    for (const rowId of rowIds) {
+      // Check if this row is a shield
+      const shieldAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_shield`);
+      if (!shieldAttr || shieldAttr.get("current") !== "1") continue;
+      
+      // Check if broken
+      const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+      if (brokenAttr && brokenAttr.get("current") === "1") continue;
+      
+      // Check if active
+      const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+      if (stateAttr && stateAttr.get("current") === "Off") continue;
+      
+      // Get shield properties
+      const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+      const defAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_shield_def`);
+      const bpAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_shield_bp`);
+      
+      return {
+        hasShield: true,
+        rowId: rowId,
+        name: nameAttr ? nameAttr.get("current") : "Shield",
+        defense: num(defAttr ? defAttr.get("current") : "4", 4),
+        bp: num(bpAttr ? bpAttr.get("current") : "10", 10)
+      };
+    }
+    
+    return null;
+  }
+  
+  // Mark a shield as broken
+  function breakShield(charId, rowId) {
+    const attrName = `repeating_protection_${rowId}_prot_broken`;
+    const existing = findObjs({ _type: "attribute", _characterid: charId, name: attrName })[0];
+    if (existing) {
+      existing.set("current", "1");
+    } else {
+      createObj("attribute", { _characterid: charId, name: attrName, current: "1" });
+    }
+  }
+  
+  // Cleanup old pending area effects (older than 5 minutes)
+  function cleanupPendingArea() {
+    const now = Date.now();
+    const maxAge = 5 * 60 * 1000;  // 5 minutes
+    Object.keys(state.MP_Engine.pendingArea).forEach(k => {
+      if (now - state.MP_Engine.pendingArea[k].timestamp > maxAge) {
+        delete state.MP_Engine.pendingArea[k];
+      }
+    });
+  }
+
+
   // Minimal, opt-in parsing: define your vulnerability in an "Ability" row
   // named "Vulnerability" (or similar) and put one or more of these lines in Notes:
   //   Attract: Energy -2
@@ -867,6 +1055,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const snType = getAtkAttr("attack_snare_type") || "";
     const isSnareAttack = (getAtkAttr("attack_is_snare") === "1") || (atkType === "snr");
     
+    // Area effect: diameter in inches (from attack_area field or template)
+    const areaRaw = getAtkAttr("attack_area") || fields.area || "";
+    const areaDiameter = num(areaRaw, 0);
+    const isAreaAttack = areaDiameter > 0;
+    const areaRadius = areaDiameter / 2;
+    
     // PR cost from dedicated attack_cost column (simple number)
     // Skip if nopr flag is set (autofire handles costs upfront)
     const skipCosts = (fields.nopr === "1");
@@ -924,7 +1118,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defMod = num(defTok.get(CFG.DEF_MOD_BAR), 0);
     const defValue = defBase + defMod;
 
-    const targetTotal = baseToHit - defValue;
+    // Area attacks target a location (defenseless immobile target)
+    // Per 4.7.2: Defense = 0, attacker gets +6 for completely immobile target
+    let targetTotal;
+    if (isAreaAttack) {
+      targetTotal = baseToHit + 6;  // +6 immobile bonus, -0 defense
+    } else {
+      targetTotal = baseToHit - defValue;
+    }
 
     // Deduct push cost AND attack PR cost from attacker in a single operation
     let prDeducted = 0;
@@ -994,8 +1195,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       atkAP, isSaveAttack, saveBC, saveMod, recMod, recTime, noDamage, saveDamage,
       snBP, snMaxBP, snType, causesKB,
       isPushing, pushAmount, rangeData, created: Date.now(),
-      noDamageType
+      noDamageType,
+      isAreaAttack, areaRadius, areaDiameter
     };
+
+    // For area attacks, handle differently
+    if (isAreaAttack) {
+      return handleAreaAttack(msg, rollId, state.MP_Engine.pending[rollId], defTok, atkTok);
+    }
 
     // Build output
     const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
@@ -1105,6 +1312,439 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     ch("MP", whisper + html + buttons);
+  }
+
+  // -------------------------
+  // AREA EFFECT HANDLING
+  // -------------------------
+
+  function handleAreaAttack(msg, rollId, rec, targetTok, atkTok) {
+    const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
+    const outcome = rec.outcome;
+    const pageId = targetTok.get("_pageid");
+    const page = getObj("page", pageId);
+    const snap = page ? page.get("snapping_increment") : 1;
+    const pixelsPerInch = 70 * snap;
+    
+    let centerX, centerY;
+    let scatterDist = 0;
+    let scatterNote = "";
+    
+    if (outcome === "HIT" || outcome === "CRIT") {
+      // Area centered on target location
+      centerX = targetTok.get("left");
+      centerY = targetTok.get("top");
+    } else if (outcome === "MISS" || outcome === "FUMBLE") {
+      // Calculate scatter per 4.7.5.1
+      // Scatter = ceil((range / 20) * failure margin)
+      const rangeInches = rec.rangeData ? rec.rangeData.inches : 0;
+      const failMargin = rec.roll - rec.targetTotal;
+      
+      // Special case: if TN was 20+ but missed on nat 20, scatter is exactly 1"
+      if (rec.targetTotal >= 20 && rec.nat === 20) {
+        scatterDist = 1;
+      } else {
+        scatterDist = Math.ceil((rangeInches / 20) * failMargin);
+      }
+      
+      // Random direction (8 directions)
+      const directions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+      const dirIdx = randomInteger(8) - 1;
+      const direction = directions[dirIdx];
+      
+      // Calculate scatter offset
+      const angles = { N: -90, NE: -45, E: 0, SE: 45, S: 90, SW: 135, W: 180, NW: -135 };
+      const angleRad = (angles[direction] * Math.PI) / 180;
+      const scatterPx = scatterDist * pixelsPerInch;
+      const offsetX = Math.cos(angleRad) * scatterPx;
+      const offsetY = Math.sin(angleRad) * scatterPx;
+      
+      centerX = targetTok.get("left") + offsetX;
+      centerY = targetTok.get("top") + offsetY;
+      
+      scatterNote = ` Scatter: ${scatterDist}" ${direction}`;
+    }
+    
+    // Find all tokens in the area
+    const tokensInArea = getTokensInRadius(pageId, centerX, centerY, rec.areaRadius);
+    
+    // Store area effect data
+    cleanupPendingArea();
+    const areaTokens = {};
+    tokensInArea.forEach(t => {
+      const distToEdge = calculateDistanceToEdge(t.distance, rec.areaRadius);
+      areaTokens[t.tokenId] = {
+        tokenId: t.tokenId,
+        charId: t.charId,
+        name: t.name,
+        distance: t.distance,
+        distToEdge: distToEdge,
+        controller: t.controller,
+        escaped: null,  // null = pending, true = escaped, false = failed
+        shieldBlocked: false,
+        prone: false
+      };
+    });
+    
+    state.MP_Engine.pendingArea[rollId] = {
+      rollId: rollId,
+      damage: rec.damageTotal,
+      damageType: rec.dmgTypeStr,
+      protKey: rec.protKey,
+      atkAP: rec.atkAP,
+      radius: rec.areaRadius,
+      diameter: rec.areaDiameter,
+      centerX: centerX,
+      centerY: centerY,
+      pageId: pageId,
+      tokens: areaTokens,
+      timestamp: Date.now(),
+      timeout: 60000,  // 60 second timeout
+      atkName: rec.atkName,
+      causesKB: rec.causesKB
+    };
+    
+    // Build output
+    let html;
+    if (outcome === "HIT" || outcome === "CRIT") {
+      html = `<div style="background:#f39c12; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+      html += `<span style="color:#000; font-weight:bold; font-size:14px;">💥 AREA ${outcome}!</span>`;
+    } else {
+      html = `<div style="background:#e74c3c; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+      html += `<span style="color:#000; font-weight:bold; font-size:14px;">💥 AREA ${outcome}!</span>`;
+    }
+    
+    html += `<br/><span style="color:#000;">Radius: <b>${rec.areaRadius}"</b> | Damage: <b>${rec.damageTotal}</b> ${rec.dmgTypeStr}</span>`;
+    html += `<br/><span style="color:#000;">To-Hit: <b>${rec.targetTotal}-</b> (+6 immobile, no def) | Roll: <b>${rec.roll}</b>${scatterNote}</span>`;
+    
+    if (tokensInArea.length === 0) {
+      html += `<br/><span style="color:#333;">No tokens in area.</span>`;
+    } else {
+      html += `<br/><span style="color:#000; font-weight:bold;">Tokens in area: ${tokensInArea.length}</span>`;
+      
+      // List tokens with escape buttons
+      tokensInArea.forEach(t => {
+        const distToEdge = calculateDistanceToEdge(t.distance, rec.areaRadius);
+        const baseDef = getAttrNum(t.charId, "physical_def", 0);
+        const escapeTN = baseDef + 9 - (3 * distToEdge);
+        const escapeTNProne = escapeTN + 6;
+        
+        // Check for shield
+        const shield = getShieldData(t.charId);
+        const shieldTN = shield ? (9 + baseDef + shield.defense) : 0;
+        
+        html += `<br/><span style="color:#333;">• <b>${esc(t.name)}</b> (${distToEdge}" to edge)</span>`;
+        html += `<br/>  <span style="font-size:11px;">Escape TN: ${escapeTN}- | Prone: ${escapeTNProne}-</span>`;
+        
+        // Player/GM buttons
+        if (t.controller !== "gm" && t.controller !== "all") {
+          // Whisper buttons to player
+          const playerButtons = `[Leap Clear (${escapeTN}-)](!mp areaescape --id ${rollId} --target ${t.tokenId}) ` +
+            `[Dive Prone (${escapeTNProne}-)](!mp areaescape --id ${rollId} --target ${t.tokenId} --prone)` +
+            (shield ? ` [Shield Block (${shieldTN}-)](!mp areashield --id ${rollId} --target ${t.tokenId})` : "");
+          sendChat("MP", `/w "${t.controller}" <b>AREA EFFECT vs ${esc(t.name)}</b><br/>${playerButtons}`);
+        }
+      });
+      
+      // GM buttons
+      html += `<br/><br/>[Auto-Roll NPCs](!mp arearollnpcs --id ${rollId})`;
+      html += ` [Force All Escapes](!mp areaforceall --id ${rollId})`;
+      html += ` [Apply All Damage](!mp areadamageall --id ${rollId})`;
+    }
+    
+    html += `</div>`;
+    ch("MP", whisper + html);
+  }
+
+  // Handle escape attempt for area effect
+  function cmdAreaEscape(msg, args) {
+    const rollId = args.id;
+    const targetId = args.target;
+    const isProne = (args.prone === "1" || args.prone === "true" || args.prone !== undefined && args.prone !== "");
+    
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    
+    const tokData = areaRec.tokens[targetId];
+    if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
+    
+    if (tokData.escaped !== null) {
+      return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} already resolved escape.`);
+    }
+    
+    const tok = getObj("graphic", targetId);
+    const char = getObj("character", tokData.charId);
+    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Token or character not found.`);
+    
+    // Calculate escape TN: Defense + 9 - (3 * distance to edge) + 6 if prone
+    const baseDef = getAttrNum(tokData.charId, "physical_def", 0);
+    const distToEdge = tokData.distToEdge;
+    let escapeTN = baseDef + 9 - (3 * distToEdge);
+    if (isProne) escapeTN += 6;
+    
+    const roll = randomInteger(20);
+    const success = (roll !== 20) && (roll <= escapeTN);
+    
+    tokData.escaped = success;
+    tokData.prone = isProne && success;
+    
+    let resultHtml;
+    if (success) {
+      resultHtml = `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">`;
+      resultHtml += `<b>${esc(tokData.name)}</b> ESCAPES area effect!`;
+      resultHtml += `<br/>TN: ${escapeTN}- | Roll: ${roll}${isProne ? " (dove prone)" : ""}`;
+      resultHtml += `</div>`;
+    } else {
+      // Failed - character ends up halfway to edge
+      const halfwayDist = Math.ceil(distToEdge / 2);
+      resultHtml = `<div style="background:#e74c3c; border:2px solid #000; padding:4px 8px;">`;
+      resultHtml += `<b>${esc(tokData.name)}</b> FAILS to escape!`;
+      resultHtml += `<br/>TN: ${escapeTN}- | Roll: ${roll}${roll === 20 ? " (fumble)" : ""}`;
+      resultHtml += `<br/>Ends ${halfwayDist}" from edge (still in area)`;
+      resultHtml += `</div>`;
+    }
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + resultHtml);
+    
+    // Check if all tokens resolved
+    checkAreaResolved(rollId);
+  }
+
+  // Handle shield block for area effect
+  function cmdAreaShield(msg, args) {
+    const rollId = args.id;
+    const targetId = args.target;
+    
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    
+    const tokData = areaRec.tokens[targetId];
+    if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
+    
+    if (tokData.escaped !== null) {
+      return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} already resolved.`);
+    }
+    
+    const char = getObj("character", tokData.charId);
+    if (!char) return ch("MP", `/w gm <b>MP:</b> Character not found.`);
+    
+    const shield = getShieldData(tokData.charId);
+    if (!shield) return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} has no active shield.`);
+    
+    // Shield block TN: 9 + Defense + shield defense bonus
+    const baseDef = getAttrNum(tokData.charId, "physical_def", 0);
+    const blockTN = 9 + baseDef + shield.defense;
+    
+    const roll = randomInteger(20);
+    const success = (roll !== 20) && (roll <= blockTN);
+    
+    let resultHtml;
+    if (success) {
+      // Shield takes the damage - check if it breaks
+      tokData.escaped = true;  // Blocked = escaped the direct damage
+      tokData.shieldBlocked = true;
+      
+      const damage = areaRec.damage;
+      const shieldBroken = damage >= shield.bp;
+      
+      resultHtml = `<div style="background:#3498db; border:2px solid #000; padding:4px 8px;">`;
+      resultHtml += `<b>${esc(tokData.name)}</b> BLOCKS with ${esc(shield.name)}!`;
+      resultHtml += `<br/>TN: ${blockTN}- | Roll: ${roll}`;
+      resultHtml += `<br/>Damage: ${damage} vs Shield BP: ${shield.bp}`;
+      
+      if (shieldBroken) {
+        breakShield(tokData.charId, shield.rowId);
+        resultHtml += `<br/><span style="color:#c0392b; font-weight:bold;">SHIELD BROKEN!</span>`;
+      } else {
+        resultHtml += `<br/><span style="color:#27ae60;">Shield holds!</span>`;
+      }
+      resultHtml += `</div>`;
+    } else {
+      // Failed block - takes normal area damage
+      tokData.escaped = false;
+      
+      resultHtml = `<div style="background:#e74c3c; border:2px solid #000; padding:4px 8px;">`;
+      resultHtml += `<b>${esc(tokData.name)}</b> FAILS to block!`;
+      resultHtml += `<br/>TN: ${blockTN}- | Roll: ${roll}${roll === 20 ? " (fumble)" : ""}`;
+      resultHtml += `<br/>Takes full area damage.`;
+      resultHtml += `</div>`;
+    }
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + resultHtml);
+    
+    checkAreaResolved(rollId);
+  }
+
+  // Auto-roll escapes for NPC tokens
+  function cmdAreaRollNPCs(msg, args) {
+    const rollId = args.id;
+    
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    
+    Object.keys(areaRec.tokens).forEach(tokId => {
+      const tokData = areaRec.tokens[tokId];
+      if (tokData.escaped !== null) return;  // Already resolved
+      if (tokData.controller !== "gm") return;  // Skip player-controlled
+      
+      // Auto-roll escape for NPC
+      cmdAreaEscape(msg, { id: rollId, target: tokId });
+    });
+  }
+
+  // Force all remaining escapes (GM override)
+  function cmdAreaForceAll(msg, args) {
+    const rollId = args.id;
+    
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    
+    Object.keys(areaRec.tokens).forEach(tokId => {
+      const tokData = areaRec.tokens[tokId];
+      if (tokData.escaped !== null) return;  // Already resolved
+      
+      // Force-roll escape
+      cmdAreaEscape(msg, { id: rollId, target: tokId });
+    });
+  }
+
+  // Apply damage to all tokens that failed to escape
+  function cmdAreaDamageAll(msg, args) {
+    const rollId = args.id;
+    
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    
+    const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
+    let html = `<div style="background:#f39c12; border:3px solid #000; padding:4px 8px;">`;
+    html += `<span style="color:#000; font-weight:bold;">AREA DAMAGE RESULTS</span>`;
+    html += `<br/>${areaRec.damage} ${areaRec.damageType}`;
+    
+    Object.keys(areaRec.tokens).forEach(tokId => {
+      const tokData = areaRec.tokens[tokId];
+      
+      if (tokData.escaped === true) {
+        html += `<br/><span style="color:#27ae60;">✓ <b>${esc(tokData.name)}</b> escaped${tokData.shieldBlocked ? " (shield)" : ""}${tokData.prone ? " (prone)" : ""}</span>`;
+        return;
+      }
+      
+      if (tokData.escaped === null) {
+        // Didn't respond - auto-fail
+        tokData.escaped = false;
+        html += `<br/><span style="color:#e67e22;">⚠ <b>${esc(tokData.name)}</b> no response - auto-fail</span>`;
+      }
+      
+      // Apply damage with coverage-adjusted protection
+      const tok = getObj("graphic", tokId);
+      const char = getObj("character", tokData.charId);
+      if (!tok || !char) {
+        html += `<br/><span style="color:#e74c3c;">✗ <b>${esc(tokData.name)}</b> - token missing</span>`;
+        return;
+      }
+      
+      const raw = areaRec.damage;
+      const protData = sumProtectionWithCoverage(tokData.charId, areaRec.protKey, true);
+      const baseProt = protData.prot;
+      const hardened = protData.hardened;
+      const hasInvuln = protData.invuln;
+      const hasAdapt = protData.adapt;
+      const isOtherType = (areaRec.damageType === "Other");
+      
+      // Apply AP vs protection
+      let effectiveProt = baseProt;
+      const rawAP = areaRec.atkAP || 0;
+      let effectiveAP = 0;
+      if (rawAP === Infinity) {
+        effectiveAP = Infinity;
+        effectiveProt = 0;
+      } else if (rawAP > 0) {
+        const apUsedVsHardened = Math.min(rawAP, hardened);
+        effectiveAP = Math.max(0, rawAP - hardened);
+        effectiveProt = Math.max(0, baseProt - effectiveAP);
+      }
+      
+      // Leftover AP for invuln/adapt bypass
+      let leftoverAP = 0;
+      if (effectiveAP === Infinity) {
+        leftoverAP = Infinity;
+      } else if (effectiveAP > baseProt) {
+        leftoverAP = effectiveAP - baseProt;
+      }
+      
+      // Damage after protection
+      let afterProt = Math.max(0, raw - effectiveProt);
+      
+      // Apply Invulnerability (1/4 damage)
+      let penetrating = afterProt;
+      if (hasInvuln && afterProt > 0 && leftoverAP !== Infinity) {
+        if (leftoverAP >= afterProt) {
+          penetrating = afterProt;
+        } else {
+          const bypassedDmg = leftoverAP;
+          const reducedDmg = afterProt - leftoverAP;
+          const afterInvuln = Math.floor(reducedDmg / 4);
+          penetrating = bypassedDmg + afterInvuln;
+        }
+      }
+      
+      // Apply Adaptation (1/2 damage, or 100% immunity for Other)
+      if (hasAdapt && penetrating > 0) {
+        if (isOtherType) {
+          penetrating = 0;
+        } else if (leftoverAP !== Infinity) {
+          penetrating = Math.floor(penetrating / 2);
+        }
+      }
+      
+      // Apply damage to Hits
+      const hits0 = getResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR);
+      const pow0 = getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      
+      const toHits = penetrating;
+      const hitsAfterDmg = Math.max(0, hits0 - toHits);
+      const overflow = Math.max(0, toHits - hits0);
+      const pow1 = Math.max(0, pow0 - overflow);
+      const hits1 = hitsAfterDmg;
+      
+      setResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      setResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+      
+      // Status effects
+      const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+      const incapacitated = (hits1 === 0);
+      
+      let statusNote = "";
+      if (incapacitated) {
+        statusNote = " <b>INCAPACITATED!</b>";
+        tok.set("status_dead", true);
+      } else if (unconscious) {
+        statusNote = " <b>UNCONSCIOUS!</b>";
+        tok.set("status_sleepy", true);
+      }
+      
+      html += `<br/><span style="color:#c0392b;">✗ <b>${esc(tokData.name)}</b>: ${raw}-${effectiveProt} prot`;
+      if (hasInvuln) html += ` [×¼]`;
+      if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
+      html += ` = ${penetrating} pen → Hits: ${hits0}→${hits1}${statusNote}</span>`;
+    });
+    
+    html += `</div>`;
+    ch("MP", whisper + html);
+    
+    // Clean up
+    delete state.MP_Engine.pendingArea[rollId];
+  }
+
+  // Check if all tokens in area have resolved their escapes
+  function checkAreaResolved(rollId) {
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return;
+    
+    const allResolved = Object.values(areaRec.tokens).every(t => t.escaped !== null);
+    if (allResolved) {
+      ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + 
+        `<div style="background:#3498db; padding:4px;">All escapes resolved. [Apply All Damage](!mp areadamageall --id ${rollId})</div>`);
+    }
   }
 
   // -------------------------
@@ -3864,6 +4504,13 @@ function cmdStance(msg, args) {
       case "grapplelock": return cmdGrappleLock(msg, args);
       case "countergrapple": return cmdCounterGrapple(msg, args);
 
+      // Area effect commands
+      case "areaescape": return cmdAreaEscape(msg, args);
+      case "areashield": return cmdAreaShield(msg, args);
+      case "arearollnpcs": return cmdAreaRollNPCs(msg, args);
+      case "areaforceall": return cmdAreaForceAll(msg, args);
+      case "areadamageall": return cmdAreaDamageAll(msg, args);
+
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
       case "status": return cmdStatus(msg, args);
@@ -3929,7 +4576,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.17</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.16</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -3972,11 +4619,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.17:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.16:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.17 READY");
+  log("MP ENGINE v2.16 READY");
 });

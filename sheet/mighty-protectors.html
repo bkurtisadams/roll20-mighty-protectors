@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.37 - Add Adaptation protection notation (/2 suffix) -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.38 - Add Area Effect support (coverage, shield, broken) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -511,7 +511,7 @@
           <td style="text-align:center; padding:1px;">
             <input type="hidden" name="attr_attack_rowid" />
             <input type="hidden" name="attr_attack_num" />
-            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -823,8 +823,34 @@
             </select>
           </div>
           <div class="sheet-panel-field">
+            <label>Coverage:</label>
+            <select name="attr_prot_coverage" title="Armor coverage for area effects: Full=100%, Heavy=50%, Light=25%" style="width:60px !important;">
+              <option value="full" selected>Full</option>
+              <option value="heavy">Heavy</option>
+              <option value="light">Light</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
             <input type="checkbox" name="attr_prot_gear" value="1" title="Gear-based (can be broken/disarmed)" />
             <label>Gear</label>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_prot_broken" value="1" class="sheet-prot-broken-flag" title="Currently broken (disabled)" />
+            <label style="color:#e94560;">Broken</label>
+          </div>
+        </div>
+        <div class="sheet-panel-row">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_prot_shield" value="1" title="This is a Shield" />
+            <label style="color:#3498db;">Shield</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Shield Defense bonus">Def+</label>
+            <input type="text" name="attr_prot_shield_def" value="4" maxlength="2" style="width:24px !important;" title="Shield Defense bonus (default +4)" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Shield Breakpoint">BP:</label>
+            <input type="text" name="attr_prot_shield_bp" maxlength="3" style="width:28px !important;" title="Shield Breakpoint (damage to break)" />
           </div>
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_prot_afield" value="1" title="This is an Ability Field (has damage roll)" />

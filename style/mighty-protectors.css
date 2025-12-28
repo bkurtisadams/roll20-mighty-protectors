@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.36 */
+/* Mighty Protectors Character Sheet CSS v42.38 - Add Area Effect support (coverage, shield, broken) */
 
 /* ========================================
    ROLL TEMPLATES
@@ -480,6 +480,21 @@
   color: #c88fff !important;
   border-color: #8040c0 !important;
   box-shadow: 0 0 4px rgba(128, 64, 192, 0.5) !important;
+}
+
+/* Protection: Broken state - red strikethrough, hidden checkbox */
+.charsheet input.sheet-prot-broken-flag {
+  display: none;
+}
+
+/* When protection is broken, dim the entire row */
+.charsheet .sheet-prot-broken-flag:checked ~ table {
+  opacity: 0.5 !important;
+}
+
+.charsheet .sheet-prot-broken-flag:checked ~ table input[name="attr_prot_name"] {
+  text-decoration: line-through !important;
+  color: #e94560 !important;
 }
 
 /* Protection Roll button - disabled by default (no ability field) */
