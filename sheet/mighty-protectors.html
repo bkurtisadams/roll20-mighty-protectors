@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.18.1 - Fix: Save attack fields persist; robust career migration -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.19 - Save attack: Init/Rec modifiers are separate values, not additive -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -610,12 +610,12 @@
             </select>
           </div>
           <div class="sheet-panel-field">
-            <label title="Modifier to the initial save (from CP table)">Save:</label>
-            <input type="text" name="attr_attack_save_mod" style="width:32px !important;" title="Modifier to the initial save (from CP table)" placeholder="0" />
+            <label title="Modifier to the initial save TN (from CP table)">Init:</label>
+            <input type="text" name="attr_attack_save_mod" style="width:32px !important;" title="Modifier to the initial save TN (from CP table)" placeholder="-8" />
           </div>
           <div class="sheet-panel-field">
-            <label title="Modifier to recovery saves (usually harder)">Rec:</label>
-            <input type="text" name="attr_attack_save_rec" style="width:32px !important;" title="Modifier to recovery saves (usually harder)" placeholder="-12" />
+            <label title="Modifier to recovery save TN (separate from init; for Poison use same value as Init)">Rec:</label>
+            <input type="text" name="attr_attack_save_rec" style="width:32px !important;" title="Modifier to recovery save TN (separate from init; for Poison use same value as Init)" placeholder="-12" />
           </div>
           <div class="sheet-panel-field">
             <label title="Time between recovery save attempts">Rec Time:</label>
