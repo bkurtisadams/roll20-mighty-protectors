@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.36 - Fix Codes input to fill row width -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.37 - Add Adaptation protection notation (/2 suffix) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -782,7 +782,7 @@
             <input type="text" name="attr_prot_damage" title="Ability Field damage dice" placeholder="" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box; font-size:9px;" />
           </td>
           <td style="text-align:center; padding:1px;">
-            <input type="text" name="attr_prot_kinetic" value="0" title="Kinetic: 5=prot, 5h=hardened, 1/4=invuln, 5h/4=both" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
+            <input type="text" name="attr_prot_kinetic" value="0" title="Kinetic: 5=prot, 5h=hardened, 1/4=invuln, 1/2=adapt, 5h/4/2=all" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_prot_energy" value="0" title="Energy protection" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -854,7 +854,7 @@
         </div>
         <textarea name="attr_description" class="sheet-panel-desc" placeholder="Description..."></textarea>
         <div class="sheet-panel-help">
-          Values: <code>5</code>=prot | <code>5h</code>=hardened | <code>1/4</code>=invuln | <code>5h/4</code>=both
+          Values: <code>5</code>=prot | <code>5h</code>=hardened | <code>1/4</code>=invuln | <code>1/2</code>=adapt | <code>5h/4/2</code>=all
         </div>
       </div>
       <input type="hidden" name="attr_prot_kb_display" value="" />
@@ -1248,6 +1248,7 @@
         <div style="font-size:11px;">
           <div><span style="color:#bd93f9;">h suffix:</span> Hardened (e.g. 5h). Negates AP 1:1.</div>
           <div><span style="color:#d35400;">1/4 entry:</span> Invulnerability. Takes ¼ damage (rounded down), +8 vs saves.</div>
+          <div><span style="color:#1abc9c;">1/2 entry:</span> Adaptation. Takes ½ damage (rounded down), +5 vs saves. 'Other' type = 100% immune.</div>
         </div>
       </div>
     </div>

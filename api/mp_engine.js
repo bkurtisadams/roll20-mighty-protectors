@@ -1,7 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.16 (Range penalty x2 beyond 10240")
+/* Mighty Protectors Roll20 API Engine v2.17 (Adaptation support)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
- * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
+ * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
  * Range uses edge-to-edge distance (adjacent tokens = 0")
  * v2.11: Fixed range calculation to account for page snapping_increment
  * v2.12: Warns and stops attack if duplicate tokens exist on map
@@ -22,12 +22,17 @@
  *        - Improved text readability (darker green for success messages)
  * v2.15: Snare BP dice formula support (e.g., "2d8" instead of fixed number)
  * v2.16: Range penalty extends beyond -12 for extreme distances (x2 = -1 more)
+ * v2.17: Adaptation support (/2 suffix)
+ *        - Takes ½ damage (rounded down) vs active attacks
+ *        - +5 bonus to saves vs adapted damage type
+ *        - 'Other' damage type: 100% immunity
+ *        - Stacks with Invulnerability (apply invuln first, then adapt)
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.16 FILE STARTING");
+log("MP ENGINE v2.17 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -305,38 +310,53 @@ MP.Engine = (function () {
   // "1/4" = invuln only (0 prot)
   // "5/4" = 5 prot + invuln
   // "5h/4" = 5 hardened + invuln
-  // Returns { prot: number, hardened: number, invuln: boolean }
+  // "1/2" = adapt only (0 prot)
+  // "5/2" = 5 prot + adapt
+  // "5h/2" = 5 hardened + adapt
+  // "5/4/2" = 5 prot + invuln + adapt
+  // "5h/4/2" = 5 hardened + invuln + adapt
+  // Returns { prot: number, hardened: number, invuln: boolean, adapt: boolean }
   function parseProtValue(val) {
     const s = String(val || "").toLowerCase().trim();
-    if (!s || s === "0") return { prot: 0, hardened: 0, invuln: false };
+    if (!s || s === "0") return { prot: 0, hardened: 0, invuln: false, adapt: false };
 
-    // IMPORTANT: treat "1/4" as invulnerability only (no numeric protection)
-    if (s === "1/4") return { prot: 0, hardened: 0, invuln: true };
-
+    // Check for adaptation /2 and invulnerability /4
+    const hasAdapt = s.includes("/2");
     const hasInvuln = s.includes("/4");
-    const withoutInvuln = hasInvuln ? s.replace("/4", "") : s;
+    
+    // IMPORTANT: treat "1/4" as invulnerability only (no numeric protection)
+    if (s === "1/4") return { prot: 0, hardened: 0, invuln: true, adapt: false };
+    // Treat "1/2" as adaptation only (no numeric protection)
+    if (s === "1/2") return { prot: 0, hardened: 0, invuln: false, adapt: true };
+    // Treat "1/4/2" or "1/2/4" as both (no numeric protection)
+    if ((s === "1/4/2" || s === "1/2/4")) return { prot: 0, hardened: 0, invuln: true, adapt: true };
 
-    const isHardened = withoutInvuln.endsWith("h");
-    const numStr = isHardened ? withoutInvuln.slice(0, -1) : withoutInvuln;
+    // Strip suffixes to get numeric part
+    let withoutSuffixes = s.replace("/4", "").replace("/2", "");
+
+    const isHardened = withoutSuffixes.endsWith("h");
+    const numStr = isHardened ? withoutSuffixes.slice(0, -1) : withoutSuffixes;
     const prot = parseFloat(numStr) || 0;
 
     return {
       prot: prot,
       hardened: isHardened ? prot : 0,
-      invuln: hasInvuln
+      invuln: hasInvuln,
+      adapt: hasAdapt
     };
   }
 
 
-  // Sum protection, hardened, and invuln for a specific damage type
-  // Returns { prot: total protection, hardened: total hardened, invuln: boolean }
+  // Sum protection, hardened, invuln, and adapt for a specific damage type
+  // Returns { prot: total protection, hardened: total hardened, invuln: boolean, adapt: boolean }
   function sumProtectionWithHardened(charId, protKey) {
-    if (!protKey) return { prot: 0, hardened: 0, invuln: false };
+    if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
     const re = new RegExp("^repeating_protection_.*_prot_" + protKey + "$");
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
     let totalProt = 0;
     let totalHardened = 0;
     let hasInvuln = false;
+    let hasAdapt = false;
     
     attrs.forEach(a => {
       const n = a.get("name");
@@ -345,10 +365,11 @@ MP.Engine = (function () {
         totalProt += parsed.prot;
         totalHardened += parsed.hardened;
         if (parsed.invuln) hasInvuln = true;
+        if (parsed.adapt) hasAdapt = true;
       }
     });
     
-    return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln };
+    return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln, adapt: hasAdapt };
   }
 
   // Legacy function for compatibility - just returns protection total
@@ -1205,11 +1226,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const protKey = rec.protKey;
     const damageType = rec.dmgTypeStr || "Kinetic";
     
-    // Get protection, hardened, and invuln for this damage type
+    // Get protection, hardened, invuln, and adapt for this damage type
     const protData = sumProtectionWithHardened(defChar.id, protKey);
     let baseProt = protData.prot;
     const hardened = protData.hardened;
     const hasInvuln = protData.invuln;
+    const hasAdapt = protData.adapt;
+    
+    // Check if this is an 'Other' damage type for Adaptation immunity
+    const isOtherType = (damageType === "Other");
     
     // Avoid Armor crits bypass protection entirely
     const bypassProt = mode.includes("noprot");
@@ -1242,7 +1267,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     // Calculate leftover AP (AP that exceeded protection)
-    // Leftover AP immunizes that many damage points from Invulnerability
+    // Leftover AP immunizes that many damage points from Invulnerability/Adaptation
     let leftoverAP = 0;
     if (effectiveAP === Infinity) {
       leftoverAP = Infinity;
@@ -1261,20 +1286,52 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // But leftover AP immunizes that many points from the reduction
     let penetrating = afterProt;
     let invulnReduction = 0;
+    let afterInvuln = afterProt;  // Track value after invuln for adaptation
     if (hasInvuln && afterProt > 0) {
       if (leftoverAP === Infinity) {
         // All AP - Invulnerability completely bypassed
         penetrating = afterProt;
+        afterInvuln = afterProt;
       } else if (leftoverAP >= afterProt) {
         // Leftover AP exceeds damage - all damage bypasses Invuln
         penetrating = afterProt;
+        afterInvuln = afterProt;
       } else {
         // Split: leftoverAP points bypass, rest takes 1/4
         const bypassedDmg = leftoverAP;
         const reducedDmg = afterProt - leftoverAP;
-        const afterInvuln = Math.floor(reducedDmg / 4);
+        afterInvuln = Math.floor(reducedDmg / 4);
         penetrating = bypassedDmg + afterInvuln;
         invulnReduction = reducedDmg - afterInvuln;
+      }
+    }
+    
+    // Apply Adaptation: 1/2 damage (rounded down) for active attacks
+    // 'Other' damage type: 100% immunity (no damage)
+    // Leftover AP immunizes that many points from the reduction
+    let adaptReduction = 0;
+    if (hasAdapt && penetrating > 0) {
+      if (isOtherType) {
+        // Other damage type: complete immunity
+        adaptReduction = penetrating;
+        penetrating = 0;
+      } else if (leftoverAP === Infinity) {
+        // All AP - Adaptation completely bypassed
+        // penetrating unchanged
+      } else {
+        // Calculate leftover AP after invuln consumed some
+        const leftoverAfterInvuln = Math.max(0, leftoverAP - (hasInvuln ? (afterProt - leftoverAP) : 0));
+        if (leftoverAfterInvuln >= penetrating) {
+          // Leftover AP exceeds remaining damage - all bypasses Adapt
+          // penetrating unchanged
+        } else {
+          // Split: leftoverAP points bypass, rest takes 1/2
+          const bypassedDmg = leftoverAfterInvuln;
+          const reducedDmg = penetrating - leftoverAfterInvuln;
+          const afterAdapt = Math.floor(reducedDmg / 2);
+          penetrating = bypassedDmg + afterAdapt;
+          adaptReduction = reducedDmg - afterAdapt;
+        }
       }
     }
     
@@ -1350,7 +1407,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Build hover tooltip for protection breakdown
     let protHover = `Protection vs ${protKey}`;
-    if (rawAP > 0 || hardened > 0 || hasInvuln) {
+    if (rawAP > 0 || hardened > 0 || hasInvuln || hasAdapt) {
       protHover += `&#10;Base Prot: ${Math.floor(baseProt)}`;
       if (rawAP > 0) {
         protHover += `&#10;AP: ${rawAP === Infinity ? 'ALL' : rawAP}`;
@@ -1370,6 +1427,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           protHover += `&#10;Invuln reduced: ${afterProt - leftoverAP} → ${Math.floor((afterProt - leftoverAP) / 4)}`;
         }
       }
+      if (hasAdapt) {
+        if (isOtherType) {
+          protHover += `&#10;Adaptation: IMMUNE to ${damageType}`;
+        } else {
+          protHover += `&#10;Adaptation: 1/2 dmg vs ${damageType}`;
+        }
+        if (adaptReduction > 0) {
+          protHover += `&#10;Adapt reduced: ${adaptReduction}`;
+        }
+      }
     }
 
     // Build protection display string
@@ -1381,6 +1448,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       invulnIndicator = ` <span style="color:#d35400;" title="Invulnerability: 1/4 damage">[×¼]</span>`;
     } else if (hasInvuln && leftoverAP > 0) {
       invulnIndicator = ` <span style="color:#c0392b;" title="AP bypassed Invulnerability">[Invuln bypassed]</span>`;
+    }
+    
+    // Adaptation indicator - teal for visibility
+    let adaptIndicator = "";
+    if (hasAdapt && isOtherType) {
+      adaptIndicator = ` <span style="color:#1abc9c;" title="Adaptation: 100% Immunity to Other">[IMMUNE]</span>`;
+    } else if (hasAdapt && adaptReduction > 0) {
+      adaptIndicator = ` <span style="color:#1abc9c;" title="Adaptation: 1/2 damage">[×½]</span>`;
+    } else if (hasAdapt && leftoverAP > 0) {
+      adaptIndicator = ` <span style="color:#16a085;" title="AP bypassed Adaptation">[Adapt bypassed]</span>`;
     }
     
     // AP indicator
@@ -1401,6 +1478,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `<br/><span title="Raw damage">${raw}</span>` +
       ` - <span title="${protHover}">${protDisplay}</span> prot${apIndicator}` +
       (hasInvuln ? ` = ${afterProt}${invulnIndicator}` : "") +
+      (hasAdapt ? `${adaptIndicator}` : "") +
       ` = <span title="Penetrating damage${(vuln && vuln.notes && vuln.notes.length) ? ('&#10;' + vuln.notes.join('&#10;')) : ''}">${penetrating}</span> pen` +
       ((vuln && vuln.notes && vuln.notes.length) ? ` <span title="${vuln.notes.join('&#10;')}">[vuln]</span>` : "") +
       (divert > 0 ? `, <span title="Roll-with (max ${maxDivert})">RW ${divert}</span>` : "") +
@@ -1569,10 +1647,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Protection adds to save (makes it easier) per 4.9
     // EXCEPTION: Damaging Poison - protection only applies to damage, NOT to save TN
-    // Also check for invulnerability (+8 bonus)
+    // Also check for invulnerability (+8 bonus) and adaptation (+5 bonus)
     const protData = sumProtectionWithHardened(defChar.id, rec.protKey);
     const prot = protData.prot;
     const invulnBonus = protData.invuln ? 8 : 0;
+    const adaptBonus = protData.adapt ? 5 : 0;
     
     // Determine if this is Damaging Poison (protection applies to damage only, not save)
     // Check early so we know whether to apply protection to save TN
@@ -1585,6 +1664,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // For Paralytic Poison/other saves: protection DOES apply to save TN
     const protForSave = isDamagingPoison ? 0 : Math.floor(prot);
     const invulnForSave = isDamagingPoison ? 0 : invulnBonus;
+    const adaptForSave = isDamagingPoison ? 0 : adaptBonus;
 
     // Roll-with for saves: spend Power to add to save TN (4.8.3.1)
     // Cost is 1 Power per +1 bonus to save TN
@@ -1606,16 +1686,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const vulnSaveMod = (vulnData && vulnData.dmgMod) ? -Math.abs(num(vulnData.dmgMod, 0)) : 0;
 
 
-    // Initial save TN = base + init mod + protection (if not damaging poison) + invuln + roll-with + crit mod + vulnerability
-    const tn = baseSave + num(rec.saveMod, 0) + protForSave + invulnForSave + rwPaid + critMod + vulnSaveMod;
+    // Initial save TN = base + init mod + protection (if not damaging poison) + invuln + adapt + roll-with + crit mod + vulnerability
+    const tn = baseSave + num(rec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + rwPaid + critMod + vulnSaveMod;
 
     const d20 = randomInteger(20);
     const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
     const pass = !isFumble && (d20 <= tn);
 
     // Recovery TN is calculated SEPARATELY using recMod (not additive to initial)
-    // Base + Rec mod + protection (if not damaging poison) + invuln + vulnerability (no roll-with/crit - those were for initial only)
-    const recTN = baseSave + num(rec.recMod, 0) + protForSave + invulnForSave + vulnSaveMod;
+    // Base + Rec mod + protection (if not damaging poison) + invuln + adapt + vulnerability (no roll-with/crit - those were for initial only)
+    const recTN = baseSave + num(rec.recMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod;
     const recTime = rec.recTime || "1 round";
 
     let statusLine = "";
@@ -1723,6 +1803,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         ? (prot > 0 ? ` | <span style="color:#888;" title="Damaging Poison: prot applies to damage, not save">Prot: n/a</span>` : "")
         : (rec.protKey ? ` | Prot: <b>+${protForSave}</b>` : "")) +
       (invulnForSave > 0 ? ` | <span style="color:#d35400;">Invuln: <b>+${invulnForSave}</b></span>` : "") +
+      (adaptForSave > 0 ? ` | <span style="color:#1abc9c;">Adapt: <b>+${adaptForSave}</b></span>` : "") +
       (rwPaid > 0 ? ` | RW: <b>+${rwPaid}</b>` : "") +
       (critMod !== 0 ? ` | Crit: <b>${critMod}</b>` : "") +
       (vulnSaveMod !== 0 ? ` | <span style="color:#e63946;">Vuln: <b>${vulnSaveMod}</b></span>` : "") +
@@ -3848,7 +3929,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.16</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.17</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -3891,11 +3972,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.16:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.17:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.16 READY");
+  log("MP ENGINE v2.17 READY");
 });
