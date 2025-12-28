@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.15 (Snare BP dice formula support)
+/* Mighty Protectors Roll20 API Engine v2.16 (Range penalty x2 beyond 10240")
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5h/4=both
@@ -20,12 +20,14 @@
  *        - Poison damage has Roll-With buttons
  *        - Save Roll-With: 1 Power per +1 to save TN, max bonus = floor(Power/10)
  *        - Improved text readability (darker green for success messages)
+ * v2.15: Snare BP dice formula support (e.g., "2d8" instead of fixed number)
+ * v2.16: Range penalty extends beyond -12 for extreme distances (x2 = -1 more)
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
  */
-log("MP ENGINE v2.14 FILE STARTING");
+log("MP ENGINE v2.16 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -559,8 +561,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     [1279, -8],
     [2559, -9],
     [5119, -10],
-    [10239, -11],
-    [Infinity, -12]
+    [10239, -11]
   ];
 
   function getRangePenalty(inches) {
@@ -569,7 +570,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         return RANGE_TABLE[i][1];
       }
     }
-    return -12;
+    // Beyond 10239": starts at -12, each x2 adds -1 more
+    // 10240-20479 = -12, 20480-40959 = -13, etc.
+    let penalty = -12;
+    let threshold = 20480;
+    while (inches >= threshold) {
+      penalty--;
+      threshold *= 2;
+    }
+    return penalty;
   }
 
   function calculateRange(atkTok, defTok) {
@@ -3839,7 +3848,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.14</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.16</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -3882,11 +3891,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.14:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.16:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.14 READY");
+  log("MP ENGINE v2.16 READY");
 });
