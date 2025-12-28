@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.19 - Save attack: Init/Rec modifiers are separate values, not additive -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.20 - Flatten ability tabs to rows, add Init/KB Res/Profile mods, remove Siphoned activation type, standardize activation dropdowns -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -443,7 +443,7 @@
       <thead>
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:left; padding:2px; color:#f4d03f;">Attacks</th>
-          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary, S=Siphoned"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
           <th style="padding:2px;"></th>
           <th style="text-align:center; padding:2px;" title="Modifier to hit roll">Mod</th>
@@ -489,7 +489,6 @@
             <!-- Hidden checkboxes for CSS state coloring -->
             <input type="checkbox" name="attr_attack_state_on" class="sheet-atk-state-on-flag" value="1" />
             <input type="checkbox" name="attr_attack_activation_c" class="sheet-atk-activation-c-flag" value="1" />
-            <input type="checkbox" name="attr_attack_activation_s" class="sheet-atk-activation-s-flag" value="1" />
             <!-- Type indicator (C/P/V) colored by state -->
             <input type="text" name="attr_attack_activation_ind" class="sheet-atk-activation-ind" readonly value="V" title="Type (set in settings)" />
           </td>
@@ -550,11 +549,10 @@
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <label>Activation:</label>
-            <select name="attr_attack_activation" title="When/how this ability activates" style="width:150px !important;">
-              <option value="C">C - Continual (always on)</option>
-              <option value="P">P - Persistent (stays if KO)</option>
-              <option value="V" selected>V - Voluntary (off if KO)</option>
-              <option value="S">S - Siphoned (temporary)</option>
+            <select name="attr_attack_activation" title="When/how this ability activates" style="width:115px !important;">
+              <option value="C">C - Always on</option>
+              <option value="P">P - Stays if KO</option>
+              <option value="V" selected>V - Off if KO</option>
             </select>
           </div>
           <div class="sheet-panel-field">
@@ -711,7 +709,7 @@
       <thead>
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:left; padding:2px; color:#f4d03f;">Protection</th>
-          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary, S=Siphoned"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
           <th style="padding:2px;"></th>
           <th style="text-align:center; padding:2px;" title="Damage dice for Ability Field">Dmg</th>
@@ -757,7 +755,6 @@
             <!-- Hidden checkboxes for CSS state coloring -->
             <input type="checkbox" name="attr_prot_state_on" class="sheet-prot-state-on-flag" value="1" />
             <input type="checkbox" name="attr_prot_activation_c" class="sheet-prot-activation-c-flag" value="1" />
-            <input type="checkbox" name="attr_prot_activation_s" class="sheet-prot-activation-s-flag" value="1" />
             <!-- Type indicator (C/P/V/S) colored by state -->
             <input type="text" name="attr_prot_activation_ind" class="sheet-prot-activation-ind" readonly value="V" title="Type (set in settings)" />
           </td>
@@ -809,11 +806,10 @@
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <label>Type:</label>
-            <select name="attr_prot_activation" title="C=Continual, P=Persistent, V=Voluntary, S=Siphoned" style="width:36px !important;">
-              <option value="C">C</option>
-              <option value="P">P</option>
-              <option value="V" selected>V</option>
-              <option value="S">S</option>
+            <select name="attr_prot_activation" title="C=Continual, P=Persistent, V=Voluntary" style="width:115px !important;">
+              <option value="C">C - Always on</option>
+              <option value="P">P - Stays if KO</option>
+              <option value="V" selected>V - Off if KO</option>
             </select>
           </div>
           <div class="sheet-panel-field">
@@ -875,7 +871,7 @@
         <tr style="color:#888; border-bottom:1px solid #2a2040;">
           <th style="text-align:center; padding:2px;" title="Character Points (negative = weakness)">CP</th>
           <th style="text-align:center; padding:2px;" title="Inventing Points">IP</th>
-          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary, S=Siphoned"></th>
+          <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Held=Withheld, Off=Inactive">Use</th>
           <th style="text-align:left; padding:2px;">Name / Description <span style="color:#555; font-size:9px;">(click to send to chat)</span></th>
         </tr>
@@ -909,7 +905,6 @@
             <!-- Hidden checkboxes for CSS state coloring (must be before indicator) -->
             <input type="checkbox" name="attr_ability_state_active" class="sheet-state-active-flag" value="1" />
             <input type="checkbox" name="attr_ability_state_held" class="sheet-state-held-flag" value="1" />
-            <input type="checkbox" name="attr_ability_type_s" class="sheet-ability-type-s-flag" value="1" />
             <!-- Type indicator (C/P/V/S) colored by state -->
             <input type="text" name="attr_ability_type_ind" class="sheet-ability-type-ind" readonly value="V" title="Activation Type (set in Desc tab)" />
           </td>
@@ -929,158 +924,126 @@
         </tr>
       </table>
 
-      <!-- TABBED SETTINGS PANEL -->
+      <!-- SETTINGS PANEL (flat rows, no tabs) -->
       <div class="sheet-options-panel">
-        <!-- Tab radios (hidden, positioned over labels) -->
-        <input type="radio" name="attr_ability_tab" value="desc" class="sheet-ability-tab-radio sheet-ability-tab-desc" checked="checked" />
-        <input type="radio" name="attr_ability_tab" value="details" class="sheet-ability-tab-radio sheet-ability-tab-details" />
-        <input type="radio" name="attr_ability_tab" value="codes" class="sheet-ability-tab-radio sheet-ability-tab-codes" />
-        <input type="radio" name="attr_ability_tab" value="help" class="sheet-ability-tab-radio sheet-ability-tab-help" />
-        
-        <!-- Tab labels (visual only) -->
-        <div class="sheet-ability-tab-bar">
-          <span class="sheet-ability-tab-label sheet-ability-tab-label-desc">Desc</span>
-          <span class="sheet-ability-tab-label sheet-ability-tab-label-details">Details</span>
-          <span class="sheet-ability-tab-label sheet-ability-tab-label-codes">Codes</span>
-          <span class="sheet-ability-tab-label sheet-ability-tab-label-help">Help</span>
-        </div>
+        <!-- Row 0: Description -->
+        <textarea name="attr_ability_desc" class="sheet-panel-desc" style="height:50px !important;" placeholder="Description, special rules, notes..."></textarea>
 
-        <!-- DESC TAB CONTENT -->
-        <div class="sheet-ability-tab-content sheet-ability-content-desc">
-          <textarea name="attr_ability_desc" class="sheet-panel-desc" style="height:50px !important;" placeholder="Description, special rules, notes..."></textarea>
-          <div class="sheet-panel-row" style="margin-top:6px;">
-            <div class="sheet-panel-field">
-              <label>Type:</label>
-              <select name="attr_ability_type" title="C=Continual, P=Persistent, V=Voluntary, S=Siphoned" style="width:40px !important;">
-                <option value="C">C</option>
-                <option value="P">P</option>
-                <option value="V" selected>V</option>
-                <option value="S">S</option>
-              </select>
-            </div>
-            <div class="sheet-panel-field">
-              <label>PR:</label>
-              <input type="text" name="attr_ability_pr" maxlength="2" style="width:24px !important;" title="Power Requirement" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Chg:</label>
-              <input type="text" name="attr_ability_charges" maxlength="3" style="width:28px !important;" title="Charges remaining" />
-            </div>
-            <div class="sheet-panel-field">
-              <input type="checkbox" name="attr_ability_gear" value="1" title="Gear-based (can be broken/disarmed)" />
-              <label>Gear</label>
-            </div>
-            <div class="sheet-panel-field">
-              <label>Rng:</label>
-              <input type="text" name="attr_ability_range" style="width:35px !important;" title="Range in inches" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Area:</label>
-              <input type="text" name="attr_ability_area" style="width:28px !important;" title="Area effect diameter" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Dur:</label>
-              <input type="text" name="attr_ability_duration" style="width:35px !important;" title="Duration" />
-            </div>
+        <!-- Row 1: Type, PR, Chg, Gear, Rng, Area, Dur -->
+        <div class="sheet-panel-row" style="margin-top:6px;">
+          <div class="sheet-panel-field">
+            <label>Type:</label>
+            <select name="attr_ability_type" title="C=Continual, P=Persistent, V=Voluntary" style="width:115px !important;">
+              <option value="C">C - Always on</option>
+              <option value="P">P - Stays if KO</option>
+              <option value="V" selected>V - Off if KO</option>
+            </select>
           </div>
-          <div style="margin-top:8px;">
-            <button type="roll" name="roll_ability_chat" class="sheet-panel-btn" 
-              value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{type=@{ability_type}}} {{state=@{ability_state}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{pr=@{ability_pr}}} {{desc=@{ability_desc}}} {{st=@{ability_st_mod}}} {{en=@{ability_en_mod}}} {{ag=@{ability_ag_mod}}} {{in=@{ability_in_mod}}} {{cl=@{ability_cl_mod}}} {{tohit=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{power=@{ability_power_mod}}} {{hits=@{ability_hits_mod}}} {{inventing=@{ability_inventing_mod}}}"
-              style="font-size:9px; padding:2px 8px;" title="Send ability details to chat">Send to Chat</button>
+          <div class="sheet-panel-field">
+            <label>PR:</label>
+            <input type="text" name="attr_ability_pr" maxlength="2" style="width:24px !important;" title="Power Requirement" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Chg:</label>
+            <input type="text" name="attr_ability_charges" maxlength="3" style="width:28px !important;" title="Charges remaining" />
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_gear" value="1" title="Gear-based (can be broken/disarmed)" />
+            <label>Gear</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label>Rng:</label>
+            <input type="text" name="attr_ability_range" style="width:35px !important;" title="Range in inches" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Area:</label>
+            <input type="text" name="attr_ability_area" style="width:28px !important;" title="Area effect diameter" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Dur:</label>
+            <input type="text" name="attr_ability_duration" style="width:35px !important;" title="Duration" />
           </div>
         </div>
 
-        <!-- DETAILS TAB CONTENT -->
-        <div class="sheet-ability-tab-content sheet-ability-content-details">
-          <div class="sheet-panel-row">
-            <span style="color:#888; font-size:9px; width:24px;">BC:</span>
-            <div class="sheet-panel-field">
-              <label>ST</label>
-              <input type="text" name="attr_ability_st_mod" style="width:28px !important;" title="Strength adjustment" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>EN</label>
-              <input type="text" name="attr_ability_en_mod" style="width:28px !important;" title="Endurance adjustment" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>AG</label>
-              <input type="text" name="attr_ability_ag_mod" style="width:28px !important;" title="Agility adjustment" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>IN</label>
-              <input type="text" name="attr_ability_in_mod" style="width:28px !important;" title="Intelligence adjustment" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>CL</label>
-              <input type="text" name="attr_ability_cl_mod" style="width:28px !important;" title="Cool adjustment" />
-            </div>
+        <!-- Row 2: BC modifiers -->
+        <div class="sheet-panel-row" style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
+          <span style="color:#888; font-size:9px; width:20px;">BC:</span>
+          <div class="sheet-panel-field">
+            <label>ST</label>
+            <input type="text" name="attr_ability_st_mod" style="width:28px !important;" title="Strength adjustment" />
           </div>
-          <div class="sheet-panel-row" style="margin-top:4px;">
-            <span style="color:#888; font-size:9px; width:24px;">Combat:</span>
-            <div class="sheet-panel-field">
-              <label>To Hit</label>
-              <input type="text" name="attr_ability_tohit_mod" style="width:28px !important;" title="To-hit adjustment" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Phys Def</label>
-              <input type="text" name="attr_ability_physdef_mod" style="width:28px !important;" title="Physical Defense adjustment" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Ment Def</label>
-              <input type="text" name="attr_ability_mentdef_mod" style="width:28px !important;" title="Mental Defense adjustment" />
-            </div>
+          <div class="sheet-panel-field">
+            <label>EN</label>
+            <input type="text" name="attr_ability_en_mod" style="width:28px !important;" title="Endurance adjustment" />
           </div>
-          <div class="sheet-panel-row" style="margin-top:4px;">
-            <span style="color:#888; font-size:9px; width:24px;">Other:</span>
-            <div class="sheet-panel-field">
-              <label>Power</label>
-              <input type="text" name="attr_ability_power_mod" style="width:28px !important;" title="Power adjustment" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Hits</label>
-              <input type="text" name="attr_ability_hits_mod" style="width:28px !important;" title="Hits adjustment" />
-            </div>
-            <div class="sheet-panel-field">
-              <label>Inventing</label>
-              <input type="text" name="attr_ability_inventing_mod" style="width:28px !important;" title="Inventing Points adjustment" />
-            </div>
+          <div class="sheet-panel-field">
+            <label>AG</label>
+            <input type="text" name="attr_ability_ag_mod" style="width:28px !important;" title="Agility adjustment" />
           </div>
-          <div style="color:#555; font-size:9px; margin-top:6px;">Values applied when ability is active (C/P/V). Negative = penalty.</div>
+          <div class="sheet-panel-field">
+            <label>IN</label>
+            <input type="text" name="attr_ability_in_mod" style="width:28px !important;" title="Intelligence adjustment" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>CL</label>
+            <input type="text" name="attr_ability_cl_mod" style="width:28px !important;" title="Cool adjustment" />
+          </div>
+          <span class="sheet-panel-divider"></span>
+          <div class="sheet-panel-field">
+            <label>To Hit</label>
+            <input type="text" name="attr_ability_tohit_mod" style="width:28px !important;" title="To-hit adjustment" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Phys Def</label>
+            <input type="text" name="attr_ability_physdef_mod" style="width:28px !important;" title="Physical Defense adjustment" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Ment Def</label>
+            <input type="text" name="attr_ability_mentdef_mod" style="width:28px !important;" title="Mental Defense adjustment" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Profile</label>
+            <input type="text" name="attr_ability_profile_mod" style="width:28px !important;" title="Profile adjustment (size change)" />
+          </div>
         </div>
 
-        <!-- CODES TAB CONTENT -->
-        <div class="sheet-ability-tab-content sheet-ability-content-codes">
-          <div style="color:#888; font-size:9px; margin-bottom:4px;">Effect Codes (for API automation)</div>
-          <input type="text" name="attr_ability_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, absorb:Fire:25..." />
+        <!-- Row 3: Other modifiers -->
+        <div class="sheet-panel-row" style="margin-top:4px;">
+          <div class="sheet-panel-field">
+            <label>Init</label>
+            <input type="text" name="attr_ability_init_mod" style="width:28px !important;" title="Initiative adjustment" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>KB Res</label>
+            <input type="text" name="attr_ability_kbres_mod" style="width:28px !important;" title="Knockback Resistance adjustment" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Power</label>
+            <input type="text" name="attr_ability_power_mod" style="width:28px !important;" title="Power adjustment" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Hits</label>
+            <input type="text" name="attr_ability_hits_mod" style="width:28px !important;" title="Hits adjustment" />
+          </div>
+          <div class="sheet-panel-field">
+            <label>Inventing</label>
+            <input type="text" name="attr_ability_inventing_mod" style="width:28px !important;" title="Inventing Points adjustment" />
+          </div>
         </div>
 
-        <!-- HELP TAB CONTENT -->
-        <div class="sheet-ability-tab-content sheet-ability-content-help">
-          <div class="sheet-panel-help" style="border:none; padding:0; margin:0;">
-            <div style="margin-bottom:6px;">
-              <span style="color:#f4d03f;">Type</span> (set once):
-              <span style="color:#aaa;">C</span>=Continual (always active) |
-              <span style="color:#aaa;">P</span>=Persistent (toggle, stays on if KO) |
-              <span style="color:#aaa;">V</span>=Voluntary (toggle, off if KO)
-            </div>
-            <div style="margin-bottom:6px;">
-              <span style="color:#f4d03f;">State</span> (current):
-              <span style="color:#50fa7b;">Active</span>=On, modifiers apply |
-              <span style="color:#f4d03f;">Held</span>=Withheld, modifiers don't apply |
-              <span style="color:#666;">Off</span>=Inactive
-            </div>
-            <div style="margin-bottom:6px;">
-              <span style="color:#f4d03f;">Fields:</span>
-              <span style="color:#aaa;">PR</span>=Power cost |
-              <span style="color:#aaa;">Chg</span>=Charges |
-              <span style="color:#aaa;">Gear</span>=Can be disarmed/broken, can't Push
-            </div>
-            <div style="color:#f4d03f; margin-top:8px; margin-bottom:4px;">Effect Codes:</div>
-            <div><code>vuln:Type:+N</code> Vulnerability (extra damage taken)</div>
-            <div><code>absorb:Type:Limit</code> Absorption (heals from damage)</div>
-            <div><code>reflect:Type:Limit</code> Reflection</div>
-            <div><code>aura:Dmg:Type:PR</code> Damage aura</div>
+        <!-- Row 4: Codes -->
+        <div class="sheet-panel-row" style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
+          <div class="sheet-panel-field" style="flex:1;">
+            <label title="Effect Codes for API automation">Codes:</label>
+            <input type="text" name="attr_ability_notes" style="flex:1; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, absorb:Fire:25..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR" />
           </div>
+        </div>
+
+        <!-- Send to Chat button -->
+        <div style="margin-top:8px;">
+          <button type="roll" name="roll_ability_chat" class="sheet-panel-btn" 
+            value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{type=@{ability_type}}} {{state=@{ability_state}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{pr=@{ability_pr}}} {{desc=@{ability_desc}}} {{st=@{ability_st_mod}}} {{en=@{ability_en_mod}}} {{ag=@{ability_ag_mod}}} {{in=@{ability_in_mod}}} {{cl=@{ability_cl_mod}}} {{tohit=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{profile=@{ability_profile_mod}}} {{init=@{ability_init_mod}}} {{kbres=@{ability_kbres_mod}}} {{power=@{ability_power_mod}}} {{hits=@{ability_hits_mod}}} {{inventing=@{ability_inventing_mod}}}"
+            style="font-size:9px; padding:2px 8px;" title="Send ability details to chat">Send to Chat</button>
         </div>
       </div>
 
@@ -2614,9 +2577,8 @@
       var update = {};
       update[rowPrefix + "_attack_activation_ind"] = type;
       update[rowPrefix + "_attack_activation_c"] = (type === "C") ? "1" : "0";
-      update[rowPrefix + "_attack_activation_s"] = (type === "S") ? "1" : "0";
-      // Continual is always on, Siphoned is always on (temporary)
-      if (type === "C" || type === "S") {
+      // Continual is always on
+      if (type === "C") {
         update[rowPrefix + "_attack_state"] = "Active";
         update[rowPrefix + "_attack_state_on"] = "1";
       }
@@ -2631,8 +2593,8 @@
       var state = v[eventInfo.sourceAttribute] || "Off";
       var type = v[rowPrefix + "_attack_activation"] || "V";
       var update = {};
-      // Continual and Siphoned stay on regardless of dropdown
-      if (type === "C" || type === "S") {
+      // Continual stays on regardless of dropdown
+      if (type === "C") {
         state = "Active";
         update[rowPrefix + "_attack_state"] = "Active";
       }
@@ -2651,9 +2613,8 @@
       var update = {};
       update[rowPrefix + "_prot_activation_ind"] = type;
       update[rowPrefix + "_prot_activation_c"] = (type === "C") ? "1" : "0";
-      update[rowPrefix + "_prot_activation_s"] = (type === "S") ? "1" : "0";
-      // Continual and Siphoned are always on
-      if (type === "C" || type === "S") {
+      // Continual is always on
+      if (type === "C") {
         update[rowPrefix + "_prot_state"] = "Active";
         update[rowPrefix + "_prot_state_on"] = "1";
       }
@@ -2668,8 +2629,8 @@
       var state = v[eventInfo.sourceAttribute] || "Off";
       var type = v[rowPrefix + "_prot_activation"] || "V";
       var update = {};
-      // Continual and Siphoned stay on regardless of dropdown
-      if (type === "C" || type === "S") {
+      // Continual stays on regardless of dropdown
+      if (type === "C") {
         state = "Active";
         update[rowPrefix + "_prot_state"] = "Active";
       }
@@ -2689,16 +2650,15 @@
     });
   });
 
-  // Sync Type dropdown → type indicator + S flag
+  // Sync Type dropdown → type indicator
   on("change:repeating_abilities:ability_type", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_type", "");
     getAttrs([eventInfo.sourceAttribute], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
       var update = {};
       update[rowPrefix + "_ability_type_ind"] = type;
-      update[rowPrefix + "_ability_type_s"] = (type === "S") ? "1" : "0";
-      // Siphoned is always active (temporary)
-      if (type === "S") {
+      // Continual is always active
+      if (type === "C") {
         update[rowPrefix + "_ability_state"] = "Active";
         update[rowPrefix + "_ability_state_active"] = "1";
         update[rowPrefix + "_ability_state_held"] = "0";
@@ -2714,8 +2674,8 @@
       var state = v[eventInfo.sourceAttribute] || "Off";
       var type = v[rowPrefix + "_ability_type"] || "V";
       var update = {};
-      // Siphoned stays active regardless of dropdown
-      if (type === "S") {
+      // Continual stays active regardless of dropdown
+      if (type === "C") {
         state = "Active";
         update[rowPrefix + "_ability_state"] = "Active";
       }
@@ -2800,14 +2760,13 @@
         ids.forEach(function(id) {
           var type = values["repeating_protection_" + id + "_prot_activation"] || "V";
           var state = values["repeating_protection_" + id + "_prot_state"] || "Off";
-          // Continual and Siphoned are always on
-          if (type === "C" || type === "S") {
+          // Continual is always on
+          if (type === "C") {
             state = "Active";
             updates["repeating_protection_" + id + "_prot_state"] = "Active";
           }
           updates["repeating_protection_" + id + "_prot_activation_ind"] = type;
           updates["repeating_protection_" + id + "_prot_activation_c"] = (type === "C") ? "1" : "0";
-          updates["repeating_protection_" + id + "_prot_activation_s"] = (type === "S") ? "1" : "0";
           updates["repeating_protection_" + id + "_prot_state_on"] = (state === "Active") ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
@@ -2827,14 +2786,13 @@
         ids.forEach(function(id) {
           var type = values["repeating_attacks_" + id + "_attack_activation"] || "V";
           var state = values["repeating_attacks_" + id + "_attack_state"] || "Off";
-          // Continual and Siphoned are always on
-          if (type === "C" || type === "S") {
+          // Continual is always on
+          if (type === "C") {
             state = "Active";
             updates["repeating_attacks_" + id + "_attack_state"] = "Active";
           }
           updates["repeating_attacks_" + id + "_attack_activation_ind"] = type;
           updates["repeating_attacks_" + id + "_attack_activation_c"] = (type === "C") ? "1" : "0";
-          updates["repeating_attacks_" + id + "_attack_activation_s"] = (type === "S") ? "1" : "0";
           updates["repeating_attacks_" + id + "_attack_state_on"] = (state === "Active") ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
@@ -2855,13 +2813,12 @@
           var prefix = "repeating_abilities_" + id + "_ability_";
           var type = values[prefix + "type"] || "V";
           var state = values[prefix + "state"] || "Off";
-          // Siphoned is always active
-          if (type === "S") {
+          // Continual is always active
+          if (type === "C") {
             state = "Active";
             updates[prefix + "state"] = "Active";
           }
           updates[prefix + "type_ind"] = type;
-          updates[prefix + "type_s"] = (type === "S") ? "1" : "0";
           updates[prefix + "state_active"] = (state === "Active") ? "1" : "0";
           updates[prefix + "state_held"] = (state === "Held") ? "1" : "0";
           updates[prefix + "active"] = (state === "Active") ? "1" : "0";

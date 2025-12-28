@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.15 */
+/* Mighty Protectors Character Sheet CSS v42.20 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -698,77 +698,4 @@
   color: #eaeaea !important;
   border: 1px solid #2a2040 !important;
   height: 20px !important;
-}
-
-/* ========================================
-   ABILITY PANEL TABS
-   ======================================== */
-
-/* Radio buttons - positioned over their labels */
-.charsheet .sheet-ability-tab-radio {
-  position: absolute !important;
-  opacity: 0 !important;
-  cursor: pointer !important;
-  z-index: 10 !important;
-  top: 6px !important;
-  height: 22px !important;
-  width: 50px !important;
-  margin: 0 !important;
-}
-
-.charsheet .sheet-ability-tab-desc { left: 8px !important; }
-.charsheet .sheet-ability-tab-details { left: 50px !important; }
-.charsheet .sheet-ability-tab-codes { left: 105px !important; }
-.charsheet .sheet-ability-tab-help { left: 155px !important; }
-
-/* Tab bar */
-.charsheet .sheet-ability-tab-bar {
-  display: flex !important;
-  gap: 0 !important;
-  margin-bottom: 8px !important;
-  border-bottom: 1px solid #3a3060 !important;
-  position: relative !important;
-}
-
-/* Tab labels */
-.charsheet .sheet-ability-tab-label {
-  padding: 4px 10px !important;
-  background: #151525 !important;
-  color: #666 !important;
-  border: 1px solid #2a2040 !important;
-  border-bottom: none !important;
-  cursor: pointer !important;
-  font-size: 10px !important;
-  font-weight: bold !important;
-  border-radius: 4px 4px 0 0 !important;
-  margin-right: -1px !important;
-  margin-bottom: -1px !important;
-}
-
-.charsheet .sheet-ability-tab-label:hover {
-  background: #1a1a2e !important;
-  color: #888 !important;
-}
-
-/* Active tab label styling */
-.charsheet .sheet-ability-tab-desc:checked ~ .sheet-ability-tab-bar .sheet-ability-tab-label-desc,
-.charsheet .sheet-ability-tab-details:checked ~ .sheet-ability-tab-bar .sheet-ability-tab-label-details,
-.charsheet .sheet-ability-tab-codes:checked ~ .sheet-ability-tab-bar .sheet-ability-tab-label-codes,
-.charsheet .sheet-ability-tab-help:checked ~ .sheet-ability-tab-bar .sheet-ability-tab-label-help {
-  background: #12121f !important;
-  color: #f4d03f !important;
-  border-bottom-color: #12121f !important;
-}
-
-/* Hide all tab content by default */
-.charsheet .sheet-ability-tab-content {
-  display: none !important;
-}
-
-/* Show active tab content */
-.charsheet .sheet-ability-tab-desc:checked ~ .sheet-ability-tab-content.sheet-ability-content-desc,
-.charsheet .sheet-ability-tab-details:checked ~ .sheet-ability-tab-content.sheet-ability-content-details,
-.charsheet .sheet-ability-tab-codes:checked ~ .sheet-ability-tab-content.sheet-ability-content-codes,
-.charsheet .sheet-ability-tab-help:checked ~ .sheet-ability-tab-content.sheet-ability-content-help {
-  display: block !important;
 }
