@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.19 (Damage Sub-Type matching)
+/* Mighty Protectors Roll20 API Engine v2.22 (Absorption to BC stats with status effects)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -39,12 +39,26 @@
  *        - Protection with blank sub-type covers full damage type
  *        - Protection with specific sub-type only matches that sub-type
  *        - Supports comma-separated sub-types (Heat,Radiation)
+ * v2.20: Absorption and Reflection support
+ *        - Protection Mode: Normal (auto-apply), Absorption, or Reflection
+ *        - Absorption/Reflection require saved action, give 1/4 damage
+ *        - Reflection redirects damage as immediate counter-attack
+ *        - Commands: absorb, reflect, reflecthit
+ * v2.21: Absorption simplified
+ *        - Absorbed points go directly to Hits, Power, or Split 50/50
+ * v2.22: Absorption expanded
+ *        - Can absorb to BC stats (ST/EN/AG/IN/CL) - temporary boost
+ *        - Can absorb to "Other" powers - tracked as status effect
+ *        - Status effects have 5-minute expiry with countdown
+ *        - BC stat boosts automatically restore on expiry/clear
+ *        - Purple status marker shows active absorption effects
+ *        - Commands: checkexpiry (manual expiry check)
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.19 FILE STARTING");
+log("MP ENGINE v2.22 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -369,6 +383,7 @@ MP.Engine = (function () {
   //   - Protection has no subtype (blank) = covers full damage type
   //   - Protection subtype matches attack subtype exactly
   //   - Protection has comma-separated subtypes and one matches
+  // NOTE: Absorption and Reflection rows are SKIPPED - they require saved action, not auto-apply
   function sumProtectionWithHardened(charId, protKey, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
     
@@ -397,6 +412,11 @@ MP.Engine = (function () {
       // Check if this row is active (state = Active)
       const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
       if (stateAttr && stateAttr.get("current") === "Off") return;  // Skip inactive rows
+      
+      // Check mode - skip Absorption and Reflection (they require saved action)
+      const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+      const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
+      if (mode === "absorption" || mode === "reflection") return;  // Skip - requires saved action
       
       // Get protection value for this damage type
       const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
@@ -452,6 +472,77 @@ MP.Engine = (function () {
   // Check if character has invulnerability for a damage type (from protection rows)
   function hasInvulnerability(charId, protKey, atkSubtype) {
     return sumProtectionWithHardened(charId, protKey, atkSubtype).invuln;
+  }
+
+  // Get Absorption or Reflection data for a character and damage type
+  // Returns { mode: "absorption"|"reflection"|null, limit, rowId, absorbsTo, current } or null
+  function getAbsorptionReflection(charId, protKey, atkSubtype) {
+    if (!protKey) return null;
+    
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const atkSub = (atkSubtype || "").trim().toLowerCase();
+    
+    // Get all protection row IDs
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const match = n.match(/^repeating_protection_([^_]+)_/);
+      if (match) rowIds.add(match[1]);
+    });
+    
+    for (const rowId of rowIds) {
+      // Check if this row is broken
+      const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+      if (brokenAttr && brokenAttr.get("current") === "1") continue;
+      
+      // Check if this row is active
+      const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+      if (stateAttr && stateAttr.get("current") === "Off") continue;
+      
+      // Check mode - only interested in Absorption or Reflection
+      const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+      const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
+      if (mode !== "absorption" && mode !== "reflection") continue;
+      
+      // Check if this row has protection for this damage type
+      const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
+      if (!protAttr) continue;
+      const protValue = protAttr.get("current");
+      if (!protValue || protValue === "0" || protValue === "") continue;
+      
+      // Check subtype matching
+      const subtypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_subtype`);
+      const protSubtype = subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "";
+      
+      let subtypeMatches = false;
+      if (protSubtype === "") {
+        subtypeMatches = true;
+      } else if (atkSub === "") {
+        subtypeMatches = false;
+      } else {
+        const protSubtypes = protSubtype.split(",").map(s => s.trim().toLowerCase());
+        subtypeMatches = protSubtypes.includes(atkSub);
+      }
+      
+      if (!subtypeMatches) continue;
+      
+      // Found a matching Absorption/Reflection row
+      const limitAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_limit`);
+      const absorbsToAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_absorbs_to`);
+      const absorbsPowerAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_absorbs_power`);
+      const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+      
+      return {
+        mode: mode,
+        rowId: rowId,
+        name: nameAttr ? nameAttr.get("current") : mode,
+        limit: num(limitAttr ? limitAttr.get("current") : "", 0),
+        absorbsTo: absorbsToAttr ? (absorbsToAttr.get("current") || "hits").toLowerCase() : "hits",
+        absorbsPower: absorbsPowerAttr ? absorbsPowerAttr.get("current") : ""
+      };
+    }
+    
+    return null;
   }
 
   // --- Area Effect Functions ---
@@ -512,6 +603,7 @@ MP.Engine = (function () {
   // coverage: "full" (100%), "heavy" (50%), "light" (25%)
   // Returns { prot, hardened, invuln, adapt } with coverage-adjusted values
   // atkSubtype: the attack's sub-type for matching
+  // NOTE: Absorption and Reflection rows are SKIPPED - they require saved action
   function sumProtectionWithCoverage(charId, protKey, isAreaEffect, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
     
@@ -540,6 +632,11 @@ MP.Engine = (function () {
       // Check if this row is active (state = Active)
       const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
       if (stateAttr && stateAttr.get("current") === "Off") return;  // Skip inactive rows
+      
+      // Check mode - skip Absorption and Reflection (they require saved action)
+      const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+      const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
+      if (mode === "absorption" || mode === "reflection") return;  // Skip - requires saved action
       
       // Get protection value for this damage type
       const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
@@ -1390,8 +1487,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       } else if (isSnareAttack) {
         buttons = buildSnareAttackButtons(rollId, critResult, pushAmount);
       } else {
-        // Default to standard attack
-        buttons = buildStandardAttackButtons(rollId, critResult, causesKB);
+        // Default to standard attack - pass pending record for Absorption/Reflection check
+        buttons = buildStandardAttackButtons(rollId, critResult, causesKB, state.MP_Engine.pending[rollId]);
       }
     }
 
@@ -1833,10 +1930,349 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
   // -------------------------
+  // ABSORPTION / REFLECTION
+  // -------------------------
+  
+  // Absorb incoming damage (1/4 damage, uses saved action, accumulates points)
+  function cmdAbsorb(msg, args) {
+    const rollId = args.id;
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired or not found.`);
+    
+    const defTok = getObj("graphic", rec.defTokenId);
+    const defChar = getObj("character", rec.defCharId);
+    if (!defChar) return ch("MP", `/w gm <b>MP:</b> Defender not found.`);
+    if (!defTok) return ch("MP", `/w gm <b>MP:</b> Defender token not found.`);
+    
+    // Verify character has Absorption for this damage type
+    const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
+    if (!absRef || absRef.mode !== "absorption") {
+      return ch("MP", `/w gm <b>MP:</b> ${esc(rec.defName)} doesn't have Absorption for this damage type.`);
+    }
+    
+    const rawDamage = rec.damageTotal;
+    const quarterDamage = Math.floor(rawDamage / 4);  // 1/4 damage, rounded down
+    
+    // Calculate absorbed points (capped at limit)
+    const absorbedPoints = absRef.limit > 0 ? Math.min(rawDamage, absRef.limit) : rawDamage;
+    const excess = absRef.limit > 0 ? Math.max(0, rawDamage - absRef.limit) : 0;
+    
+    // Get current Hits and Power
+    const hits0 = getResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    
+    // Apply 1/4 damage to Hits first
+    const toHits = quarterDamage;
+    const hitsAfterDmg = Math.max(0, hits0 - toHits);
+    const overflow = Math.max(0, toHits - hits0);
+    const powAfterDmg = Math.max(0, pow0 - overflow);
+    
+    // Determine absorption target
+    const absorbsTo = absRef.absorbsTo;
+    const bcStats = { st: "strength", en: "endurance", ag: "agility", "in": "intelligence", cl: "cool" };
+    
+    let absorptionDesc = "";
+    let hits1 = hitsAfterDmg;
+    let pow1 = powAfterDmg;
+    let createEffect = false;
+    let effectTarget = "";
+    let statBoosted = null;
+    let statOriginal = 0;
+    let statNew = 0;
+    
+    if (absorbsTo === "hits") {
+      hits1 = hitsAfterDmg + absorbedPoints;
+      absorptionDesc = `+${absorbedPoints} Hits`;
+    } else if (absorbsTo === "power") {
+      pow1 = powAfterDmg + absorbedPoints;
+      absorptionDesc = `+${absorbedPoints} Power`;
+    } else if (absorbsTo === "split") {
+      const toHitsGain = Math.floor(absorbedPoints / 2);
+      const toPowerGain = absorbedPoints - toHitsGain;
+      hits1 = hitsAfterDmg + toHitsGain;
+      pow1 = powAfterDmg + toPowerGain;
+      absorptionDesc = `+${toHitsGain} Hits, +${toPowerGain} Power`;
+    } else if (bcStats[absorbsTo]) {
+      // BC stat boost
+      const statAttr = bcStats[absorbsTo];
+      statBoosted = statAttr;
+      statOriginal = getAttrNum(rec.defCharId, statAttr, 10);
+      statNew = statOriginal + absorbedPoints;
+      setAttr(rec.defCharId, statAttr, statNew);
+      absorptionDesc = `+${absorbedPoints} ${absorbsTo.toUpperCase()} (${statOriginal}→${statNew})`;
+      createEffect = true;
+      effectTarget = absorbsTo.toUpperCase();
+    } else if (absorbsTo === "other") {
+      // Other power - just create status effect label
+      const powerName = absRef.absorbsPower || "Power";
+      absorptionDesc = `+${absorbedPoints} CPs to ${powerName}`;
+      createEffect = true;
+      effectTarget = powerName;
+    }
+    
+    // Apply Hits/Power changes
+    setResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+    setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    
+    // Create absorption effect for BC stats and Other powers
+    if (createEffect) {
+      const expiryTime = Date.now() + (5 * 60 * 1000);  // 5 minutes from now
+      
+      const absEffect = {
+        type: "absorption",
+        target: effectTarget,
+        amount: absorbedPoints,
+        statAttr: statBoosted,  // For BC stats, the attribute name to restore
+        originalValue: statOriginal,  // For BC stats, original value before boost
+        created: Date.now(),
+        expires: expiryTime,
+        sourceAtk: rec.atkName,
+        dmgType: rec.dmgTypeStr
+      };
+      
+      if (!state.MP_Engine.conditions[rec.defTokenId]) {
+        state.MP_Engine.conditions[rec.defTokenId] = [];
+      }
+      state.MP_Engine.conditions[rec.defTokenId].push(absEffect);
+      
+      // Set a purple aura marker to indicate active absorption
+      defTok.set("status_purple", true);
+    }
+    
+    // Status effects (only if net result is bad)
+    const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0 && hits1 < hits0;
+    const incapacitated = (hits1 === 0);
+    
+    if (incapacitated) defTok.set("status_dead", true);
+    else if (unconscious) defTok.set("status_sleepy", true);
+    
+    // Build output
+    let html = `<div style="background:#9b59b6; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#fff; font-weight:bold; font-size:14px;">🔮 ABSORPTION!</span>`;
+    html += `<br/><span style="color:#fff;"><b>${esc(rec.defName)}</b> absorbs ${rawDamage} ${rec.dmgTypeStr}${rec.dmgSubtype ? ` (${rec.dmgSubtype})` : ""}</span>`;
+    html += `<br/><span style="color:#fff;">Takes ¼ damage: ${quarterDamage}</span>`;
+    html += `<br/><span style="color:#fff;">Absorbs ${absorbedPoints} → ${absorptionDesc}</span>`;
+    
+    // Show Hits/Power for hits/power/split modes
+    if (absorbsTo === "hits" || absorbsTo === "power" || absorbsTo === "split") {
+      html += `<br/><span style="color:#fff;">Hits: ${hits0}→${hits1} | Power: ${pow0}→${pow1}</span>`;
+    } else {
+      // For BC stats / Other, just show the damage result
+      html += `<br/><span style="color:#fff;">Hits: ${hits0}→${hits1}</span>`;
+    }
+    
+    if (excess > 0) {
+      html += `<br/><span style="color:#f1c40f;">⚠ ${excess} points exceeded limit (ignored)</span>`;
+    }
+    
+    if (createEffect) {
+      html += `<br/><span style="color:#ddd; font-size:11px;"><i>Expires in 5 minutes.</i></span>`;
+    }
+    html += `<br/><span style="color:#ddd; font-size:11px;"><i>Used saved action.</i></span>`;
+    
+    if (incapacitated) html += `<br/><span style="color:#e74c3c; font-weight:bold;">INCAPACITATED!</span>`;
+    else if (unconscious) html += `<br/><span style="color:#e74c3c; font-weight:bold;">UNCONSCIOUS!</span>`;
+    
+    html += `</div>`;
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+    
+    // Clean up pending record
+    delete state.MP_Engine.pending[rollId];
+  }
+  
+  // Reflect incoming damage (1/4 damage, immediate counter-attack)
+  function cmdReflect(msg, args) {
+    const rollId = args.id;
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired or not found.`);
+    
+    const defTok = getObj("graphic", rec.defTokenId);
+    const defChar = getObj("character", rec.defCharId);
+    if (!defChar) return ch("MP", `/w gm <b>MP:</b> Defender not found.`);
+    if (!defTok) return ch("MP", `/w gm <b>MP:</b> Defender token not found.`);
+    
+    // Verify character has Reflection for this damage type
+    const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
+    if (!absRef || absRef.mode !== "reflection") {
+      return ch("MP", `/w gm <b>MP:</b> ${esc(rec.defName)} doesn't have Reflection for this damage type.`);
+    }
+    
+    const rawDamage = rec.damageTotal;
+    const quarterDamage = Math.floor(rawDamage / 4);  // 1/4 damage, rounded down
+    
+    // Calculate reflected points (capped at limit)
+    const reflectedPoints = absRef.limit > 0 ? Math.min(rawDamage, absRef.limit) : rawDamage;
+    const excess = absRef.limit > 0 ? Math.max(0, rawDamage - absRef.limit) : 0;
+    
+    // Apply 1/4 damage to Hits
+    const hits0 = getResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    
+    const toHits = quarterDamage;
+    const hitsAfterDmg = Math.max(0, hits0 - toHits);
+    const overflow = Math.max(0, toHits - hits0);
+    const pow1 = Math.max(0, pow0 - overflow);
+    const hits1 = hitsAfterDmg;
+    
+    setResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+    setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    
+    // Status effects
+    const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    const incapacitated = (hits1 === 0);
+    
+    if (incapacitated) defTok.set("status_dead", true);
+    else if (unconscious) defTok.set("status_sleepy", true);
+    
+    // Store reflection data for counter-attack
+    const reflectRollId = "reflect_" + String(Date.now()) + "_" + randomInteger(999999);
+    state.MP_Engine.pending[reflectRollId] = {
+      rollId: reflectRollId,
+      atkCharId: rec.defCharId,  // Reflector is now the attacker
+      atkName: rec.defName + " (Reflection)",
+      defTokenId: null,  // Will be chosen by player
+      defCharId: null,
+      damageTotal: reflectedPoints,
+      dmgTypeStr: rec.dmgTypeStr,
+      dmgSubtype: rec.dmgSubtype,
+      protKey: rec.protKey,
+      atkAP: 0,
+      causesKB: rec.causesKB,
+      created: Date.now(),
+      originalAtkCharId: rec.atkCharId  // Track original attacker for "back at attacker" option
+    };
+    
+    // Build output
+    let html = `<div style="background:#e67e22; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#fff; font-weight:bold; font-size:14px;">🔄 REFLECTION!</span>`;
+    html += `<br/><span style="color:#fff;"><b>${esc(rec.defName)}</b> reflects ${rawDamage} ${rec.dmgTypeStr}${rec.dmgSubtype ? ` (${rec.dmgSubtype})` : ""}</span>`;
+    html += `<br/><span style="color:#fff;">Takes ¼ damage: ${quarterDamage} → Hits: ${hits0}→${hits1}</span>`;
+    html += `<br/><span style="color:#fff;">Reflects: <b>${reflectedPoints}</b> damage${absRef.limit > 0 ? ` (limit ${absRef.limit})` : ""}</span>`;
+    if (excess > 0) {
+      html += `<br/><span style="color:#f1c40f;">⚠ ${excess} points exceeded limit (not reflected)</span>`;
+    }
+    html += `<br/><span style="color:#ddd; font-size:11px;"><i>Used saved action.</i></span>`;
+    
+    if (incapacitated) html += `<br/><span style="color:#c0392b; font-weight:bold;">INCAPACITATED!</span>`;
+    else if (unconscious) html += `<br/><span style="color:#c0392b; font-weight:bold;">UNCONSCIOUS!</span>`;
+    
+    html += `</div>`;
+    
+    // Add counter-attack buttons
+    let buttons = `<br/>[Reflect at Original Attacker](!mp reflecthit --id ${reflectRollId} --target original)`;
+    buttons += ` [Reflect at Target...](!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id})`;
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html + buttons);
+    
+    // Clean up original pending record
+    delete state.MP_Engine.pending[rollId];
+  }
+  
+  // Apply reflected damage to a target
+  function cmdReflectHit(msg, args) {
+    const rollId = args.id;
+    const targetArg = args.target;
+    
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Reflection record expired or not found.`);
+    
+    // Determine target
+    let targetTokId;
+    if (targetArg === "original") {
+      // Find the original attacker's token
+      const atkChar = getObj("character", rec.originalAtkCharId);
+      if (!atkChar) return ch("MP", `/w gm <b>MP:</b> Original attacker not found.`);
+      
+      const pageId = Campaign().get("playerpageid");
+      const tokens = findObjs({ _type: "graphic", _pageid: pageId, _subtype: "token", represents: rec.originalAtkCharId });
+      if (tokens.length === 0) return ch("MP", `/w gm <b>MP:</b> Original attacker has no token on this page.`);
+      targetTokId = tokens[0].id;
+    } else {
+      targetTokId = targetArg;
+    }
+    
+    const targetTok = getObj("graphic", targetTokId);
+    if (!targetTok) return ch("MP", `/w gm <b>MP:</b> Target token not found.`);
+    
+    const targetCharId = targetTok.get("represents");
+    if (!targetCharId) return ch("MP", `/w gm <b>MP:</b> Target token has no character.`);
+    
+    const targetChar = getObj("character", targetCharId);
+    if (!targetChar) return ch("MP", `/w gm <b>MP:</b> Target character not found.`);
+    
+    const targetName = targetChar.get("name");
+    
+    // Get target's protection
+    const protData = sumProtectionWithHardened(targetCharId, rec.protKey, rec.dmgSubtype);
+    const prot = protData.prot;
+    const hasInvuln = protData.invuln;
+    const hasAdapt = protData.adapt;
+    const isOtherType = (rec.dmgTypeStr === "Other");
+    
+    // Calculate penetrating damage
+    let penetrating = Math.max(0, rec.damageTotal - prot);
+    
+    // Invulnerability: 1/4 damage
+    if (hasInvuln && penetrating > 0) {
+      penetrating = Math.floor(penetrating / 4);
+    }
+    
+    // Adaptation: 1/2 damage (or immune for Other type)
+    if (hasAdapt && penetrating > 0) {
+      if (isOtherType) {
+        penetrating = 0;
+      } else {
+        penetrating = Math.floor(penetrating / 2);
+      }
+    }
+    
+    // Apply damage
+    const hits0 = getResource(targetTok, targetCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = getResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    
+    const toHits = penetrating;
+    const hitsAfterDmg = Math.max(0, hits0 - toHits);
+    const overflow = Math.max(0, toHits - hits0);
+    const pow1 = Math.max(0, pow0 - overflow);
+    const hits1 = hitsAfterDmg;
+    
+    setResource(targetTok, targetCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+    setResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    
+    // Status effects
+    const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    const incapacitated = (hits1 === 0);
+    
+    if (incapacitated) targetTok.set("status_dead", true);
+    else if (unconscious) targetTok.set("status_sleepy", true);
+    
+    // Build output
+    let html = `<div style="background:#e67e22; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#fff; font-weight:bold; font-size:14px;">🔄 REFLECTED DAMAGE!</span>`;
+    html += `<br/><span style="color:#fff;"><b>${esc(targetName)}</b> hit by reflected ${rec.dmgTypeStr}</span>`;
+    html += `<br/><span style="color:#fff;">Raw: ${rec.damageTotal} - ${prot} prot`;
+    if (hasInvuln) html += ` [×¼]`;
+    if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
+    html += ` = ${penetrating} penetrating</span>`;
+    html += `<br/><span style="color:#fff;">Hits: ${hits0}→${hits1}</span>`;
+    
+    if (incapacitated) html += `<br/><span style="color:#c0392b; font-weight:bold;">INCAPACITATED!</span>`;
+    else if (unconscious) html += `<br/><span style="color:#c0392b; font-weight:bold;">UNCONSCIOUS!</span>`;
+    
+    html += `</div>`;
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+    
+    // Clean up
+    delete state.MP_Engine.pending[rollId];
+  }
+
+  // -------------------------
   // BUTTON BUILDERS
   // -------------------------
 
-  function buildStandardAttackButtons(rollId, critResult, causesKB) {
+  function buildStandardAttackButtons(rollId, critResult, causesKB, rec) {
     const critType = critResult ? critResult.type : null;
     let buttons = "";
     
@@ -1869,6 +2305,22 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     if (causesKB) {
       buttons += ` [KB](!mp kb --id ${rollId})`;
+    }
+    
+    // Check for Absorption or Reflection (requires saved action)
+    if (rec && rec.defCharId && rec.protKey) {
+      const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
+      if (absRef) {
+        if (absRef.mode === "absorption") {
+          const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
+          buttons += `<br/><span style="color:#9b59b6; font-weight:bold;">🔮 Absorption available${limitNote}</span>`;
+          buttons += ` [Absorb (¼ dmg, saved action)](!mp absorb --id ${rollId})`;
+        } else if (absRef.mode === "reflection") {
+          const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
+          buttons += `<br/><span style="color:#e67e22; font-weight:bold;">🔄 Reflection available${limitNote}</span>`;
+          buttons += ` [Reflect (¼ dmg, saved action)](!mp reflect --id ${rollId})`;
+        }
+      }
     }
     
     // Add limb shot saves if applicable
@@ -2691,17 +3143,37 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     let msg_out = `<b>Conditions on ${esc(char.get("name"))}</b>`;
+    const now = Date.now();
     
     conditions.forEach((cond, idx) => {
-      const condLabel = cond.type.replace(/_/g, " ").toUpperCase();
-      msg_out += `<br/><br/><b>${idx + 1}. ${condLabel}</b>`;
-      msg_out += `<br/><span style="font-size:11px;">Source: ${esc(cond.sourceAtk)}</span>`;
-      msg_out += `<br/><span style="font-size:11px;">Recovery: ${cond.saveBC} at ${cond.recTN}- every ${cond.recTime}</span>`;
-      if (cond.permanent) {
-        msg_out += `<br/><span style="color:#ff0000; font-size:11px;">⚠️ PERMANENT</span>`;
+      if (cond.type === "absorption") {
+        // Absorption effect
+        msg_out += `<br/><br/><b>${idx + 1}. ABSORPTION</b>`;
+        msg_out += `<br/><span style="font-size:11px;">+${cond.amount} to ${esc(cond.target)}</span>`;
+        msg_out += `<br/><span style="font-size:11px;">Source: ${esc(cond.sourceAtk)} (${cond.dmgType})</span>`;
+        
+        // Show time remaining
+        const remaining = cond.expires - now;
+        if (remaining > 0) {
+          const mins = Math.floor(remaining / 60000);
+          const secs = Math.floor((remaining % 60000) / 1000);
+          msg_out += `<br/><span style="color:#9b59b6; font-size:11px;">⏱ ${mins}m ${secs}s remaining</span>`;
+        } else {
+          msg_out += `<br/><span style="color:#e74c3c; font-size:11px;">⚠️ EXPIRED</span>`;
+        }
+        msg_out += `<br/>[Clear Effect](!mp clearcondition --target ${tokId} --idx ${idx})`;
       } else {
-        msg_out += `<br/>[Recovery Roll](!mp recover --target ${tokId} --idx ${idx}) `;
-        msg_out += `[Remove](!mp clearcondition --target ${tokId} --idx ${idx})`;
+        // Standard condition
+        const condLabel = cond.type.replace(/_/g, " ").toUpperCase();
+        msg_out += `<br/><br/><b>${idx + 1}. ${condLabel}</b>`;
+        msg_out += `<br/><span style="font-size:11px;">Source: ${esc(cond.sourceAtk)}</span>`;
+        msg_out += `<br/><span style="font-size:11px;">Recovery: ${cond.saveBC} at ${cond.recTN}- every ${cond.recTime}</span>`;
+        if (cond.permanent) {
+          msg_out += `<br/><span style="color:#ff0000; font-size:11px;">⚠️ PERMANENT</span>`;
+        } else {
+          msg_out += `<br/>[Recovery Roll](!mp recover --target ${tokId} --idx ${idx}) `;
+          msg_out += `[Remove](!mp clearcondition --target ${tokId} --idx ${idx})`;
+        }
       }
     });
     
@@ -2721,10 +3193,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const conditions = state.MP_Engine.conditions[tokId] || [];
     
     if (clearAll) {
-      // Remove all markers
+      // Remove all markers and restore BC stats for absorption effects
       conditions.forEach(cond => {
-        tok.set("status_" + cond.marker, false);
+        if (cond.type === "absorption" && cond.statAttr) {
+          // Restore BC stat to original value
+          setAttr(char.id, cond.statAttr, cond.originalValue);
+        }
+        if (cond.marker) {
+          tok.set("status_" + cond.marker, false);
+        }
       });
+      // Remove purple marker if any absorptions were cleared
+      const hadAbsorption = conditions.some(c => c.type === "absorption");
+      if (hadAbsorption) {
+        tok.set("status_purple", false);
+      }
       state.MP_Engine.conditions[tokId] = [];
       return ch("MP", `/w gm All conditions cleared from <b>${esc(char.get("name"))}</b>.`);
     }
@@ -2734,19 +3217,112 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     const cond = conditions[condIdx];
-    const condLabel = cond.type.replace(/_/g, " ");
+    let condLabel;
+    let restoredNote = "";
+    
+    if (cond.type === "absorption") {
+      condLabel = `Absorption (+${cond.amount} ${cond.target})`;
+      // Restore BC stat if this was a stat boost
+      if (cond.statAttr) {
+        setAttr(char.id, cond.statAttr, cond.originalValue);
+        const statName = cond.statAttr.toUpperCase().substring(0, 2);
+        restoredNote = ` ${statName} restored to ${cond.originalValue}.`;
+      }
+    } else {
+      condLabel = cond.type.replace(/_/g, " ");
+    }
     
     // Remove the condition
     conditions.splice(condIdx, 1);
     state.MP_Engine.conditions[tokId] = conditions;
     
     // Remove marker if no other conditions use it
-    const markerStillUsed = conditions.some(c => c.marker === cond.marker);
-    if (!markerStillUsed) {
-      tok.set("status_" + cond.marker, false);
+    if (cond.marker) {
+      const markerStillUsed = conditions.some(c => c.marker === cond.marker);
+      if (!markerStillUsed) {
+        tok.set("status_" + cond.marker, false);
+      }
     }
     
-    ch("MP", `/w gm <b>${esc(char.get("name"))}</b>: ${condLabel} condition removed.`);
+    // Remove purple marker if no more absorption effects
+    if (cond.type === "absorption") {
+      const hasOtherAbsorption = conditions.some(c => c.type === "absorption");
+      if (!hasOtherAbsorption) {
+        tok.set("status_purple", false);
+      }
+    }
+    
+    ch("MP", `/w gm <b>${esc(char.get("name"))}</b>: ${condLabel} removed.${restoredNote}`);
+  }
+  
+  // Check for expired absorption effects (called periodically or on status check)
+  function checkAbsorptionExpiry(tokId) {
+    const tok = getObj("graphic", tokId);
+    if (!tok) return;
+    
+    const char = getCharFromToken(tok);
+    if (!char) return;
+    
+    const conditions = state.MP_Engine.conditions[tokId] || [];
+    const now = Date.now();
+    let changed = false;
+    let report = [];
+    
+    // Check each condition for expiry
+    for (let i = conditions.length - 1; i >= 0; i--) {
+      const cond = conditions[i];
+      if (cond.type === "absorption" && cond.expires && cond.expires <= now) {
+        // Expired - restore stat if applicable
+        if (cond.statAttr) {
+          setAttr(char.id, cond.statAttr, cond.originalValue);
+          const statName = cond.statAttr.toUpperCase().substring(0, 2);
+          report.push(`${cond.target} restored to ${cond.originalValue}`);
+        } else {
+          report.push(`+${cond.amount} to ${cond.target} expired`);
+        }
+        conditions.splice(i, 1);
+        changed = true;
+      }
+    }
+    
+    if (changed) {
+      state.MP_Engine.conditions[tokId] = conditions;
+      // Remove purple marker if no more absorption effects
+      const hasAbsorption = conditions.some(c => c.type === "absorption");
+      if (!hasAbsorption) {
+        tok.set("status_purple", false);
+      }
+      
+      if (report.length > 0) {
+        ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + 
+          `<span style="color:#9b59b6;"><b>${esc(char.get("name"))}</b>: Absorption expired - ${report.join(", ")}</span>`);
+      }
+    }
+  }
+  
+  // Command to check all tokens for expired absorptions
+  function cmdCheckExpiry(msg, args) {
+    const tokId = args.target;
+    
+    if (tokId) {
+      // Check specific token
+      checkAbsorptionExpiry(tokId);
+      return ch("MP", `/w gm Checked absorption expiry.`);
+    }
+    
+    // Check all tokens with conditions
+    const allTokenIds = Object.keys(state.MP_Engine.conditions || {});
+    let checked = 0;
+    
+    allTokenIds.forEach(tId => {
+      const conditions = state.MP_Engine.conditions[tId] || [];
+      if (conditions.some(c => c.type === "absorption")) {
+        checkAbsorptionExpiry(tId);
+        checked++;
+      }
+    });
+    
+    ch("MP", `/w gm Checked ${checked} token(s) for absorption expiry.`);
   }
 
   // -------------------------
@@ -3195,6 +3771,46 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+  }
+  
+  // Restore selected tokens to full Hits and Power
+  function cmdRestore(msg, args) {
+    const selected = msg.selected || [];
+    if (selected.length === 0) {
+      return ch("MP", `/w gm <b>MP:</b> No tokens selected. Select one or more tokens first.`);
+    }
+    
+    let restored = [];
+    
+    selected.forEach(sel => {
+      if (sel._type !== "graphic") return;
+      
+      const tok = getObj("graphic", sel._id);
+      if (!tok) return;
+      
+      const char = getCharFromToken(tok);
+      if (!char) return;
+      
+      // Get max from token bar max (same source as cmdStatus)
+      const hitsMax = parseInt(tok.get("bar2_max"), 10) || 20;
+      const powMax = parseInt(tok.get("bar1_max"), 10) || 40;
+      
+      // Set token bars (Power=bar1, Hits=bar2)
+      tok.set("bar1_value", powMax);
+      tok.set("bar2_value", hitsMax);
+      
+      // Clear incapacitated/unconscious markers
+      tok.set("status_dead", false);
+      tok.set("status_sleepy", false);
+      
+      restored.push(char.get("name") + ` (H:${hitsMax} P:${powMax})`);
+    });
+    
+    if (restored.length > 0) {
+      ch("MP", `/w gm <b>Restored:</b> ${restored.join(", ")}`);
+    } else {
+      ch("MP", `/w gm <b>MP:</b> No valid tokens to restore.`);
+    }
   }
 
   // -------------------------
@@ -4576,7 +5192,11 @@ function cmdStance(msg, args) {
       case "limbsave": return cmdLimbSave(msg, args);
       case "save": return cmdSave(msg, args);
       case "recover": return cmdRecover(msg, args);
-      case "conditions": return cmdConditions(msg, args);
+      case "conditions": 
+        // Check for expired absorptions first
+        if (args.target) checkAbsorptionExpiry(args.target);
+        return cmdConditions(msg, args);
+      case "checkexpiry": return cmdCheckExpiry(msg, args);
       case "clearcondition": return cmdClearCondition(msg, args);
       case "snare": return cmdSnare(msg, args);
       case "break": return cmdBreak(msg, args);
@@ -4596,9 +5216,15 @@ function cmdStance(msg, args) {
       case "areaforceall": return cmdAreaForceAll(msg, args);
       case "areadamageall": return cmdAreaDamageAll(msg, args);
 
+      // Absorption/Reflection commands
+      case "absorb": return cmdAbsorb(msg, args);
+      case "reflect": return cmdReflect(msg, args);
+      case "reflecthit": return cmdReflectHit(msg, args);
+
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
       case "status": return cmdStatus(msg, args);
+      case "restore": return cmdRestore(msg, args);
       case "info": return cmdInfo(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "atk": return cmdQuickAttack(msg, args);
@@ -4661,7 +5287,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.19</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.22</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -4704,11 +5330,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.19:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.22:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.19 READY");
+  log("MP ENGINE v2.22 READY");
 });

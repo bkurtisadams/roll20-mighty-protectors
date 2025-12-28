@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.40 - Sub-Type dropdowns for attacks and protection -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.43 - Absorption to BC stats and powers with status effects -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -962,6 +962,40 @@
           <div class="sheet-panel-field">
             <label>Chg:</label>
             <input type="text" name="attr_prot_charges" maxlength="3" style="width:28px !important;" title="Charges remaining" />
+          </div>
+        </div>
+
+        <!-- Row 4: Absorption / Reflection -->
+        <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
+          <div class="sheet-panel-field">
+            <label>Mode:</label>
+            <select name="attr_prot_mode" title="Normal=auto-apply, Absorption/Reflection=requires saved action, 1/4 damage" style="width:90px !important;">
+              <option value="normal" selected>Normal</option>
+              <option value="absorption">Absorption</option>
+              <option value="reflection">Reflection</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Maximum points (Absorption Effect / Reflection Effect limit)">Limit:</label>
+            <input type="text" name="attr_prot_limit" maxlength="3" style="width:28px !important;" title="Maximum points from Absorption/Reflection Effect table" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Where absorbed points go (Absorption only)">Absorbs To:</label>
+            <select name="attr_prot_absorbs_to" title="Where absorbed points are applied" style="width:70px !important;">
+              <option value="hits" selected>Hits</option>
+              <option value="power">Power</option>
+              <option value="split">Split 50/50</option>
+              <option value="st">ST</option>
+              <option value="en">EN</option>
+              <option value="ag">AG</option>
+              <option value="in">IN</option>
+              <option value="cl">CL</option>
+              <option value="other">Other...</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Power name when Absorbs To = Other">Power:</label>
+            <input type="text" name="attr_prot_absorbs_power" style="width:70px !important;" title="Power name (when Absorbs To = Other)" placeholder="Flame Aura" />
           </div>
         </div>
 
