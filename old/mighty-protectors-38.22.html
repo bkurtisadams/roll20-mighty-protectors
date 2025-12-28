@@ -856,7 +856,7 @@
       {{#ap}}<div style="color:#f4d03f; font-weight:bold;">⚡ Armor Piercing: Ignores {{ap}} protection</div>{{/ap}}
       {{#savebc}}
       <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
-        <div style="color:#f4d03f; font-weight:bold; font-size:14px;"> SAVE ATTACK</div>
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;">💫 SAVE ATTACK</div>
         <div><span style="color:#aaa;">Save BC:</span> <span style="color:#e63946; font-weight:bold;">{{savebc}}</span></div>
         {{#savemod}}<div><span style="color:#aaa;">Save Mod:</span> <span style="color:#fff;">{{savemod}}</span></div>{{/savemod}}
         {{#recovery}}<div><span style="color:#aaa;">Recovery:</span> <span style="color:#fff;">{{recovery}}</span></div>{{/recovery}}
@@ -867,7 +867,7 @@
       {{/savebc}}
       {{#bp}}
       <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
-        <div style="color:#f4d03f; font-weight:bold; font-size:14px;"> {{#snaretype}}{{snaretype}} {{/snaretype}}SNARE</div>
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;">🔗 {{#snaretype}}{{snaretype}} {{/snaretype}}SNARE</div>
         <div><span style="color:#aaa;">Break Point:</span> <span style="color:#e63946; font-weight:bold;">{{bp}}</span></div>
         {{#maxbp}}<div><span style="color:#aaa;">Max BP:</span> <span style="color:#fff;">{{maxbp}}</span></div>{{/maxbp}}
         <div style="color:#999; font-size:11px; margin-top:6px;">• Escape: HTH ≥ BP</div>
@@ -897,7 +897,7 @@
       {{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
       {{#savebc}}
       <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
-        <div style="color:#f4d03f; font-weight:bold; font-size:14px;"> SAVE ATTACK</div>
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;">💫 SAVE ATTACK</div>
         <div><span style="color:#aaa;">Save BC:</span> <span style="color:#e63946; font-weight:bold;">{{savebc}}</span></div>
         {{#savemod}}<div><span style="color:#aaa;">Save Mod:</span> <span style="color:#fff;">{{savemod}}</span></div>{{/savemod}}
         {{#recovery}}<div><span style="color:#aaa;">Recovery:</span> <span style="color:#fff;">{{recovery}}</span></div>{{/recovery}}
@@ -908,7 +908,7 @@
       {{/savebc}}
       {{#bp}}
       <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
-        <div style="color:#f4d03f; font-weight:bold; font-size:14px;"> {{#snaretype}}{{snaretype}} {{/snaretype}}SNARE</div>
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;">🔗 {{#snaretype}}{{snaretype}} {{/snaretype}}SNARE</div>
         <div><span style="color:#aaa;">Break Point:</span> <span style="color:#e63946; font-weight:bold;">{{bp}}</span></div>
         {{#maxbp}}<div><span style="color:#aaa;">Max BP:</span> <span style="color:#fff;">{{maxbp}}</span></div>{{/maxbp}}
         <div style="color:#666; font-size:11px; margin-top:4px;">• Escape: HTH ≥ BP</div>
@@ -1004,7 +1004,7 @@
     21474836480,25769803776,32212254720,42949672960,51539607552
     ];
 
-  var carryDisplay = [
+var carryDisplay = [
     "8","10","12","15","20","24","30","40","48","60","80","96","120","160","192","240","320","384","480","640","768",
     "960","1,280","1,536","1,920","2,560","3,072","3,840","5,120","6,144","7,680","10,240","12,288","15,360","20,480","24,576",
     "30,720","40,960","49,152","61,440","81,920","98,304","122,880","163,840","196,608","245,760","327,680","393,216",
@@ -1220,36 +1220,36 @@
   }
 
   // healing rate calculation (per 4.13)
-  on("clicked:heal", function() {
-      getAttrs(["character_name", "healing_rate", "heal_base", "heal_decimal"], function(values) {
-          let base = parseInt(values.heal_base) || 0;
-          let decimal = parseInt(values.heal_decimal) || 0;
-          let rate = values.healing_rate || "0";
-          let charName = values.character_name || "Character";
-          
-          startRoll(`&{template:healing} {{name=${charName} rolls Healing}} {{rate=${rate}}} {{roll=[[1d10]]}} {{decimal=${decimal}}} {{healed=[[0]]}} {{notes=Heal Power Points first, then Hit Points.}}`, function(results) {
-              let d10 = results.results.roll.result;
-              let bonus = (decimal > 0 && d10 <= decimal) ? 1 : 0;
-              let total = base + bonus;
-              
-              finishRoll(results.rollId, {
-                  healed: total
-              });
-          });
-      });
-  });
+    on("clicked:heal", function() {
+        getAttrs(["character_name", "healing_rate", "heal_base", "heal_decimal"], function(values) {
+            let base = parseInt(values.heal_base) || 0;
+            let decimal = parseInt(values.heal_decimal) || 0;
+            let rate = values.healing_rate || "0";
+            let charName = values.character_name || "Character";
+            
+            startRoll(`&{template:healing} {{name=${charName} rolls Healing}} {{rate=${rate}}} {{roll=[[1d10]]}} {{decimal=${decimal}}} {{healed=[[0]]}} {{notes=Heal Power Points first, then Hit Points.}}`, function(results) {
+                let d10 = results.results.roll.result;
+                let bonus = (decimal > 0 && d10 <= decimal) ? 1 : 0;
+                let total = base + bonus;
+                
+                finishRoll(results.rollId, {
+                    healed: total
+                });
+            });
+        });
+    });
 
-  on("change:healing_rate sheet:opened", function() {
-      getAttrs(["healing_rate"], function(values) {
-          let rate = parseFloat(values.healing_rate) || 0;
-          setAttrs({
-              heal_base: Math.floor(rate),
-              heal_decimal: Math.round((rate % 1) * 10)
-          });
-      });
-  });
+    on("change:healing_rate sheet:opened", function() {
+        getAttrs(["healing_rate"], function(values) {
+            let rate = parseFloat(values.healing_rate) || 0;
+            setAttrs({
+                heal_base: Math.floor(rate),
+                heal_decimal: Math.round((rate % 1) * 10)
+            });
+        });
+    });
 
-  on("change:power_mod", function(eventInfo) {
+    on("change:power_mod", function(eventInfo) {
     var prevValue = parseInt(eventInfo.previousValue) || 0;
     var newValue = parseInt(eventInfo.newValue) || 0;
     var delta = newValue - prevValue;
@@ -1771,10 +1771,10 @@
     });
     }
 
-  on("change:invention_points_base change:invention_points_bonus", function() {
+    on("change:invention_points_base change:invention_points_bonus", function() {
     calcInventingPts();
     calcIPTotals();
-  });
+    });
 
   on("sheet:opened", function() {
     getAttrs(["migrated_v37", "migrated_from_old"], function(v) {
@@ -1785,9 +1785,9 @@
       var oldAttrs = [
         "identity-name", "skills", "careers", "origin", "origin_type", "group",
         "starting_cps", "xp_earned", "exp_base", "exp_earned",
-        // legacy Bio & Info fields (not present as visible inputs anymore)
-        "height", "eyes", "hair", "base",
-        // legacy notes fields
+        // legacy Bio & Info fields (legacy sheets)
+        "height", "weight", "eyes", "hair", "base",
+        // legacy notes fields (legacy sheets)
         "power_notes", "hits_notes",
         // new-sheet notes (so we can append without overwriting)
         "notes"
@@ -1814,140 +1814,132 @@
           updates["true_id"] = old["identity-name"];
           hasOldData = true;
         }
-        // Careers (legacy sheets stored these as "skills" (line 1) and "careers" (line 2))
-        // IMPORTANT: compare normalized strings to avoid duplicating identical entries due to whitespace/line-ending differences.
-        if (!alreadyMigratedRepeating) {
-        var normCareer = function(s) {
-            return String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
-        };
-        var skillCareer = String(old["skills"] || "").trim();
-        var otherCareer = String(old["careers"] || "").trim();
+        // Legacy sheets have varied naming: some stored careers under "careers", others under "skills".
+        // Import ONLY ONE source to avoid duplicate Career entries.
+        var legacyCareers = (old["careers"] || "").trim();
+        var legacySkills  = (old["skills"]  || "").trim();
 
-        if (skillCareer) {
-            var careerRowId = generateRowID();
-            updates["repeating_careers_" + careerRowId + "_career_name"] = skillCareer;
-            hasOldData = true;
+        // Prefer explicit careers; fall back to skills.
+        // If both exist and differ, merge into a single entry (still only one repeating row).
+        var careerText = legacyCareers || legacySkills;
+        if (legacyCareers && legacySkills && legacyCareers.toLowerCase() !== legacySkills.toLowerCase()) {
+          careerText = legacyCareers + "\n" + legacySkills;
         }
-        if (otherCareer && normCareer(otherCareer) !== normCareer(skillCareer)) {
-            var careerRowId2 = generateRowID();
-            updates["repeating_careers_" + careerRowId2 + "_career_name"] = otherCareer;
-            hasOldData = true;
+        if (careerText) {
+          var careerRowId = generateRowID();
+          updates["repeating_careers_" + careerRowId + "_career_name"] = careerText;
+          hasOldData = true;
         }
 
-        // Mark that we've migrated legacy repeating-style data at least once
-        if (skillCareer || otherCareer) {
-            updates["migrated_from_old"] = "1";
+        if (old["origin_type"] && old["origin_type"].trim()) {
+          updates["origin"] = old["origin_type"];
+          hasOldData = true;
+        } else if (old["origin"] && old["origin"].trim()) {
+          updates["origin"] = old["origin"];
+          hasOldData = true;
         }
+        if (old["group"] && old["group"].trim()) {
+          updates["group"] = old["group"];
+          hasOldData = true;
         }
+        // Legacy Bio & Info (and legacy notes) from older sheets
+        // Preserve by appending into Notes exactly once.
+        var legacyBits = [];
+        if (old["height"] && String(old["height"]).trim()) legacyBits.push("Height: " + String(old["height"]).trim());
+        
+        if (old["eyes"] && String(old["eyes"]).trim()) legacyBits.push("Eyes: " + String(old["eyes"]).trim());
+        if (old["hair"] && String(old["hair"]).trim()) legacyBits.push("Hair: " + String(old["hair"]).trim());
+        if (old["base"] && String(old["base"]).trim()) legacyBits.push("Base: " + String(old["base"]).trim());
+        if (old["power_notes"] && String(old["power_notes"]).trim()) legacyBits.push("Power Notes: " + String(old["power_notes"]).trim());
+        if (old["hits_notes"] && String(old["hits_notes"]).trim()) legacyBits.push("Hits Notes: " + String(old["hits_notes"]).trim());
 
-  if (old["origin_type"] && old["origin_type"].trim()) {
-            updates["origin"] = old["origin_type"];
-            hasOldData = true;
-          } else if (old["origin"] && old["origin"].trim()) {
-            updates["origin"] = old["origin"];
-            hasOldData = true;
-          }
-          if (old["group"] && old["group"].trim()) {
-            updates["group"] = old["group"];
-            hasOldData = true;
-          }
-          // Legacy Bio & Info text (older sheets had extra free-text fields that aren't shown as dedicated inputs anymore)
-          // We preserve it by appending into Notes exactly once.
-          var legacyBits = [];
-          if (old["height"] && String(old["height"]).trim()) legacyBits.push("Height: " + String(old["height"]).trim());
-          if (old["eyes"] && String(old["eyes"]).trim()) legacyBits.push("Eyes: " + String(old["eyes"]).trim());
-          if (old["hair"] && String(old["hair"]).trim()) legacyBits.push("Hair: " + String(old["hair"]).trim());
-          if (old["base"] && String(old["base"]).trim()) legacyBits.push("Base: " + String(old["base"]).trim());
-          if (old["power_notes"] && String(old["power_notes"]).trim()) legacyBits.push("Power Notes: " + String(old["power_notes"]).trim());
-          if (old["hits_notes"] && String(old["hits_notes"]).trim()) legacyBits.push("Hits Notes: " + String(old["hits_notes"]).trim());
-
-          if (legacyBits.length) {
+        if (legacyBits.length) {
           var existingNotes = String(old["notes"] || "");
           var legacyHeader = "[Legacy Bio & Info]";
           if (existingNotes.indexOf(legacyHeader) === -1) {
-              var legacyBlock = legacyHeader + "\n" + legacyBits.join("\n");
-              updates["notes"] = (existingNotes && existingNotes.trim())
+            var legacyBlock = legacyHeader + "\n" + legacyBits.join("\n");
+            updates["notes"] = (existingNotes && existingNotes.trim())
               ? (existingNotes + "\n\n" + legacyBlock)
               : legacyBlock;
-              hasOldData = true;
+            hasOldData = true;
           }
-          }
+        }
 
 
-          if (old["starting_cps"] && old["starting_cps"].trim()) {
-            updates["starting_eps"] = old["starting_cps"];
+        if (old["starting_cps"] && old["starting_cps"].trim()) {
+          updates["starting_eps"] = old["starting_cps"];
+          hasOldData = true;
+        } else if (old["exp_base"]) {
+          var expBase = String(old["exp_base"]).trim();
+          if (expBase) {
+            updates["starting_eps"] = expBase;
             hasOldData = true;
-          } else if (old["exp_base"]) {
-            var expBase = String(old["exp_base"]).trim();
-            if (expBase) {
-              updates["starting_eps"] = expBase;
-              hasOldData = true;
-            }
           }
-          if (old["xp_earned"] && old["xp_earned"].trim()) {
-            updates["ep_earned"] = old["xp_earned"];
+        }
+        if (old["xp_earned"] && old["xp_earned"].trim()) {
+          updates["ep_earned"] = old["xp_earned"];
+          hasOldData = true;
+        } else if (old["exp_earned"]) {
+          var expEarned = String(old["exp_earned"]).trim();
+          if (expEarned) {
+            updates["ep_earned"] = expEarned;
             hasOldData = true;
-          } else if (old["exp_earned"]) {
-            var expEarned = String(old["exp_earned"]).trim();
-            if (expEarned) {
-              updates["ep_earned"] = expEarned;
+          }
+        }
+        
+        if (!alreadyMigratedRepeating) {
+          for (var i = 1; i <= 16; i++) {
+            var desc = old["ability" + i + "_desc"];
+            var cost = old["ability" + i + "_cost"];
+            // Convert to string and trim, handle null/undefined/number values
+            var descStr = (desc === null || desc === undefined) ? "" : String(desc).trim();
+            if (descStr) {
               hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_abilities_" + rowId + "_ability_name"] = descStr;
+              updates["repeating_abilities_" + rowId + "_ability_cp"] = (cost === null || cost === undefined) ? "0" : String(cost);
             }
           }
           
-          if (!alreadyMigratedRepeating) {
-            for (var i = 1; i <= 16; i++) {
-              var desc = old["ability" + i + "_desc"];
-              var cost = old["ability" + i + "_cost"];
-              // Convert to string and trim, handle null/undefined/number values
-              var descStr = (desc === null || desc === undefined) ? "" : String(desc).trim();
-              if (descStr) {
-                hasOldData = true;
-                var rowId = generateRowID();
-                updates["repeating_abilities_" + rowId + "_ability_name"] = descStr;
-                updates["repeating_abilities_" + rowId + "_ability_cp"] = (cost === null || cost === undefined) ? "0" : String(cost);
-              }
+          ["one", "two", "three"].forEach(function(slot) {
+            var name = old["attack_" + slot];
+            if (name && name.trim()) {
+              hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_attacks_" + rowId + "_attack_name"] = name;
+              updates["repeating_attacks_" + rowId + "_attack_damage"] = old["damage_" + slot] || "";
+              updates["repeating_attacks_" + rowId + "_attack_dmgtype"] = old["damagetype_" + slot] || "";
+              updates["repeating_attacks_" + rowId + "_attack_tohit"] = old["tohit_" + slot] || "";
+              var kbVal = String(old["knockback_" + slot] || "").toLowerCase().trim();
+              updates["repeating_attacks_" + rowId + "_attack_kb"] = (kbVal === "yes" || kbVal === "y" || kbVal === "1" || kbVal === "true") ? "1" : "0";
             }
-            
-            ["one", "two", "three"].forEach(function(slot) {
-              var name = old["attack_" + slot];
-              if (name && name.trim()) {
-                hasOldData = true;
-                var rowId = generateRowID();
-                updates["repeating_attacks_" + rowId + "_attack_name"] = name;
-                updates["repeating_attacks_" + rowId + "_attack_damage"] = old["damage_" + slot] || "";
-                updates["repeating_attacks_" + rowId + "_attack_dmgtype"] = old["damagetype_" + slot] || "";
-                updates["repeating_attacks_" + rowId + "_attack_tohit"] = old["tohit_" + slot] || "";
-                var kbVal = String(old["knockback_" + slot] || "").toLowerCase().trim();
-                updates["repeating_attacks_" + rowId + "_attack_kb"] = (kbVal === "yes" || kbVal === "y" || kbVal === "1" || kbVal === "true") ? "1" : "0";
-              }
-            });
-            
-            ["one", "two", "three"].forEach(function(slot) {
-              var name = old["protection_" + slot];
-              if (name && name.trim()) {
-                hasOldData = true;
-                var rowId = generateRowID();
-                updates["repeating_protection_" + rowId + "_prot_name"] = name;
-                var kineticVal = old["kinetic_" + slot] || old["kenetic_" + slot] || "0";
-                updates["repeating_protection_" + rowId + "_prot_kinetic"] = kineticVal;
-                updates["repeating_protection_" + rowId + "_prot_energy"] = old["energy_" + slot] || "0";
-                updates["repeating_protection_" + rowId + "_prot_bio"] = old["bio_" + slot] || "0";
-                updates["repeating_protection_" + rowId + "_prot_entropy"] = old["entropy_" + slot] || "0";
-                updates["repeating_protection_" + rowId + "_prot_psychic"] = old["psychic_" + slot] || "0";
-                updates["repeating_protection_" + rowId + "_prot_other"] = old["other_" + slot] || "0";
-              }
-            });
-          }
+          });
           
-          updates["migrated_v37"] = "1";
-          setAttrs(updates);
-          if (hasOldData) {
-            console.log("Mighty Protectors: Migrated character from old sheet format");
-          }
-        });
+          ["one", "two", "three"].forEach(function(slot) {
+            var name = old["protection_" + slot];
+            if (name && name.trim()) {
+              hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_protection_" + rowId + "_prot_name"] = name;
+              var kineticVal = old["kinetic_" + slot] || old["kenetic_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_kinetic"] = kineticVal;
+              updates["repeating_protection_" + rowId + "_prot_energy"] = old["energy_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_bio"] = old["bio_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_entropy"] = old["entropy_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_psychic"] = old["psychic_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_other"] = old["other_" + slot] || "0";
+            }
+          });
+        }
+        
+        updates["migrated_v37"] = "1";
+        setAttrs(updates);
+        if (hasOldData) {
+          console.log("Mighty Protectors: Migrated character from old sheet format");
+        }
       });
     });
+  });
 
   on("change:repeating_attacks:attack_dmgtype", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_dmgtype", "");
@@ -2009,58 +2001,61 @@
   });
 
 
-  // --- ABILITIES/WEAKNESSES SUMMARY (no API required) ---
-  function rebuildABWSummary() {
-    getSectionIDs("repeating_abilities", function(ids) {
-      if (!ids || !ids.length) {
-        setAttrs({ abw_summary: "<b>Abilities</b><br>None<br><br><b>Weaknesses</b><br>None" });
-        return;
+
+// --- ABILITIES/WEAKNESSES SUMMARY (no API required) ---
+// --- ABILITIES/WEAKNESSES SUMMARY (no API required) ---
+function rebuildABWSummary() {
+  getSectionIDs("repeating_abilities", function(ids) {
+    if (!ids || !ids.length) {
+      setAttrs({ abw_summary: "<b>Abilities</b><br>None<br><br><b>Weaknesses</b><br>None" });
+      return;
+    }
+
+    var attrList = [];
+    ids.forEach(function(id) {
+      attrList.push("repeating_abilities_" + id + "_ability_name");
+      attrList.push("repeating_abilities_" + id + "_ability_cp");
+      attrList.push("repeating_abilities_" + id + "_ability_ip");
+    });
+
+    getAttrs(attrList, function(v) {
+      var abilities = [];
+      var weaknesses = [];
+
+      ids.forEach(function(id) {
+        var name = (v["repeating_abilities_" + id + "_ability_name"] || "").trim();
+        var cp = parseFloat(v["repeating_abilities_" + id + "_ability_cp"]) || 0;
+        var ip = parseFloat(v["repeating_abilities_" + id + "_ability_ip"]) || 0;
+
+        // Skip truly empty rows
+        if (!name && cp === 0 && ip === 0) return;
+
+        var label = name || "(unnamed)";
+        var line = label + " (CP " + cp + (ip ? (", IP " + ip) : "") + ")";
+        if (cp < 0) weaknesses.push(line);
+        else abilities.push(line);
+      });
+
+      function fmt(arr) {
+        if (!arr.length) return "None";
+        return arr.map(function(s) { return "• " + s; }).join("<br>");
       }
 
-      var attrList = [];
-      ids.forEach(function(id) {
-        attrList.push("repeating_abilities_" + id + "_ability_name");
-        attrList.push("repeating_abilities_" + id + "_ability_cp");
-        attrList.push("repeating_abilities_" + id + "_ability_ip");
-      });
-
-      getAttrs(attrList, function(v) {
-        var abilities = [];
-        var weaknesses = [];
-
-        ids.forEach(function(id) {
-          var name = (v["repeating_abilities_" + id + "_ability_name"] || "").trim();
-          var cp = parseFloat(v["repeating_abilities_" + id + "_ability_cp"]) || 0;
-          var ip = parseFloat(v["repeating_abilities_" + id + "_ability_ip"]) || 0;
-
-          // Skip truly empty rows
-          if (!name && cp === 0 && ip === 0) return;
-
-          var label = name || "(unnamed)";
-          var line = label + " (CP " + cp + (ip ? (", IP " + ip) : "") + ")";
-          if (cp < 0) weaknesses.push(line);
-          else abilities.push(line);
-        });
-
-        function fmt(arr) {
-          if (!arr.length) return "None";
-          return arr.map(function(s) { return "• " + s; }).join("<br>");
-        }
-
-        var summary = "<b>Abilities</b><br>" + fmt(abilities) + "<br><br><b>Weaknesses</b><br>" + fmt(weaknesses);
-        setAttrs({ abw_summary: summary });
-      });
+      var summary = "<b>Abilities</b><br>" + fmt(abilities) + "<br><br><b>Weaknesses</b><br>" + fmt(weaknesses);
+      setAttrs({ abw_summary: summary });
     });
-  }
+  });
+}
 
-  on("change:repeating_abilities remove:repeating_abilities", rebuildABWSummary);
-  on("sheet:opened", rebuildABWSummary);
+on("change:repeating_abilities remove:repeating_abilities", rebuildABWSummary);
+on("sheet:opened", rebuildABWSummary);
 
-  on("sheet:opened change:intelligence_score change:ip_mod", function() {
-      calcBaseIPs();
-    });
 
-// ==================== ABILITY MODIFIER NOTES PARSER ====================
+on("sheet:opened change:intelligence_score change:ip_mod", function() {
+    calcBaseIPs();
+  });
+
+  // ==================== ABILITY MODIFIER NOTES PARSER ====================
 // Shorthand patterns:
 //   aura:d8+1:Energy:1       - Ability Field (damage:type:PR)
 //   absorb:Energy:25:Flame   - Absorption (types:limit:effect)
