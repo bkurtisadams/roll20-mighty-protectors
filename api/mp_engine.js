@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.18 (Area Effect support)
+/* Mighty Protectors Roll20 API Engine v2.19 (Damage Sub-Type matching)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -34,12 +34,17 @@
  *        - Coverage reduction: Light=25%, Heavy=50%, Full=100%
  *        - Scatter on miss: ceil((range/20) * failMargin)
  *        - Commands: areaescape, areashield, arearollnpcs, areaforceall, areadamageall
+ * v2.19: Damage Sub-Type matching
+ *        - Attack and protection rows have sub-type fields (Heat, Sonics, Poison, etc.)
+ *        - Protection with blank sub-type covers full damage type
+ *        - Protection with specific sub-type only matches that sub-type
+ *        - Supports comma-separated sub-types (Heat,Radiation)
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
- *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}}
+ *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.18 FILE STARTING");
+log("MP ENGINE v2.19 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -357,44 +362,96 @@ MP.Engine = (function () {
   }
 
 
-  // Sum protection, hardened, invuln, and adapt for a specific damage type
+  // Sum protection, hardened, invuln, and adapt for a specific damage type and subtype
   // Returns { prot: total protection, hardened: total hardened, invuln: boolean, adapt: boolean }
-  function sumProtectionWithHardened(charId, protKey) {
+  // atkSubtype: the attack's sub-type (e.g., "heat", "sonics") - blank means no specific subtype
+  // Protection matches if:
+  //   - Protection has no subtype (blank) = covers full damage type
+  //   - Protection subtype matches attack subtype exactly
+  //   - Protection has comma-separated subtypes and one matches
+  function sumProtectionWithHardened(charId, protKey, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
-    const re = new RegExp("^repeating_protection_.*_prot_" + protKey + "$");
+    
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
     let totalProt = 0;
     let totalHardened = 0;
     let hasInvuln = false;
     let hasAdapt = false;
     
+    // Normalize attack subtype for matching
+    const atkSub = (atkSubtype || "").trim().toLowerCase();
+    
+    // Get all protection row IDs
+    const rowIds = new Set();
     attrs.forEach(a => {
       const n = a.get("name");
-      if (re.test(n)) {
-        const parsed = parseProtValue(a.get("current"));
-        totalProt += parsed.prot;
-        totalHardened += parsed.hardened;
-        if (parsed.invuln) hasInvuln = true;
-        if (parsed.adapt) hasAdapt = true;
+      const match = n.match(/^repeating_protection_([^_]+)_/);
+      if (match) rowIds.add(match[1]);
+    });
+    
+    rowIds.forEach(rowId => {
+      // Check if this row is broken
+      const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+      if (brokenAttr && brokenAttr.get("current") === "1") return;  // Skip broken rows
+      
+      // Check if this row is active (state = Active)
+      const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+      if (stateAttr && stateAttr.get("current") === "Off") return;  // Skip inactive rows
+      
+      // Get protection value for this damage type
+      const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
+      if (!protAttr) return;  // No protection for this damage type
+      
+      const protValue = protAttr.get("current");
+      if (!protValue || protValue === "0" || protValue === "") return;  // No protection value
+      
+      // Check subtype matching
+      const subtypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_subtype`);
+      const protSubtype = subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "";
+      
+      // Matching rules:
+      // 1. If protection has no subtype (blank), it covers the full damage type - always matches
+      // 2. If attack has no subtype, only full-type protection (blank subtype) applies
+      // 3. If both have subtypes, they must match (protection can be comma-separated list)
+      let subtypeMatches = false;
+      if (protSubtype === "") {
+        // Protection covers full type - always matches
+        subtypeMatches = true;
+      } else if (atkSub === "") {
+        // Attack has no subtype, but protection is subtype-specific - no match
+        subtypeMatches = false;
+      } else {
+        // Both have subtypes - check if attack subtype is in protection's list
+        const protSubtypes = protSubtype.split(",").map(s => s.trim().toLowerCase());
+        subtypeMatches = protSubtypes.includes(atkSub);
       }
+      
+      if (!subtypeMatches) return;  // Subtype doesn't match
+      
+      // Parse and accumulate protection
+      const parsed = parseProtValue(protValue);
+      totalProt += parsed.prot;
+      totalHardened += parsed.hardened;
+      if (parsed.invuln) hasInvuln = true;
+      if (parsed.adapt) hasAdapt = true;
     });
     
     return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln, adapt: hasAdapt };
   }
 
   // Legacy function for compatibility - just returns protection total
-  function sumProtection(charId, protKey) {
-    return sumProtectionWithHardened(charId, protKey).prot;
+  function sumProtection(charId, protKey, atkSubtype) {
+    return sumProtectionWithHardened(charId, protKey, atkSubtype).prot;
   }
 
   // Get total hardened for a specific damage type
-  function sumHardened(charId, protKey) {
-    return sumProtectionWithHardened(charId, protKey).hardened;
+  function sumHardened(charId, protKey, atkSubtype) {
+    return sumProtectionWithHardened(charId, protKey, atkSubtype).hardened;
   }
   
   // Check if character has invulnerability for a damage type (from protection rows)
-  function hasInvulnerability(charId, protKey) {
-    return sumProtectionWithHardened(charId, protKey).invuln;
+  function hasInvulnerability(charId, protKey, atkSubtype) {
+    return sumProtectionWithHardened(charId, protKey, atkSubtype).invuln;
   }
 
   // --- Area Effect Functions ---
@@ -454,7 +511,8 @@ MP.Engine = (function () {
   // Sum protection with coverage reduction for area effects
   // coverage: "full" (100%), "heavy" (50%), "light" (25%)
   // Returns { prot, hardened, invuln, adapt } with coverage-adjusted values
-  function sumProtectionWithCoverage(charId, protKey, isAreaEffect) {
+  // atkSubtype: the attack's sub-type for matching
+  function sumProtectionWithCoverage(charId, protKey, isAreaEffect, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
     
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
@@ -462,6 +520,9 @@ MP.Engine = (function () {
     let totalHardened = 0;
     let hasInvuln = false;
     let hasAdapt = false;
+    
+    // Normalize attack subtype for matching
+    const atkSub = (atkSubtype || "").trim().toLowerCase();
     
     // Get all protection row IDs
     const rowIds = new Set();
@@ -484,7 +545,27 @@ MP.Engine = (function () {
       const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
       if (!protAttr) return;
       
-      const parsed = parseProtValue(protAttr.get("current"));
+      const protValue = protAttr.get("current");
+      if (!protValue || protValue === "0" || protValue === "") return;
+      
+      // Check subtype matching
+      const subtypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_subtype`);
+      const protSubtype = subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "";
+      
+      // Matching rules (same as sumProtectionWithHardened):
+      let subtypeMatches = false;
+      if (protSubtype === "") {
+        subtypeMatches = true;  // Full type protection
+      } else if (atkSub === "") {
+        subtypeMatches = false;  // Attack has no subtype, protection is specific
+      } else {
+        const protSubtypes = protSubtype.split(",").map(s => s.trim().toLowerCase());
+        subtypeMatches = protSubtypes.includes(atkSub);
+      }
+      
+      if (!subtypeMatches) return;
+      
+      const parsed = parseProtValue(protValue);
       if (parsed.invuln) hasInvuln = true;
       if (parsed.adapt) hasAdapt = true;
       
@@ -1025,6 +1106,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
     const dmgTypeStr = dmgTypeMap[dmgTypeRaw] || fields.type || "Other";
     
+    // Damage sub-type (e.g., Heat, Sonics, Poison) - used to match against specific protection
+    const dmgSubtype = (getAtkAttr("attack_subtype") || fields.subtype || "").trim().toLowerCase();
+    
     // Save attack attributes (new v2.13 fields) - defined early for use in noDamageType
     const isSaveAttack = (getAtkAttr("attack_is_save") === "1") || (atkType === "sav");
     const saveBC = getAtkAttr("attack_save_bc") || "";
@@ -1191,7 +1275,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       rollId, playerid: msg.playerid, atkCharId, atkName, defTokenId, 
       defCharId: defChar.id, defName, rowId, nat, roll, confirm, targetTotal,
       outcome, isCrit, isFumble, critResult, fumbleResult,
-      damageTotal, dmgTypeStr, protKey, atkType,
+      damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType,
       atkAP, isSaveAttack, saveBC, saveMod, recMod, recTime, noDamage, saveDamage,
       snBP, snMaxBP, snType, causesKB,
       isPushing, pushAmount, rangeData, created: Date.now(),
@@ -1390,6 +1474,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       rollId: rollId,
       damage: rec.damageTotal,
       damageType: rec.dmgTypeStr,
+      dmgSubtype: rec.dmgSubtype,
       protKey: rec.protKey,
       atkAP: rec.atkAP,
       radius: rec.areaRadius,
@@ -1643,7 +1728,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
       
       const raw = areaRec.damage;
-      const protData = sumProtectionWithCoverage(tokData.charId, areaRec.protKey, true);
+      const protData = sumProtectionWithCoverage(tokData.charId, areaRec.protKey, true, areaRec.dmgSubtype);
       const baseProt = protData.prot;
       const hardened = protData.hardened;
       const hasInvuln = protData.invuln;
@@ -1866,8 +1951,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const protKey = rec.protKey;
     const damageType = rec.dmgTypeStr || "Kinetic";
     
-    // Get protection, hardened, invuln, and adapt for this damage type
-    const protData = sumProtectionWithHardened(defChar.id, protKey);
+    // Get protection, hardened, invuln, and adapt for this damage type and subtype
+    const protData = sumProtectionWithHardened(defChar.id, protKey, rec.dmgSubtype);
     let baseProt = protData.prot;
     const hardened = protData.hardened;
     const hasInvuln = protData.invuln;
@@ -2288,7 +2373,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Protection adds to save (makes it easier) per 4.9
     // EXCEPTION: Damaging Poison - protection only applies to damage, NOT to save TN
     // Also check for invulnerability (+8 bonus) and adaptation (+5 bonus)
-    const protData = sumProtectionWithHardened(defChar.id, rec.protKey);
+    const protData = sumProtectionWithHardened(defChar.id, rec.protKey, rec.dmgSubtype);
     const prot = protData.prot;
     const invulnBonus = protData.invuln ? 8 : 0;
     const adaptBonus = protData.adapt ? 5 : 0;
@@ -4576,7 +4661,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.16</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.19</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -4619,11 +4704,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.16:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.19:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.16 READY");
+  log("MP ENGINE v2.19 READY");
 });

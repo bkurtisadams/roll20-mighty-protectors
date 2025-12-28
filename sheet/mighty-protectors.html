@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.38 - Add Area Effect support (coverage, shield, broken) -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.39 - Add damage sub-type fields and restructure settings panels -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -511,7 +511,7 @@
           <td style="text-align:center; padding:1px;">
             <input type="hidden" name="attr_attack_rowid" />
             <input type="hidden" name="attr_attack_num" />
-            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -555,8 +555,11 @@
 
 <!-- SETTINGS PANEL -->
       <div class="sheet-options-panel">
-        <!-- Row 1: Activation, Attack Type, Gear, AP, AF, Area, Duration -->
-        <div class="sheet-panel-row">
+        <!-- Row 0: Description -->
+        <textarea name="attr_description" class="sheet-panel-desc" style="height:60px !important;" placeholder="Description, special rules, notes..."></textarea>
+
+        <!-- Row 1: Activation, Attack Type, Gear -->
+        <div class="sheet-panel-row" style="margin-top:6px;">
           <div class="sheet-panel-field">
             <label>Activation:</label>
             <select name="attr_attack_activation" title="When/how this ability activates" style="width:115px !important;">
@@ -579,7 +582,7 @@
           </div>
         </div>
 
-        <!-- Row 2: AP, AF, Area, Duration, Info button -->
+        <!-- Row 2: AP, AF, Area, Duration, Sub-Type, Info button -->
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <label title="Armor Piercing: Points of protection ignored (number or ALL)">AP:</label>
@@ -594,8 +597,12 @@
             <input type="text" name="attr_attack_area" style="width:28px !important;" title="Area Effect: Diameter in inches" />
           </div>
           <div class="sheet-panel-field">
-            <label title="Duration: How long the effect lasts">Duration:</label>
-            <input type="text" name="attr_attack_duration" style="width:50px !important;" title="Duration: How long the effect lasts" />
+            <label title="Duration: How long the effect lasts">Dur:</label>
+            <input type="text" name="attr_attack_duration" style="width:40px !important;" title="Duration: How long the effect lasts" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Damage sub-type (Heat, Sonics, Poison, etc.)">Sub:</label>
+            <input type="text" name="attr_attack_subtype" style="width:60px !important;" title="Damage sub-type (Heat, Electricity, Radiation, Light, Sonics, Vibration, Blunt, Sharp, Disease, Poison, Venom, Cold, Gas, etc.)" placeholder="Heat" />
           </div>
           <span class="sheet-panel-divider"></span>
           <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{name=@{attack_name}}} {{row=@{attack_rowid}}}" title="Show attack details">Info</button>
@@ -676,12 +683,9 @@
           </div>
         </div>
 
-        <!-- Description -->
-        <textarea name="attr_description" class="sheet-panel-desc" placeholder="Description / special rules..." style="margin-top:4px;"></textarea>
-
-        <!-- Help text (simplified since UI handles most cases now) -->
+        <!-- Help text -->
         <div class="sheet-panel-help">
-          Notes shorthand still works: <code>sav:BC:mod:rec</code> | <code>snr:type:bp/max</code> | <code>dtype:none</code>
+          Notes shorthand: <code>sav:BC:mod:rec</code> | <code>snr:type:bp/max</code> | <code>dtype:none</code>
         </div>
       </div>
 
@@ -813,7 +817,11 @@
 
       <!-- SETTINGS PANEL -->
       <div class="sheet-options-panel">
-        <div class="sheet-panel-row">
+        <!-- Row 0: Description -->
+        <textarea name="attr_description" class="sheet-panel-desc" style="height:60px !important;" placeholder="Description, special rules, notes..."></textarea>
+
+        <!-- Row 1: Type, Coverage, Gear, Broken -->
+        <div class="sheet-panel-row" style="margin-top:6px;">
           <div class="sheet-panel-field">
             <label>Type:</label>
             <select name="attr_prot_activation" title="C=Continual, P=Persistent, V=Voluntary" style="width:115px !important;">
@@ -839,6 +847,8 @@
             <label style="color:#e94560;">Broken</label>
           </div>
         </div>
+
+        <!-- Row 2: Shield, Sub-Type -->
         <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_prot_shield" value="1" title="This is a Shield" />
@@ -852,12 +862,19 @@
             <label title="Shield Breakpoint">BP:</label>
             <input type="text" name="attr_prot_shield_bp" maxlength="3" style="width:28px !important;" title="Shield Breakpoint (damage to break)" />
           </div>
+          <span class="sheet-panel-divider"></span>
+          <div class="sheet-panel-field">
+            <label title="Damage sub-type this protection applies to (blank = full type)">Sub-Type:</label>
+            <input type="text" name="attr_prot_subtype" style="width:80px !important;" title="Damage sub-type (Heat, Electricity, Radiation, Sonics, etc.). Blank = full damage type. Comma-separate for multiple." placeholder="Heat,Radiation" />
+          </div>
+        </div>
+
+        <!-- Row 3: Ability Field -->
+        <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_prot_afield" value="1" title="This is an Ability Field (has damage roll)" />
             <label>Ability Field</label>
           </div>
-        </div>
-        <div class="sheet-panel-row">
           <div class="sheet-panel-field">
             <label>Dmg Type:</label>
             <select name="attr_prot_dmgtype" title="Ability Field damage type" style="width:44px !important;">
@@ -878,7 +895,8 @@
             <input type="text" name="attr_prot_charges" maxlength="3" style="width:28px !important;" title="Charges remaining" />
           </div>
         </div>
-        <textarea name="attr_description" class="sheet-panel-desc" placeholder="Description..."></textarea>
+
+        <!-- Help text -->
         <div class="sheet-panel-help">
           Values: <code>5</code>=prot | <code>5h</code>=hardened | <code>1/4</code>=invuln | <code>1/2</code>=adapt | <code>5h/4/2</code>=all
         </div>
