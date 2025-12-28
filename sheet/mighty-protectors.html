@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.25 - Add weight multiplier, remove readonly from modifier fields, cyan styling -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.28 - Adjust profile/weight row spacing, bullet separator -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -136,21 +136,23 @@
 
 <!-- PROFILE / WEIGHT / MASS / WEALTH / LUCK ROW -->
   <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
-    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
+    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:3px;">
 
       <span style="color:#888; font-size:10px;" title="Profile affects range penalties">Profile:</span>
       <input type="text" name="attr_profile" value="1"
-        style="width:45px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        style="width:35px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
         title="Profile (default 1). Size affects range penalties." />
 
-      <span style="color:#aaa; font-size:11px;">Weight</span>
+      <span style="color:#aaa; font-size:10px;">Weight:</span>
       <input type="text" name="attr_weight" value="0"
-        style="width:70px; flex-shrink:1; min-width:55px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" />
-      <span style="color:#888; font-size:10px;">lbs</span>
-      <span style="color:#888; font-size:10px;" title="Weight multiplier from Size Change">x</span>
+        style="width:55px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" 
+        title="Base weight in lbs" />
+      <span style="color:#888; font-size:10px;" title="Weight multiplier from Size Change">×</span>
       <input type="text" name="attr_weight_mult" value="1"
-        style="width:35px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
-        title="Weight multiplier from Size Change (e.g., x8, /6)" />
+        style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+        title="Weight multiplier from Size Change (e.g., 8, 0.5)" />
+      <span style="color:#888; font-size:10px;">=</span>
+      <span name="attr_effective_weight" style="color:#f4d03f; font-size:10px; min-width:35px;">0</span>
 
       <!-- MASS BUTTON -->
       <button type="roll" class="mp-labellink" name="roll_mass"
@@ -158,21 +160,23 @@
         value="&{template:default} {{name=@{character_name} rolls Mass}} {{Mass=[[@{mass}]]}}">Mass</button>
         
       <input type="text" name="attr_mass"
-        style="width:65px; flex-shrink:1; min-width:40px; background:#1e1e38; color:#eaeaea; border:1px solid #4a4070; padding:3px; text-align:center; box-sizing:border-box;"
+        style="width:70px; background:#1e1e38; color:#eaeaea; border:1px solid #4a4070; padding:2px; text-align:center; box-sizing:border-box;"
         value="1d4" readonly />
 
       <span style="color:#888; font-size:10px;" title="KB Resistance: Bonus to Mass roll vs Knockback">KBR:</span>
       <input type="text" name="attr_kb_resistance" value="0"
-        style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        style="width:24px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
         title="Knockback Resistance bonus (from Inertia)" />
+
+      <span style="color:#888; font-size:11px; margin:0 3px;">•</span>
 
       <!-- WEALTH BUTTON -->
       <button type="roll" class="mp-labellink" name="roll_wealth"
-        style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0 0 0 8px; background:#e63946; color:#fff; border:1px solid #2a2040;"
+        style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;"
         value="&{template:default} {{name=@{character_name} rolls Wealth}} {{Roll=[[@{wealth}]]}}">Wealth</button>
         
       <input type="text" name="attr_wealth" value="d4"
-        style="width:60px; flex-shrink:1; min-width:40px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;"
+        style="width:70px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;"
         title="Starting: d4 (~$40k annual income)" />
 
       <!-- LUCK BUTTON -->
@@ -181,7 +185,7 @@
         value="&{template:default} {{name=@{character_name} rolls Luck}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}">Luck</button>
         
       <input type="text" name="attr_luck" value="10"
-        style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        style="width:26px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
         title="Starting: 10- save (average luck)" />
 
     </div>
@@ -1841,7 +1845,7 @@
       "strength_cost", "endurance_cost", "agility_cost", "intelligence_cost", "cool_cost",
       "strength_mod", "endurance_mod", "agility_mod", "intelligence_mod", "cool_mod",
       "physical_def_bonus", "mental_def_bonus",
-      "weight", "power_mod", "hits_mod", "power_score", "power_score_max", "hits_score", "hits_score_max"
+      "weight", "weight_mult", "power_mod", "hits_mod", "power_score", "power_score_max", "hits_score", "hits_score_max"
     ], function(values) {
       var stBase = parseInt(values.strength_cost) || 0;
       var enBase = parseInt(values.endurance_cost) || 0;
@@ -1868,6 +1872,8 @@
       
       var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
       var weight = parseInt(weightRaw) || 1;
+      var weightMult = parseFloat(values.weight_mult) || 1;
+      var effectiveWeight = Math.round(weight * weightMult);
       
       var stIdx = clampIndex(st);
       var enIdx = clampIndex(en);
@@ -1918,7 +1924,8 @@
         hth_damage: hthTable[stIdx],
         healing_rate: (healTable[enIdx] / 10).toFixed(1),
         invention_points_base: ipBase,
-        leap_base: formatNumber((carryValues[stIdx] / weight).toFixed(1)),
+        effective_weight: formatNumber(effectiveWeight),
+        leap_base: formatNumber((carryValues[stIdx] / effectiveWeight).toFixed(1)),
         power_base: powerBase,
         hits_base: Math.max(1, hitsBase),
         power_score_max: newPowerMax,
@@ -1988,16 +1995,21 @@
     recalcAll();
   });
 
-  on("change:weight", function() {
-    getAttrs(["weight"], function(values) {
+  on("change:weight change:weight_mult", function() {
+    getAttrs(["weight", "weight_mult"], function(values) {
       var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
       var weight = parseInt(weightRaw) || 1;
+      var mult = parseFloat(values.weight_mult) || 1;
       
+      var effectiveWeight = Math.round(weight * mult);
       var weightFormatted = formatNumber(weight);
-      var halfWeight = weight / 2;
+      var effectiveFormatted = formatNumber(effectiveWeight);
+      
+      var halfWeight = effectiveWeight / 2;
       var idx = findClosestCarryIndex(halfWeight);
       setAttrs({ 
         weight: weightFormatted,
+        effective_weight: effectiveFormatted,
         mass: hthTable[idx] 
       });
     });
@@ -2218,6 +2230,18 @@
 
   on("change:agility_save change:intelligence_save change:cool_save", function() {
     recalcAttackToHits();
+  });
+
+  on("change:physical_def_bonus change:mental_def_bonus", function() {
+    recalcAll();
+  });
+
+  on("change:power_mod change:hits_mod", function() {
+    recalcAll();
+  });
+
+  on("change:strength_mod change:endurance_mod change:agility_mod change:intelligence_mod change:cool_mod", function() {
+    recalcAll();
   });
 
   on("change:repeating_attacks:attack_kb", function(eventInfo) {
