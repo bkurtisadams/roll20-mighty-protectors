@@ -3634,6 +3634,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const remoteLabel = remote ? " <span style='color:#9b59b6;'>(Remote)</span>" : "";
     msg_out += `Result: <b style="color:#27ae60;">HIT - GRAPPLED${lockAttempt ? " & LOCKED" : ""}</b>${remoteLabel}<br/>`;
+    
+    // Show grip dice (what will be used for Squeeze/Break Free)
+    const gripDisplay = (gripType === "power" && gripDice) ? gripDice : (getAttr(atkChar.id, "hth_damage") || "1d4");
+    const gripSource = (gripType === "power" && gripDice) ? "Power" : "HTH";
+    msg_out += `<i>Grip: <b>${gripDisplay}</b> (${gripSource})</i><br/>`;
+    
     // Per 3.0.2.6: -3 restraint, -9 if fully restrained (locked)
     const restraintPenalty = lockAttempt ? -9 : -3;
     msg_out += `<i>Restraint: Both parties at <b>${restraintPenalty}</b> to physical tasks</i><br/>`;
