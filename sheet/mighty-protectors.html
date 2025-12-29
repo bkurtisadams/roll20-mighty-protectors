@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.45 - Orphan cleanup, profile/weight parsing fixes -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.47 - Add Grapple Attack row to attack settings panel -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -558,7 +558,7 @@
         <!-- Row 0: Description -->
         <textarea name="attr_description" class="sheet-panel-desc" style="height:60px !important;" placeholder="Description, special rules, notes..."></textarea>
 
-        <!-- Row 1: Activation, Attack Type, Gear -->
+        <!-- Row 1: Activation, Attack Type, Sub-Type, Gear -->
         <div class="sheet-panel-row" style="margin-top:6px;">
           <div class="sheet-panel-field">
             <label>Activation:</label>
@@ -577,32 +577,8 @@
             </select>
           </div>
           <div class="sheet-panel-field">
-            <input type="checkbox" name="attr_attack_gear" value="1" title="Gear-based: Can be broken/disarmed, cannot Push" />
-            <label title="Gear-based: Can be broken/disarmed, cannot Push">Gear</label>
-          </div>
-        </div>
-
-        <!-- Row 2: AP, AF, Area, Duration, Sub-Type, Info button -->
-        <div class="sheet-panel-row">
-          <div class="sheet-panel-field">
-            <label title="Armor Piercing: Points of protection ignored (number or ALL)">AP:</label>
-            <input type="text" name="attr_attack_ap" style="width:28px !important;" title="Armor Piercing: Points of protection ignored (number or ALL)" />
-          </div>
-          <div class="sheet-panel-field">
-            <label title="Autofire: Rate of fire 2-7">AF:</label>
-            <input type="text" name="attr_attack_autofire" maxlength="1" style="width:20px !important;" title="Autofire: Rate of fire 2-7" />
-          </div>
-          <div class="sheet-panel-field">
-            <label title="Area Effect: Diameter in inches">Area:</label>
-            <input type="text" name="attr_attack_area" style="width:28px !important;" title="Area Effect: Diameter in inches" />
-          </div>
-          <div class="sheet-panel-field">
-            <label title="Duration: How long the effect lasts">Dur:</label>
-            <input type="text" name="attr_attack_duration" style="width:40px !important;" title="Duration: How long the effect lasts" />
-          </div>
-          <div class="sheet-panel-field">
-            <label title="Damage sub-type">Sub:</label>
-            <select name="attr_attack_subtype" title="Damage sub-type (blank = general type)" style="width:80px !important;">
+            <label title="Damage sub-type (blank = general type)">Sub:</label>
+            <select name="attr_attack_subtype" title="Damage sub-type (blank = general type)" style="width:90px !important;">
               <option value="" selected>-- None --</option>
               <optgroup label="Kinetic">
                 <option value="blunt">Blunt</option>
@@ -638,6 +614,30 @@
                 <option value="time">Time</option>
               </optgroup>
             </select>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_gear" value="1" title="Gear-based: Can be broken/disarmed, cannot Push" />
+            <label title="Gear-based: Can be broken/disarmed, cannot Push">Gear</label>
+          </div>
+        </div>
+
+        <!-- Row 2: AP, AF, Area, Duration, Info button -->
+        <div class="sheet-panel-row">
+          <div class="sheet-panel-field">
+            <label title="Armor Piercing: Points of protection ignored (number or ALL)">AP:</label>
+            <input type="text" name="attr_attack_ap" style="width:28px !important;" title="Armor Piercing: Points of protection ignored (number or ALL)" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Autofire: Rate of fire 2-7">AF:</label>
+            <input type="text" name="attr_attack_autofire" maxlength="1" style="width:20px !important;" title="Autofire: Rate of fire 2-7" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Area Effect: Diameter in inches">Area:</label>
+            <input type="text" name="attr_attack_area" style="width:28px !important;" title="Area Effect: Diameter in inches" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Duration: How long the effect lasts">Dur:</label>
+            <input type="text" name="attr_attack_duration" style="width:40px !important;" title="Duration: How long the effect lasts" />
           </div>
           <span class="sheet-panel-divider"></span>
           <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{name=@{attack_name}}} {{row=@{attack_rowid}}}" title="Show attack details">Info</button>
@@ -715,6 +715,26 @@
           <div class="sheet-panel-field">
             <label title="Maximum Break Point (caps initial roll and stacking)">Max:</label>
             <input type="text" name="attr_attack_max_bp" style="width:28px !important;" title="Maximum Break Point (caps initial roll and stacking)" />
+          </div>
+        </div>
+
+        <!-- Row 5: Grapple Attack -->
+        <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_is_grapple" value="1" class="sheet-atk-grapple-flag" title="This attack can initiate a grapple" />
+            <label title="This attack can initiate a grapple" style="color:#f4d03f;">Grapple Attack</label>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_grapple_remote" value="1" title="Remote grapple (TK, Magnetism) - target cannot counter-grapple" />
+            <label title="Remote grapple (TK, Magnetism) - target cannot counter-grapple">Remote</label>
+          </div>
+          <div class="sheet-panel-field" style="margin-left:8px;">
+            <label>Grip:</label>
+            <input type="radio" name="attr_attack_grip_type" value="hth" checked="checked" title="Use character's Base HTH Damage" />
+            <label title="Use character's Base HTH Damage">HTH</label>
+            <input type="radio" name="attr_attack_grip_type" value="power" title="Use power's damage dice" style="margin-left:6px;" />
+            <label title="Use power's damage dice">Power:</label>
+            <input type="text" name="attr_attack_grip_dice" style="width:45px !important; margin-left:2px;" title="Power grip dice (e.g., 2d8)" placeholder="2d8" />
           </div>
         </div>
 
