@@ -1,8 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.22 (Absorption to BC stats with status effects)
+/* Mighty Protectors Roll20 API Engine v2.24 (Minimum range 1" per MP rules)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
- * Range uses edge-to-edge distance (adjacent tokens = 0")
+ * Range uses edge-to-edge distance (minimum range = 1" per MP rules)
  * v2.11: Fixed range calculation to account for page snapping_increment
  * v2.12: Warns and stops attack if duplicate tokens exist on map
  *        Added damage field validation (rejects non-dice text)
@@ -53,12 +53,21 @@
  *        - BC stat boosts automatically restore on expiry/clear
  *        - Purple status marker shows active absorption effects
  *        - Commands: checkexpiry (manual expiry check)
+ * v2.23: Profile range fix (per game designer ruling)
+ *        - Only TARGET profile affects range penalty, not attacker profile
+ *        - Small target (profile < 1): range × (1/profile) = harder to hit
+ *        - Large target (profile > 1): range / profile = easier to hit
+ *        - Example: 1/420 profile at 1" = treated as 420" away (-7 penalty)
+ * v2.24: Minimum range enforcement
+ *        - Adjacent tokens are at 1" range (not 0") per MP rules
+ *        - Profile adjustments now work correctly at melee range
+ *        - Example: fly at 1/420 profile in melee = 1" / (1/420) = 420" = -7 penalty
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.22 FILE STARTING");
+log("MP ENGINE v2.24 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1031,32 +1040,39 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const inchesPerSquare = scaleNumber / 5;
 
     const distInches = distSquares * inchesPerSquare;
+    
+    // MP minimum range is 1" (adjacent tokens are at 1" range, not 0")
+    const finalInches = Math.max(1, distInches);
 
     return {
-      inches: Math.round(distInches * 10) / 10,
-      penalty: getRangePenalty(distInches)
+      inches: Math.round(finalInches * 10) / 10,
+      penalty: getRangePenalty(finalInches)
     };
   }
 
 
   function calculateRangeWithProfile(atkTok, defTok, atkCharId, defCharId) {
     const baseRange = calculateRange(atkTok, defTok);
+    
+    // Early return for invalid tokens (calculateRange returns 0 for missing tokens)
     if (baseRange.inches === 0) return baseRange;
     
-    // Get profiles (default 1)
-    const atkProfile = getAttrNum(atkCharId, "profile", 1) || 1;
+    // Get target profile (default 1) - only target profile affects range penalty
     const defProfile = getAttrNum(defCharId, "profile", 1) || 1;
     
-    // Adjusted range = actual range * attacker profile / target profile
-    const adjustedInches = (baseRange.inches * atkProfile) / defProfile;
+    // Adjusted range = actual range / target profile
+    // Small profile (< 1): dividing by fraction increases range (harder to hit)
+    // Large profile (> 1): dividing by larger number decreases range (easier to hit)
+    // Note: baseRange.inches is minimum 1" per MP rules, so a 1/420 profile at melee
+    // range becomes 1" / (1/420) = 420" effective range
+    const adjustedInches = baseRange.inches / defProfile;
     
     return {
       inches: Math.round(baseRange.inches * 10) / 10,
       adjustedInches: Math.round(adjustedInches * 10) / 10,
       penalty: getRangePenalty(adjustedInches),
-      atkProfile,
       defProfile,
-      profileAdjusted: (atkProfile !== 1 || defProfile !== 1)
+      profileAdjusted: (defProfile !== 1)
     };
   }
 
@@ -4168,7 +4184,7 @@ function cmdStance(msg, args) {
     msg_out += `Page: ${scaleNum} ${scaleUnit}/sq, snap:${snapIncr}</span><br/>`;
     
     if (rangeData.profileAdjusted) {
-      msg_out += `Profiles: ${rangeData.atkProfile} / ${rangeData.defProfile}<br/>`;
+      msg_out += `Target Profile: ${rangeData.defProfile}<br/>`;
       msg_out += `Adjusted: <b>${rangeData.adjustedInches}"</b><br/>`;
     }
     
@@ -5287,7 +5303,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.22</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.24</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -5330,11 +5346,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.22:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.24:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.22 READY");
+  log("MP ENGINE v2.24 READY");
 });

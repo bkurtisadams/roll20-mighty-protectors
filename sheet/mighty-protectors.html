@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.43 - Absorption to BC stats and powers with status effects -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.45 - Orphan cleanup, profile/weight parsing fixes -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -1013,7 +1013,11 @@
   <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
       <span style="color:#f4d03f; font-weight:bold; font-size:11px;">Abilities / Weaknesses <span style="color:#555; font-size:9px;">(neg CPs = weakness)</span></span>
-      <button type="roll" name="roll_abw_summary" value="&{template:mpabw} {{name=@{character_name}}} {{body=@{abw_summary}}}" style="background:#333; color:#f4d03f; border:1px solid #444; padding:0 4px; font-size:9px;" title="Send all abilities to chat">All</button>
+      <div style="display:flex; gap:4px; align-items:center;">
+        <input type="text" name="attr_cleanup_orphan_id" placeholder="orphan ID" style="width:80px; font-size:8px; background:#222; color:#ff6b6b; border:1px solid #444; padding:1px 3px;" title="Paste orphan row ID here (from console), then click 🧹 to remove" />
+        <button type="action" name="act_cleanup_orphans" style="background:#555; color:#ff6b6b; border:1px solid #666; padding:0 4px; font-size:8px;" title="Diagnose orphaned ability rows (check F12 console)">🧹</button>
+        <button type="roll" name="roll_abw_summary" value="&{template:mpabw} {{name=@{character_name}}} {{body=@{abw_summary}}}" style="background:#333; color:#f4d03f; border:1px solid #444; padding:0 4px; font-size:9px;" title="Send all abilities to chat">All</button>
+      </div>
     </div>
 
     <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
@@ -1164,11 +1168,11 @@
         <div class="sheet-panel-row" style="margin-top:4px; gap:4px 8px !important;">
           <div class="sheet-panel-field">
             <label>Profile</label>
-            <input type="text" name="attr_ability_profile_mod" class="sheet-mod-input" style="width:32px !important; font-size:9px !important; text-overflow:ellipsis; overflow:hidden;" title="Click to see full value. Profile multiplier (e.g., x2, /120)" placeholder="x1" />
+            <input type="text" name="attr_ability_profile_mod" class="sheet-mod-input" style="width:32px !important; font-size:9px !important; text-overflow:ellipsis; overflow:hidden;" title="Profile multiplier (e.g., x2, /120, 1/420)" placeholder="x1" />
           </div>
           <div class="sheet-panel-field">
             <label>Weight</label>
-            <input type="text" name="attr_ability_weight_mod" class="sheet-mod-input" style="width:28px !important;" title="Weight multiplier (e.g., x8, /6)" placeholder="x1" />
+            <input type="text" name="attr_ability_weight_mod" class="sheet-mod-input" style="width:28px !important;" title="Weight multiplier (e.g., x8, /6, 1/6)" placeholder="x1" />
           </div>
           <div class="sheet-panel-field">
             <label>Init</label>
@@ -1559,7 +1563,7 @@
     <div style="background:#8be9fd; color:#000; font-weight:bold; padding:6px 10px;">Combat Query Reference</div>
     <div style="padding:8px 10px; color:#eaeaea;">
       <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">RANGE (4.7.3)</div>
-      <div style="font-size:11px; margin-bottom:8px;">0-4": 0 | 5-9": -1 | 10-19": -2 | 20-39": -3 | 40-79": -4 | 80-159": -5 | etc.</div>
+      <div style="font-size:11px; margin-bottom:8px;">1-4": 0 | 5-9": -1 | 10-19": -2 | 20-39": -3 | 40-79": -4 | 80-159": -5 | etc.</div>
       
       <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">CALLED SHOTS (4.14.2)</div>
       <div style="font-size:11px; margin-bottom:8px;">
@@ -1895,14 +1899,24 @@
       var divisor = parseFloat(str.substring(1));
       return (divisor && divisor !== 0) ? (1 / divisor) : 1;
     }
-    // Handle multiplication format: x2, ×2, *2
+    // Handle multiplication format: x2, ×2, *2, x.67, x.0003
     if (str.charAt(0) === 'x' || str.charAt(0) === '×' || str.charAt(0) === '*') {
       var mult = parseFloat(str.substring(1));
-      return mult || 1;
+      return isNaN(mult) ? 1 : mult;
     }
-    // Plain number
+    // Handle fraction format: 1/420, 1/6 (numerator/denominator)
+    if (str.indexOf('/') > 0) {
+      var parts = str.split('/');
+      var numer = parseFloat(parts[0]);
+      var denom = parseFloat(parts[1]);
+      if (!isNaN(numer) && denom && denom !== 0) {
+        return numer / denom;
+      }
+      return 1;
+    }
+    // Plain number (including 0, .5, etc.)
     var num = parseFloat(str);
-    return num || 1;
+    return isNaN(num) ? 1 : num;
   }
 
   function recalcAbilityBonuses() {
@@ -2324,7 +2338,7 @@
   function initQuerySettings() {
     getAttrs(["query_range", "query_called", "query_def", "query_stance", "query_aim", "query_pushhb", "query_multi", "query_other"], function(v) {
       var updates = {};
-      updates.range_query = v.query_range === "1" ? "?{Range Penalty|0-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
+      updates.range_query = v.query_range === "1" ? "?{Range Penalty|1-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
       updates.multi_query = v.query_multi === "1" ? "?{Actions This Phase|1 Action,0|2 Actions,-3|3 Actions,-6|4 Actions,-9|5 Actions,-12}" : "0";
       updates.called_query = v.query_called === "1" ? "?{Called Shot|None,0|Head,-6|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3}" : "0";
       updates.def_query = v.query_def === "1" ? "?{Target Defense|0}" : "0";
@@ -3058,6 +3072,80 @@
 
   on("change:intelligence_score change:ip_mod", function() {
     calcBaseIPs();
+  });
+
+  // ==================== ORPHAN CLEANUP ====================
+  // Removes orphaned repeating row data that Roll20 sometimes leaves behind
+  
+  on("clicked:cleanup_orphans", function() {
+    console.log("=== ORPHAN CLEANUP DIAGNOSTIC ===");
+    console.log("This tool helps identify orphaned ability rows.");
+    console.log("Orphaned rows have data but are invisible in the UI.");
+    console.log("");
+    
+    // Get all ability IDs that Roll20 thinks exist
+    getSectionIDs("repeating_abilities", function(allIds) {
+      console.log("Roll20 reports", allIds.length, "ability rows:");
+      
+      // Build attribute list to check each row
+      var attrList = ["cleanup_orphan_id"];
+      allIds.forEach(function(id) {
+        attrList.push("repeating_abilities_" + id + "_ability_name");
+        attrList.push("repeating_abilities_" + id + "_ability_state");
+        attrList.push("repeating_abilities_" + id + "_ability_weight_mod");
+        attrList.push("repeating_abilities_" + id + "_ability_profile_mod");
+      });
+      
+      getAttrs(attrList, function(values) {
+        var orphanIdToRemove = (values.cleanup_orphan_id || "").trim();
+        
+        console.log("");
+        console.log("=== ALL ABILITY ROWS ===");
+        allIds.forEach(function(id, idx) {
+          var name = values["repeating_abilities_" + id + "_ability_name"] || "(no name)";
+          var state = values["repeating_abilities_" + id + "_ability_state"] || "Off";
+          var weight = values["repeating_abilities_" + id + "_ability_weight_mod"] || "";
+          var profile = values["repeating_abilities_" + id + "_ability_profile_mod"] || "";
+          
+          var mods = [];
+          if (weight) mods.push("W:" + weight);
+          if (profile) mods.push("P:" + profile);
+          var modStr = mods.length ? " [" + mods.join(", ") + "]" : "";
+          
+          console.log((idx + 1) + ". " + name + " (" + state + ")" + modStr);
+          console.log("   ID: " + id);
+        });
+        
+        console.log("");
+        console.log("=== TO REMOVE AN ORPHAN ===");
+        console.log("1. Count the visible ability rows in your sheet");
+        console.log("2. If Roll20 reports MORE rows than visible, some are orphaned");
+        console.log("3. Identify the orphan by name (it won't be visible)");
+        console.log("4. Copy its ID from above");
+        console.log("5. Paste into the cleanup_orphan_id attribute and click 🧹 again");
+        console.log("   Or run in API console: removeRepeatingRow('repeating_abilities_ID_HERE')");
+        
+        // If user provided an orphan ID, try to remove it
+        if (orphanIdToRemove) {
+          console.log("");
+          console.log("=== ATTEMPTING REMOVAL ===");
+          console.log("Orphan ID to remove: " + orphanIdToRemove);
+          
+          // Clean the ID (remove any prefix if user pasted the full attribute name)
+          var cleanId = orphanIdToRemove.replace("repeating_abilities_", "").replace(/_ability_.*/, "");
+          
+          if (allIds.indexOf(cleanId) !== -1) {
+            console.log("Found matching ID, removing: repeating_abilities_" + cleanId);
+            removeRepeatingRow("repeating_abilities_" + cleanId);
+            setAttrs({ cleanup_orphan_id: "" }, { silent: true });
+            console.log("Removal attempted. Refresh the sheet to verify.");
+          } else {
+            console.log("ERROR: ID not found in ability rows. Check the ID and try again.");
+            console.log("Available IDs:", allIds);
+          }
+        }
+      });
+    });
   });
 
 </script>
