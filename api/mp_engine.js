@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.30 (Restraint penalty enforcement)
+/* Mighty Protectors Roll20 API Engine v2.32 (Restore clears all effects)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -94,12 +94,21 @@
  *        - -9 if fully restrained (locked)
  *        - Penalty shown in attack output and hover breakdown
  *        - Checks both grapple record and fist status marker
+ * v2.31: Grapple attack corrections (4.11)
+ *        - Grapple attacks do NOT deal damage (only establish hold)
+ *        - Squeeze command now uses full damage pipeline (protection, roll-with)
+ *        - Squeeze creates pending record with damage buttons
+ * v2.32: Restore clears all effects
+ *        - !mp restore now clears all status markers (not just dead/sleepy)
+ *        - Clears grapple/snare state and releases held targets
+ *        - Clears conditions (paralyzed, mind control, etc.)
+ *        - Resets defense modifier (bar3) to 0
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.30 FILE STARTING");
+log("MP ENGINE v2.32 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1410,6 +1419,32 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
+
+    // If this attack row is flagged as a Grapple, route to grapple subsystem (4.11)
+    // Grapple attacks do NOT deal damage - they only establish the hold
+    const isGrappleAttack = (getAtkAttr("attack_is_grapple") === "1");
+    if (isGrappleAttack) {
+      if (!atkTok) {
+        ch("MP", `/w gm <b>MP:</b> Could not find an attacker token on this page for ${esc(atkChar.get("name"))}.`);
+        return;
+      }
+      const remote = (getAtkAttr("attack_grapple_remote") === "1");
+      const gripType = (getAtkAttr("attack_grip_type") || "hth");
+      const gripDice = String(getAtkAttr("attack_grip_dice") || "").trim();
+
+      // Use the sheet's already-rolled d20
+      cmdGrapple(msg, {
+        atk: atkTok.id,
+        def: defTok.id,
+        remote: remote ? "1" : "0",
+        griptype: gripType,
+        gripdice: gripDice,
+        tohit: targetTotal,
+        roll: roll
+      });
+      return;
+    }
+
     // Determine outcome
     let outcome = "MISS";
     let isCrit = false;
@@ -1737,7 +1772,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let escapeTN = baseDef + 9 - (3 * distToEdge);
     if (isProne) escapeTN += 6;
     
-    const roll = randomInteger(20);
+    const roll = (args.roll !== undefined && args.roll !== null && String(args.roll).trim() !== "") ? num(args.roll, 0) : randomInteger(20);
     const success = (roll !== 20) && (roll <= escapeTN);
     
     tokData.escaped = success;
@@ -3552,7 +3587,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const lockPenalty = lockAttempt ? -3 : 0;
     
     const finalTN = baseChance - defDef + lockPenalty;
-    const roll = randomInteger(20);
+    const roll = (args.roll !== undefined && args.roll !== null && String(args.roll).trim() !== "") ? num(args.roll, 0) : randomInteger(20);
     const hit = roll <= finalTN;
 
     // Build roll breakdown for hover text
@@ -3623,7 +3658,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     const atkTokId = args.atk || sn.grapplerTokenId;
-    const atkChar = getCharFromToken(getObj("graphic", atkTokId));
+    const atkTok = getObj("graphic", atkTokId);
+    const atkChar = getCharFromToken(atkTok);
     const defChar = getCharFromToken(defTok);
 
     if (!atkChar || !defChar) {
@@ -3642,10 +3678,37 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     const damage = rollExpr(hthExpr);
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") +
-      `<b>${esc(atkChar.get("name"))} Squeezes ${esc(defChar.get("name"))}</b>${gripLabel}<br/>` +
-      `Damage: <span title="${hthExpr}"><b>${damage}</b></span> (Kinetic, no KB)<br/>` +
-      `<i>Apply protection and roll-with normally.</i>`);
+    // Create pending record for damage processing
+    // protKey should match what typeToProtKey() returns (e.g., "kinetic")
+    const rollId = String(Date.now()) + "_" + randomInteger(999999);
+    state.MP_Engine.pending[rollId] = {
+      rollId,
+      playerid: msg.playerid,
+      atkCharId: atkChar.id,
+      atkName: atkChar.get("name") + " - Squeeze",
+      defTokenId: defTokId,
+      defCharId: defChar.id,
+      defName: defChar.get("name"),
+      damageTotal: damage,
+      dmgTypeStr: "Kinetic",
+      dmgSubtype: "",
+      protKey: "kinetic",  // Matches typeToProtKey("Kinetic") return value
+      atkAP: 0,
+      causesKB: false,  // Squeeze never causes KB per 4.11
+      isSqueeze: true,
+      created: Date.now()
+    };
+
+    // Build output with damage buttons
+    let html = `<div style="background:#e8daef; border:2px solid #9b59b6; padding:4px 8px;">`;
+    html += `<b>${esc(atkChar.get("name"))} Squeezes ${esc(defChar.get("name"))}</b>${gripLabel}<br/>`;
+    html += `Damage: <span title="${hthExpr}"><b>${damage}</b></span> (Kinetic, no KB)<br/>`;
+    html += `[No Roll-With](!mp apply --id ${rollId} --mode noroll) `;
+    html += `[Roll-With Max](!mp apply --id ${rollId} --mode rwmax) `;
+    html += `[Roll-With...](!mp apply --id ${rollId} --mode rw --amt ?{Roll-With amount|0})`;
+    html += `</div>`;
+
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
   }
 
   function cmdGrappleBreak(msg, args) {
@@ -4038,6 +4101,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const char = getCharFromToken(tok);
       if (!char) return;
       
+      const tokId = tok.id;
+      
       // Get max from token bar max (same source as cmdStatus)
       const hitsMax = parseInt(tok.get("bar2_max"), 10) || 20;
       const powMax = parseInt(tok.get("bar1_max"), 10) || 40;
@@ -4046,15 +4111,54 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tok.set("bar1_value", powMax);
       tok.set("bar2_value", hitsMax);
       
-      // Clear incapacitated/unconscious markers
+      // Clear all status markers
       tok.set("status_dead", false);
       tok.set("status_sleepy", false);
+      tok.set("status_grab", false);        // Being grappled
+      tok.set("status_fist", false);        // Grappling someone
+      tok.set("status_cobweb", false);      // Snared
+      tok.set("status_broken-heart", false); // Off balance
+      tok.set("status_broken-leg", false);  // Leg disabled
+      tok.set("status_broken-shield", false); // Arm disabled
+      tok.set("status_prone", false);       // Prone
+      tok.set("status_purple", false);      // Absorption effect active
+      tok.set("status_blue", false);        // Defensive stance
+      tok.set("status_white-tower", false); // Full defense
+      
+      // Reset defense modifier (bar3)
+      tok.set(CFG.DEF_MOD_BAR, 0);
+      
+      // Clear snare/grapple state for this token
+      if (state.MP_Engine.snares[tokId]) {
+        // If this token was grappling someone, clear their grab status too
+        const sn = state.MP_Engine.snares[tokId];
+        if (sn.grapplerTokenId) {
+          const grapplerTok = getObj("graphic", sn.grapplerTokenId);
+          if (grapplerTok) grapplerTok.set("status_fist", false);
+        }
+        delete state.MP_Engine.snares[tokId];
+      }
+      
+      // Check if this token is grappling someone else and release them
+      Object.keys(state.MP_Engine.snares).forEach(victimId => {
+        const sn = state.MP_Engine.snares[victimId];
+        if (sn && sn.grapplerTokenId === tokId) {
+          const victimTok = getObj("graphic", victimId);
+          if (victimTok) victimTok.set("status_grab", false);
+          delete state.MP_Engine.snares[victimId];
+        }
+      });
+      
+      // Clear conditions for this token
+      if (state.MP_Engine.conditions && state.MP_Engine.conditions[tokId]) {
+        delete state.MP_Engine.conditions[tokId];
+      }
       
       restored.push(char.get("name") + ` (H:${hitsMax} P:${powMax})`);
     });
     
     if (restored.length > 0) {
-      ch("MP", `/w gm <b>Restored:</b> ${restored.join(", ")}`);
+      ch("MP", `/w gm <b>Restored:</b> ${restored.join(", ")} <i>(all status effects cleared)</i>`);
     } else {
       ch("MP", `/w gm <b>MP:</b> No valid tokens to restore.`);
     }
@@ -5565,7 +5669,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.30</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.32</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -5608,11 +5712,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.30:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.32:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.30 READY");
+  log("MP ENGINE v2.32 READY");
 });
