@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.55 - Fix continual “lighted” indicator: tie C glow to actual Active state (not type alone) */
+/* Mighty Protectors Character Sheet CSS v42.56 - Add Atk# field for targeted Heightened Expertise bonuses */
 
 /* ========================================
    ROLL TEMPLATES
@@ -737,4 +737,74 @@
   color: #eaeaea !important;
   border: 1px solid #2a2040 !important;
   height: 20px !important;
+}
+/* ========================================
+   TO-HIT TOOLTIP (Heightened Expertise)
+   ======================================== */
+
+/* Container for To Hit cell with tooltip */
+.charsheet .sheet-tohit-container {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+/* Hide the bonus flag checkbox */
+.charsheet .sheet-tohit-bonus-flag {
+  display: none !important;
+}
+
+/* Default To Hit input style */
+.charsheet .sheet-tohit-input {
+  width: 100% !important;
+  background: #1e1e38 !important;
+  color: #f4d03f !important;
+  border: 1px solid #4a4070 !important;
+  padding: 1px !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  box-sizing: border-box !important;
+}
+
+/* When bonus flag is checked, To Hit turns cyan */
+.charsheet .sheet-tohit-bonus-flag:checked ~ .sheet-tohit-input {
+  color: #8be9fd !important;
+  border-color: #8be9fd !important;
+  background: #1a2a3a !important;
+}
+
+/* Tooltip - hidden by default */
+.charsheet .sheet-tohit-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2b2b3d;
+  color: #eaeaea;
+  border: 1px solid #8be9fd;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 9px;
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+
+/* Show tooltip on container hover */
+.charsheet .sheet-tohit-container:hover .sheet-tohit-tooltip {
+  display: block;
+}
+
+/* Arrow pointer for tooltip */
+.charsheet .sheet-tohit-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #8be9fd transparent transparent transparent;
 }

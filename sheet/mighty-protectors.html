@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.55 - Fix continual “lighted” indicator: tie C glow to actual Active state (not type alone) -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.56 - Add Atk# field for targeted Heightened Expertise bonuses -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -523,7 +523,11 @@
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
           </td>
           <td style="text-align:center; padding:1px;">
-            <input type="text" name="attr_attack_tohit" readonly title="Target number to hit" style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:1px; text-align:center; font-weight:bold; box-sizing:border-box;" />
+            <div class="sheet-tohit-container">
+              <input type="checkbox" name="attr_attack_tohit_has_bonus" class="sheet-tohit-bonus-flag" value="1" />
+              <input type="text" name="attr_attack_tohit" readonly class="sheet-tohit-input" style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:1px; text-align:center; font-weight:bold; box-sizing:border-box;" />
+              <input type="text" name="attr_attack_tohit_breakdown" readonly class="sheet-tohit-tooltip" value="" />
+            </div>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_damage" title="Damage dice/formula" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -1199,7 +1203,11 @@
           <span class="sheet-panel-divider"></span>
           <div class="sheet-panel-field">
             <label>To Hit</label>
-            <input type="text" name="attr_ability_tohit_mod" class="sheet-mod-input" style="width:24px !important;" title="To-hit adjustment" />
+            <input type="text" name="attr_ability_tohit_mod" class="sheet-mod-input" style="width:24px !important;" title="To-hit adjustment (applies to all attacks if Atk# is blank)" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Attack row number(s) this To Hit bonus applies to. Blank=all, 3=row 3, 1,3,5=multiple">Atk#</label>
+            <input type="text" name="attr_ability_tohit_atknum" class="sheet-mod-input" style="width:32px !important;" title="Target attack row(s): blank=all, 3=row 3 only, 1,3,5=multiple rows" placeholder="" />
           </div>
           <div class="sheet-panel-field">
             <label>Phys Def</label>
@@ -1329,6 +1337,8 @@
 
 <!-- Ability to-hit bonus (calculated from active abilities) -->
 <input type="hidden" name="attr_ability_tohit_bonus" value="0" />
+<!-- Per-attack to-hit bonuses JSON: {"1":4,"3":2} means attack 1 gets +4, attack 3 gets +2 -->
+<input type="hidden" name="attr_ability_tohit_targeted" value="{}" />
 
 <!-- ROLL TEMPLATES -->
 <rolltemplate class="sheet-rolltemplate-healing">
@@ -1988,6 +1998,7 @@
           hits_mod: 0,
           ip_mod: 0,
           ability_tohit_bonus: 0,
+          ability_tohit_targeted: "{}",
           profile: 1,
           weight_mult: 1,
           initiative_mod: 0,
@@ -2008,6 +2019,7 @@
         attrList.push(prefix + "in_mod");
         attrList.push(prefix + "cl_mod");
         attrList.push(prefix + "tohit_mod");
+        attrList.push(prefix + "tohit_atknum");
         attrList.push(prefix + "physdef_mod");
         attrList.push(prefix + "mentdef_mod");
         attrList.push(prefix + "power_mod");
@@ -2026,6 +2038,8 @@
           power: 0, hits: 0, inventing: 0,
           profile: 1, weight: 1, init: 0, kbres: 0
         };
+        // Targeted to-hit bonuses: { "1": 4, "3": 2 } means attack row 1 gets +4, row 3 gets +2
+        var targetedTohit = {};
 
         ids.forEach(function(id) {
           var prefix = "repeating_abilities_" + id + "_ability_";
@@ -2038,7 +2052,27 @@
             sums.ag += parseInt(values[prefix + "ag_mod"]) || 0;
             sums.inv += parseInt(values[prefix + "in_mod"]) || 0;
             sums.cl += parseInt(values[prefix + "cl_mod"]) || 0;
-            sums.tohit += parseInt(values[prefix + "tohit_mod"]) || 0;
+            
+            // Handle to-hit: check if targeted to specific attack row(s)
+            var tohitMod = parseInt(values[prefix + "tohit_mod"]) || 0;
+            var tohitAtknum = (values[prefix + "tohit_atknum"] || "").trim();
+            
+            if (tohitMod !== 0) {
+              if (!tohitAtknum || tohitAtknum === "0") {
+                // Global bonus - applies to all attacks
+                sums.tohit += tohitMod;
+              } else {
+                // Targeted bonus - parse comma-separated row numbers
+                var targetRows = tohitAtknum.split(",");
+                targetRows.forEach(function(rowStr) {
+                  var rowNum = parseInt(rowStr.trim());
+                  if (rowNum && rowNum > 0) {
+                    targetedTohit[rowNum] = (targetedTohit[rowNum] || 0) + tohitMod;
+                  }
+                });
+              }
+            }
+            
             sums.physdef += parseInt(values[prefix + "physdef_mod"]) || 0;
             sums.mentdef += parseInt(values[prefix + "mentdef_mod"]) || 0;
             sums.power += parseInt(values[prefix + "power_mod"]) || 0;
@@ -2065,6 +2099,7 @@
           hits_mod: sums.hits,
           ip_mod: sums.inventing,
           ability_tohit_bonus: sums.tohit,
+          ability_tohit_targeted: JSON.stringify(targetedTohit),
           profile: sums.profile,
           weight_mult: sums.weight,
           initiative_mod: sums.init,
@@ -2083,6 +2118,7 @@
      "change:repeating_abilities:ability_in_mod " +
      "change:repeating_abilities:ability_cl_mod " +
      "change:repeating_abilities:ability_tohit_mod " +
+     "change:repeating_abilities:ability_tohit_atknum " +
      "change:repeating_abilities:ability_physdef_mod " +
      "change:repeating_abilities:ability_mentdef_mod " +
      "change:repeating_abilities:ability_power_mod " +
@@ -2412,11 +2448,17 @@
   // ==================== ATTACK TO-HIT (WITH ABILITY BONUS) ====================
 
   function recalcAttackToHits() {
-    getAttrs(["agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus"], function(v) {
+    getAttrs(["agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus", "ability_tohit_targeted"], function(v) {
       var agSave = parseInt(v.agility_save) || 6;
       var inSave = parseInt(v.intelligence_save) || 6;
       var clSave = parseInt(v.cool_save) || 6;
-      var tohitAbility = parseInt(v.ability_tohit_bonus) || 0;
+      var tohitGlobal = parseInt(v.ability_tohit_bonus) || 0;
+      var tohitTargeted = {};
+      try {
+        tohitTargeted = JSON.parse(v.ability_tohit_targeted || "{}");
+      } catch (e) {
+        tohitTargeted = {};
+      }
 
       getSectionIDs("repeating_attacks", function(ids) {
         if (ids.length === 0) return;
@@ -2425,17 +2467,43 @@
         ids.forEach(function(id) {
           attrList.push("repeating_attacks_" + id + "_attack_atk");
           attrList.push("repeating_attacks_" + id + "_attack_mod");
+          attrList.push("repeating_attacks_" + id + "_attack_num");
         });
 
         getAttrs(attrList, function(atkValues) {
           var updates = {};
-          ids.forEach(function(id) {
+          ids.forEach(function(id, index) {
             var atkType = atkValues["repeating_attacks_" + id + "_attack_atk"] || "P";
             var mod = parseInt(atkValues["repeating_attacks_" + id + "_attack_mod"]) || 0;
             var baseSave = atkType === "M" ? inSave : (atkType === "E" ? clSave : agSave);
-            var tohitNum = baseSave + 3 + mod + tohitAbility;
+            var bcLabel = atkType === "M" ? "IN" : (atkType === "E" ? "CL" : "AG");
+            // Get row number (1-based) - use stored value or fall back to index+1
+            var rowNum = parseInt(atkValues["repeating_attacks_" + id + "_attack_num"]) || (index + 1);
+            // Apply global bonus + any targeted bonus for this row
+            var targetedBonus = parseInt(tohitTargeted[rowNum]) || 0;
+            var totalAbilityBonus = tohitGlobal + targetedBonus;
+            var tohitNum = baseSave + 3 + mod + totalAbilityBonus;
+            
             updates["repeating_attacks_" + id + "_attack_tohit"] = tohitNum + "-";
             updates["repeating_attacks_" + id + "_attack_tohit_num"] = tohitNum;
+            
+            // Set bonus flag for CSS coloring (cyan when targeted Ht.Exp applies)
+            updates["repeating_attacks_" + id + "_attack_tohit_has_bonus"] = targetedBonus > 0 ? "1" : "0";
+            
+            // Build breakdown string for tooltip
+            var breakdown = bcLabel + " " + baseSave + " + 3";
+            if (mod !== 0) breakdown += " + Mod " + (mod >= 0 ? "+" : "") + mod;
+            if (totalAbilityBonus !== 0) {
+              if (targetedBonus > 0 && tohitGlobal > 0) {
+                breakdown += " + Ht.Exp +" + totalAbilityBonus + " (+" + tohitGlobal + " all, +" + targetedBonus + " this)";
+              } else if (targetedBonus > 0) {
+                breakdown += " + Ht.Exp +" + targetedBonus;
+              } else {
+                breakdown += " + Ability +" + tohitGlobal;
+              }
+            }
+            breakdown += " = " + tohitNum + "-";
+            updates["repeating_attacks_" + id + "_attack_tohit_breakdown"] = breakdown;
           });
           setAttrs(updates);
         });
@@ -2443,28 +2511,56 @@
     });
   }
 
-  on("change:ability_tohit_bonus", function() {
+  on("change:ability_tohit_bonus change:ability_tohit_targeted", function() {
     recalcAttackToHits();
   });
 
   on("change:repeating_attacks:attack_atk change:repeating_attacks:attack_mod", function(eventInfo) {
-    getAttrs(["agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus"], function(v) {
+    getAttrs(["agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus", "ability_tohit_targeted"], function(v) {
       var agSave = parseInt(v.agility_save) || 6;
       var inSave = parseInt(v.intelligence_save) || 6;
       var clSave = parseInt(v.cool_save) || 6;
-      var tohitAbility = parseInt(v.ability_tohit_bonus) || 0;
+      var tohitGlobal = parseInt(v.ability_tohit_bonus) || 0;
+      var tohitTargeted = {};
+      try {
+        tohitTargeted = JSON.parse(v.ability_tohit_targeted || "{}");
+      } catch (e) {
+        tohitTargeted = {};
+      }
       
       var srcAttr = eventInfo.sourceAttribute;
       var rowPrefix = srcAttr.replace(/_attack_atk$/, "").replace(/_attack_mod$/, "");
       
-      getAttrs([rowPrefix + "_attack_atk", rowPrefix + "_attack_mod"], function(atkV) {
+      getAttrs([rowPrefix + "_attack_atk", rowPrefix + "_attack_mod", rowPrefix + "_attack_num"], function(atkV) {
         var atkType = atkV[rowPrefix + "_attack_atk"] || "P";
         var mod = parseInt(atkV[rowPrefix + "_attack_mod"]) || 0;
         var baseSave = atkType === "M" ? inSave : (atkType === "E" ? clSave : agSave);
-        var tohitNum = baseSave + 3 + mod + tohitAbility;
+        var bcLabel = atkType === "M" ? "IN" : (atkType === "E" ? "CL" : "AG");
+        var rowNum = parseInt(atkV[rowPrefix + "_attack_num"]) || 1;
+        var targetedBonus = parseInt(tohitTargeted[rowNum]) || 0;
+        var totalAbilityBonus = tohitGlobal + targetedBonus;
+        var tohitNum = baseSave + 3 + mod + totalAbilityBonus;
+        
         var update = {};
         update[rowPrefix + "_attack_tohit"] = tohitNum + "-";
         update[rowPrefix + "_attack_tohit_num"] = tohitNum;
+        update[rowPrefix + "_attack_tohit_has_bonus"] = targetedBonus > 0 ? "1" : "0";
+        
+        // Build breakdown
+        var breakdown = bcLabel + " " + baseSave + " + 3";
+        if (mod !== 0) breakdown += " + Mod " + (mod >= 0 ? "+" : "") + mod;
+        if (totalAbilityBonus !== 0) {
+          if (targetedBonus > 0 && tohitGlobal > 0) {
+            breakdown += " + Ht.Exp +" + totalAbilityBonus + " (+" + tohitGlobal + " all, +" + targetedBonus + " this)";
+          } else if (targetedBonus > 0) {
+            breakdown += " + Ht.Exp +" + targetedBonus;
+          } else {
+            breakdown += " + Ability +" + tohitGlobal;
+          }
+        }
+        breakdown += " = " + tohitNum + "-";
+        update[rowPrefix + "_attack_tohit_breakdown"] = breakdown;
+        
         setAttrs(update);
       });
     });
@@ -2474,14 +2570,45 @@
     var srcAttr = eventInfo.sourceAttribute;
     var rowPrefix = srcAttr.replace(/_attack_name$/, "");
     
-    getAttrs([rowPrefix + "_attack_tohit", "agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus"], function(v) {
+    getAttrs([rowPrefix + "_attack_tohit", rowPrefix + "_attack_atk", "agility_save", "intelligence_save", "cool_save", "ability_tohit_bonus", "ability_tohit_targeted", rowPrefix + "_attack_num"], function(v) {
       if (!v[rowPrefix + "_attack_tohit"] || v[rowPrefix + "_attack_tohit"] === "") {
+        var atkType = v[rowPrefix + "_attack_atk"] || "P";
         var agSave = parseInt(v.agility_save) || 6;
-        var tohitAbility = parseInt(v.ability_tohit_bonus) || 0;
-        var tohitNum = agSave + 3 + tohitAbility;
+        var inSave = parseInt(v.intelligence_save) || 6;
+        var clSave = parseInt(v.cool_save) || 6;
+        var baseSave = atkType === "M" ? inSave : (atkType === "E" ? clSave : agSave);
+        var bcLabel = atkType === "M" ? "IN" : (atkType === "E" ? "CL" : "AG");
+        var tohitGlobal = parseInt(v.ability_tohit_bonus) || 0;
+        var tohitTargeted = {};
+        try {
+          tohitTargeted = JSON.parse(v.ability_tohit_targeted || "{}");
+        } catch (e) {
+          tohitTargeted = {};
+        }
+        var rowNum = parseInt(v[rowPrefix + "_attack_num"]) || 1;
+        var targetedBonus = parseInt(tohitTargeted[rowNum]) || 0;
+        var totalAbilityBonus = tohitGlobal + targetedBonus;
+        var tohitNum = baseSave + 3 + totalAbilityBonus;
+        
         var update = {};
         update[rowPrefix + "_attack_tohit"] = tohitNum + "-";
         update[rowPrefix + "_attack_tohit_num"] = tohitNum;
+        update[rowPrefix + "_attack_tohit_has_bonus"] = targetedBonus > 0 ? "1" : "0";
+        
+        // Build breakdown
+        var breakdown = bcLabel + " " + baseSave + " + 3";
+        if (totalAbilityBonus !== 0) {
+          if (targetedBonus > 0 && tohitGlobal > 0) {
+            breakdown += " + Ht.Exp +" + totalAbilityBonus + " (+" + tohitGlobal + " all, +" + targetedBonus + " this)";
+          } else if (targetedBonus > 0) {
+            breakdown += " + Ht.Exp +" + targetedBonus;
+          } else {
+            breakdown += " + Ability +" + tohitGlobal;
+          }
+        }
+        breakdown += " = " + tohitNum + "-";
+        update[rowPrefix + "_attack_tohit_breakdown"] = breakdown;
+        
         setAttrs(update);
       }
     });
