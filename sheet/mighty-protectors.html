@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.50 - add 'holding back' text to query info; change version on css file -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.51 - add linked and multi-ability to repeating abilities, row 1.5 -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -792,12 +792,12 @@
           <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
           <th style="padding:2px;"></th>
           <th style="text-align:center; padding:2px;" title="Damage dice for Ability Field">Dmg</th>
-          <th style="text-align:center; padding:2px;" title="Kinetic protection (physical impact)">Kin</th>
-          <th style="text-align:center; padding:2px;" title="Energy protection (heat, electricity, radiation, light)">Eng</th>
-          <th style="text-align:center; padding:2px;" title="Biochemical protection (poison, disease, acid)">Bio</th>
-          <th style="text-align:center; padding:2px;" title="Entropy protection (cold, disintegration)">Ent</th>
-          <th style="text-align:center; padding:2px;" title="Psychic protection (mental attacks)">Psy</th>
-          <th style="text-align:center; padding:2px;" title="Other protection (magical, dimensional)">Oth</th>
+          <th style="text-align:center; padding:2px;" title="Kinetic protection (Unarmed, Magnetism, Sonic)">Kin</th>
+          <th style="text-align:center; padding:2px;" title="Energy protection (Flame Ability, Light Control, Lightning)">Eng</th>
+          <th style="text-align:center; padding:2px;" title="Biochemical protection (Chemical, Poison/Venom)">Bio</th>
+          <th style="text-align:center; padding:2px;" title="Entropy protection (Ice Ability, Paralysis Ray, Death Touch)">Ent</th>
+          <th style="text-align:center; padding:2px;" title="Psychic protection (Mental attacks)">Psy</th>
+          <th style="text-align:center; padding:2px;" title="Other protection (Special types of protection)">Oth</th>
           <th style="text-align:center; padding:2px;" title="Power Requirement per use">PR</th>
           <th style="text-align:left; padding:2px;" title="Notes">Notes</th>
         </tr>
@@ -1157,6 +1157,18 @@
           <div class="sheet-panel-field">
             <label>Dur:</label>
             <input type="text" name="attr_ability_duration" style="width:35px !important;" title="Duration" />
+          </div>
+        </div>
+
+        <!-- Row 1.5: Linked Group / Multi-Ability -->
+        <div class="sheet-panel-row" style="margin-top:4px; gap:4px 12px !important;">
+          <div class="sheet-panel-field">
+            <label title="Abilities with same Group ID activate/deactivate together (-2.5 CP each)">Linked:</label>
+            <input type="text" name="attr_ability_linked_group" style="width:50px !important;" title="Group ID - abilities with same ID toggle together (-2.5 CP each)" placeholder="A" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Only one ability with same Group ID can be active at a time (-10 CP each)">Multi:</label>
+            <input type="text" name="attr_ability_multi_group" style="width:50px !important;" title="Group ID - only one ability in group active at a time (-10 CP each)" placeholder="B" />
           </div>
         </div>
 
@@ -3245,6 +3257,78 @@
         }
       });
     }
+  });
+
+  // ==================== LINKED & MULTI-ABILITY GROUP HANDLERS ====================
+  // Linked: abilities with same group ID activate/deactivate together
+  // Multi: only one ability with same group ID can be active at a time
+
+  on("change:repeating_abilities:ability_state", function(eventInfo) {
+    // Skip if triggered by our own setAttrs (silent flag doesn't prevent this, so we use a guard)
+    if (eventInfo.sourceType === "sheetworker") return;
+    
+    var srcAttr = eventInfo.sourceAttribute;
+    var rowId = srcAttr.split("_")[2];
+    var newState = eventInfo.newValue;
+    var prefix = "repeating_abilities_" + rowId + "_ability_";
+    
+    getAttrs([prefix + "linked_group", prefix + "multi_group"], function(v) {
+      var linkedGroup = (v[prefix + "linked_group"] || "").trim().toUpperCase();
+      var multiGroup = (v[prefix + "multi_group"] || "").trim().toUpperCase();
+      
+      // If no groups defined, nothing to sync
+      if (!linkedGroup && !multiGroup) return;
+      
+      getSectionIDs("repeating_abilities", function(ids) {
+        // Build attribute list for all abilities
+        var attrList = [];
+        ids.forEach(function(id) {
+          attrList.push("repeating_abilities_" + id + "_ability_linked_group");
+          attrList.push("repeating_abilities_" + id + "_ability_multi_group");
+          attrList.push("repeating_abilities_" + id + "_ability_state");
+        });
+        
+        getAttrs(attrList, function(values) {
+          var updates = {};
+          
+          ids.forEach(function(id) {
+            // Skip the source row
+            if (id === rowId) return;
+            
+            var otherPrefix = "repeating_abilities_" + id + "_ability_";
+            var otherLinked = (values[otherPrefix + "linked_group"] || "").trim().toUpperCase();
+            var otherMulti = (values[otherPrefix + "multi_group"] || "").trim().toUpperCase();
+            var otherState = values[otherPrefix + "state"] || "Off";
+            
+            // LINKED: same group = same state
+            if (linkedGroup && otherLinked === linkedGroup) {
+              if (otherState !== newState) {
+                updates[otherPrefix + "state"] = newState;
+                // Also update the CSS flag checkboxes
+                updates[otherPrefix + "state_active"] = (newState === "Active") ? "1" : "0";
+                updates[otherPrefix + "state_held"] = (newState === "Held") ? "1" : "0";
+              }
+            }
+            
+            // MULTI: if source went Active, turn off others in same multi-group
+            if (multiGroup && otherMulti === multiGroup && newState === "Active") {
+              if (otherState === "Active") {
+                updates[otherPrefix + "state"] = "Off";
+                updates[otherPrefix + "state_active"] = "0";
+                updates[otherPrefix + "state_held"] = "0";
+              }
+            }
+          });
+          
+          if (Object.keys(updates).length > 0) {
+            setAttrs(updates, {silent: true}, function() {
+              // Recalc bonuses after group state changes
+              recalcAbilityBonuses();
+            });
+          }
+        });
+      });
+    });
   });
 
 </script>
