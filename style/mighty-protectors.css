@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.54 - Fix continual state handling; respect broken gear; add orange styling for continual abilities */
+/* Mighty Protectors Character Sheet CSS v42.55 - Fix continual “lighted” indicator: tie C glow to actual Active state (not type alone) */
 
 /* ========================================
    ROLL TEMPLATES
@@ -444,7 +444,7 @@
 }
 
 /* Attack: Continual (C) - orange, always on */
-.charsheet .sheet-atk-activation-c-flag:checked ~ input.sheet-atk-activation-ind {
+.charsheet .sheet-atk-state-on-flag:checked ~ input.sheet-atk-activation-c-flag:checked ~ input.sheet-atk-activation-ind {
   background: #5a3a1d !important;
   color: #ff8c42 !important;
   border-color: #d35400 !important;
@@ -468,7 +468,7 @@
 }
 
 /* Protection: Continual (C) - orange, always on */
-.charsheet .sheet-prot-activation-c-flag:checked ~ input.sheet-prot-activation-ind {
+.charsheet .sheet-prot-state-on-flag:checked ~ input.sheet-prot-activation-c-flag:checked ~ input.sheet-prot-activation-ind {
   background: #5a3a1d !important;
   color: #ff8c42 !important;
   border-color: #d35400 !important;
@@ -517,6 +517,14 @@
   box-shadow: 0 0 4px rgba(80, 200, 80, 0.4) !important;
 }
 
+/* Ability: Continual (C) - orange (only when Active) */
+.charsheet .sheet-state-active-flag:checked ~ input.sheet-ability-type-c-flag:checked ~ input.sheet-ability-type-ind {
+  background: #5a3a1d !important;
+  color: #ff8c42 !important;
+  border-color: #d35400 !important;
+  box-shadow: 0 0 4px rgba(211, 84, 0, 0.5) !important;
+}
+
 /* Ability: Held state - yellow */
 .charsheet .sheet-state-held-flag:checked ~ input.sheet-ability-type-ind {
   background: #5a5a2d !important;
@@ -525,14 +533,6 @@
   box-shadow: 0 0 4px rgba(200, 200, 80, 0.4) !important;
 }
 
-
-/* Ability: Continual (C) - orange */
-.charsheet .sheet-ability-type-c-flag:checked ~ input.sheet-ability-type-ind {
-  background: #5a3a1d !important;
-  color: #ff8c42 !important;
-  border-color: #d35400 !important;
-  box-shadow: 0 0 4px rgba(211, 84, 0, 0.5) !important;
-}
 
 /* Ability: Siphoned (S) - purple, temporary */
 .charsheet .sheet-ability-type-s-flag:checked ~ input.sheet-ability-type-ind {

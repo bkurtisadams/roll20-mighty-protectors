@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.54 - Fix continual state handling; respect broken gear; add orange styling for continual abilities -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.55 - Fix continual “lighted” indicator: tie C glow to actual Active state (not type alone) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -2874,11 +2874,6 @@
       var update = {};
       update[rowPrefix + "_attack_activation_ind"] = type;
       update[rowPrefix + "_attack_activation_c"] = (type === "C") ? "1" : "0";
-      // Continual is always on (unless broken)
-      if (type === "C" && !broken) {
-        update[rowPrefix + "_attack_state"] = "Active";
-        update[rowPrefix + "_attack_state_on"] = "1";
-      }
       setAttrs(update, { silent: true });
     });
   });
@@ -2907,11 +2902,6 @@
       var update = {};
       update[rowPrefix + "_prot_activation_ind"] = type;
       update[rowPrefix + "_prot_activation_c"] = (type === "C") ? "1" : "0";
-      // Continual is always on (unless broken)
-      if (type === "C" && !broken) {
-        update[rowPrefix + "_prot_state"] = "Active";
-        update[rowPrefix + "_prot_state_on"] = "1";
-      }
       setAttrs(update, { silent: true });
     });
   });
@@ -2949,12 +2939,6 @@
       var update = {};
       update[rowPrefix + "_ability_type_ind"] = type;
       update[rowPrefix + "_ability_type_c"] = (type === "C") ? "1" : "0";
-      // Continual is always active (unless broken)
-      if (type === "C" && !broken) {
-        update[rowPrefix + "_ability_state"] = "Active";
-        update[rowPrefix + "_ability_state_active"] = "1";
-        update[rowPrefix + "_ability_state_held"] = "0";
-      }
       setAttrs(update, { silent: true });
     });
   });
