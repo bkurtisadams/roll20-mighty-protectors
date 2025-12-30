@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.48 - Add Broken checkbox to Attack and Ability settings panels -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.49 - tweak layout of Profile, Wealth, HTH, Heal Rate fields and adjusting title text -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -80,7 +80,7 @@
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
         <span style="color:#aaa; white-space:nowrap;">IP Mod:</span>
-        <input type="text" name="attr_ip_mod" value="0" style="width:25px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Heightened Inventing, etc.)" />
+        <input type="text" name="attr_ip_mod" value="0" style="width:25px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Inventing)" />
       </div>
     </div>
 
@@ -136,23 +136,23 @@
 
 <!-- PROFILE / WEIGHT / MASS / WEALTH / LUCK ROW -->
   <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
-<!-- PROFILE / WEIGHT / MASS / WEALTH / LUCK ROW -->
+
   <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
     <div style="display:flex; align-items:center; flex-wrap:wrap; gap:2px;">
 
       <span style="color:#888; font-size:10px;" title="Profile affects range penalties">Profile</span>
       <input type="text" name="attr_profile" value="1"
-        style="width:40px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:9px; text-overflow:ellipsis; overflow:hidden; box-sizing:border-box;"
+        style="width:45px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px; text-overflow:ellipsis; overflow:hidden; box-sizing:border-box;"
         title="Click to see full value. Profile affects range penalties." />
 
       <span style="color:#aaa; font-size:10px;">Weight</span>
       <input type="text" name="attr_weight" value="0"
         style="width:55px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" 
         title="Base weight in lbs" />
-      <span style="color:#888; font-size:10px;" title="Weight multiplier from Size Change">×</span>
+      <span style="color:#888; font-size:10px;" title="Weight multiplier">×</span>
       <input type="text" name="attr_weight_mult" value="1"
         style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
-        title="Weight multiplier from Size Change (e.g., 8, 0.5)" />
+        title="Weight multiplier (Size, Density)" />
       <span style="color:#888; font-size:10px;">=</span>
       <span name="attr_effective_weight" style="color:#f4d03f; font-size:10px; min-width:30px;">0</span>
 
@@ -170,7 +170,7 @@
         style="width:24px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
         title="Knockback Resistance bonus (from Inertia)" />
 
-      <span style="color:#888; font-size:11px; margin:0 2px;">•</span>
+      <span style="color:#888; font-size:11px; margin:0 3px;">•</span>
 
       <!-- WEALTH BUTTON -->
       <button type="roll" class="mp-labellink" name="roll_wealth"
@@ -231,13 +231,14 @@
         <td style="text-align:center; color:#e63946; font-weight:bold;" title="Strength - physical power, carrying capacity, HTH damage">ST</td>
         <td style="text-align:center;"><input type="text" name="attr_strength_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
-          <span style="display:inline-block; width:26px; text-align:center; color:#666;" title="ST has no saving throw">n/a</span>
+          <span style="display:inline-block; width:26px; text-align:left; color:#666;" title="ST has no saving throw">n/a</span>
           <button type="button" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:transparent; color:transparent; border:1px solid transparent; cursor:default;">HTH</button>
         </td>
         <td>
           <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
             <span style="color:#aaa; font-size:10px;">Base HTH:</span>
-            <input type="text" name="attr_hth_damage" readonly style="width:80px; flex-shrink:1; min-width:70px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Hand-to-Hand damage dice" />
+            <!-- <input type="text" name="attr_hth_damage" readonly style="width:80px; flex-shrink:1; min-width:70px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Hand-to-Hand damage dice" /> -->
+             <input type="text" name="attr_hth_damage" readonly style="width:70px; flex-shrink:1; min-width:50px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Hand-to-Hand damage dice" />
             <button type="roll" class="mp-labellink sheet-mp-rollbtn" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
             <span style="color:#aaa; font-size:10px;">Carry:</span>
             <input type="text" name="attr_carry_capacity" readonly style="width:120px; flex-shrink:1; min-width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="Carrying capacity in pounds" />
@@ -255,8 +256,9 @@
           <button type="roll" class="mp-labellink" name="roll_endurance_save" title="Roll EN Save (d20 ≤ EN Save)" value="&{template:default} {{name=@{character_name} rolls EN Save}} {{Roll=[[1d20cs<@{endurance_save}cf>@{endurance_save}]]}} {{Target=[[@{endurance_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">EN</button>
         </td>
         <td style="white-space:nowrap;">
-          <span style="color:#aaa; font-size:10px; padding-left:8px;">Heal Rate:</span>
-            <input type="text" name="attr_healing_rate" readonly style="width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" />
+          <span style="color:#aaa; font-size:10px; padding-left:8px;"title="Characters heal their Healing Rate in points per day of rest">Heal Rate:</span>
+            <!-- <input type="text" name="attr_healing_rate" readonly style="width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" /> -->
+             <input type="text" name="attr_healing_rate" readonly style="width:70px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" />
             <input type="hidden" name="attr_heal_base" value="0" />
             <input type="hidden" name="attr_heal_decimal" value="0" />
             <input type="hidden" name="attr_heal_decimal_target" value="1" />
@@ -292,13 +294,15 @@
           <button type="roll" class="mp-labellink" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)" value="&{template:default} {{name=@{character_name} rolls AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">AG</button>
         </td>
 
+        <!-- Physical Defense (AG row) -->
         <td style="white-space:nowrap;">
-          <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
-            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Physical Defense Modifier:</span>
+          <div style="display:flex; align-items:center; gap:6px; padding-left:8px;">
+            <!-- <span style="color:#aaa; font-size:10px; display:inline-block; width:138px;">Physical Defense Modifier:</span> -->
+             <span style="color:#aaa; font-size:10px; display:inline-block; width:118px;">Physical Defense Modifier:</span>
             <input type="text" name="attr_physical_def_bonus" value="0"
               style="width:34px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
               title="From active abilities (Heightened Defense, etc.)" />
-            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Physical Def:</span>
+            <span style="color:#aaa; font-size:10px; display:inline-block; width:95px;">Total Physical Def:</span>
             <input type="text" name="attr_physical_def" readonly
               style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #8be9fd; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
               title="Total Physical Def = AG Save + Physical Defense Modifier" />
@@ -333,13 +337,15 @@
           <button type="roll" class="mp-labellink" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)" value="&{template:default} {{name=@{character_name} rolls IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">IN</button>
         </td>
 
+        <!-- Mental Defense (IN row) -->
         <td style="white-space:nowrap;">
-          <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
-            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Mental Defense Modifier:</span>
+          <div style="display:flex; align-items:center; gap:6px; padding-left:8px;">
+            <!-- <span style="color:#aaa; font-size:10px; display:inline-block; width:138px;">Mental Defense Modifier:</span> -->
+             <span style="color:#aaa; font-size:10px; display:inline-block; width:118px;">Mental Defense Modifier:</span>
             <input type="text" name="attr_mental_def_bonus" value="0"
               style="width:34px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
               title="From active abilities (Heightened Defense, etc.)" />
-            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Mental Def:</span>
+            <span style="color:#aaa; font-size:10px; display:inline-block; width:95px;">Total Mental Def:</span>
             <input type="text" name="attr_mental_def" readonly
               style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #8be9fd; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
               title="Total Mental Def = IN Save + Mental Defense Modifier" />
@@ -389,7 +395,7 @@
           <div class="sheet-power-row" style="display:flex; align-items:center; gap:4px;">
             <span class="sheet-power-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">POWER:</span>
             <span style="color:#aaa; font-size:10px;">Modifier</span>
-            <input type="text" name="attr_power_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Heightened Power, etc.)" />
+            <input type="text" name="attr_power_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Energy)" />
             <span style="color:#aaa; font-size:10px;">Maximum</span>
             <input type="text" name="attr_power_score_max" class="sheet-power-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Power" />
             <span style="color:#aaa; font-size:10px;">Current</span>
@@ -399,7 +405,7 @@
           <div class="sheet-hits-row" style="display:flex; align-items:center; gap:4px;">
             <span class="sheet-hits-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">HITS:</span>
             <span style="color:#aaa; font-size:10px;">Modifier</span>
-            <input type="text" name="attr_hits_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Heightened Hits, etc.)" />
+            <input type="text" name="attr_hits_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="From active abilities (Durability)" />
             <span style="color:#aaa; font-size:10px;">Maximum</span>
             <input type="text" name="attr_hits_score_max" class="sheet-hits-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Hits" />
             <span style="color:#aaa; font-size:10px;">Current</span>

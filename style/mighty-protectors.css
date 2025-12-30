@@ -271,7 +271,7 @@
   min-width: 0 !important;
 }
 
-.charsheet table td input[name="attr_hth_damage"],
+/* .charsheet table td input[name="attr_hth_damage"], */
 .charsheet table td input[name="attr_carry_capacity"],
 .charsheet table td input[name="attr_healing_rate"],
 .charsheet table td input[name="attr_initiative_score"] {
@@ -280,11 +280,11 @@
   max-width: 100px !important;
 }
 
-.charsheet table td div[style*="inline-grid"] {
+/* .charsheet table td div[style*="inline-grid"] {
   display: flex !important;
   flex-wrap: wrap !important;
   gap: 4px 6px !important;
-}
+} */
 
 .charsheet input[name="attr_move"],
 .charsheet input[name="attr_leap_total"] {
