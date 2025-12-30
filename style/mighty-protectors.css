@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.43 */
+/* Mighty Protectors Character Sheet CSS v42.50 */
 
 /* ========================================
    ROLL TEMPLATES
@@ -582,13 +582,15 @@
 .charsheet .sheet-panel-field {
   display: flex !important;
   align-items: center !important;
-  gap: 3px !important;
+  gap: 1px !important;
 }
 
 .charsheet .sheet-panel-field label {
   color: #888 !important;
   font-size: 10px !important;
   white-space: nowrap !important;
+  margin: 0 !important;   /* tighten up */
+  padding: 0 !important;  /* tighten up */
 }
 
 .charsheet .sheet-panel-field input[type="text"],
