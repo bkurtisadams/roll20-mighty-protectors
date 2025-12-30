@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.50 */
+/* Mighty Protectors Character Sheet CSS v42.52 - fix missing protection Broken checkbox */
 
 /* ========================================
    ROLL TEMPLATES
@@ -482,10 +482,7 @@
   box-shadow: 0 0 4px rgba(128, 64, 192, 0.5) !important;
 }
 
-/* Protection: Broken state - red strikethrough, hidden checkbox */
-.charsheet input.sheet-prot-broken-flag {
-  display: none;
-}
+/* Protection: Broken state - red strikethrough */
 
 /* When protection is broken, dim the entire row */
 .charsheet .sheet-prot-broken-flag:checked ~ table {
