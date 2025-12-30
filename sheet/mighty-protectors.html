@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.47 - Add Grapple Attack row to attack settings panel -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.48 - Add Broken checkbox to Attack and Ability settings panels -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -619,6 +619,10 @@
             <input type="checkbox" name="attr_attack_gear" value="1" title="Gear-based: Can be broken/disarmed, cannot Push" />
             <label title="Gear-based: Can be broken/disarmed, cannot Push">Gear</label>
           </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_broken" value="1" class="sheet-atk-broken-flag" title="Currently broken (disabled)" />
+            <label style="color:#e94560;">Broken</label>
+          </div>
         </div>
 
         <!-- Row 2: AP, AF, Area, Duration, Info button -->
@@ -1131,6 +1135,10 @@
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_ability_gear" value="1" title="Gear-based (can be broken/disarmed)" />
             <label>Gear</label>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_broken" value="1" class="sheet-ability-broken-flag" title="Currently broken (disabled)" />
+            <label style="color:#e94560;">Broken</label>
           </div>
           <div class="sheet-panel-field">
             <label>Rng:</label>
@@ -3166,6 +3174,64 @@
         }
       });
     });
+  });
+
+  // ==================== BROKEN GEAR HANDLERS ====================
+  // When Broken is checked, force State to Off and prevent reactivation
+
+  on("change:repeating_attacks:attack_broken", function(eventInfo) {
+    if (eventInfo.newValue === "1") {
+      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      setAttrs({ ["repeating_attacks_" + rowId + "_attack_state"]: "Off" });
+    }
+  });
+
+  on("change:repeating_protection:prot_broken", function(eventInfo) {
+    if (eventInfo.newValue === "1") {
+      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      setAttrs({ ["repeating_protection_" + rowId + "_prot_state"]: "Off" });
+    }
+  });
+
+  on("change:repeating_abilities:ability_broken", function(eventInfo) {
+    if (eventInfo.newValue === "1") {
+      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      setAttrs({ ["repeating_abilities_" + rowId + "_ability_state"]: "Off" });
+    }
+  });
+
+  // Prevent reactivation while broken
+  on("change:repeating_attacks:attack_state", function(eventInfo) {
+    if (eventInfo.newValue === "Active") {
+      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      getAttrs(["repeating_attacks_" + rowId + "_attack_broken"], function(v) {
+        if (v["repeating_attacks_" + rowId + "_attack_broken"] === "1") {
+          setAttrs({ ["repeating_attacks_" + rowId + "_attack_state"]: "Off" });
+        }
+      });
+    }
+  });
+
+  on("change:repeating_protection:prot_state", function(eventInfo) {
+    if (eventInfo.newValue === "Active") {
+      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      getAttrs(["repeating_protection_" + rowId + "_prot_broken"], function(v) {
+        if (v["repeating_protection_" + rowId + "_prot_broken"] === "1") {
+          setAttrs({ ["repeating_protection_" + rowId + "_prot_state"]: "Off" });
+        }
+      });
+    }
+  });
+
+  on("change:repeating_abilities:ability_state", function(eventInfo) {
+    if (eventInfo.newValue === "Active") {
+      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      getAttrs(["repeating_abilities_" + rowId + "_ability_broken"], function(v) {
+        if (v["repeating_abilities_" + rowId + "_ability_broken"] === "1") {
+          setAttrs({ ["repeating_abilities_" + rowId + "_ability_state"]: "Off" });
+        }
+      });
+    }
   });
 
 </script>
