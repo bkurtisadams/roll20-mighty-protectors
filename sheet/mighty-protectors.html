@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.51 - add linked and multi-ability to repeating abilities, row 1.5 -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.53 - fix broken gear not turning off light effect -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -2867,13 +2867,14 @@
   // Attack: Type dropdown → indicator text + type flag
   on("change:repeating_attacks:attack_activation", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_activation", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_attack_broken"], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
+      var broken = v[rowPrefix + "_attack_broken"] === "1";
       var update = {};
       update[rowPrefix + "_attack_activation_ind"] = type;
       update[rowPrefix + "_attack_activation_c"] = (type === "C") ? "1" : "0";
-      // Continual is always on
-      if (type === "C") {
+      // Continual is always on (unless broken)
+      if (type === "C" && !broken) {
         update[rowPrefix + "_attack_state"] = "Active";
         update[rowPrefix + "_attack_state_on"] = "1";
       }
@@ -2884,12 +2885,13 @@
   // Attack: State dropdown → state flag
   on("change:repeating_attacks:attack_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_attack_activation"], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_attack_activation", rowPrefix + "_attack_broken"], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
       var type = v[rowPrefix + "_attack_activation"] || "V";
+      var broken = v[rowPrefix + "_attack_broken"] === "1";
       var update = {};
-      // Continual stays on regardless of dropdown
-      if (type === "C") {
+      // Continual stays on regardless of dropdown (unless broken)
+      if (type === "C" && !broken) {
         state = "Active";
         update[rowPrefix + "_attack_state"] = "Active";
       }
@@ -2903,13 +2905,14 @@
   // Protection: Type dropdown → indicator text + type flag
   on("change:repeating_protection:prot_activation", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_prot_activation", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_prot_broken"], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
+      var broken = v[rowPrefix + "_prot_broken"] === "1";
       var update = {};
       update[rowPrefix + "_prot_activation_ind"] = type;
       update[rowPrefix + "_prot_activation_c"] = (type === "C") ? "1" : "0";
-      // Continual is always on
-      if (type === "C") {
+      // Continual is always on (unless broken)
+      if (type === "C" && !broken) {
         update[rowPrefix + "_prot_state"] = "Active";
         update[rowPrefix + "_prot_state_on"] = "1";
       }
@@ -2920,12 +2923,13 @@
   // Protection: State dropdown → state flag
   on("change:repeating_protection:prot_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_prot_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_prot_activation"], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_prot_activation", rowPrefix + "_prot_broken"], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
       var type = v[rowPrefix + "_prot_activation"] || "V";
+      var broken = v[rowPrefix + "_prot_broken"] === "1";
       var update = {};
-      // Continual stays on regardless of dropdown
-      if (type === "C") {
+      // Continual stays on regardless of dropdown (unless broken)
+      if (type === "C" && !broken) {
         state = "Active";
         update[rowPrefix + "_prot_state"] = "Active";
       }
@@ -2948,12 +2952,13 @@
   // Sync Type dropdown → type indicator
   on("change:repeating_abilities:ability_type", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_type", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_ability_broken"], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
+      var broken = v[rowPrefix + "_ability_broken"] === "1";
       var update = {};
       update[rowPrefix + "_ability_type_ind"] = type;
-      // Continual is always active
-      if (type === "C") {
+      // Continual is always active (unless broken)
+      if (type === "C" && !broken) {
         update[rowPrefix + "_ability_state"] = "Active";
         update[rowPrefix + "_ability_state_active"] = "1";
         update[rowPrefix + "_ability_state_held"] = "0";
@@ -2965,12 +2970,13 @@
   // Sync State dropdown → checkboxes for CSS coloring + recalc
   on("change:repeating_abilities:ability_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_ability_type"], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_ability_type", rowPrefix + "_ability_broken"], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
       var type = v[rowPrefix + "_ability_type"] || "V";
+      var broken = v[rowPrefix + "_ability_broken"] === "1";
       var update = {};
-      // Continual stays active regardless of dropdown
-      if (type === "C") {
+      // Continual stays active regardless of dropdown (unless broken)
+      if (type === "C" && !broken) {
         state = "Active";
         update[rowPrefix + "_ability_state"] = "Active";
       }
@@ -3049,14 +3055,16 @@
       ids.forEach(function(id) {
         attrList.push("repeating_protection_" + id + "_prot_activation");
         attrList.push("repeating_protection_" + id + "_prot_state");
+        attrList.push("repeating_protection_" + id + "_prot_broken");
       });
       getAttrs(attrList, function(values) {
         var updates = {};
         ids.forEach(function(id) {
           var type = values["repeating_protection_" + id + "_prot_activation"] || "V";
           var state = values["repeating_protection_" + id + "_prot_state"] || "Off";
-          // Continual is always on
-          if (type === "C") {
+          var broken = values["repeating_protection_" + id + "_prot_broken"] === "1";
+          // Continual is always on (unless broken)
+          if (type === "C" && !broken) {
             state = "Active";
             updates["repeating_protection_" + id + "_prot_state"] = "Active";
           }
@@ -3075,14 +3083,16 @@
       ids.forEach(function(id) {
         attrList.push("repeating_attacks_" + id + "_attack_activation");
         attrList.push("repeating_attacks_" + id + "_attack_state");
+        attrList.push("repeating_attacks_" + id + "_attack_broken");
       });
       getAttrs(attrList, function(values) {
         var updates = {};
         ids.forEach(function(id) {
           var type = values["repeating_attacks_" + id + "_attack_activation"] || "V";
           var state = values["repeating_attacks_" + id + "_attack_state"] || "Off";
-          // Continual is always on
-          if (type === "C") {
+          var broken = values["repeating_attacks_" + id + "_attack_broken"] === "1";
+          // Continual is always on (unless broken)
+          if (type === "C" && !broken) {
             state = "Active";
             updates["repeating_attacks_" + id + "_attack_state"] = "Active";
           }
@@ -3101,6 +3111,7 @@
       ids.forEach(function(id) {
         attrList.push("repeating_abilities_" + id + "_ability_type");
         attrList.push("repeating_abilities_" + id + "_ability_state");
+        attrList.push("repeating_abilities_" + id + "_ability_broken");
       });
       getAttrs(attrList, function(values) {
         var updates = {};
@@ -3108,8 +3119,9 @@
           var prefix = "repeating_abilities_" + id + "_ability_";
           var type = values[prefix + "type"] || "V";
           var state = values[prefix + "state"] || "Off";
-          // Continual is always active
-          if (type === "C") {
+          var broken = values[prefix + "broken"] === "1";
+          // Continual is always active (unless broken)
+          if (type === "C" && !broken) {
             state = "Active";
             updates[prefix + "state"] = "Active";
           }
@@ -3207,21 +3219,32 @@
   on("change:repeating_attacks:attack_broken", function(eventInfo) {
     if (eventInfo.newValue === "1") {
       const rowId = eventInfo.sourceAttribute.split("_")[2];
-      setAttrs({ ["repeating_attacks_" + rowId + "_attack_state"]: "Off" });
+      setAttrs({
+        ["repeating_attacks_" + rowId + "_attack_state"]: "Off",
+        ["repeating_attacks_" + rowId + "_attack_state_on"]: "0"
+      });
     }
   });
 
   on("change:repeating_protection:prot_broken", function(eventInfo) {
     if (eventInfo.newValue === "1") {
       const rowId = eventInfo.sourceAttribute.split("_")[2];
-      setAttrs({ ["repeating_protection_" + rowId + "_prot_state"]: "Off" });
+      setAttrs({
+        ["repeating_protection_" + rowId + "_prot_state"]: "Off",
+        ["repeating_protection_" + rowId + "_prot_state_on"]: "0"
+      });
     }
   });
 
   on("change:repeating_abilities:ability_broken", function(eventInfo) {
     if (eventInfo.newValue === "1") {
       const rowId = eventInfo.sourceAttribute.split("_")[2];
-      setAttrs({ ["repeating_abilities_" + rowId + "_ability_state"]: "Off" });
+      setAttrs({
+        ["repeating_abilities_" + rowId + "_ability_state"]: "Off",
+        ["repeating_abilities_" + rowId + "_ability_state_active"]: "0",
+        ["repeating_abilities_" + rowId + "_ability_state_held"]: "0",
+        ["repeating_abilities_" + rowId + "_ability_active"]: "0"
+      });
     }
   });
 
@@ -3231,7 +3254,10 @@
       const rowId = eventInfo.sourceAttribute.split("_")[2];
       getAttrs(["repeating_attacks_" + rowId + "_attack_broken"], function(v) {
         if (v["repeating_attacks_" + rowId + "_attack_broken"] === "1") {
-          setAttrs({ ["repeating_attacks_" + rowId + "_attack_state"]: "Off" });
+          setAttrs({
+            ["repeating_attacks_" + rowId + "_attack_state"]: "Off",
+            ["repeating_attacks_" + rowId + "_attack_state_on"]: "0"
+          });
         }
       });
     }
@@ -3242,7 +3268,10 @@
       const rowId = eventInfo.sourceAttribute.split("_")[2];
       getAttrs(["repeating_protection_" + rowId + "_prot_broken"], function(v) {
         if (v["repeating_protection_" + rowId + "_prot_broken"] === "1") {
-          setAttrs({ ["repeating_protection_" + rowId + "_prot_state"]: "Off" });
+          setAttrs({
+            ["repeating_protection_" + rowId + "_prot_state"]: "Off",
+            ["repeating_protection_" + rowId + "_prot_state_on"]: "0"
+          });
         }
       });
     }
@@ -3253,7 +3282,12 @@
       const rowId = eventInfo.sourceAttribute.split("_")[2];
       getAttrs(["repeating_abilities_" + rowId + "_ability_broken"], function(v) {
         if (v["repeating_abilities_" + rowId + "_ability_broken"] === "1") {
-          setAttrs({ ["repeating_abilities_" + rowId + "_ability_state"]: "Off" });
+          setAttrs({
+            ["repeating_abilities_" + rowId + "_ability_state"]: "Off",
+            ["repeating_abilities_" + rowId + "_ability_state_active"]: "0",
+            ["repeating_abilities_" + rowId + "_ability_state_held"]: "0",
+            ["repeating_abilities_" + rowId + "_ability_active"]: "0"
+          });
         }
       });
     }
