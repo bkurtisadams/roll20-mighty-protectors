@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.53 - fix broken gear not turning off light effect -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.54 - Fix continual state handling; respect broken gear; add orange styling for continual abilities -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -1096,6 +1096,7 @@
             <!-- Hidden checkboxes for CSS state coloring (must be before indicator) -->
             <input type="checkbox" name="attr_ability_state_active" class="sheet-state-active-flag" value="1" />
             <input type="checkbox" name="attr_ability_state_held" class="sheet-state-held-flag" value="1" />
+            <input type="checkbox" name="attr_ability_type_c" class="sheet-ability-type-c-flag" value="1" />
             <!-- Type indicator (C/P/V/S) colored by state -->
             <input type="text" name="attr_ability_type_ind" class="sheet-ability-type-ind" readonly value="V" title="Activation Type (set in Desc tab)" />
           </td>
@@ -2890,11 +2891,6 @@
       var type = v[rowPrefix + "_attack_activation"] || "V";
       var broken = v[rowPrefix + "_attack_broken"] === "1";
       var update = {};
-      // Continual stays on regardless of dropdown (unless broken)
-      if (type === "C" && !broken) {
-        state = "Active";
-        update[rowPrefix + "_attack_state"] = "Active";
-      }
       update[rowPrefix + "_attack_state_on"] = (state === "Active") ? "1" : "0";
       setAttrs(update, { silent: true });
     });
@@ -2928,11 +2924,6 @@
       var type = v[rowPrefix + "_prot_activation"] || "V";
       var broken = v[rowPrefix + "_prot_broken"] === "1";
       var update = {};
-      // Continual stays on regardless of dropdown (unless broken)
-      if (type === "C" && !broken) {
-        state = "Active";
-        update[rowPrefix + "_prot_state"] = "Active";
-      }
       update[rowPrefix + "_prot_state_on"] = (state === "Active") ? "1" : "0";
       setAttrs(update, { silent: true });
     });
@@ -2957,6 +2948,7 @@
       var broken = v[rowPrefix + "_ability_broken"] === "1";
       var update = {};
       update[rowPrefix + "_ability_type_ind"] = type;
+      update[rowPrefix + "_ability_type_c"] = (type === "C") ? "1" : "0";
       // Continual is always active (unless broken)
       if (type === "C" && !broken) {
         update[rowPrefix + "_ability_state"] = "Active";
@@ -2975,11 +2967,6 @@
       var type = v[rowPrefix + "_ability_type"] || "V";
       var broken = v[rowPrefix + "_ability_broken"] === "1";
       var update = {};
-      // Continual stays active regardless of dropdown (unless broken)
-      if (type === "C" && !broken) {
-        state = "Active";
-        update[rowPrefix + "_ability_state"] = "Active";
-      }
       // Set checkboxes for CSS styling
       update[rowPrefix + "_ability_state_active"] = (state === "Active") ? "1" : "0";
       update[rowPrefix + "_ability_state_held"] = (state === "Held") ? "1" : "0";
@@ -3063,11 +3050,6 @@
           var type = values["repeating_protection_" + id + "_prot_activation"] || "V";
           var state = values["repeating_protection_" + id + "_prot_state"] || "Off";
           var broken = values["repeating_protection_" + id + "_prot_broken"] === "1";
-          // Continual is always on (unless broken)
-          if (type === "C" && !broken) {
-            state = "Active";
-            updates["repeating_protection_" + id + "_prot_state"] = "Active";
-          }
           updates["repeating_protection_" + id + "_prot_activation_ind"] = type;
           updates["repeating_protection_" + id + "_prot_activation_c"] = (type === "C") ? "1" : "0";
           updates["repeating_protection_" + id + "_prot_state_on"] = (state === "Active") ? "1" : "0";
@@ -3091,11 +3073,6 @@
           var type = values["repeating_attacks_" + id + "_attack_activation"] || "V";
           var state = values["repeating_attacks_" + id + "_attack_state"] || "Off";
           var broken = values["repeating_attacks_" + id + "_attack_broken"] === "1";
-          // Continual is always on (unless broken)
-          if (type === "C" && !broken) {
-            state = "Active";
-            updates["repeating_attacks_" + id + "_attack_state"] = "Active";
-          }
           updates["repeating_attacks_" + id + "_attack_activation_ind"] = type;
           updates["repeating_attacks_" + id + "_attack_activation_c"] = (type === "C") ? "1" : "0";
           updates["repeating_attacks_" + id + "_attack_state_on"] = (state === "Active") ? "1" : "0";
@@ -3120,12 +3097,8 @@
           var type = values[prefix + "type"] || "V";
           var state = values[prefix + "state"] || "Off";
           var broken = values[prefix + "broken"] === "1";
-          // Continual is always active (unless broken)
-          if (type === "C" && !broken) {
-            state = "Active";
-            updates[prefix + "state"] = "Active";
-          }
           updates[prefix + "type_ind"] = type;
+          updates[prefix + "type_c"] = (type === "C") ? "1" : "0";
           updates[prefix + "state_active"] = (state === "Active") ? "1" : "0";
           updates[prefix + "state_held"] = (state === "Held") ? "1" : "0";
           updates[prefix + "active"] = (state === "Active") ? "1" : "0";

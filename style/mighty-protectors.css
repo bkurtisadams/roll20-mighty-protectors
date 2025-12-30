@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.53 - fix missing protection Broken checkbox */
+/* Mighty Protectors Character Sheet CSS v42.54 - Fix continual state handling; respect broken gear; add orange styling for continual abilities */
 
 /* ========================================
    ROLL TEMPLATES
@@ -411,6 +411,7 @@
 .charsheet input.sheet-ability-glow-cb,
 .charsheet input.sheet-ability-held-cb,
 .charsheet input.sheet-state-active-flag,
+.charsheet input.sheet-ability-type-c-flag,
 .charsheet input.sheet-state-held-flag,
 .charsheet input.sheet-ability-type-s-flag {
   display: none !important;
@@ -522,6 +523,15 @@
   color: #ff8 !important;
   border-color: #8a8a4a !important;
   box-shadow: 0 0 4px rgba(200, 200, 80, 0.4) !important;
+}
+
+
+/* Ability: Continual (C) - orange */
+.charsheet .sheet-ability-type-c-flag:checked ~ input.sheet-ability-type-ind {
+  background: #5a3a1d !important;
+  color: #ff8c42 !important;
+  border-color: #d35400 !important;
+  box-shadow: 0 0 4px rgba(211, 84, 0, 0.5) !important;
 }
 
 /* Ability: Siphoned (S) - purple, temporary */
