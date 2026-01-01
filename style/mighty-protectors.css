@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.64 - Use columns: atk/prot 40px, ability 52px */
+/* Mighty Protectors Character Sheet CSS v42.65 - Cyan input fields in all panels */
 
 /* ========================================
    ROLL TEMPLATES
@@ -397,7 +397,7 @@
 .charsheet .sheet-options-panel select,
 .charsheet .sheet-options-panel input[type="text"] {
   background: #12121f !important;
-  color: #eaeaea !important;
+  color: #8be9fd !important;
   border: 1px solid #3a3060 !important;
 }
 
@@ -628,14 +628,14 @@
 .charsheet .sheet-panel-field input[type="number"] {
   width: 40px !important;
   background: #0d0d1a !important;
-  color: #eaeaea !important;
+  color: #8be9fd !important;
   border: 1px solid #2a2040 !important;
   padding: 2px 4px !important;
   text-align: center !important;
   font-size: 10px !important;
 }
 
-/* Modifier inputs - cyan color to indicate calculated/contributable */
+/* Modifier inputs - cyan color (now matches base, kept for backwards compat) */
 .charsheet .sheet-panel-field input[type="text"].sheet-mod-input,
 .charsheet .sheet-panel-field input[type="number"].sheet-mod-input,
 .charsheet input.sheet-mod-input {
@@ -652,7 +652,7 @@
 
 .charsheet .sheet-panel-field select {
   background: #0d0d1a !important;
-  color: #eaeaea !important;
+  color: #8be9fd !important;
   border: 1px solid #2a2040 !important;
   padding: 1px 2px !important;
   font-size: 10px !important;
