@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.67 - remove 'click to send to chat' -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.70 - Called shot single query -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -517,7 +517,7 @@
           <td style="text-align:center; padding:1px;">
             <input type="hidden" name="attr_attack_rowid" />
             <input type="hidden" name="attr_attack_num" />
-            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -1262,7 +1262,15 @@
           </div>
           <div class="sheet-panel-field" style="flex-direction:row; align-items:center; gap:4px;">
             <input type="checkbox" name="attr_ability_pain_resistance" value="1" style="margin:0;" title="Pain Resistance: Only knocked out when Hits reach 0, not at half Hits" />
-            <label style="margin:0; cursor:pointer;" title="Pain Resistance: Only knocked out when Hits reach 0, not at half Hits">Pain Resistance</label>
+            <label style="margin:0; cursor:pointer;" title="Pain Resistance: Only knocked out when Hits reach 0, not at half Hits">Pain Resist</label>
+          </div>
+          <div class="sheet-panel-field" style="flex-direction:row; align-items:center; gap:4px;">
+            <input type="checkbox" name="attr_ability_protected_brain" value="1" style="margin:0;" title="Protected Brain: Immune to Called Shots to head (10 CP)" />
+            <label style="margin:0; cursor:pointer;" title="Protected Brain: Immune to Called Shots to head (10 CP)">Prot Brain</label>
+          </div>
+          <div class="sheet-panel-field" style="flex-direction:row; align-items:center; gap:4px;">
+            <input type="checkbox" name="attr_ability_immunity" value="1" style="margin:0;" title="Immunity: Ignore negative effects of own Ability (+2.5 CP)" />
+            <label style="margin:0; cursor:pointer;" title="Immunity: Ignore negative effects of own Ability (+2.5 CP)">Immunity</label>
           </div>
         </div>
 
@@ -1337,6 +1345,7 @@
 <!-- Global Hidden query attributes -->
 <input type="hidden" name="attr_range_query" value="0" />
 <input type="hidden" name="attr_called_query" value="0" />
+<input type="hidden" name="attr_called_type_query" value="None" />
 <input type="hidden" name="attr_def_query" value="0" />
 <input type="hidden" name="attr_stance_query" value="0" />
 <input type="hidden" name="attr_aim_query" value="0" />
@@ -1356,6 +1365,8 @@
 <input type="hidden" name="attr_ability_tohit_targeted" value="{}" />
 <input type="hidden" name="attr_willpower_fortitude" value="0" />
 <input type="hidden" name="attr_willpower_pain_resistance" value="0" />
+<input type="hidden" name="attr_willpower_protected_brain" value="0" />
+<input type="hidden" name="attr_willpower_immunity" value="0" />
 
 <!-- ROLL TEMPLATES -->
 <rolltemplate class="sheet-rolltemplate-healing">
@@ -2021,7 +2032,9 @@
           initiative_mod: 0,
           kb_resistance: 0,
           willpower_fortitude: 0,
-          willpower_pain_resistance: 0
+          willpower_pain_resistance: 0,
+          willpower_protected_brain: 0,
+          willpower_immunity: 0
         }, {silent: true}, function() {
           recalcAll();
         });
@@ -2050,6 +2063,8 @@
         attrList.push(prefix + "kbres_mod");
         attrList.push(prefix + "fortitude");
         attrList.push(prefix + "pain_resistance");
+        attrList.push(prefix + "protected_brain");
+        attrList.push(prefix + "immunity");
       });
 
       getAttrs(attrList, function(values) {
@@ -2058,7 +2073,7 @@
           tohit: 0, physdef: 0, mentdef: 0,
           power: 0, hits: 0, inventing: 0,
           profile: 1, weight: 1, init: 0, kbres: 0,
-          fortitude: 0, pain_resistance: 0
+          fortitude: 0, pain_resistance: 0, protected_brain: 0, immunity: 0
         };
         // Targeted to-hit bonuses: { "1": 4, "3": 2 } means attack row 1 gets +4, row 3 gets +2
         var targetedTohit = {};
@@ -2108,6 +2123,8 @@
             // Willpower flags - if any ability has these checked, character has them
             if (values[prefix + "fortitude"] === "1") sums.fortitude = 1;
             if (values[prefix + "pain_resistance"] === "1") sums.pain_resistance = 1;
+            if (values[prefix + "protected_brain"] === "1") sums.protected_brain = 1;
+            if (values[prefix + "immunity"] === "1") sums.immunity = 1;
           }
         });
 
@@ -2130,7 +2147,9 @@
           initiative_mod: sums.init,
           kb_resistance: sums.kbres,
           willpower_fortitude: sums.fortitude,
-          willpower_pain_resistance: sums.pain_resistance
+          willpower_pain_resistance: sums.pain_resistance,
+          willpower_protected_brain: sums.protected_brain,
+          willpower_immunity: sums.immunity
         }, {silent: true}, function() {
           recalcAll();
         });
@@ -2157,6 +2176,8 @@
      "change:repeating_abilities:ability_kbres_mod " +
      "change:repeating_abilities:ability_fortitude " +
      "change:repeating_abilities:ability_pain_resistance " +
+     "change:repeating_abilities:ability_protected_brain " +
+     "change:repeating_abilities:ability_immunity " +
      "remove:repeating_abilities", function() {
     recalcAbilityBonuses();
   });
@@ -2459,7 +2480,8 @@
       var updates = {};
       updates.range_query = v.query_range === "1" ? "?{Range Penalty|1-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
       updates.multi_query = v.query_multi === "1" ? "?{Actions This Phase|1 Action,0|2 Actions,-3|3 Actions,-6|4 Actions,-9|5 Actions,-12}" : "0";
-      updates.called_query = v.query_called === "1" ? "?{Called Shot|None,0|Head,-6|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3}" : "0";
+      // Called shot: single query returns type, penalty looked up by API
+      updates.called_type_query = v.query_called === "1" ? "?{Called Shot|None|Head (-6 / x2 dmg)|Arm (-3 / saves)|Leg (-3 / saves)|Avoid Light Armor (-3)|Avoid Heavy Armor (-6)|Gear (-3 / break)}" : "None";
       updates.def_query = v.query_def === "1" ? "?{Target Defense|0}" : "0";
       updates.stance_query = v.query_stance === "1" ? "?{Target Stance|None,0|Defensive,3|Full Defense,6}" : "0";
       updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";

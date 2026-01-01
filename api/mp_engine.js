@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.34 (Willpower abilities)
+/* Mighty Protectors Roll20 API Engine v2.37 (Called shot handling)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -111,12 +111,24 @@
  *        - Clears grapple/snare state and releases held targets
  *        - Clears conditions (paralyzed, mind control, etc.)
  *        - Resets defense modifier (bar3) to 0
+ * v2.35: Protected Brain ability
+ *        - Checkbox in ability panel, negates Head Shot critical effects
+ * v2.36: Protected Brain notification
+ *        - Shows notification in attack output when Head Shot is negated
+ * v2.37: Called shot handling (4.14.2)
+ *        - Roll template now passes called shot type to API
+ *        - Head Shot (-6): Doubles Hits after protection/roll-with, Protected Brain negates
+ *        - Leg Shot (-3): Shows EN+7 and AG save buttons
+ *        - Arm Shot (-3): Shows EN+7 and AG save buttons
+ *        - Avoid Armor (-3/-6): Bypasses partial armor coverage
+ *        - Gear Shot (-3): Shows breakpoint comparison note
+ *        - Called shot penalty shown in hover breakdown
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.32 FILE STARTING");
+log("MP ENGINE v2.37 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1243,6 +1255,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rollIR = inlineTotal(msg, fields.roll);
     const confIR = inlineTotal(msg, fields.confirm);
     const dmgIR = inlineTotal(msg, fields.damage);
+    const targetIR = inlineTotal(msg, fields.target);  // Pre-calculated target from template
 
     if (!rollIR) {
       ch("MP", `/w gm <b>MP:</b> Could not parse roll.`);
@@ -1253,6 +1266,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const roll = num(rollIR.total, 0);
     const confirm = confIR ? num(confIR.total, 0) : 10;
     const damageTotal = dmgIR ? num(dmgIR.total, 0) : 0;
+    const templateTarget = targetIR ? num(targetIR.total, 0) : null;  // Template's pre-calculated target
+    
+    // Called shot type from roll template - extract type name from descriptive text like "Head (-6 / x2 dmg)"
+    const calledShotRaw = (fields.calledtype || "None").trim();
+    const calledShotType = calledShotRaw.split(" (")[0].trim();  // Extract type before parentheses
+    
+    // Called shot penalty lookup
+    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3 };
+    const calledShotPenalty = calledShotPenalties[calledShotType] || 0;
+    const isCalledShot = calledShotType !== "None" && calledShotType !== "";
+    const isHeadShot = calledShotType === "Head";
+    const isLegShot = calledShotType === "Leg";
+    const isArmShot = calledShotType === "Arm";
+    const isAvoidArmor = calledShotType === "Avoid Light Armor" || calledShotType === "Avoid Heavy Armor";
+    const isGearShot = calledShotType === "Gear";
 
     const getAtkAttr = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
 
@@ -1403,8 +1431,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let targetTotal;
     if (isAreaAttack) {
       targetTotal = baseToHit + 6;  // +6 immobile bonus, -0 defense
+    } else if (templateTarget !== null) {
+      // Use the template's pre-calculated target (includes query modifiers EXCEPT called shot)
+      // API applies called shot penalty since it's not in the template calculation
+      targetTotal = templateTarget + calledShotPenalty;
     } else {
-      targetTotal = baseToHit - defValue;
+      targetTotal = baseToHit - defValue + calledShotPenalty;
     }
 
     // Deduct push cost AND attack PR cost from attacker in a single operation
@@ -1502,7 +1534,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       snBP, snMaxBP, snType, causesKB,
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType,
-      isAreaAttack, areaRadius, areaDiameter
+      isAreaAttack, areaRadius, areaDiameter,
+      calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot
     };
 
     // For area attacks, handle differently
@@ -1572,14 +1605,29 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // IMPORTANT: use &quot; so the title="" attribute doesn't get truncated by a raw quote
       hoverBreakdown += `&#10;Range: ${rangePenalty} (${usedInches}&quot;${profNote})`;
     }
+    
+    // Called shot penalty
+    if (calledShotPenalty !== 0) hoverBreakdown += `&#10;Called (${calledShotType}): ${calledShotPenalty}`;
 
     hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Final: ${targetTotal}-`;
+    
+    // Build inline display notes
+    const calledShotNote = calledShotPenalty !== 0 ? ` Called:${calledShotPenalty}` : "";
+    
     html += `<br/><span style="color:#000; font-size:12px;" title="${hoverBreakdown}"><b>To-Hit: ${targetTotal}-</b></span> `;
-    html += `<span style="color:#333; font-size:10px;" title="${hoverBreakdown}">[${atkTypeLabel}] Roll:${roll} | ${defTypeLabel}:${defModLabel}${abilityBonusNote}${atkPenaltyNote}${restraintNote}${rangePenaltyNote}${macroModNote}${distNote}</span>`;
+    html += `<span style="color:#333; font-size:10px;" title="${hoverBreakdown}">[${atkTypeLabel}] Roll:${roll} | ${defTypeLabel}:${defModLabel}${abilityBonusNote}${atkPenaltyNote}${restraintNote}${rangePenaltyNote}${calledShotNote}${macroModNote}${distNote}</span>`;
 
     if (isCrit && critResult) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Critical hit effect">⚡ ${esc(critResult.desc)}</span>`;
+      
+      // Check if HEAD_SHOT is negated by Protected Brain
+      if (critResult.type === CRIT_TYPES.HEAD_SHOT) {
+        const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
+        if (hasProtectedBrain) {
+          html += `<br/><span style="color:#50fa7b; font-size:11px; font-weight:bold;">🧠 PROTECTED BRAIN - Head Shot negated!</span>`;
+        }
+      }
       
       // Auto-apply Off Balance to target
       if (critResult.type === CRIT_TYPES.OFF_BALANCE) {
@@ -1615,6 +1663,29 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isPushing) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Pushing: +${pushAmount} damage, costs ${pushAmount} Power">⚡ PUSH +${pushAmount}!</span>`;
     }
+    
+    // Called shot display
+    if (isCalledShot) {
+      const calledShotLabels = {
+        "Head": "🎯 HEAD SHOT (-6) - Hits DOUBLED after protection!",
+        "Leg": "🎯 LEG SHOT (-3) - EN+7 and AG saves required",
+        "Arm": "🎯 ARM SHOT (-3) - EN+7 and AG saves required",
+        "Avoid Light Armor": "🎯 AVOID LIGHT ARMOR (-3) - Bypasses partial coverage",
+        "Avoid Heavy Armor": "🎯 AVOID HEAVY ARMOR (-6) - Bypasses partial coverage",
+        "Gear": "🎯 GEAR SHOT (-3) - Compare damage to breakpoint"
+      };
+      const calledLabel = calledShotLabels[calledShotType] || `🎯 CALLED SHOT: ${calledShotType}`;
+      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;">${calledLabel}</span>`;
+      
+      // Check for Protected Brain on deliberate head shot
+      if (isHeadShot) {
+        const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
+        if (hasProtectedBrain) {
+          html += `<br/><span style="color:#50fa7b; font-size:11px; font-weight:bold;">🧠 PROTECTED BRAIN - Head Shot negated!</span>`;
+        }
+      }
+    }
+    
     if (prDeducted > 0) {
       html += `<br/><span style="color:#333; font-size:10px;">PR: -${prDeducted}</span>`;
     }
@@ -2429,11 +2500,33 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const critType = critResult ? critResult.type : null;
     let buttons = "";
     
-    // Determine which apply mode to use based on crit type
-    if (critType === CRIT_TYPES.HEAD_SHOT) {
+    // Check if defender has Protected Brain (negates head shots)
+    const hasProtectedBrain = rec && rec.defCharId && 
+      (num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1);
+    
+    // Called shot info from pending record
+    const isHeadShot = rec && rec.isHeadShot;
+    const isLegShot = rec && rec.isLegShot;
+    const isArmShot = rec && rec.isArmShot;
+    const isAvoidArmor = rec && rec.isAvoidArmor;
+    const isGearShot = rec && rec.isGearShot;
+    
+    // Determine which apply mode to use based on crit type AND called shot type
+    // Head shots: crit OR deliberate called shot (both double damage)
+    if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
       // Head shot: apply damage then double after prot/roll-with
       buttons = `[Apply (Head Shot)](!mp apply --id ${rollId} --mode headshot) `;
       buttons += `[RW + Head Shot](!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0})`;
+    } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && hasProtectedBrain) {
+      // Head shot negated by Protected Brain - show normal buttons
+      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
+      buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax) `;
+      buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+    } else if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
+      // Avoid armor: ignore protection (crit OR deliberate called shot)
+      buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot) `;
+      buttons += `[RW Max (No Prot)](!mp apply --id ${rollId} --mode noprot_rwmax) `;
+      buttons += `[RW Custom (No Prot)](!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0})`;
     } else if (critType === CRIT_TYPES.SOLID_HIT) {
       // Solid hit: +3 damage
       buttons = `[Apply (+3 Solid)](!mp apply --id ${rollId} --mode solid) `;
@@ -2444,11 +2537,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
       buttons += `[RW Max (½)](!mp apply --id ${rollId} --mode precise_rwmax) `;
       buttons += `[RW Custom (½)](!mp apply --id ${rollId} --mode precise_rw --amt ?{Divert to Power|0})`;
-    } else if (critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
-      // Avoid armor: ignore protection
-      buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot) `;
-      buttons += `[RW Max (No Prot)](!mp apply --id ${rollId} --mode noprot_rwmax) `;
-      buttons += `[RW Custom (No Prot)](!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0})`;
     } else {
       // Normal hit or other crit types
       buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
@@ -2476,13 +2564,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
     
-    // Add limb shot saves if applicable
-    if (critType === CRIT_TYPES.LEG_SHOT) {
+    // Add limb shot saves if applicable (crit OR deliberate called shot)
+    if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
       buttons += `<br/>[Leg Shot Saves](!mp limbsave --id ${rollId} --limb leg)`;
-    } else if (critType === CRIT_TYPES.ARM_SHOT) {
+    } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
       buttons += `<br/>[Arm Shot Saves](!mp limbsave --id ${rollId} --limb arm)`;
     } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
       buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+    }
+    
+    // Gear shot info
+    if (isGearShot) {
+      buttons += `<br/><i>(Compare damage to Gear breakpoint)</i>`;
     }
     
     return buttons;
@@ -2698,8 +2791,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let toHits = Math.max(0, penetrating - divert);
     
     // Head Shot: DOUBLE Hits after protection and roll-with
+    // Protected Brain negates head shot effect
     const isHeadShot = mode.includes("headshot");
-    if (isHeadShot) {
+    const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
+    if (isHeadShot && !hasProtectedBrain) {
       toHits = toHits * 2;
     }
 
@@ -2730,8 +2825,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     let effectNotes = "";
-    if (isHeadShot) {
+    if (isHeadShot && !hasProtectedBrain) {
       effectNotes = ` <span style="color:#e94560;">[HEAD SHOT x2]</span>`;
+    } else if (isHeadShot && hasProtectedBrain) {
+      effectNotes = ` <span style="color:#50fa7b;">[HEAD SHOT NEGATED - Protected Brain]</span>`;
     }
     if (mode.includes("solid")) {
       effectNotes += ` <span style="color:#8b4513;">[+3 Solid Hit]</span>`;
@@ -5737,7 +5834,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.32</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.37</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -5780,11 +5877,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.34:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.37:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.32 READY");
+  log("MP ENGINE v2.37 READY");
 });
