@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.32 (Restore clears all effects)
+/* Mighty Protectors Roll20 API Engine v2.33 (Ability to-hit bonus fix, improved hover)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -99,6 +99,10 @@
  *        - Squeeze command now uses full damage pipeline (protection, roll-with)
  *        - Squeeze creates pending record with damage buttons
  * v2.32: Restore clears all effects
+ * v2.33: Ability to-hit bonus fix
+ *        - API now includes ability_tohit_bonus (global) and ability_tohit_targeted (per-row)
+ *        - Heightened Expertise bonuses now properly applied to combat rolls
+ *        - Improved hover breakdown: shows BC+3, Atk Mod, Ht.Exp, subtotal, then penalties
  *        - !mp restore now clears all status markers (not just dead/sleepy)
  *        - Clears grapple/snare state and releases held targets
  *        - Clears conditions (paralyzed, mind control, etc.)
@@ -1256,6 +1260,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkType = getAtkAttr("attack_type") || "std";
     const atkMod = num(getAtkAttr("attack_mod"), 0);
     const macroMod = num(fields.hitmod, 0);  // Extra modifier from macro
+    
+    // Ability to-hit bonuses (Heightened Expertise, etc.)
+    const abilityTohitGlobal = getAttrNum(atkCharId, "ability_tohit_bonus", 0);
+    const atkRowNum = num(getAtkAttr("attack_num"), 1);
+    let abilityTohitTargeted = 0;
+    try {
+      const targetedJson = getAttr(atkCharId, "ability_tohit_targeted") || "{}";
+      const targetedObj = JSON.parse(targetedJson);
+      abilityTohitTargeted = num(targetedObj[atkRowNum], 0);
+    } catch (e) { /* ignore parse errors */ }
+    const abilityTohitBonus = abilityTohitGlobal + abilityTohitTargeted;
     const dmgTypeRaw = (getAtkAttr("attack_dmgtype") || "Kin").toLowerCase();
     const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
     const dmgTypeStr = dmgTypeMap[dmgTypeRaw] || fields.type || "Other";
@@ -1370,7 +1385,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       log(`MP RANGE DEBUG: atk(${atkTok.get("left")},${atkTok.get("top")}) def(${defTok.get("left")},${defTok.get("top")}) snap:${snap} => ${rangeData.inches}"`);
     }
     
-    const baseToHit = atkSave + 3 + atkMod + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty;
+    const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty;
 
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
@@ -1512,34 +1527,52 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const restraintNote = atkRestraintPenalty !== 0 ? ` Rstr:${atkRestraintPenalty}` : "";
     const distNote = (rangeData && typeof rangeData.inches === "number") ? ` Dist:${rangeData.inches}"` : "";
 
-    const baseToHitPreMods = atkSave + 3 + atkMod;  // Before stance, range, restraint, and defense
-    let hoverBreakdown = `Base: ${baseToHitPreMods}-`;
+    const abilityBonusNote = abilityTohitBonus !== 0 ? ` Ht.Exp:+${abilityTohitBonus}` : "";
+
+    // Build detailed hover breakdown
+    const bcLabel = atkTypeCode === "M" ? "IN" : (atkTypeCode === "E" ? "CL" : "AG");
+    const baseChance = atkSave + 3;
+    let hoverBreakdown = `${bcLabel} ${atkSave} + 3 = ${baseChance}-`;
+    if (atkMod !== 0) hoverBreakdown += `&#10;Atk Mod: ${atkMod >= 0 ? '+' : ''}${atkMod}`;
+    if (abilityTohitBonus !== 0) {
+      if (abilityTohitTargeted > 0 && abilityTohitGlobal > 0) {
+        hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitBonus} (+${abilityTohitGlobal} all, +${abilityTohitTargeted} this)`;
+      } else if (abilityTohitTargeted > 0) {
+        hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitTargeted} (this atk)`;
+      } else {
+        hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitGlobal}`;
+      }
+    }
+    if (macroMod !== 0) hoverBreakdown += `&#10;Cmd Mod: ${macroMod > 0 ? '+' : ''}${macroMod}`;
+    
+    // Subtotal before defense/penalties
+    const subtotal = baseChance + atkMod + abilityTohitBonus + macroMod;
+    hoverBreakdown += `&#10;─────────`;
+    hoverBreakdown += `&#10;Subtotal: ${subtotal}-`;
+    
+    // Defense and penalties
     if (defValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${defValue}`;
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
     if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
-    if (macroMod !== 0) hoverBreakdown += `&#10;Mod: ${macroMod > 0 ? '+' : ''}${macroMod}`;
-    // MP scale: 1" = 5 ft.
-    // Always show range penalty in hover (format: Range: -1 (9"))
+    
+    // Range penalty (MP scale: 1" = 5 ft.)
     if (rangeData && typeof rangeData.inches === "number") {
       const usedInches =
         (rangeData.profileAdjusted && typeof rangeData.adjustedInches === "number")
           ? rangeData.adjustedInches
           : rangeData.inches;
-
-      // Show target profile only if it isn't 1
       const profNote =
         (rangeData.defProfile && rangeData.defProfile !== 1)
           ? `, TgtProf:${rangeData.defProfile}`
           : "";
-
       // IMPORTANT: use &quot; so the title="" attribute doesn't get truncated by a raw quote
       hoverBreakdown += `&#10;Range: ${rangePenalty} (${usedInches}&quot;${profNote})`;
     }
 
-
+    hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Final: ${targetTotal}-`;
     html += `<br/><span style="color:#000; font-size:12px;" title="${hoverBreakdown}"><b>To-Hit: ${targetTotal}-</b></span> `;
-    html += `<span style="color:#333; font-size:10px;" title="${hoverBreakdown}">[${atkTypeLabel}] Roll:${roll} | ${defTypeLabel}:${defModLabel}${atkPenaltyNote}${restraintNote}${rangePenaltyNote}${macroModNote}${distNote}</span>`;
+    html += `<span style="color:#333; font-size:10px;" title="${hoverBreakdown}">[${atkTypeLabel}] Roll:${roll} | ${defTypeLabel}:${defModLabel}${abilityBonusNote}${atkPenaltyNote}${restraintNote}${rangePenaltyNote}${macroModNote}${distNote}</span>`;
 
     if (isCrit && critResult) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Critical hit effect">⚡ ${esc(critResult.desc)}</span>`;
@@ -5718,7 +5751,7 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.32:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.33:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
