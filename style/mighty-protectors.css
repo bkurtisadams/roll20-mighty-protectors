@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.56 - Add Atk# field for targeted Heightened Expertise bonuses */
+/* Mighty Protectors Character Sheet CSS v42.58 - Reduce ability row vertical gap */
 
 /* ========================================
    ROLL TEMPLATES
@@ -306,6 +306,11 @@
 .charsheet .repeating_protection > div,
 .charsheet .repeating_abilities > div {
   position: relative !important;
+}
+
+/* Compact ability rows - vertical alignment */
+.charsheet .repeating_abilities td {
+  vertical-align: middle !important;
 }
 
 /* Hidden checkbox overlay for cog - covers cog and dropdown area */
@@ -732,11 +737,14 @@
 .charsheet .sheet-ability-state-sel {
   width: 52px !important;
   font-size: 9px !important;
-  padding: 1px 2px !important;
+  padding: 0 2px !important;
+  margin: 0 !important;
   background: #0d0d1a !important;
   color: #eaeaea !important;
   border: 1px solid #2a2040 !important;
-  height: 20px !important;
+  height: 18px !important;
+  vertical-align: middle !important;
+  box-sizing: border-box !important;
 }
 /* ========================================
    TO-HIT TOOLTIP (Heightened Expertise)
