@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.37 (Called shot handling)
+/* Mighty Protectors Roll20 API Engine v2.38 (Protected Brain visibility fix)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -123,12 +123,15 @@
  *        - Avoid Armor (-3/-6): Bypasses partial armor coverage
  *        - Gear Shot (-3): Shows breakpoint comparison note
  *        - Called shot penalty shown in hover breakdown
+ * v2.38: Protected Brain visibility fix
+ *        - Changed text color from green (#50fa7b) to dark blue (#1a5276)
+ *        - Now visible on green HIT background
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.37 FILE STARTING");
+log("MP ENGINE v2.38 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1625,7 +1628,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (critResult.type === CRIT_TYPES.HEAD_SHOT) {
         const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
         if (hasProtectedBrain) {
-          html += `<br/><span style="color:#50fa7b; font-size:11px; font-weight:bold;">🧠 PROTECTED BRAIN - Head Shot negated!</span>`;
+          html += `<br/><span style="color:#1a5276; font-size:11px; font-weight:bold;">🧠 PROTECTED BRAIN - Head Shot negated!</span>`;
         }
       }
       
@@ -1681,7 +1684,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (isHeadShot) {
         const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
         if (hasProtectedBrain) {
-          html += `<br/><span style="color:#50fa7b; font-size:11px; font-weight:bold;">🧠 PROTECTED BRAIN - Head Shot negated!</span>`;
+          html += `<br/><span style="color:#1a5276; font-size:11px; font-weight:bold;">🧠 PROTECTED BRAIN - Head Shot negated!</span>`;
         }
       }
     }
@@ -2828,7 +2831,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isHeadShot && !hasProtectedBrain) {
       effectNotes = ` <span style="color:#e94560;">[HEAD SHOT x2]</span>`;
     } else if (isHeadShot && hasProtectedBrain) {
-      effectNotes = ` <span style="color:#50fa7b;">[HEAD SHOT NEGATED - Protected Brain]</span>`;
+      effectNotes = ` <span style="color:#1a5276; font-weight:bold;">[HEAD SHOT NEGATED - Protected Brain]</span>`;
     }
     if (mode.includes("solid")) {
       effectNotes += ` <span style="color:#8b4513;">[+3 Solid Hit]</span>`;
@@ -5379,8 +5382,9 @@ function cmdStance(msg, args) {
   // -------------------------
   // QUICK ATTACK COMMAND
   // -------------------------
-  // Usage: !mp atk N --atk TOKEN_ID --target TOKEN_ID [--mod N] [--push N]
-  // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0}
+  // Usage: !mp atk N --atk TOKEN_ID --target TOKEN_ID [--mod N] [--push N] [--called TYPE]
+  // Called types: None, Head, Arm, Leg, Light (Avoid Light Armor), Heavy (Avoid Heavy Armor), Gear
+  // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0} --called ?{Called|None|Head|Arm|Leg|Light|Heavy|Gear}
   // Triggers existing mpattack roll template handler
 
   function findAttackRowByIndex(charId, atkIndex) {
@@ -5446,11 +5450,21 @@ function cmdStance(msg, args) {
     const ap = getAtk("attack_ap") || "";
     const pushAmount = num(args.push, 0);  // 0=no push, 2=normal, 4+=special
     const hitMod = num(args.mod, 0);
+    
+    // Called shot support - accepts type name or abbreviation
+    const calledRaw = (args.called || "None").trim();
+    const calledMap = {
+      "none": "None", "head": "Head", "arm": "Arm", "leg": "Leg",
+      "avoidlight": "Avoid Light Armor", "light": "Avoid Light Armor",
+      "avoidheavy": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
+      "gear": "Gear"
+    };
+    const calledType = calledMap[calledRaw.toLowerCase()] || calledRaw;
 
     // Build and send the roll template - this triggers handleMpAttack
     const pushDmg = pushAmount > 0 ? `+${pushAmount}` : "";
     
-    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
+    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{calledtype=${calledType}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
 
     sendChat(`character|${atkCharId}`, rollMsg);
   }
@@ -5834,9 +5848,9 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.37</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.38</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
-          <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N]</code><br/>
+          <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
           <code>!mp sv BC [mod]</code> - Save (EN/AG/IN/CL)<br/>
           <b>Combat:</b><br/>
@@ -5877,11 +5891,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.37:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.38:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.37 READY");
+  log("MP ENGINE v2.38 READY");
 });
