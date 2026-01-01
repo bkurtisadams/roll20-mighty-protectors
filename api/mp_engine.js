@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.38 (Protected Brain visibility fix)
+/* Mighty Protectors Roll20 API Engine v2.40 (Push/Hold Back fix)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -126,12 +126,19 @@
  * v2.38: Protected Brain visibility fix
  *        - Changed text color from green (#50fa7b) to dark blue (#1a5276)
  *        - Now visible on green HIT background
+ * v2.39: targetTotal calculation fix
+ *        - API now always calculates to-hit from scratch using actual token defense
+ *        - Hover breakdown math now matches displayed Final value
+ * v2.40: Push/Hold Back fix
+ *        - Fixed !mp atk command to support Hold Back (negative values)
+ *        - Restored target field in roll template for TO-HIT display
+ *        - Added Hold Back display message in attack output
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.38 FILE STARTING");
+log("MP ENGINE v2.40 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1431,13 +1438,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Area attacks target a location (defenseless immobile target)
     // Per 4.7.2: Defense = 0, attacker gets +6 for completely immobile target
+    // Always calculate from API's values - templateTarget (if present) is just for display
     let targetTotal;
     if (isAreaAttack) {
       targetTotal = baseToHit + 6;  // +6 immobile bonus, -0 defense
-    } else if (templateTarget !== null) {
-      // Use the template's pre-calculated target (includes query modifiers EXCEPT called shot)
-      // API applies called shot penalty since it's not in the template calculation
-      targetTotal = templateTarget + calledShotPenalty;
     } else {
       targetTotal = baseToHit - defValue + calledShotPenalty;
     }
@@ -1665,6 +1669,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     if (isPushing) {
       html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Pushing: +${pushAmount} damage, costs ${pushAmount} Power">⚡ PUSH +${pushAmount}!</span>`;
+    } else if (pushAmount < 0) {
+      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Hold Back: ${pushAmount} damage">🛡️ HOLD BACK ${pushAmount}</span>`;
     }
     
     // Called shot display
@@ -5462,7 +5468,8 @@ function cmdStance(msg, args) {
     const calledType = calledMap[calledRaw.toLowerCase()] || calledRaw;
 
     // Build and send the roll template - this triggers handleMpAttack
-    const pushDmg = pushAmount > 0 ? `+${pushAmount}` : "";
+    // Push (positive) adds damage, Hold Back (negative) reduces damage
+    const pushDmg = pushAmount !== 0 ? (pushAmount > 0 ? `+${pushAmount}` : `${pushAmount}`) : "";
     
     const rollMsg = `&{template:mpattack} {{mpapi=1}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{calledtype=${calledType}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
 
@@ -5632,7 +5639,8 @@ function cmdStance(msg, args) {
     ch("MP", `/w gm ` + announceHtml);
 
     // Roll each attack separately with slight delay to avoid race conditions
-    const pushDmg = pushAmount > 0 ? `+${pushAmount}` : "";
+    // Push (positive) adds damage, Hold Back (negative) reduces damage
+    const pushDmg = pushAmount !== 0 ? (pushAmount > 0 ? `+${pushAmount}` : `${pushAmount}`) : "";
     
     for (let shot = 1; shot <= autofireRate; shot++) {
       setTimeout(() => {
@@ -5848,7 +5856,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.38</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.40</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -5891,11 +5899,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.38:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.40:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.38 READY");
+  log("MP ENGINE v2.40 READY");
 });
