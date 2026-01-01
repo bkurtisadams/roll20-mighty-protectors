@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.33 (Ability to-hit bonus fix, improved hover)
+/* Mighty Protectors Roll20 API Engine v2.34 (Willpower abilities)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -103,6 +103,10 @@
  *        - API now includes ability_tohit_bonus (global) and ability_tohit_targeted (per-row)
  *        - Heightened Expertise bonuses now properly applied to combat rolls
  *        - Improved hover breakdown: shows BC+3, Atk Mod, Ht.Exp, subtotal, then penalties
+ * v2.34: Willpower abilities support
+ *        - Fortitude: doubles roll-with capacity (checkbox in ability panel)
+ *        - Pain Resistance: no knockout at half Hits, only at 0 (checkbox in ability panel)
+ *        - !mp stat shows Fortitude/Pain Resistance indicators
  *        - !mp restore now clears all status markers (not just dead/sleepy)
  *        - Clears grapple/snare state and releases held targets
  *        - Clears conditions (paralyzed, mind control, etc.)
@@ -2033,7 +2037,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       setResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
       
       // Status effects
-      const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+      // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
+      const hasPainResistance = (num(getAttr(tokData.charId, "willpower_pain_resistance"), 0) === 1);
+      const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
       const incapacitated = (hits1 === 0);
       
       let statusNote = "";
@@ -2181,7 +2187,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     // Status effects (only if net result is bad)
-    const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0 && hits1 < hits0;
+    // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
+    const hasPainResistance = (num(getAttr(rec.defCharId, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0 && hits1 < hits0;
     const incapacitated = (hits1 === 0);
     
     if (incapacitated) defTok.set("status_dead", true);
@@ -2260,7 +2268,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
     
     // Status effects
-    const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
+    const hasPainResistance = (num(getAttr(rec.defCharId, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
     
     if (incapacitated) defTok.set("status_dead", true);
@@ -2382,7 +2392,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     setResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
     
     // Status effects
-    const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
+    const hasPainResistance = (num(getAttr(targetCharId, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
     
     if (incapacitated) targetTok.set("status_dead", true);
@@ -2663,6 +2675,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Roll-with capacity: max divert = floor(current Power / 10)
     let maxDivert = Math.floor(pow0 / 10);
     
+    // Fortitude (Willpower) doubles roll-with capacity
+    const hasFortitude = (num(getAttr(defChar.id, "willpower_fortitude"), 0) === 1);
+    if (hasFortitude) {
+      maxDivert = maxDivert * 2;
+    }
+    
     // Precise Hit halves roll-with capacity
     if (mode.includes("precise")) {
       maxDivert = Math.floor(maxDivert / 2);
@@ -2697,7 +2715,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     setResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
 
     // Check for unconsciousness (over half remaining hits in one attack)
-    const unconscious = (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
+    const hasPainResistance = (num(getAttr(defChar.id, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
 
     let statusLine = "";
@@ -5210,7 +5230,15 @@ function cmdStance(msg, args) {
     
     msg_out += `<b>Protection:</b> Kin ${fmtProt(kinData)} | Eng ${fmtProt(engData)} | Ent ${fmtProt(entData)} | Psy ${fmtProt(psyData)} | Bio ${fmtProt(bioData)} | Oth ${fmtProt(othData)}<br/>`;
     msg_out += `<b>HTH:</b> ${hth} | <b>Mass:</b> ${mass}<br/>`;
-    msg_out += `<b>Roll-With Cap:</b> ${Math.floor(pow / 10)}`;
+    
+    // Roll-With Cap with Fortitude bonus
+    const hasFortitude = (num(getAttr(char.id, "willpower_fortitude"), 0) === 1);
+    const hasPainResistance = (num(getAttr(char.id, "willpower_pain_resistance"), 0) === 1);
+    const baseRollWith = Math.floor(pow / 10);
+    const rollWithCap = hasFortitude ? baseRollWith * 2 : baseRollWith;
+    msg_out += `<b>Roll-With Cap:</b> ${rollWithCap}`;
+    if (hasFortitude) msg_out += ` <span style="color:#8be9fd;">(Fortitude x2)</span>`;
+    if (hasPainResistance) msg_out += ` <span style="color:#27ae60;">(Pain Res.)</span>`;
     
     if (snare) {
       msg_out += `<br/><span style="color:#e94560;"><b>Snared:</b> ${snare.type} (BP ${snare.bp || "N/A"}) by ${snare.source}</span>`;
@@ -5645,6 +5673,7 @@ function cmdStance(msg, args) {
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
       case "status": return cmdStatus(msg, args);
+      case "stat": return testStatus(msg, args);  // Detailed status with protections, roll-with cap
       case "restore": return cmdRestore(msg, args);
       case "info": return cmdInfo(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
@@ -5731,7 +5760,7 @@ function cmdStance(msg, args) {
           <code>!mp countergrapple --target TOKID --wrestle 0|1</code><br/>
 
           <code>!mp wakeup --target TOKID</code><br/>
-          <code>!mp status --target TOKID</code><br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
+          <code>!mp status --target TOKID</code><br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
 
           <b>Stances (Bar3):</b><br/>
           <code>!mp stance normal|def|full|offbal|N</code><br/>
@@ -5751,7 +5780,7 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.33:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.34:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
