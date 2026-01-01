@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.40 (Push/Hold Back fix)
+/* Mighty Protectors Roll20 API Engine v2.41 (Absorption debug command)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -133,12 +133,15 @@
  *        - Fixed !mp atk command to support Hold Back (negative values)
  *        - Restored target field in roll template for TO-HIT display
  *        - Added Hold Back display message in attack output
+ * v2.41: Absorption debug command
+ *        - Added !mp debug absorb to check protection row setup
+ *        - Shows State, Mode, and damage type values for each row
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.40 FILE STARTING");
+log("MP ENGINE v2.41 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -5852,11 +5855,59 @@ function cmdStance(msg, args) {
             return ch("MP", `/w gm ✅ Deleted ${esc(name)} token at (${x}, ${y}) on page "${esc(pageName)}"`);
           }
           return ch("MP", `/w gm ❌ No token found near (${x}, ${y}) on any page`);
+        } else if (debugArg === "absorb") {
+          // Debug absorption setup for selected token
+          const tok = getSelectedToken(msg);
+          if (!tok) return ch("MP", `/w gm Select a token to check absorption setup.`);
+          const char = getCharFromToken(tok);
+          if (!char) return ch("MP", `/w gm Token not linked to character.`);
+          const charId = char.id;
+          const charName = char.get("name");
+          
+          const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+          const rowIds = new Set();
+          attrs.forEach(a => {
+            const n = a.get("name");
+            const match = n.match(/^repeating_protection_([^_]+)_/);
+            if (match) rowIds.add(match[1]);
+          });
+          
+          let out = `<b>${esc(charName)} Protection Rows:</b><br/>`;
+          for (const rowId of rowIds) {
+            const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+            const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+            const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+            const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+            const kinAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_kinetic`);
+            const engAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_energy`);
+            const bioAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_bio`);
+            
+            const name = nameAttr ? nameAttr.get("current") : "(unnamed)";
+            const state = stateAttr ? stateAttr.get("current") : "?";
+            const mode = modeAttr ? modeAttr.get("current") : "normal";
+            const broken = brokenAttr && brokenAttr.get("current") === "1" ? "BROKEN" : "";
+            const kin = kinAttr ? kinAttr.get("current") : "0";
+            const eng = engAttr ? engAttr.get("current") : "0";
+            const bio = bioAttr ? bioAttr.get("current") : "0";
+            
+            let rowColor = "#eee";
+            if (mode === "absorption" || mode === "reflection") rowColor = "#d4edda";
+            if (state === "Off") rowColor = "#f8d7da";
+            if (broken) rowColor = "#f5c6cb";
+            
+            out += `<div style="background:${rowColor}; padding:2px; margin:1px;">`;
+            out += `<b>${esc(name)}</b> [${mode}]<br/>`;
+            out += `State: ${state}${broken ? " ⚠️" + broken : ""}<br/>`;
+            out += `Kin:${kin} Eng:${eng} Bio:${bio}`;
+            out += `</div>`;
+          }
+          if (rowIds.size === 0) out += `<i>No protection rows found.</i>`;
+          return ch("MP", `/w gm ` + out);
         }
-        return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>");
+        return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.40</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.41</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -5899,11 +5950,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.40:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.41:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.40 READY");
+  log("MP ENGINE v2.41 READY");
 });
