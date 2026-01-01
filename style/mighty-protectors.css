@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.58 - Reduce ability row vertical gap */
+/* Mighty Protectors Character Sheet CSS v42.59 - Reduce attack/protection row vertical gap */
 
 /* ========================================
    ROLL TEMPLATES
@@ -309,7 +309,9 @@
 }
 
 /* Compact ability rows - vertical alignment */
-.charsheet .repeating_abilities td {
+.charsheet .repeating_abilities td,
+.charsheet .repeating_attacks td,
+.charsheet .repeating_protection td {
   vertical-align: middle !important;
 }
 
@@ -348,10 +350,13 @@
   width: 100% !important;
   font-size: 9px !important;
   padding: 0 2px !important;
+  margin: 0 !important;
   background: #0d0d1a !important;
   color: #eaeaea !important;
   border: 1px solid #2a2040 !important;
   height: 18px !important;
+  vertical-align: middle !important;
+  box-sizing: border-box !important;
 }
 
 .charsheet input.sheet-options-flag:checked ~ * .sheet-cog-icon,
