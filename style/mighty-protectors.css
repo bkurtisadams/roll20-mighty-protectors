@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.60 - Narrow Use column, widen DmgType column */
+/* Mighty Protectors Character Sheet CSS v42.63 - Use columns: atk/prot 36px, ability 44px */
 
 /* ========================================
    ROLL TEMPLATES
@@ -350,6 +350,20 @@
   width: 100% !important;
   font-size: 9px !important;
   padding: 0 2px !important;
+  margin: 0 !important;
+  background: #0d0d1a !important;
+  color: #eaeaea !important;
+  border: 1px solid #2a2040 !important;
+  height: 18px !important;
+  vertical-align: middle !important;
+  box-sizing: border-box !important;
+}
+
+/* Damage type dropdown - compact */
+.charsheet .sheet-attack-dmgtype-sel {
+  width: 100% !important;
+  font-size: 9px !important;
+  padding: 0 !important;
   margin: 0 !important;
   background: #0d0d1a !important;
   color: #eaeaea !important;
@@ -740,7 +754,7 @@
 
 /* State dropdown - compact */
 .charsheet .sheet-ability-state-sel {
-  width: 52px !important;
+  width: 100% !important;
   font-size: 9px !important;
   padding: 0 2px !important;
   margin: 0 !important;
