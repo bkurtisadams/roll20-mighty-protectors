@@ -1,8 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.44 (Activation & Duration Tracking)
+/* Mighty Protectors Roll20 API Engine v2.45 (Activation & Duration Tracking)
  * - Auto-deduct PR/charges when abilities/protections activated (state → Active)
  * - Duration tracking: !mp round advances round, decrements active durations
+ * - Duration expiry: auto-renews (deducts PR/charges) or deactivates if can't pay
  * - Commands: !mp round, !mp durations, !mp activate, !mp deactivate
- * - v2.44: Fixed parseArgs to handle positional arguments
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -5932,7 +5932,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.44</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.45</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6035,6 +6035,112 @@ function cmdStance(msg, args) {
     );
     if (state.MP_Engine.durations[charId].length === 0) {
       delete state.MP_Engine.durations[charId];
+    }
+  }
+  
+  // Try to renew a duration by deducting PR/charges again
+  // Returns true if renewed, false if deactivated
+  function tryRenewDuration(charId, sectionType, rowId, name) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    const getVal = (attrName) => {
+      const a = attrs.find(x => x.get("name") === attrName);
+      return a ? a.get("current") : "";
+    };
+    const setVal = (attrName, val) => {
+      let a = attrs.find(x => x.get("name") === attrName);
+      if (a) {
+        a.set("current", val);
+      } else {
+        createObj("attribute", { characterid: charId, name: attrName, current: val });
+      }
+    };
+    
+    // Build attribute names based on section type
+    let prAttr, chargesAttr, stateAttr, durActiveAttr, durNumAttr, durUnitAttr;
+    if (sectionType === "ability") {
+      const prefix = `repeating_abilities_${rowId}_ability_`;
+      prAttr = prefix + "pr";
+      chargesAttr = prefix + "charges";
+      stateAttr = prefix + "state";
+      durActiveAttr = prefix + "duration_active";
+      durNumAttr = prefix + "duration_num";
+      durUnitAttr = prefix + "duration_unit";
+    } else {
+      const prefix = `repeating_protection_${rowId}_prot_`;
+      prAttr = prefix + "pr";
+      chargesAttr = prefix + "charges";
+      stateAttr = prefix + "state";
+      durActiveAttr = prefix + "duration_active";
+      durNumAttr = prefix + "duration_num";
+      durUnitAttr = prefix + "duration_unit";
+    }
+    
+    const pr = parseInt(getVal(prAttr), 10) || 0;
+    const chargesRaw = getVal(chargesAttr);
+    const hasCharges = chargesRaw !== "" && chargesRaw !== undefined && chargesRaw !== null;
+    const charges = hasCharges ? parseInt(chargesRaw, 10) || 0 : -1;
+    
+    let canRenew = false;
+    
+    if (hasCharges && charges >= 0) {
+      // Uses charges
+      if (charges > 0) {
+        setVal(chargesAttr, charges - 1);
+        canRenew = true;
+      }
+    } else if (pr > 0) {
+      // Uses PR - check power
+      const powerAttr = attrs.find(x => x.get("name") === CFG.POWER_ATTR);
+      const currentPower = powerAttr ? parseInt(powerAttr.get("current"), 10) || 0 : 0;
+      if (currentPower >= pr) {
+        const newPower = currentPower - pr;
+        if (powerAttr) powerAttr.set("current", newPower);
+        // Update tokens
+        const tokens = findObjs({ _type: "graphic", represents: charId });
+        tokens.forEach(tok => {
+          if (tok.get(CFG.POWER_BAR + "_link")) {
+            tok.set(CFG.POWER_BAR + "_value", newPower);
+          }
+        });
+        canRenew = true;
+      }
+    } else {
+      // No cost - auto-renew
+      canRenew = true;
+    }
+    
+    if (canRenew) {
+      // Reset duration in tracking
+      const durNum = getVal(durNumAttr);
+      const durUnit = getVal(durUnitAttr);
+      const totalRounds = durationToRounds(durNum, durUnit);
+      
+      if (state.MP_Engine.durations[charId]) {
+        const dur = state.MP_Engine.durations[charId].find(
+          d => d.rowId === rowId && d.sectionType === sectionType
+        );
+        if (dur) {
+          dur.roundsRemaining = totalRounds;
+        } else {
+          // Re-add if somehow removed
+          state.MP_Engine.durations[charId].push({
+            name: name,
+            sectionType: sectionType,
+            rowId: rowId,
+            roundsRemaining: totalRounds,
+            totalRounds: totalRounds,
+            escape: "",
+            startRound: state.MP_Engine.currentRound
+          });
+        }
+      }
+      return true;
+    } else {
+      // Can't renew - deactivate
+      setVal(stateAttr, "Off");
+      setVal(durActiveAttr, "0");
+      removeDuration(charId, sectionType, rowId);
+      return false;
     }
   }
   
@@ -6204,15 +6310,15 @@ function cmdStance(msg, args) {
     // Report and process expired
     if (expired.length > 0) {
       report += `<div style="background:#5a2d2d; padding:4px; margin-top:4px;">`;
-      report += `<b>⏱️ Expired:</b><br/>`;
+      report += `<b>⏱️ Duration Expired:</b><br/>`;
       expired.forEach(e => {
-        report += `${esc(e.charName)}: ${esc(e.name)}<br/>`;
-        // Set duration_active to 0
-        const durActiveAttr = e.sectionType === "ability" 
-          ? `repeating_abilities_${e.rowId}_ability_duration_active`
-          : `repeating_protection_${e.rowId}_prot_duration_active`;
-        const attr = findObjs({ _type: "attribute", _characterid: e.charId, name: durActiveAttr })[0];
-        if (attr) attr.set("current", "0");
+        // Try to renew (deduct PR/charges again)
+        const renewed = tryRenewDuration(e.charId, e.sectionType, e.rowId, e.name);
+        if (renewed) {
+          report += `${esc(e.charName)}: ${esc(e.name)} <span style="color:#50fa7b;">RENEWED</span><br/>`;
+        } else {
+          report += `${esc(e.charName)}: ${esc(e.name)} <span style="color:#ff6b6b;">DEACTIVATED</span><br/>`;
+        }
       });
       report += `</div>`;
     }
@@ -6335,11 +6441,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.44:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.45:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.44 READY");
+  log("MP ENGINE v2.45 READY");
 });
