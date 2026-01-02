@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.75 - Fix mpability template nested conditionals -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.76 - Add duration num/unit/escape/active fields to attacks, abilities, protections -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -652,10 +652,33 @@
           </div>
           <div class="sheet-panel-field">
             <label title="Duration: How long the effect lasts">Dur:</label>
-            <input type="text" name="attr_attack_duration" style="width:40px !important;" title="Duration: How long the effect lasts" />
+            <input type="text" name="attr_attack_duration_num" maxlength="4" style="width:28px !important;" title="Duration quantity" />
+            <select name="attr_attack_duration_unit" style="width:58px !important;" title="Duration unit">
+              <option value="" selected>--</option>
+              <option value="round">Round</option>
+              <option value="minute">Minute</option>
+              <option value="hour">Hour</option>
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+              <option value="year">Year</option>
+              <option value="perm">Permanent</option>
+            </select>
           </div>
           <span class="sheet-panel-divider"></span>
           <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{name=@{attack_name}}} {{row=@{attack_rowid}}}" title="Show attack details">Info</button>
+        </div>
+
+        <!-- Row 2.5: Duration Details -->
+        <div class="sheet-panel-row" style="margin-top:4px;">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_duration_active" value="1" class="sheet-atk-dur-active-flag" title="Duration effect currently active" />
+            <label title="Duration effect currently active" style="color:#50fa7b;">Active</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="How target can escape before duration expires">Escape:</label>
+            <input type="text" name="attr_attack_duration_escape" style="width:120px !important;" title="How target can escape before duration expires" placeholder="e.g., Dunk in water" />
+          </div>
         </div>
 
         <!-- Row 3: Save Attack -->
@@ -999,6 +1022,33 @@
             <label>Chg:</label>
             <input type="text" name="attr_prot_charges" maxlength="3" style="width:28px !important;" title="Charges remaining" />
           </div>
+          <div class="sheet-panel-field">
+            <label title="Duration: How long the effect lasts">Dur:</label>
+            <input type="text" name="attr_prot_duration_num" maxlength="4" style="width:28px !important;" title="Duration quantity" />
+            <select name="attr_prot_duration_unit" style="width:58px !important;" title="Duration unit">
+              <option value="" selected>--</option>
+              <option value="round">Round</option>
+              <option value="minute">Minute</option>
+              <option value="hour">Hour</option>
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+              <option value="year">Year</option>
+              <option value="perm">Permanent</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Row 3.5: Duration Details -->
+        <div class="sheet-panel-row" style="margin-top:4px;">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_prot_duration_active" value="1" class="sheet-prot-dur-active-flag" title="Duration effect currently active" />
+            <label title="Duration effect currently active" style="color:#50fa7b;">Active</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="How to end effect before duration expires">Escape:</label>
+            <input type="text" name="attr_prot_duration_escape" style="width:120px !important;" title="How to end effect before duration expires" placeholder="e.g., Remove device" />
+          </div>
         </div>
 
         <!-- Row 4: Absorption / Reflection -->
@@ -1164,7 +1214,30 @@
           </div>
           <div class="sheet-panel-field">
             <label>Dur:</label>
-            <input type="text" name="attr_ability_duration" style="width:35px !important;" title="Duration" />
+            <input type="text" name="attr_ability_duration_num" maxlength="4" style="width:28px !important;" title="Duration quantity" />
+            <select name="attr_ability_duration_unit" style="width:58px !important;" title="Duration unit">
+              <option value="" selected>--</option>
+              <option value="round">Round</option>
+              <option value="minute">Minute</option>
+              <option value="hour">Hour</option>
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+              <option value="year">Year</option>
+              <option value="perm">Permanent</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Row 1.25: Duration Details -->
+        <div class="sheet-panel-row" style="margin-top:4px;">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_duration_active" value="1" class="sheet-ability-dur-active-flag" title="Duration effect currently active" />
+            <label title="Duration effect currently active" style="color:#50fa7b;">Active</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="How to end effect before duration expires">Escape:</label>
+            <input type="text" name="attr_ability_duration_escape" style="width:120px !important;" title="How to end effect before duration expires" placeholder="e.g., Dunk in water" />
           </div>
         </div>
 
@@ -1299,8 +1372,6 @@
       <input type="hidden" name="attr_ability_reflect_types" value="" />
       <input type="hidden" name="attr_ability_reflect_limit" value="" />
       <input type="hidden" name="attr_ability_autofire_rof" value="" />
-      <input type="hidden" name="attr_ability_duration_time" value="" />
-      <input type="hidden" name="attr_ability_duration_escape" value="" />
       <input type="hidden" name="attr_ability_contact_link" value="" />
       <input type="hidden" name="attr_ability_contact_ind" value="" />
       <input type="hidden" name="attr_ability_carrier_link" value="" />
@@ -2947,8 +3018,10 @@
           updates[prefix + "_ability_reflect_types"] = "";
           updates[prefix + "_ability_reflect_limit"] = "";
           updates[prefix + "_ability_autofire_rof"] = "";
-          updates[prefix + "_ability_duration_time"] = "";
+          updates[prefix + "_ability_duration_num"] = "";
+          updates[prefix + "_ability_duration_unit"] = "";
           updates[prefix + "_ability_duration_escape"] = "";
+          updates[prefix + "_ability_duration_active"] = "0";
           updates[prefix + "_ability_contact_link"] = "";
           updates[prefix + "_ability_contact_ind"] = "";
           updates[prefix + "_ability_carrier_link"] = "";
@@ -2990,7 +3063,12 @@
           var durationMatch = notes.match(/duration:([^:]+):?(.*)?/i);
           if (durationMatch) {
             updates[prefix + "_ability_mod_type"] = "duration";
-            updates[prefix + "_ability_duration_time"] = durationMatch[1];
+            var durStr = durationMatch[1].trim().toLowerCase();
+            var durNumMatch = durStr.match(/^(\d+)\s*(round|minute|hour|day|week|month|year|perm)/i);
+            if (durNumMatch) {
+              updates[prefix + "_ability_duration_num"] = durNumMatch[1];
+              updates[prefix + "_ability_duration_unit"] = durNumMatch[2].toLowerCase();
+            }
             updates[prefix + "_ability_duration_escape"] = durationMatch[2] || "";
           }
           
