@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.74 - Absorption debug command -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.75 - Fix mpability template nested conditionals -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -1614,31 +1614,17 @@
       {{#desc}}
       <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px; white-space:pre-wrap;">{{desc}}</div>
       {{/desc}}
-      {{#st}}{{#en}}{{#ag}}{{#in}}{{#cl}}
-      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
-        <div style="color:#f4d03f; font-size:11px; font-weight:bold; margin-bottom:4px;">STAT MODIFIERS</div>
-        <div style="display:flex; gap:12px; flex-wrap:wrap;">
-          {{#st}}<span>ST {{st}}</span>{{/st}}
-          {{#en}}<span>EN {{en}}</span>{{/en}}
-          {{#ag}}<span>AG {{ag}}</span>{{/ag}}
-          {{#in}}<span>IN {{in}}</span>{{/in}}
-          {{#cl}}<span>CL {{cl}}</span>{{/cl}}
-        </div>
-      </div>
-      {{/cl}}{{/in}}{{/ag}}{{/en}}{{/st}}
-      {{#tohit}}{{#physdef}}{{#mentdef}}{{#power}}{{#hits}}{{#inventing}}
-      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
-        <div style="color:#8be9fd; font-size:11px; font-weight:bold; margin-bottom:4px;">BONUSES</div>
-        <div style="display:flex; gap:12px; flex-wrap:wrap;">
-          {{#tohit}}<span>To Hit {{tohit}}</span>{{/tohit}}
-          {{#physdef}}<span>Phys Def {{physdef}}</span>{{/physdef}}
-          {{#mentdef}}<span>Ment Def {{mentdef}}</span>{{/mentdef}}
-          {{#power}}<span>Power {{power}}</span>{{/power}}
-          {{#hits}}<span>Hits {{hits}}</span>{{/hits}}
-          {{#inventing}}<span>Inventing {{inventing}}</span>{{/inventing}}
-        </div>
-      </div>
-      {{/inventing}}{{/hits}}{{/power}}{{/mentdef}}{{/physdef}}{{/tohit}}
+      {{#st}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#f4d03f; font-size:10px;">Stats:</span> <span style="color:#fff;">ST {{st}}</span>{{#en}} <span style="color:#fff;">EN {{en}}</span>{{/en}}{{#ag}} <span style="color:#fff;">AG {{ag}}</span>{{/ag}}{{#in}} <span style="color:#fff;">IN {{in}}</span>{{/in}}{{#cl}} <span style="color:#fff;">CL {{cl}}</span>{{/cl}}</div>{{/st}}
+      {{^st}}{{#en}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#f4d03f; font-size:10px;">Stats:</span> <span style="color:#fff;">EN {{en}}</span>{{#ag}} <span style="color:#fff;">AG {{ag}}</span>{{/ag}}{{#in}} <span style="color:#fff;">IN {{in}}</span>{{/in}}{{#cl}} <span style="color:#fff;">CL {{cl}}</span>{{/cl}}</div>{{/en}}{{/st}}
+      {{^st}}{{^en}}{{#ag}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#f4d03f; font-size:10px;">Stats:</span> <span style="color:#fff;">AG {{ag}}</span>{{#in}} <span style="color:#fff;">IN {{in}}</span>{{/in}}{{#cl}} <span style="color:#fff;">CL {{cl}}</span>{{/cl}}</div>{{/ag}}{{/en}}{{/st}}
+      {{^st}}{{^en}}{{^ag}}{{#in}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#f4d03f; font-size:10px;">Stats:</span> <span style="color:#fff;">IN {{in}}</span>{{#cl}} <span style="color:#fff;">CL {{cl}}</span>{{/cl}}</div>{{/in}}{{/ag}}{{/en}}{{/st}}
+      {{^st}}{{^en}}{{^ag}}{{^in}}{{#cl}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#f4d03f; font-size:10px;">Stats:</span> <span style="color:#fff;">CL {{cl}}</span></div>{{/cl}}{{/in}}{{/ag}}{{/en}}{{/st}}
+      {{#tohit}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#8be9fd; font-size:10px;">Bonuses:</span> <span style="color:#fff;">To Hit {{tohit}}</span>{{#physdef}} <span style="color:#fff;">Phys Def {{physdef}}</span>{{/physdef}}{{#mentdef}} <span style="color:#fff;">Ment Def {{mentdef}}</span>{{/mentdef}}{{#power}} <span style="color:#fff;">Power {{power}}</span>{{/power}}{{#hits}} <span style="color:#fff;">Hits {{hits}}</span>{{/hits}}{{#inventing}} <span style="color:#fff;">Inventing {{inventing}}</span>{{/inventing}}</div>{{/tohit}}
+      {{^tohit}}{{#physdef}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#8be9fd; font-size:10px;">Bonuses:</span> <span style="color:#fff;">Phys Def {{physdef}}</span>{{#mentdef}} <span style="color:#fff;">Ment Def {{mentdef}}</span>{{/mentdef}}{{#power}} <span style="color:#fff;">Power {{power}}</span>{{/power}}{{#hits}} <span style="color:#fff;">Hits {{hits}}</span>{{/hits}}{{#inventing}} <span style="color:#fff;">Inventing {{inventing}}</span>{{/inventing}}</div>{{/physdef}}{{/tohit}}
+      {{^tohit}}{{^physdef}}{{#mentdef}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#8be9fd; font-size:10px;">Bonuses:</span> <span style="color:#fff;">Ment Def {{mentdef}}</span>{{#power}} <span style="color:#fff;">Power {{power}}</span>{{/power}}{{#hits}} <span style="color:#fff;">Hits {{hits}}</span>{{/hits}}{{#inventing}} <span style="color:#fff;">Inventing {{inventing}}</span>{{/inventing}}</div>{{/mentdef}}{{/physdef}}{{/tohit}}
+      {{^tohit}}{{^physdef}}{{^mentdef}}{{#power}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#8be9fd; font-size:10px;">Bonuses:</span> <span style="color:#fff;">Power {{power}}</span>{{#hits}} <span style="color:#fff;">Hits {{hits}}</span>{{/hits}}{{#inventing}} <span style="color:#fff;">Inventing {{inventing}}</span>{{/inventing}}</div>{{/power}}{{/mentdef}}{{/physdef}}{{/tohit}}
+      {{^tohit}}{{^physdef}}{{^mentdef}}{{^power}}{{#hits}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#8be9fd; font-size:10px;">Bonuses:</span> <span style="color:#fff;">Hits {{hits}}</span>{{#inventing}} <span style="color:#fff;">Inventing {{inventing}}</span>{{/inventing}}</div>{{/hits}}{{/power}}{{/mentdef}}{{/physdef}}{{/tohit}}
+      {{^tohit}}{{^physdef}}{{^mentdef}}{{^power}}{{^hits}}{{#inventing}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#8be9fd; font-size:10px;">Bonuses:</span> <span style="color:#fff;">Inventing {{inventing}}</span></div>{{/inventing}}{{/hits}}{{/power}}{{/mentdef}}{{/physdef}}{{/tohit}}
     </div>
   </div>
 </rolltemplate>
