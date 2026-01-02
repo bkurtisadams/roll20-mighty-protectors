@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.41 (Absorption debug command)
+/* Mighty Protectors Roll20 API Engine v2.42 (Head shot KB fix)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -136,12 +136,15 @@
  * v2.41: Absorption debug command
  *        - Added !mp debug absorb to check protection row setup
  *        - Shows State, Mode, and damage type values for each row
+ * v2.42: Head shot knockback fix (MP 4.14.2.1)
+ *        - Knockback is NOT doubled on head shots (damage to Hits is doubled, KB is not)
+ *        - Added hitsForKB field to track pre-doubled value for KB calculation
  * 
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.41 FILE STARTING");
+log("MP ENGINE v2.42 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -2802,6 +2805,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Damage to Hits after roll-with
     let toHits = Math.max(0, penetrating - divert);
     
+    // Store pre-doubled value for knockback (MP 4.14.2.1: KB is NOT doubled on head shots)
+    const hitsForKB = toHits;
+    
     // Head Shot: DOUBLE Hits after protection and roll-with
     // Protected Brain negates head shot effect
     const isHeadShot = mode.includes("headshot");
@@ -2941,8 +2947,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msgLine);
     
-    // Store hits taken for limb shot saves
+    // Store hits taken for limb shot saves (uses actual damage including head shot doubling)
     state.MP_Engine.pending[rollId].hitsTaken = toHits;
+    // Store pre-doubled hits for knockback (MP 4.14.2.1: KB is NOT doubled on head shots)
+    state.MP_Engine.pending[rollId].hitsForKB = hitsForKB;
   }
 
   // -------------------------
@@ -3022,13 +3030,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const massExpr = getAttr(defChar.id, "mass") || "1d4";
     const massRoll = rollExpr(massExpr);
 
-    // Use stored hits taken if available
-    const hitsTaken = rec.hitsTaken || 0;
+    // Use hitsForKB (non-doubled for head shots per MP 4.14.2.1), fallback to hitsTaken
+    const hitsForKB = rec.hitsForKB !== undefined ? rec.hitsForKB : (rec.hitsTaken || 0);
 
-    const kb = Math.max(0, hitsTaken - massRoll);
+    const kb = Math.max(0, hitsForKB - massRoll);
 
     let msg_out = `<b>Knockback vs ${esc(rec.defName)}</b><br/>` +
-      `Hits Taken: <b>${hitsTaken}</b> - Mass(${esc(massExpr)}): <b>${massRoll}</b> = <b>${kb}"</b> KB`;
+      `Hits for KB: <b>${hitsForKB}</b> - Mass(${esc(massExpr)}): <b>${massRoll}</b> = <b>${kb}"</b> KB`;
 
     if (kb > 0) {
       msg_out += `<br/><i>Target pushed ${kb}" away from attacker. AG save at -${kb} or fall prone.</i>`;
@@ -5907,7 +5915,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.41</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.42</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -5950,11 +5958,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.41:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.42:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.41 READY");
+  log("MP ENGINE v2.42 READY");
 });
