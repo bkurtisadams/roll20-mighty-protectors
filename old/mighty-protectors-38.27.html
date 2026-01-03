@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.27 (auto-detect target defense from attack type) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.28 (auto-deduct power and charges) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -431,23 +431,25 @@
     <!-- Attacks Header -->
     <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
       <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
-        <th style="width:155px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
+        <th style="width:150px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
         <th style="width:36px;"></th>
         <th style="width:40px; text-align:center; padding:1px 1px;" title="Attack Type: Physical (AG) / Mental (IN) / Emotion (CL)">
           <div style="line-height:9px;">Atk<br>Type</div>
         </th>
         <th style="width:28px; text-align:center; padding:2px 1px;" title="To-hit modifier">Mod</th>
         <th style="width:34px; text-align:center; padding:1px 1px;" title="Target number to hit">
-  <div style="line-height:9px;">To<br>Hit</div>
-</th>
-        <th style="width:65px; text-align:center; padding:2px 1px;" title="Damage dice">Damage</th>
-        <!-- <th style="width:60px; text-align:center; padding:2px 1px;" title="Damage dice">DMG TEST</th> -->
-        <th style="width:30px; text-align:center; padding:2px 1px;" title="Range in inches">Rng</th>
-        <th style="width:40px; text-align:center; padding:1px 1px;" title="Damage Type">
+          <div style="line-height:9px;">To<br>Hit</div>
+        </th>
+        <th style="width:60px; text-align:center; padding:2px 1px;" title="Damage dice">Damage</th>
+        <th style="width:28px; text-align:center; padding:2px 1px;" title="Range in inches">Rng</th>
+        <th style="width:38px; text-align:center; padding:1px 1px;" title="Damage Type">
           <div style="line-height:9px;">Dmg<br>Type</div>
         </th>
         <th style="width:20px; text-align:center; padding:2px 1px;" title="Knockback">KB</th>
-        <th style="width:35px; text-align:center; padding:2px 1px;" title="Cost: PR, charges (6c), or both (2/6c)">Cost</th>
+        <th style="width:22px; text-align:center; padding:2px 1px;" title="Power Requirement - auto-deducted via API">PR</th>
+        <th style="width:38px; text-align:center; padding:1px 1px;" title="Charges - current/max, click ↻ to reload">
+          <div style="line-height:9px;">Ch<br><span style="font-size:8px; color:#50fa7b;">↻</span></div>
+        </th>
         <th style="text-align:left; padding:2px 1px;" title="Special attacks use shorthand">Notes <button type="roll" name="roll_notes_help" value="&{template:mphelp} {{help=1}}" style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px;" title="Show shorthand help">?</button></th>
       </tr>
     </table>
@@ -469,7 +471,7 @@
         <input type="hidden" name="attr_attack_num" />
         <input type="hidden" name="attr_attack_atk_full" />
 
-        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{charges=@{attack_charges}}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
       </td>
 
       <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
@@ -523,10 +525,22 @@
         <input type="checkbox" name="attr_attack_kb" value="1" checked="checked" title="Causes Knockback" />
       </td>
 
-      <td style="width:35px; text-align:center; padding:1px; vertical-align:middle;">
-        <input type="text" name="attr_attack_cost"
-          style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
-          title="PR, charges (6c), or both (2/6c)" />
+<td style="width:22px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="text" name="attr_attack_pr" value=""
+          style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+          title="Power Requirement - auto-deducted on attack" />
+      </td>
+
+      <td style="width:38px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="hidden" name="attr_attack_charges_max" value="" />
+        <div style="display:flex; align-items:center; gap:1px;">
+          <input type="text" name="attr_attack_charges"
+            style="flex:1; min-width:0; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;"
+            title="Current/Max charges (e.g., 4/6). Empty = unlimited." />
+          <button type="action" name="act_reload_charges"
+            style="background:transparent; color:#50fa7b; border:none; padding:0; cursor:pointer; font-size:10px; width:10px; flex-shrink:0;"
+            title="Reload charges to maximum">↻</button>
+        </div>
       </td>
 
       <td style="padding:1px; vertical-align:middle; overflow:hidden;">
@@ -535,7 +549,7 @@
             style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;"
             title="Shorthand: sav:BC:mod:rec | snr:type:bp/max | ap:N" />
           <button type="roll" name="roll_attack_info"
-            value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
+            value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_pr}}} {{charges=@{attack_charges}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
             style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
             title="Show attack info">?</button>
           
@@ -912,7 +926,8 @@
       {{#ap}}<div><span style="color:#bd93f9; font-weight:bold;">Armor Piercing:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
       {{#dtype}}<div><span style="color:#aaa;">D-Type:</span> <span style="color:#fff;">{{dtype}}</span></div>{{/dtype}}
       {{#kb}}<div><span style="color:#aaa;">KB:</span> <span style="color:#fff;">{{kb}}</span></div>{{/kb}}
-      {{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
+      {{#pr}}<div><span style="color:#aaa;">PR:</span> <span style="color:#8be9fd;">{{pr}}</span></div>{{/pr}}
+      {{#charges}}<div><span style="color:#aaa;">Charges:</span> <span style="color:#50fa7b;">{{charges}}</span></div>{{/charges}}
       {{#savebc}}
       <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
         <div style="color:#f4d03f; font-weight:bold; font-size:14px;">💫 SAVE ATTACK</div>
@@ -2295,5 +2310,69 @@ function initAbilityNotes() {
   });
 }
 
+// ==================== CHARGES SYSTEM ====================
+  
+// Parse charges field: "4/6" returns {current:4, max:6}, "6" returns {current:6, max:6}
+function parseCharges(str) {
+if (!str || str.trim() === "") return null;
+str = str.trim();
+var match = str.match(/^(\d+)(?:\/(\d+))?$/);
+if (!match) return null;
+var current = parseInt(match[1], 10);
+var max = match[2] ? parseInt(match[2], 10) : current;
+return { current: current, max: max };
+}
+
+// Handle reload button
+on("clicked:repeating_attacks:reload_charges", function(eventInfo) {
+var match = eventInfo.sourceAttribute.match(/repeating_attacks_([^_]+)_/);
+if (!match) return;
+var rowId = match[1];
+var prefix = "repeating_attacks_" + rowId;
+
+getAttrs([prefix + "_attack_charges", prefix + "_attack_charges_max", prefix + "_attack_name", "character_name"], function(v) {
+    var chargesStr = v[prefix + "_attack_charges"] || "";
+    var chargesMax = v[prefix + "_attack_charges_max"] || "";
+    var attackName = v[prefix + "_attack_name"] || "Attack";
+    var charName = v.character_name || "Character";
+    
+    var charges = parseCharges(chargesStr);
+    if (charges === null && !chargesMax) {
+    return; // No charges defined
+    }
+    
+    var max = chargesMax ? parseInt(chargesMax, 10) : (charges ? charges.max : 0);
+    if (max <= 0) return;
+    
+    var updates = {};
+    updates[prefix + "_attack_charges"] = max + "/" + max;
+    updates[prefix + "_attack_charges_max"] = max.toString();
+    
+    setAttrs(updates);
+});
+});
+
+// When charges field changes, update max if it increased
+on("change:repeating_attacks:attack_charges", function(eventInfo) {
+var match = eventInfo.sourceAttribute.match(/repeating_attacks_([^_]+)_/);
+if (!match) return;
+var rowId = match[1];
+var prefix = "repeating_attacks_" + rowId;
+
+getAttrs([prefix + "_attack_charges", prefix + "_attack_charges_max"], function(v) {
+    var chargesStr = v[prefix + "_attack_charges"] || "";
+    var charges = parseCharges(chargesStr);
+    
+    if (charges !== null) {
+    var storedMax = parseInt(v[prefix + "_attack_charges_max"], 10) || 0;
+    // Update max if the new max is higher (user increased capacity)
+    if (charges.max > storedMax) {
+        var updates = {};
+        updates[prefix + "_attack_charges_max"] = charges.max.toString();
+        setAttrs(updates, {silent: true});
+    }
+    }
+});
+});
 // Add initAbilityNotes() call to your sheet:opened handler
 </script>
