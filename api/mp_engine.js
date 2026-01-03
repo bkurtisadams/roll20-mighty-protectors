@@ -1,8 +1,5 @@
-/* Mighty Protectors Roll20 API Engine v2.45 (Activation & Duration Tracking)
- * - Auto-deduct PR/charges when abilities/protections activated (state → Active)
- * - Duration tracking: !mp round advances round, decrements active durations
- * - Duration expiry: auto-renews (deducts PR/charges) or deactivates if can't pay
- * - Commands: !mp round, !mp durations, !mp activate, !mp deactivate
+/* Mighty Protectors Roll20 API Engine v2.42.1 (Round tracking)
+ * - Added simple !mp round command for combat round tracking
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -140,7 +137,7 @@
  * v2.41: Absorption debug command
  *        - Added !mp debug absorb to check protection row setup
  *        - Shows State, Mode, and damage type values for each row
- * v2.42: Head shot knockback fix (MP 4.14.2.1)
+ * v2.42.1: Head shot knockback fix (MP 4.14.2.1)
  *        - Knockback is NOT doubled on head shots (damage to Hits is doubled, KB is not)
  *        - Added hitsForKB field to track pre-doubled value for KB calculation
  * 
@@ -224,8 +221,7 @@ MP.Engine = (function () {
     pendingArea: {},  // Pending area effects: { rollId: { damage, damageType, radius, centerX, centerY, pageId, tokens: {}, timestamp, timeout } }
     snares: {},
     conditions: {},  // Token conditions: { tokenId: [{ type, sourceAtk, saveTN, recTN, recTime, marker, created, effectDesc, atkCharId }] }
-    durations: {},   // Active durations: { charId: [{ source, name, type, roundsRemaining, unit, totalRounds, escape, rowId, sectionType }] }
-    currentRound: 1, // Current combat round
+    currentRound: 1,  // Combat round counter
     autoroll: true,
     enabled: true
   };
@@ -234,8 +230,7 @@ MP.Engine = (function () {
   if (!state.MP_Engine.conditions) state.MP_Engine.conditions = {};
   // Ensure pendingArea exists for existing state
   if (!state.MP_Engine.pendingArea) state.MP_Engine.pendingArea = {};
-  // Ensure durations exists for existing state
-  if (!state.MP_Engine.durations) state.MP_Engine.durations = {};
+  // Ensure currentRound exists for existing state
   if (!state.MP_Engine.currentRound) state.MP_Engine.currentRound = 1;
 
   // Status markers for save attack conditions
@@ -5382,7 +5377,7 @@ function cmdStance(msg, args) {
   function parseArgs(content) {
     const parts = content.split(/\s+/);
     const cmd = (parts[1] || "").toLowerCase();
-    const args = { _: [] };  // _ holds positional arguments
+    const args = {};
 
     // Supports multi-word values: --name Heightened Senses --cp -5
     let i = 2;
@@ -5399,8 +5394,6 @@ function cmdStance(msg, args) {
         args[key] = vals.length ? vals.join(" ") : "1";
         i = j;
       } else {
-        // Positional argument (no -- prefix)
-        if (p) args._.push(p);
         i++;
       }
     }
@@ -5811,11 +5804,8 @@ function cmdStance(msg, args) {
       case "reflect": return cmdReflect(msg, args);
       case "reflecthit": return cmdReflectHit(msg, args);
 
-      // Duration/Activation commands
+      // Round tracking
       case "round": return cmdRound(msg, args);
-      case "durations": return cmdDurations(msg, args);
-      case "activate": return cmdActivate(msg, args);
-      case "deactivate": return cmdDeactivate(msg, args);
 
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
@@ -5932,7 +5922,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.45</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.42.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -5957,17 +5947,17 @@ function cmdStance(msg, args) {
           <code>!mp wakeup --target TOKID</code><br/>
           <code>!mp status --target TOKID</code><br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
 
-          <b>Duration & Activation:</b><br/>
-          <code>!mp round [+N|-N|set N]</code> - Advance round, process durations<br/>
-          <code>!mp durations</code> - List all active duration effects<br/>
-          <code>!mp activate ROWID --type ability|protection</code> - Manual activate<br/>
-          <code>!mp deactivate ROWID --type ability|protection</code> - Manual deactivate<br/>
           <b>Stances (Bar3):</b><br/>
           <code>!mp stance normal|def|full|offbal|N</code><br/>
           <code>!mp clearstances</code> - Clear all on page<br/>
           <code>!mp offbal</code> - Apply Off Balance to selected<br/>
           <b>Range:</b><br/>
           <code>!mp range</code> - Check range between 2 selected tokens<br/>
+          <b>Round Tracking:</b><br/>
+          <code>!mp round</code> - Advance to next round<br/>
+          <code>!mp round +N</code> - Advance N rounds<br/>
+          <code>!mp round set N</code> - Set to round N<br/>
+          <code>!mp round show</code> - Show current round<br/>
           <b>Test Commands:</b><br/>
           <code>!mp test</code> - Show all test commands<br/>
           <code>!mp test grapple [TOHIT] [lock]</code> - Grapple harness (select 2 tokens: grappler, target)
@@ -5976,476 +5966,50 @@ function cmdStance(msg, args) {
   }
 
   // -------------------------
-  // DURATION & ACTIVATION SYSTEM
+  // ROUND TRACKING (Minimal)
   // -------------------------
-  
-  // Convert duration to rounds for tracking
-  function durationToRounds(num, unit) {
-    const n = parseInt(num, 10) || 0;
-    if (n <= 0 || !unit) return 0;
-    const u = String(unit).toLowerCase();
-    switch (u) {
-      case "round": return n;
-      case "minute": return n * 6;
-      case "hour": return n * 360;
-      case "day": return n * 8640;
-      case "week": return n * 60480;
-      case "month": return n * 259200;
-      case "year": return n * 3110400;
-      case "perm": return -1; // Permanent = never expires
-      default: return 0;
-    }
-  }
-  
-  // Format rounds back to readable duration
-  function formatDuration(rounds) {
-    if (rounds < 0) return "Permanent";
-    if (rounds === 0) return "Instant";
-    if (rounds < 6) return rounds + " round" + (rounds > 1 ? "s" : "");
-    if (rounds < 360) return Math.floor(rounds / 6) + " minute" + (rounds >= 12 ? "s" : "");
-    if (rounds < 8640) return Math.floor(rounds / 360) + " hour" + (rounds >= 720 ? "s" : "");
-    return Math.floor(rounds / 8640) + " day" + (rounds >= 17280 ? "s" : "");
-  }
-  
-  // Add a duration effect to tracking
-  function addDuration(charId, name, sectionType, rowId, roundsTotal, escape) {
-    if (!state.MP_Engine.durations[charId]) {
-      state.MP_Engine.durations[charId] = [];
-    }
-    // Remove any existing duration for same row
-    state.MP_Engine.durations[charId] = state.MP_Engine.durations[charId].filter(
-      d => !(d.rowId === rowId && d.sectionType === sectionType)
-    );
-    state.MP_Engine.durations[charId].push({
-      name: name,
-      sectionType: sectionType,
-      rowId: rowId,
-      roundsRemaining: roundsTotal,
-      totalRounds: roundsTotal,
-      escape: escape || "",
-      startRound: state.MP_Engine.currentRound
-    });
-  }
-  
-  // Remove a duration effect
-  function removeDuration(charId, sectionType, rowId) {
-    if (!state.MP_Engine.durations[charId]) return;
-    state.MP_Engine.durations[charId] = state.MP_Engine.durations[charId].filter(
-      d => !(d.rowId === rowId && d.sectionType === sectionType)
-    );
-    if (state.MP_Engine.durations[charId].length === 0) {
-      delete state.MP_Engine.durations[charId];
-    }
-  }
-  
-  // Try to renew a duration by deducting PR/charges again
-  // Returns true if renewed, false if deactivated
-  function tryRenewDuration(charId, sectionType, rowId, name) {
-    const attrs = findObjs({ _type: "attribute", _characterid: charId });
-    const getVal = (attrName) => {
-      const a = attrs.find(x => x.get("name") === attrName);
-      return a ? a.get("current") : "";
-    };
-    const setVal = (attrName, val) => {
-      let a = attrs.find(x => x.get("name") === attrName);
-      if (a) {
-        a.set("current", val);
-      } else {
-        createObj("attribute", { characterid: charId, name: attrName, current: val });
-      }
-    };
-    
-    // Build attribute names based on section type
-    let prAttr, chargesAttr, stateAttr, durActiveAttr, durNumAttr, durUnitAttr;
-    if (sectionType === "ability") {
-      const prefix = `repeating_abilities_${rowId}_ability_`;
-      prAttr = prefix + "pr";
-      chargesAttr = prefix + "charges";
-      stateAttr = prefix + "state";
-      durActiveAttr = prefix + "duration_active";
-      durNumAttr = prefix + "duration_num";
-      durUnitAttr = prefix + "duration_unit";
-    } else {
-      const prefix = `repeating_protection_${rowId}_prot_`;
-      prAttr = prefix + "pr";
-      chargesAttr = prefix + "charges";
-      stateAttr = prefix + "state";
-      durActiveAttr = prefix + "duration_active";
-      durNumAttr = prefix + "duration_num";
-      durUnitAttr = prefix + "duration_unit";
-    }
-    
-    const pr = parseInt(getVal(prAttr), 10) || 0;
-    const chargesRaw = getVal(chargesAttr);
-    const hasCharges = chargesRaw !== "" && chargesRaw !== undefined && chargesRaw !== null;
-    const charges = hasCharges ? parseInt(chargesRaw, 10) || 0 : -1;
-    
-    let canRenew = false;
-    
-    if (hasCharges && charges >= 0) {
-      // Uses charges
-      if (charges > 0) {
-        setVal(chargesAttr, charges - 1);
-        canRenew = true;
-      }
-    } else if (pr > 0) {
-      // Uses PR - check power
-      const powerAttr = attrs.find(x => x.get("name") === CFG.POWER_ATTR);
-      const currentPower = powerAttr ? parseInt(powerAttr.get("current"), 10) || 0 : 0;
-      if (currentPower >= pr) {
-        const newPower = currentPower - pr;
-        if (powerAttr) powerAttr.set("current", newPower);
-        // Update tokens
-        const tokens = findObjs({ _type: "graphic", represents: charId });
-        tokens.forEach(tok => {
-          if (tok.get(CFG.POWER_BAR + "_link")) {
-            tok.set(CFG.POWER_BAR + "_value", newPower);
-          }
-        });
-        canRenew = true;
-      }
-    } else {
-      // No cost - auto-renew
-      canRenew = true;
-    }
-    
-    if (canRenew) {
-      // Reset duration in tracking
-      const durNum = getVal(durNumAttr);
-      const durUnit = getVal(durUnitAttr);
-      const totalRounds = durationToRounds(durNum, durUnit);
-      
-      if (state.MP_Engine.durations[charId]) {
-        const dur = state.MP_Engine.durations[charId].find(
-          d => d.rowId === rowId && d.sectionType === sectionType
-        );
-        if (dur) {
-          dur.roundsRemaining = totalRounds;
-        } else {
-          // Re-add if somehow removed
-          state.MP_Engine.durations[charId].push({
-            name: name,
-            sectionType: sectionType,
-            rowId: rowId,
-            roundsRemaining: totalRounds,
-            totalRounds: totalRounds,
-            escape: "",
-            startRound: state.MP_Engine.currentRound
-          });
-        }
-      }
-      return true;
-    } else {
-      // Can't renew - deactivate
-      setVal(stateAttr, "Off");
-      setVal(durActiveAttr, "0");
-      removeDuration(charId, sectionType, rowId);
-      return false;
-    }
-  }
-  
-  // Process activation of an ability or protection
-  function processActivation(charId, sectionType, rowId, isActivating) {
-    const char = getObj("character", charId);
-    if (!char) return;
-    const charName = char.get("name");
-    
-    // Build attribute prefix
-    let prefix, nameAttr, prAttr, chargesAttr, durNumAttr, durUnitAttr, durEscapeAttr, durActiveAttr;
-    if (sectionType === "ability") {
-      prefix = `repeating_abilities_${rowId}_ability_`;
-      nameAttr = prefix + "name";
-      prAttr = prefix + "pr";
-      chargesAttr = prefix + "charges";
-      durNumAttr = prefix + "duration_num";
-      durUnitAttr = prefix + "duration_unit";
-      durEscapeAttr = prefix + "duration_escape";
-      durActiveAttr = prefix + "duration_active";
-    } else if (sectionType === "protection") {
-      prefix = `repeating_protection_${rowId}_prot_`;
-      nameAttr = prefix + "name";
-      prAttr = prefix + "pr";
-      chargesAttr = prefix + "charges";
-      durNumAttr = prefix + "duration_num";
-      durUnitAttr = prefix + "duration_unit";
-      durEscapeAttr = prefix + "duration_escape";
-      durActiveAttr = prefix + "duration_active";
-    } else {
-      return;
-    }
-    
-    // Get current values
-    const attrs = findObjs({ _type: "attribute", _characterid: charId });
-    const getVal = (name) => {
-      const a = attrs.find(x => x.get("name") === name);
-      return a ? a.get("current") : "";
-    };
-    const setVal = (name, val) => {
-      let a = attrs.find(x => x.get("name") === name);
-      if (a) {
-        a.set("current", val);
-      } else {
-        createObj("attribute", { characterid: charId, name: name, current: val });
-      }
-    };
-    
-    const name = getVal(nameAttr) || "Unknown";
-    const pr = parseInt(getVal(prAttr), 10) || 0;
-    const chargesRaw = getVal(chargesAttr);
-    const hasCharges = chargesRaw !== "" && chargesRaw !== undefined && chargesRaw !== null;
-    const charges = hasCharges ? parseInt(chargesRaw, 10) || 0 : -1;
-    const durNum = getVal(durNumAttr);
-    const durUnit = getVal(durUnitAttr);
-    const durEscape = getVal(durEscapeAttr);
-    
-    if (isActivating) {
-      // Deduct PR or Charges
-      if (hasCharges && charges >= 0) {
-        // Use charges instead of PR
-        if (charges <= 0) {
-          ch("MP", `/w gm <div style="background:#ff6b6b; padding:4px;">⚠️ <b>${esc(charName)}</b>: ${esc(name)} has no charges remaining!</div>`);
-          return;
-        }
-        setVal(chargesAttr, charges - 1);
-        ch("MP", `/w gm <div style="background:#2d5a3d; color:#fff; padding:4px;">✓ <b>${esc(charName)}</b> activates <b>${esc(name)}</b> (1 charge used, ${charges - 1} remaining)</div>`);
-      } else if (pr > 0) {
-        // Deduct PR from Power
-        const powerAttr = attrs.find(x => x.get("name") === CFG.POWER_ATTR);
-        const currentPower = powerAttr ? parseInt(powerAttr.get("current"), 10) || 0 : 0;
-        const newPower = Math.max(0, currentPower - pr);
-        if (powerAttr) {
-          powerAttr.set("current", newPower);
-        }
-        // Also update token if present
-        const tokens = findObjs({ _type: "graphic", represents: charId });
-        tokens.forEach(tok => {
-          const bar = CFG.POWER_BAR;
-          if (tok.get(bar + "_link")) {
-            tok.set(bar + "_value", newPower);
-          }
-        });
-        ch("MP", `/w gm <div style="background:#2d5a3d; color:#fff; padding:4px;">✓ <b>${esc(charName)}</b> activates <b>${esc(name)}</b> (PR ${pr}, Power: ${currentPower}→${newPower})</div>`);
-      } else {
-        ch("MP", `/w gm <div style="background:#2d5a3d; color:#fff; padding:4px;">✓ <b>${esc(charName)}</b> activates <b>${esc(name)}</b></div>`);
-      }
-      
-      // Start duration tracking if has duration
-      const totalRounds = durationToRounds(durNum, durUnit);
-      if (totalRounds !== 0) {
-        addDuration(charId, name, sectionType, rowId, totalRounds, durEscape);
-        setVal(durActiveAttr, "1");
-        if (totalRounds > 0) {
-          ch("MP", `/w gm <div style="background:#1e3a5f; color:#fff; padding:4px;">⏱️ Duration: ${formatDuration(totalRounds)}${durEscape ? " (Escape: " + esc(durEscape) + ")" : ""}</div>`);
-        }
-      }
-    } else {
-      // Deactivating - remove duration tracking
-      removeDuration(charId, sectionType, rowId);
-      setVal(durActiveAttr, "0");
-      ch("MP", `/w gm <div style="background:#5a3d2d; color:#fff; padding:4px;">✗ <b>${esc(charName)}</b> deactivates <b>${esc(name)}</b></div>`);
-    }
-  }
-  
-  // Command: !mp round [+N|-N|set N]
+  // Simple round counter with reminder to check durations
   function cmdRound(msg, args) {
-    const subCmd = args.subcmd || args._[0] || "";
+    const parts = msg.content.split(/\s+/);
+    const subCmd = parts[2] || "";
+    const subArg = parts[3] || "";
+    
     let newRound = state.MP_Engine.currentRound;
     
-    if (subCmd === "" || subCmd === "+1" || subCmd === "next") {
+    if (subCmd === "" || subCmd === "next") {
       newRound++;
+    } else if (subCmd === "show") {
+      return ch("MP", `/w gm <div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;"><b>⚔️ Current Round: ${state.MP_Engine.currentRound}</b></div>`);
     } else if (subCmd.startsWith("+")) {
       newRound += parseInt(subCmd.slice(1), 10) || 1;
     } else if (subCmd.startsWith("-")) {
       newRound = Math.max(1, newRound + parseInt(subCmd, 10));
-    } else if (subCmd === "set" && args._[1]) {
-      newRound = Math.max(1, parseInt(args._[1], 10) || 1);
+    } else if (subCmd === "set" && subArg) {
+      newRound = Math.max(1, parseInt(subArg, 10) || 1);
     } else if (!isNaN(parseInt(subCmd, 10))) {
       newRound = Math.max(1, parseInt(subCmd, 10));
     }
     
-    const roundsAdvanced = newRound - state.MP_Engine.currentRound;
     state.MP_Engine.currentRound = newRound;
     
     let report = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">`;
-    report += `<b>⚔️ Round ${newRound}</b>`;
-    
-    // Process duration decrements
-    const expired = [];
-    const warnings = [];
-    
-    Object.keys(state.MP_Engine.durations).forEach(charId => {
-      const char = getObj("character", charId);
-      const charName = char ? char.get("name") : "Unknown";
-      const durations = state.MP_Engine.durations[charId];
-      
-      durations.forEach(d => {
-        if (d.roundsRemaining < 0) return; // Permanent
-        
-        d.roundsRemaining -= roundsAdvanced;
-        
-        if (d.roundsRemaining <= 0) {
-          expired.push({ charId, charName, name: d.name, sectionType: d.sectionType, rowId: d.rowId });
-        } else if (d.roundsRemaining <= 3) {
-          warnings.push({ charName, name: d.name, remaining: d.roundsRemaining });
-        }
-      });
-      
-      // Remove expired
-      state.MP_Engine.durations[charId] = durations.filter(d => d.roundsRemaining > 0 || d.roundsRemaining < 0);
-      if (state.MP_Engine.durations[charId].length === 0) {
-        delete state.MP_Engine.durations[charId];
-      }
-    });
-    
-    // Report warnings
-    if (warnings.length > 0) {
-      report += `<div style="background:#5a4a1e; padding:4px; margin-top:4px;">`;
-      report += `<b>⚠️ Expiring Soon:</b><br/>`;
-      warnings.forEach(w => {
-        report += `${esc(w.charName)}: ${esc(w.name)} (${w.remaining} round${w.remaining > 1 ? "s" : ""})<br/>`;
-      });
-      report += `</div>`;
-    }
-    
-    // Report and process expired
-    if (expired.length > 0) {
-      report += `<div style="background:#5a2d2d; padding:4px; margin-top:4px;">`;
-      report += `<b>⏱️ Duration Expired:</b><br/>`;
-      expired.forEach(e => {
-        // Try to renew (deduct PR/charges again)
-        const renewed = tryRenewDuration(e.charId, e.sectionType, e.rowId, e.name);
-        if (renewed) {
-          report += `${esc(e.charName)}: ${esc(e.name)} <span style="color:#50fa7b;">RENEWED</span><br/>`;
-        } else {
-          report += `${esc(e.charName)}: ${esc(e.name)} <span style="color:#ff6b6b;">DEACTIVATED</span><br/>`;
-        }
-      });
-      report += `</div>`;
-    }
-    
+    report += `<b>⚔️ Round ${newRound}</b><br/>`;
+    report += `<span style="color:#f4d03f;">⏱️ Check active durations - deduct PR/charges as needed</span>`;
     report += `</div>`;
+    
     return ch("MP", `/w gm ` + report);
-  }
-  
-  // Command: !mp durations [--char CHARID]
-  function cmdDurations(msg, args) {
-    const filterCharId = args.char || null;
-    let report = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">`;
-    report += `<b>⏱️ Active Durations (Round ${state.MP_Engine.currentRound})</b><br/>`;
-    
-    let count = 0;
-    Object.keys(state.MP_Engine.durations).forEach(charId => {
-      if (filterCharId && charId !== filterCharId) return;
-      const char = getObj("character", charId);
-      const charName = char ? char.get("name") : "Unknown";
-      const durations = state.MP_Engine.durations[charId];
-      
-      durations.forEach(d => {
-        count++;
-        const remaining = d.roundsRemaining < 0 ? "Permanent" : formatDuration(d.roundsRemaining);
-        report += `<div style="background:#2a2040; padding:2px; margin:2px;">`;
-        report += `<b>${esc(charName)}</b>: ${esc(d.name)}<br/>`;
-        report += `Remaining: ${remaining}`;
-        if (d.escape) report += ` | Escape: ${esc(d.escape)}`;
-        report += `</div>`;
-      });
-    });
-    
-    if (count === 0) {
-      report += `<i>No active duration effects.</i>`;
-    }
-    report += `</div>`;
-    return ch("MP", `/w gm ` + report);
-  }
-  
-  // Command: !mp activate ROWID --type ability|protection [--char CHARID]
-  function cmdActivate(msg, args) {
-    const rowId = args._[0] || args.row || "";
-    const sectionType = args.type || "ability";
-    let charId = args.char || null;
-    
-    // If no charId, try to get from selected token
-    if (!charId && msg.selected && msg.selected.length > 0) {
-      const tok = getObj("graphic", msg.selected[0]._id);
-      if (tok) charId = tok.get("represents");
-    }
-    
-    if (!charId || !rowId) {
-      return ch("MP", `/w gm Usage: <code>!mp activate ROWID --type ability|protection</code> (select token or use --char)`);
-    }
-    
-    processActivation(charId, sectionType, rowId, true);
-  }
-  
-  // Command: !mp deactivate ROWID --type ability|protection [--char CHARID]
-  function cmdDeactivate(msg, args) {
-    const rowId = args._[0] || args.row || "";
-    const sectionType = args.type || "ability";
-    let charId = args.char || null;
-    
-    if (!charId && msg.selected && msg.selected.length > 0) {
-      const tok = getObj("graphic", msg.selected[0]._id);
-      if (tok) charId = tok.get("represents");
-    }
-    
-    if (!charId || !rowId) {
-      return ch("MP", `/w gm Usage: <code>!mp deactivate ROWID --type ability|protection</code> (select token or use --char)`);
-    }
-    
-    processActivation(charId, sectionType, rowId, false);
   }
 
   // -------------------------
   // INIT
   // -------------------------
   on("chat:message", onChat);
-  
-  // Listen for ability/protection state changes to auto-deduct PR/charges
-  on("change:attribute", function(obj, prev) {
-    const attrName = obj.get("name");
-    const charId = obj.get("_characterid");
-    const newVal = obj.get("current");
-    const oldVal = prev.current;
-    
-    // Skip if value didn't actually change
-    if (newVal === oldVal) return;
-    
-    // Check for ability state change
-    const abilityMatch = attrName.match(/^repeating_abilities_([^_]+)_ability_state$/);
-    if (abilityMatch) {
-      const rowId = abilityMatch[1];
-      const isActivating = (newVal === "Active");
-      const wasActive = (oldVal === "Active");
-      
-      if (isActivating && !wasActive) {
-        processActivation(charId, "ability", rowId, true);
-      } else if (!isActivating && wasActive) {
-        processActivation(charId, "ability", rowId, false);
-      }
-      return;
-    }
-    
-    // Check for protection state change
-    const protMatch = attrName.match(/^repeating_protection_([^_]+)_prot_state$/);
-    if (protMatch) {
-      const rowId = protMatch[1];
-      const isActivating = (newVal === "Active");
-      const wasActive = (oldVal === "Active");
-      
-      if (isActivating && !wasActive) {
-        processActivation(charId, "protection", rowId, true);
-      } else if (!isActivating && wasActive) {
-        processActivation(charId, "protection", rowId, false);
-      }
-      return;
-    }
-  });
 
-  ch("MP", `/w gm <b>MP Engine v2.45:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.42.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.45 READY");
+  log("MP ENGINE v2.42.1 READY");
 });
