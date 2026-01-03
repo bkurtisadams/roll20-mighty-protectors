@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.76 - Add duration num/unit/escape/active fields to attacks, abilities, protections -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.77 - Add Career Task roll button with save query and bonus field -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -62,8 +62,9 @@
   <!-- COLUMN 1: CAREERS -->
   <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;">
     <fieldset class="repeating_careers" style="border:none; padding:0; margin:0; width:100%;">
-      <div style="display:flex; align-items:center; gap:6px; margin-bottom: 2px;">
-        <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Career</span>
+      <div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
+        <button type="roll" name="roll_career_task" title="Roll Task Check using this career" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;" value="&{template:default} {{name=@{character_name} rolls Task: @{career_name} (+@{career_bonus})}} {{Target=[[?{Which Save?|AG,@{agility_save}|IN,@{intelligence_save}|CL,@{cool_save}} + @{career_bonus}]]-}} {{Roll=[[1d20]]}}">Career</button>
+        <input type="text" name="attr_career_bonus" value="0" title="Career bonus (+3 for combined backgrounds or doubled background)" style="width:24px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
         <input type="text" name="attr_career_name" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; border-radius:0; box-sizing:border-box;" />
       </div>
     </fieldset>
