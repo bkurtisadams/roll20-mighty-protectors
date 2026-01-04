@@ -1,5 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.42.1 (Round tracking)
- * - Added simple !mp round command for combat round tracking
+/* Mighty Protectors Roll20 API Engine v2.43 (Profile range fix + hitmod passthrough)
+ * v2.43: Profile range correction per rulebook 4.7.3.1
+ *        - Both attacker AND target profiles now affect range penalty
+ *        - Formula: adjustedRange = actualRange × atkProfile / defProfile
+ *        - Example: Profile 1 firing at Profile 3.2 at 24" = 24×1/3.2 = 7.5" = -1 penalty
+ *        - Sheet query modifiers (aim/multi/other) now passed to API via hitmod field
+ *        - API reads hitmod from inline roll result (supports computed values)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
  * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
@@ -54,11 +59,7 @@
  *        - BC stat boosts automatically restore on expiry/clear
  *        - Purple status marker shows active absorption effects
  *        - Commands: checkexpiry (manual expiry check)
- * v2.23: Profile range fix (per game designer ruling)
- *        - Only TARGET profile affects range penalty, not attacker profile
- *        - Small target (profile < 1): range × (1/profile) = harder to hit
- *        - Large target (profile > 1): range / profile = easier to hit
- *        - Example: 1/420 profile at 1" = treated as 420" away (-7 penalty)
+ * v2.23: (superseded by v2.43 - profile now uses both attacker and target)
  * v2.24: Minimum range enforcement
  *        - Adjacent tokens are at 1" range (not 0") per MP rules
  *        - Profile adjustments now work correctly at melee range
@@ -1138,22 +1139,29 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Early return for invalid tokens (calculateRange returns 0 for missing tokens)
     if (baseRange.inches === 0) return baseRange;
     
-    // Get target profile (default 1) - only target profile affects range penalty
+    // Get both profiles (default 1) - per rulebook 4.7.3.1:
+    // "Multiply the actual range by the attacker's profile, then divide it by the target's profile"
+    const atkProfile = getAttrNum(atkCharId, "profile", 1) || 1;
     const defProfile = getAttrNum(defCharId, "profile", 1) || 1;
     
-    // Adjusted range = actual range / target profile
-    // Small profile (< 1): dividing by fraction increases range (harder to hit)
-    // Large profile (> 1): dividing by larger number decreases range (easier to hit)
-    // Note: baseRange.inches is minimum 1" per MP rules, so a 1/420 profile at melee
-    // range becomes 1" / (1/420) = 420" effective range
-    const adjustedInches = baseRange.inches / defProfile;
+    // Adjusted range = actual range × attacker profile / target profile
+    // Small attacker profile: multiplying by fraction decreases range (easier to hide/aim)
+    // Large attacker profile: multiplying by larger number increases range (harder to aim)
+    // Small target profile: dividing by fraction increases range (harder to hit)
+    // Large target profile: dividing by larger number decreases range (easier to hit)
+    // Example from rulebook: Gauntlet (profile 1) at Cybernaut (profile 3.2) at 24" = 24×1/3.2 = 7.5"
+    const adjustedInches = baseRange.inches * atkProfile / defProfile;
+    
+    // Check if either profile differs from 1
+    const profileAdjusted = (atkProfile !== 1 || defProfile !== 1);
     
     return {
       inches: Math.round(baseRange.inches * 10) / 10,
       adjustedInches: Math.round(adjustedInches * 10) / 10,
       penalty: getRangePenalty(adjustedInches),
+      atkProfile,
       defProfile,
-      profileAdjusted: (defProfile !== 1)
+      profileAdjusted
     };
   }
 
@@ -1311,7 +1319,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkTypeCode = rawAtkType || "P";
     const atkType = getAtkAttr("attack_type") || "std";
     const atkMod = num(getAtkAttr("attack_mod"), 0);
-    const macroMod = num(fields.hitmod, 0);  // Extra modifier from macro
+    
+    // Sheet query modifiers (aim/multi/other) passed as inline roll, or plain number from macros
+    const hitmodIR = inlineTotal(msg, fields.hitmod);
+    const macroMod = hitmodIR ? hitmodIR.total : num(fields.hitmod, 0);
     
     // Ability to-hit bonuses (Heightened Expertise, etc.)
     const abilityTohitGlobal = getAttrNum(atkCharId, "ability_tohit_bonus", 0);
@@ -1577,7 +1588,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defModLabel = defMod !== 0 ? `${defBase}${defMod >= 0 ? '+' : ''}${defMod}` : `${defBase}`;
     const atkPenaltyNote = atkStancePenalty !== 0 ? ` Stance:${atkStancePenalty}` : "";
     const rangePenaltyNote = rangePenalty !== 0 ? ` Rng:${rangePenalty}` : "";
-    const macroModNote = macroMod !== 0 ? ` Mod:${macroMod > 0 ? '+' : ''}${macroMod}` : "";
+    const macroModNote = macroMod !== 0 ? ` Adj:${macroMod > 0 ? '+' : ''}${macroMod}` : "";
     const restraintNote = atkRestraintPenalty !== 0 ? ` Rstr:${atkRestraintPenalty}` : "";
     const distNote = (rangeData && typeof rangeData.inches === "number") ? ` Dist:${rangeData.inches}"` : "";
 
@@ -1597,7 +1608,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitGlobal}`;
       }
     }
-    if (macroMod !== 0) hoverBreakdown += `&#10;Cmd Mod: ${macroMod > 0 ? '+' : ''}${macroMod}`;
+    if (macroMod !== 0) hoverBreakdown += `&#10;Aim/Multi/Other: ${macroMod > 0 ? '+' : ''}${macroMod}`;
     
     // Subtotal before defense/penalties
     const subtotal = baseChance + atkMod + abilityTohitBonus + macroMod;
@@ -1615,10 +1626,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         (rangeData.profileAdjusted && typeof rangeData.adjustedInches === "number")
           ? rangeData.adjustedInches
           : rangeData.inches;
-      const profNote =
-        (rangeData.defProfile && rangeData.defProfile !== 1)
-          ? `, TgtProf:${rangeData.defProfile}`
-          : "";
+      // Build profile note showing both profiles if either differs from 1
+      let profNote = "";
+      if (rangeData.profileAdjusted) {
+        const atkP = rangeData.atkProfile !== undefined ? rangeData.atkProfile : 1;
+        const defP = rangeData.defProfile !== undefined ? rangeData.defProfile : 1;
+        if (atkP !== 1 && defP !== 1) {
+          profNote = `, AtkProf:${atkP}, TgtProf:${defP}`;
+        } else if (atkP !== 1) {
+          profNote = `, AtkProf:${atkP}`;
+        } else if (defP !== 1) {
+          profNote = `, TgtProf:${defP}`;
+        }
+      }
       // IMPORTANT: use &quot; so the title="" attribute doesn't get truncated by a raw quote
       hoverBreakdown += `&#10;Range: ${rangePenalty} (${usedInches}&quot;${profNote})`;
     }
@@ -4699,7 +4719,14 @@ function cmdStance(msg, args) {
     msg_out += `Page: ${scaleNum} ${scaleUnit}/sq, snap:${snapIncr}</span><br/>`;
     
     if (rangeData.profileAdjusted) {
-      msg_out += `Target Profile: ${rangeData.defProfile}<br/>`;
+      const atkP = rangeData.atkProfile !== undefined ? rangeData.atkProfile : 1;
+      const defP = rangeData.defProfile !== undefined ? rangeData.defProfile : 1;
+      if (atkP !== 1) {
+        msg_out += `Attacker Profile: ${atkP}<br/>`;
+      }
+      if (defP !== 1) {
+        msg_out += `Target Profile: ${defP}<br/>`;
+      }
       msg_out += `Adjusted: <b>${rangeData.adjustedInches}"</b><br/>`;
     }
     
