@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.83 - PR/Ch in attack rolltemplate -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.84 - Fix query settings useApi scope bug -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -2570,6 +2570,7 @@
 
   function initQuerySettings() {
     getAttrs(["use_api","query_range", "query_called", "query_def", "query_stance", "query_aim", "query_pushhb", "query_multi", "query_other"], function(v) {
+      var useApi = (v.use_api === "1");
       var updates = {};
       updates.range_query = v.query_range === "1" ? "?{Range Penalty|1-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
       updates.multi_query = v.query_multi === "1" ? "?{Actions This Phase|1 Action,0|2 Actions,-3|3 Actions,-6|4 Actions,-9|5 Actions,-12}" : "0";
