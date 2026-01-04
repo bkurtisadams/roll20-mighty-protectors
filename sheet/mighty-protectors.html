@@ -430,10 +430,15 @@
     <div style="margin-bottom:3px; padding-bottom:6px; border-bottom:1px solid #2a2040; font-size:10px;">
       <span style="color:#888; margin-right:4px;">Query:</span>
       <button type="roll" name="roll_query_help" value="&{template:mpqueryhelp} {{help=1}}" style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px; margin-right:6px;" title="Show query help">?</button>
+      <input type="checkbox" name="attr_use_api" value="1" title="Use API automation (disables Range/Def/Stance queries)" /><span style="color:#8be9fd; margin-right:10px;">Use API</span>
+      <span class="sheet-query-auto">
       <input type="checkbox" name="attr_query_range" value="1" title="Prompt for range penalty" /><span style="color:#aaa; margin-right:8px;">Range</span>
+      </span>
       <input type="checkbox" name="attr_query_called" value="1" title="Prompt for called shot penalty" /><span style="color:#aaa; margin-right:8px;">Called</span>
+      <span class="sheet-query-auto">
       <input type="checkbox" name="attr_query_def" value="1" title="Prompt for target defense" /><span style="color:#aaa; margin-right:8px;">Def</span>
       <input type="checkbox" name="attr_query_stance" value="1" title="Prompt for stance modifier" /><span style="color:#aaa; margin-right:8px;">Stance</span>
+      </span>
       <input type="checkbox" name="attr_query_aim" value="1" title="Prompt for aim bonus" /><span style="color:#aaa; margin-right:8px;">Aim</span>
       <input type="checkbox" name="attr_query_pushhb" value="1" title="Push: adds damage - Hold Back: reduces damage" /><span style="color:#aaa; margin-right:8px;">Push/HB</span>
       <input type="checkbox" name="attr_query_multi" value="1" title="Prompt for multiple action penalty" /><span style="color:#aaa; margin-right:8px;">Multi</span>
@@ -518,7 +523,7 @@
           <td style="text-align:center; padding:1px;">
             <input type="hidden" name="attr_attack_rowid" />
             <input type="hidden" name="attr_attack_num" />
-            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -1904,6 +1909,13 @@
       
       getAttrs(oldAttrs, function(old) {
         var updates = {};
+      var useApi = (v.use_api === "1");
+      if (useApi) {
+        // Force off automated queries when API is driving combat math
+        updates.query_range = "0";
+        updates.query_def = "0";
+        updates.query_stance = "0";
+      }
         var hasOldData = false;
         
         // True ID migration
@@ -2534,7 +2546,7 @@
   });
 
   function initQuerySettings() {
-    getAttrs(["query_range", "query_called", "query_def", "query_stance", "query_aim", "query_pushhb", "query_multi", "query_other"], function(v) {
+    getAttrs(["use_api","query_range", "query_called", "query_def", "query_stance", "query_aim", "query_pushhb", "query_multi", "query_other"], function(v) {
       var updates = {};
       updates.range_query = v.query_range === "1" ? "?{Range Penalty|1-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
       updates.multi_query = v.query_multi === "1" ? "?{Actions This Phase|1 Action,0|2 Actions,-3|3 Actions,-6|4 Actions,-9|5 Actions,-12}" : "0";
@@ -2546,11 +2558,16 @@
       updates.pushhb_query = v.query_pushhb === "1" ? "?{Push/Hold Back|0}" : "0";
       updates.push_query = updates.pushhb_query;
       updates.other_query = v.query_other === "1" ? "?{Other Mods|0}" : "0";
+      if (useApi) {
+        updates.range_query = "0";
+        updates.def_query = "0";
+        updates.stance_query = "0";
+      }
       setAttrs(updates);
     });
   }
 
-  on("change:query_range change:query_called change:query_def change:query_stance change:query_aim change:query_pushhb change:query_multi change:query_other", function() {
+  on("change:use_api change:query_range change:query_called change:query_def change:query_stance change:query_aim change:query_pushhb change:query_multi change:query_other", function() {
     initQuerySettings();
   });
 
