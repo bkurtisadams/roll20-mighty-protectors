@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.45 (Unlimited charges support)
+/* Mighty Protectors Roll20 API Engine v2.46 (Block attack on 0 charges)
+ * v2.46: Block attack when no charges remaining
+ *        - Attack is blocked with visible public message instead of proceeding
+ *        - Check occurs before power deduction (no wasted resources)
+ *        - "Last charge used" warning still whispered to GM on final use
+ * v2.45: Unlimited charges support
  * v2.44: Unlimited charges (-1) support
  *        - Enter -1 in Charges field for unlimited uses
  *        - Skips charge decrement, displays ∞ in autofire announcement
@@ -1472,6 +1477,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       targetTotal = baseToHit - defValue + calledShotPenalty;
     }
 
+    // Block attack if no charges remaining (check before deducting any resources)
+    if (atkChgCost > 0 && num(atkChgRaw, 0) <= 0) {
+      ch("MP", `<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkName)}</b>: No charges remaining!</div>`);
+      return;
+    }
+
     // Deduct push cost AND attack PR cost from attacker in a single operation
     let prDeducted = 0;
     let totalPowerCost = 0;
@@ -1491,15 +1502,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let chgDeducted = 0;
     if (atkChgCost > 0 && atkCharId && rowId) {
       const chg0 = num(atkChgRaw, 0);
-      if (chg0 <= 0) {
-        sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: No charges remaining!`);
-      } else {
-        chgDeducted = 1;
-        const chg1 = chg0 - 1;
-        setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
-        if (chg1 === 0) {
-          sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Last charge used!`);
-        }
+      chgDeducted = 1;
+      const chg1 = chg0 - 1;
+      setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
+      if (chg1 === 0) {
+        sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Last charge used!`);
       }
     }
 
@@ -5955,7 +5962,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.45</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.46</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6038,11 +6045,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.45:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.46:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.45 READY");
+  log("MP ENGINE v2.46 READY");
 });
