@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.43 (Profile range fix + hitmod passthrough)
+/* Mighty Protectors Roll20 API Engine v2.44 (Unlimited charges support)
+ * v2.44: Unlimited charges (-1) support
+ *        - Enter -1 in Charges field for unlimited uses
+ *        - Skips charge decrement, displays ∞ in chat
  * v2.43: Profile range correction per rulebook 4.7.3.1
  *        - Both attacker AND target profiles now affect range penalty
  *        - Formula: adjustedRange = actualRange × atkProfile / defProfile
@@ -1381,10 +1384,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Skip if nopr flag is set (autofire handles costs upfront)
     const skipCosts = (fields.nopr === "1");
     const atkPR = skipCosts ? 0 : num(getAtkAttr("attack_cost") || fields.cost || "", 0);
-    // Charges: if attack_charges field has a value, deduct 1 per attack
+    // Charges: if attack_charges field has a value, deduct 1 per attack (-1 = unlimited)
     const atkChgRaw = getAtkAttr("attack_charges");
     const hasCharges = !skipCosts && (atkChgRaw !== undefined && atkChgRaw !== null && String(atkChgRaw).trim() !== "");
-    const atkChgCost = hasCharges ? 1 : 0;
+    const atkChgNum = hasCharges ? num(atkChgRaw, 0) : 0;
+    const isUnlimitedCharges = (atkChgNum === -1);
+    const atkChgCost = (hasCharges && !isUnlimitedCharges) ? 1 : 0;
 
 
     let atkSaveAttr;
@@ -5642,12 +5647,13 @@ function cmdStance(msg, args) {
     const basePR = num(getAtk("attack_cost"), 0);
     const totalPR = basePR * autofireRate;
     
-    // Check charges - multiply by autofire rate
+    // Check charges - multiply by autofire rate (-1 = unlimited)
     const chargesRaw = getAtk("attack_charges");
     const hasCharges = (chargesRaw !== undefined && chargesRaw !== null && String(chargesRaw).trim() !== "");
     const currentCharges = hasCharges ? num(chargesRaw, 0) : Infinity;
+    const isUnlimitedCharges = (currentCharges === -1);
     
-    if (hasCharges && currentCharges < autofireRate) {
+    if (hasCharges && !isUnlimitedCharges && currentCharges < autofireRate) {
       return ch("MP", `/w gm ⚠️ ${esc(attackName)}: Not enough charges for Autofire ×${autofireRate}! (Have ${currentCharges})`);
     }
 
@@ -5662,8 +5668,8 @@ function cmdStance(msg, args) {
       setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, currentPower - totalPR));
     }
 
-    // Deduct charges upfront
-    if (hasCharges) {
+    // Deduct charges upfront (skip if unlimited)
+    if (hasCharges && !isUnlimitedCharges) {
       setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", currentCharges - autofireRate);
       if (currentCharges - autofireRate <= 0) {
         ch("MP", `/w gm ⚠️ ${esc(attackName)}: Last charges used!`);
@@ -5675,7 +5681,7 @@ function cmdStance(msg, args) {
     announceHtml += `<div style="font-weight:bold; font-size:14px; color:#f4d03f; margin-bottom:4px;">🔥 AUTOFIRE ×${autofireRate}</div>`;
     announceHtml += `<div><b>${esc(atkName)}</b> fires <b>${esc(attackName)}</b> at <b>${esc(defChar.get("name"))}</b></div>`;
     if (totalPR > 0) announceHtml += `<div style="color:#8be9fd; font-size:11px;">PR: -${totalPR} (${basePR}×${autofireRate})</div>`;
-    if (hasCharges) announceHtml += `<div style="color:#8be9fd; font-size:11px;">Charges: -${autofireRate} (${currentCharges - autofireRate} remaining)</div>`;
+    if (hasCharges) announceHtml += `<div style="color:#8be9fd; font-size:11px;">Charges: ${isUnlimitedCharges ? "∞" : `-${autofireRate} (${currentCharges - autofireRate} remaining)`}</div>`;
     announceHtml += `<div style="color:#aaa; font-size:10px; margin-top:4px;">Note: Targets must be adjacent. Rolling ${autofireRate} separate attacks...</div>`;
     announceHtml += `</div>`;
     ch("MP", `/w gm ` + announceHtml);

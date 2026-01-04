@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.33 (Add PR to attack chat card) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.34 (Add target and modifiers to attack chat card) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -472,7 +472,7 @@
         <input type="hidden" name="attr_attack_atk_full" />
         <input type="hidden" name="attr_attack_pr" />
 
-        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{tname=@{target|Target|token_name}}} {{tdef=[[((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{deftype=@{attack_atk_full}}} {{stance=[[@{stance_query}]]}} {{rngmod=[[@{range_query}]]}} {{called=[[@{called_query}]]}} {{aim=[[@{aim_query}]]}} {{multi=[[@{multi_query}]]}} {{other=[[@{other_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
       </td>
 
       <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
@@ -811,6 +811,8 @@
       </tr>
     </table>
     <div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">{{type}} · KB:{{kb}}{{#pr}} · PR:{{pr}}{{/pr}} · Rng:{{range}}"</div>
+    <div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs {{tname}} ({{deftype}} Def: {{tdef}})</div>
+    <div style="padding:2px 8px 4px; text-align:center; font-size:9px; color:#555;">Stn:{{stance}} Rng:{{rngmod}} Cld:{{called}} Aim:{{aim}} Mul:{{multi}} Oth:{{other}}</div>
   </div>
 </rolltemplate>
 

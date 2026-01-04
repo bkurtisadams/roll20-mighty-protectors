@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.79 - modify career roll button/chat card -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.81 - unlimited charges (-1), PR in attack chat card -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -478,7 +478,7 @@
           <th style="text-align:center; padding:2px; line-height:1.1;" title="Damage Type: Kinetic/Energy/Bio/Entropy/Psychic/Other">Dmg<br>Type</th>
           <th style="text-align:center; padding:2px;" title="Causes Knockback">KB</th>
           <th style="text-align:center; padding:2px;" title="Power Requirement per use">PR</th>
-          <th style="text-align:center; padding:2px;" title="Charges remaining">Ch</th>
+          <th style="text-align:center; padding:2px;" title="Charges remaining (-1 = unlimited)">Ch</th>
           <th style="text-align:left; padding:2px;" title="Notes and modifier codes">Notes</th>
         </tr>
       </thead>
@@ -526,7 +526,7 @@
           <td style="text-align:center; padding:1px;">
             <input type="hidden" name="attr_attack_rowid" />
             <input type="hidden" name="attr_attack_num" />
-            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{hitmod=[[@{aim_query}+@{multi_query}+@{other_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{hitmod=[[@{aim_query}+@{multi_query}+@{other_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-@{def_query}-@{stance_query}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_cost}}} {{ch=@{attack_charges}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -561,7 +561,7 @@
             <input type="text" name="attr_attack_cost" maxlength="2" title="Power Requirement" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
           </td>
           <td style="text-align:center; padding:1px;">
-            <input type="text" name="attr_attack_charges" maxlength="3" title="Charges remaining" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
+            <input type="text" name="attr_attack_charges" maxlength="3" title="Charges remaining (-1 = unlimited)" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
           </td>
           <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
@@ -1029,7 +1029,7 @@
           </div>
           <div class="sheet-panel-field">
             <label>Chg:</label>
-            <input type="text" name="attr_prot_charges" maxlength="3" style="width:28px !important;" title="Charges remaining" />
+            <input type="text" name="attr_prot_charges" maxlength="3" style="width:28px !important;" title="Charges remaining (-1 = unlimited)" />
           </div>
           <div class="sheet-panel-field">
             <label title="Duration: How long the effect lasts">Dur:</label>
@@ -1203,7 +1203,7 @@
           </div>
           <div class="sheet-panel-field">
             <label>Chg:</label>
-            <input type="text" name="attr_ability_charges" maxlength="3" style="width:28px !important;" title="Charges remaining" />
+            <input type="text" name="attr_ability_charges" maxlength="3" style="width:28px !important;" title="Charges remaining (-1 = unlimited)" />
           </div>
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_ability_gear" value="1" title="Gear-based (can be broken/disarmed)" />
@@ -1528,7 +1528,7 @@
         </td>
       </tr>
     </table>
-    <div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">{{type}} · KB:{{kb}} · Rng:{{range}}"</div>
+    <div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">{{type}} · KB:{{kb}}{{#pr}} · PR:{{pr}}{{/pr}}{{#ch}} · Ch:{{ch}}{{/ch}} · Rng:{{range}}"</div>
   </div>
 </rolltemplate>
 
