@@ -1,7 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.44 (Unlimited charges support)
+/* Mighty Protectors Roll20 API Engine v2.45 (Unlimited charges support)
  * v2.44: Unlimited charges (-1) support
  *        - Enter -1 in Charges field for unlimited uses
- *        - Skips charge decrement, displays ∞ in chat
+ *        - Skips charge decrement, displays ∞ in autofire announcement
  * v2.43: Profile range correction per rulebook 4.7.3.1
  *        - Both attacker AND target profiles now affect range penalty
  *        - Formula: adjustedRange = actualRange × atkProfile / defProfile
@@ -5955,7 +5955,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.42.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.45</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6038,11 +6038,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.42.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.45:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.42.1 READY");
+  log("MP ENGINE v2.45 READY");
 });
