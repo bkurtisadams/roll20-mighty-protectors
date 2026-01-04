@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.28 (critical hits/fumbles support) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.29 (Task Check 3.0.2.1 Background support) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -64,9 +64,9 @@
   <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;">
     <fieldset class="repeating_careers" style="border:none; padding:0; margin:0; width:100%;">
       <div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
-        <button type="roll" name="roll_career_task" title="Roll Task Check using this career" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;" value="&{template:mptask} {{career=@{career_name}}} {{target=[[?{Which Save?|AG,@{agility_save}|IN,@{intelligence_save}|CL,@{cool_save}} + @{career_bonus}]]}} {{roll=[[1d20]]}}">Career</button>
-        <input type="text" name="attr_career_bonus" value="0" title="Career bonus (+3 for combined backgrounds or doubled background)" style="width:20px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
-        <input type="text" name="attr_career_name" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; border-radius:0; box-sizing:border-box;" />
+        <button type="roll" name="roll_career_task" title="Roll Task Check (3.0.2.1 Background)" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;" value="&{template:mptask} {{name=@{character_name}}} {{career=@{career_name}}} {{mod=?{Background|Common Knowledge/Has Bkgd (+3),3|Common Knowledge/Lacks Bkgd (+0),0|Training Required/Has Bkgd (+0),0|Training Required/Lacks Bkgd (-3),-3|Specialized Training/Has Bkgd (+0),0|Specialized Training/Lacks Bkgd w/ Instr (-3),-3|Specialized ✗ NO Instr (1 only),0}}} {{roll=[[1d20]]}} {{target=[[?{Which Save?|IN,@{intelligence_save}|AG,@{agility_save}|CL,@{cool_save}} + ?{Background} + @{career_bonus}]]}}">Career</button>
+        <input type="text" name="attr_career_name" placeholder="Career" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" style="flex:1; min-width:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; border-radius:0; box-sizing:border-box;" />
+        <input type="text" name="attr_career_bonus" value="0" title="Extra bonus: specialized career or Knowledge Ability" style="width:20px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
       </div>
     </fieldset>
 </div>
@@ -744,12 +744,18 @@
 
 <rolltemplate class="sheet-rolltemplate-mptask">
   <div style="background:#fff; border:2px solid #7b2d8e; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:250px;">
-    <div style="background:#7b2d8e; color:#fff; font-weight:bold; padding:6px 10px;">Task: {{career}}</div>
-    <div style="padding:8px 10px; color:#333;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span>Roll <span style="font-weight:bold; font-size:16px; background:#ffffcc; padding:2px 6px; border:1px solid #ccc;">{{roll}}</span></span>
-        <span>Target <span style="font-weight:bold; color:#7b2d8e;">{{target}}-</span></span>
-      </div>
+    <div style="background:#7b2d8e; color:#fff; font-weight:bold; padding:6px 10px;">{{name}} rolls Task: {{career}}</div>
+    <div style="background:#eee; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ddd;">
+      <span style="font-weight:bold; color:#333;">Roll</span>
+      <span style="font-weight:bold; font-size:16px; background:#ffffcc; padding:2px 6px; border:1px solid #ccc; color:#000;">{{roll}}</span>
+    </div>
+    <div style="background:#fff; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ddd;">
+      <span style="font-weight:bold; color:#333;">Target</span>
+      <span><span style="font-weight:bold; font-size:16px; background:#ffffcc; padding:2px 6px; border:1px solid #ccc; color:#000;">{{target}}</span>-</span>
+    </div>
+    <div style="background:#eee; padding:4px 10px; display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-weight:bold; color:#333;">Modifier</span>
+      <span style="font-weight:bold; color:#7b2d8e;">{{mod}}</span>
     </div>
   </div>
 </rolltemplate>
