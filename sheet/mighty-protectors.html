@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.93 - Called shot penalty included in to-hit calculation -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.94 - Enhanced Info buttons for attacks, protections, and abilities -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -674,7 +674,7 @@
             </select>
           </div>
           <span class="sheet-panel-divider"></span>
-          <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{name=@{attack_name}}} {{row=@{attack_rowid}}}" title="Show attack details">Info</button>
+          <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{title=@{attack_name}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit_num}}} {{damage=@{attack_damage}}} {{dtype=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{cost=@{attack_cost}}} {{charges=@{attack_charges}}} {{area=@{attack_area}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_save_rec}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{snaretype=@{attack_snare_type}}} {{duration=@{attack_duration_num} @{attack_duration_unit}}} {{notes=@{attack_notes}}}" title="Show attack details">Info</button>
         </div>
 
         <!-- Row 2.5: Duration Details -->
@@ -1093,6 +1093,11 @@
           </div>
         </div>
 
+        <!-- Info button row -->
+        <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
+          <button type="roll" name="roll_prot_info" class="sheet-panel-btn" value="&{template:mpprotinfo} {{title=@{prot_name}}} {{activation=@{prot_activation}}} {{pr=@{prot_pr}}} {{kinetic=@{prot_kinetic}}} {{energy=@{prot_energy}}} {{bio=@{prot_bio}}} {{entropy=@{prot_entropy}}} {{psychic=@{prot_psychic}}} {{other=@{prot_other}}} {{subtype=@{prot_subtype}}} {{coverage=@{prot_coverage}}} {{shield=@{prot_shield}}} {{shielddef=@{prot_shield_def}}} {{afield=@{prot_afield}}} {{damage=@{prot_damage}}} {{dmgtype=@{prot_dmgtype}}} {{kb=@{prot_kb_display}}} {{notes=@{prot_notes}}} {{desc=@{description}}}" title="Show protection details">Info</button>
+        </div>
+
         <!-- Help text -->
         <div class="sheet-panel-help">
           Values: <code>5</code>=prot | <code>5h</code>=hardened | <code>1/4</code>=invuln | <code>1/2</code>=adapt | <code>5h/4/2</code>=all
@@ -1362,7 +1367,10 @@
         </div>
 
         <!-- Send to Chat button -->
-        <div style="margin-top:8px;">
+        <div style="margin-top:8px; display:flex; gap:8px;">
+          <button type="roll" name="roll_ability_info" class="sheet-panel-btn" 
+            value="&{template:mpabilityinfo} {{title=@{ability_name}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{type=@{ability_type}}} {{pr=@{ability_pr}}} {{charges=@{ability_charges}}} {{range=@{ability_range}}} {{area=@{ability_area}}} {{duration=@{ability_duration_num} @{ability_duration_unit}}} {{linked=@{ability_linked_group}}} {{multi=@{ability_multi_group}}} {{stmod=@{ability_st_mod}}} {{enmod=@{ability_en_mod}}} {{agmod=@{ability_ag_mod}}} {{inmod=@{ability_in_mod}}} {{clmod=@{ability_cl_mod}}} {{tohitmod=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{powermod=@{ability_power_mod}}} {{hitsmod=@{ability_hits_mod}}} {{desc=@{ability_desc}}}"
+            style="font-size:9px; padding:2px 8px;" title="Show ability details summary">Info</button>
           <button type="roll" name="roll_ability_chat" class="sheet-panel-btn" 
             value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{type=@{ability_type}}} {{state=@{ability_state}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{pr=@{ability_pr}}} {{desc=@{ability_desc}}} {{st=@{ability_st_mod}}} {{en=@{ability_en_mod}}} {{ag=@{ability_ag_mod}}} {{in=@{ability_in_mod}}} {{cl=@{ability_cl_mod}}} {{tohit=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{profile=@{ability_profile_mod}}} {{weight=@{ability_weight_mod}}} {{init=@{ability_init_mod}}} {{kbres=@{ability_kbres_mod}}} {{power=@{ability_power_mod}}} {{hits=@{ability_hits_mod}}} {{inventing=@{ability_inventing_mod}}}"
             style="font-size:9px; padding:2px 8px;" title="Send ability details to chat">Send to Chat</button>
@@ -1626,16 +1634,18 @@
   <div style="background:#2b2b3d; border:2px solid #bd93f9; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
     <div style="background:#bd93f9; color:#000; font-weight:bold; padding:6px 10px;">{{title}}</div>
     <div style="padding:8px 10px; color:#eaeaea; line-height:1.25;">
-      {{#name}}<div><span style="color:#aaa;">Name:</span> <span style="color:#fff;">{{name}}</span></div>{{/name}}
       {{#atype}}<div><span style="color:#aaa;">A-Type:</span> <span style="color:#fff;">{{atype}}</span></div>{{/atype}}
       {{#mod}}<div><span style="color:#aaa;">Modifier:</span> <span style="color:#fff;">{{mod}}</span></div>{{/mod}}
       {{#tohit}}<div><span style="color:#aaa;">To Hit:</span> <span style="color:#8be9fd;">{{tohit}}</span></div>{{/tohit}}
       {{#damage}}<div><span style="color:#aaa;">Damage:</span> <span style="color:#8be9fd;">{{damage}}</span></div>{{/damage}}
-      {{#range}}<div><span style="color:#aaa;">Range:</span> <span style="color:#fff;">{{range}}"</span></div>{{/range}}
-      {{#ap}}<div><span style="color:#bd93f9; font-weight:bold;">Armor Piercing:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
       {{#dtype}}<div><span style="color:#aaa;">D-Type:</span> <span style="color:#fff;">{{dtype}}</span></div>{{/dtype}}
+      {{#range}}<div><span style="color:#aaa;">Range:</span> <span style="color:#fff;">{{range}}"</span></div>{{/range}}
       {{#kb}}<div><span style="color:#aaa;">KB:</span> <span style="color:#fff;">{{kb}}</span></div>{{/kb}}
-      {{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
+      {{#ap}}<div><span style="color:#bd93f9; font-weight:bold;">Armor Piercing:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
+      {{#cost}}<div><span style="color:#aaa;">PR:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
+      {{#charges}}<div><span style="color:#aaa;">Charges:</span> <span style="color:#fff;">{{charges}}</span></div>{{/charges}}
+      {{#area}}<div><span style="color:#aaa;">Area:</span> <span style="color:#fff;">{{area}}"</span></div>{{/area}}
+      {{#duration}}<div><span style="color:#aaa;">Duration:</span> <span style="color:#fff;">{{duration}}</span></div>{{/duration}}
       {{#savebc}}
       <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
         <div style="color:#f4d03f; font-weight:bold; font-size:14px;">💫 SAVE ATTACK</div>
@@ -1664,6 +1674,89 @@
         <div style="color:#fff;">{{notes}}</div>
       </div>
       {{/notes}}
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpprotinfo">
+  <div style="background:#2b2b3d; border:2px solid #3498db; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#3498db; color:#fff; font-weight:bold; padding:6px 10px;">{{title}}</div>
+    <div style="padding:8px 10px; color:#eaeaea; line-height:1.25;">
+      {{#activation}}<div><span style="color:#aaa;">Type:</span> <span style="color:#fff;">{{activation}}</span></div>{{/activation}}
+      {{#pr}}<div><span style="color:#aaa;">PR:</span> <span style="color:#fff;">{{pr}}</span></div>{{/pr}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#8be9fd; font-weight:bold; margin-bottom:4px;">Protection Values</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          {{#kinetic}}<span><span style="color:#aaa;">Kin:</span> <span style="color:#fff;">{{kinetic}}</span></span>{{/kinetic}}
+          {{#energy}}<span><span style="color:#aaa;">Ene:</span> <span style="color:#fff;">{{energy}}</span></span>{{/energy}}
+          {{#bio}}<span><span style="color:#aaa;">Bio:</span> <span style="color:#fff;">{{bio}}</span></span>{{/bio}}
+          {{#entropy}}<span><span style="color:#aaa;">Ent:</span> <span style="color:#fff;">{{entropy}}</span></span>{{/entropy}}
+          {{#psychic}}<span><span style="color:#aaa;">Psy:</span> <span style="color:#fff;">{{psychic}}</span></span>{{/psychic}}
+          {{#other}}<span><span style="color:#aaa;">Oth:</span> <span style="color:#fff;">{{other}}</span></span>{{/other}}
+        </div>
+      </div>
+      {{#subtype}}<div style="margin-top:4px;"><span style="color:#aaa;">Sub-Type:</span> <span style="color:#f4d03f;">{{subtype}}</span></div>{{/subtype}}
+      {{#coverage}}<div><span style="color:#aaa;">Coverage:</span> <span style="color:#fff;">{{coverage}}</span></div>{{/coverage}}
+      {{#shield}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#3498db; font-weight:bold;">🛡️ SHIELD</div>
+        <div><span style="color:#aaa;">Defense Bonus:</span> <span style="color:#fff;">+{{shielddef}}</span></div>
+      </div>
+      {{/shield}}
+      {{#afield}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#e63946; font-weight:bold;">⚡ ABILITY FIELD</div>
+        <div><span style="color:#aaa;">Damage:</span> <span style="color:#ff6b6b; font-weight:bold;">{{damage}}</span></div>
+        {{#dmgtype}}<div><span style="color:#aaa;">Type:</span> <span style="color:#fff;">{{dmgtype}}</span></div>{{/dmgtype}}
+        {{#kb}}<div><span style="color:#aaa;">KB:</span> <span style="color:#fff;">{{kb}}</span></div>{{/kb}}
+      </div>
+      {{/afield}}
+      {{#notes}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#aaa;">Notes:</div>
+        <div style="color:#fff;">{{notes}}</div>
+      </div>
+      {{/notes}}
+      {{#desc}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#aaa;">Description:</div>
+        <div style="color:#fff;">{{desc}}</div>
+      </div>
+      {{/desc}}
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpabilityinfo">
+  <div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#50fa7b; color:#000; font-weight:bold; padding:6px 10px;">{{title}}</div>
+    <div style="padding:8px 10px; color:#eaeaea; line-height:1.25;">
+      {{#cp}}<div><span style="color:#aaa;">CP:</span> <span style="color:#8be9fd;">{{cp}}</span></div>{{/cp}}
+      {{#ip}}<div><span style="color:#aaa;">IP:</span> <span style="color:#fff;">{{ip}}</span></div>{{/ip}}
+      {{#type}}<div><span style="color:#aaa;">Type:</span> <span style="color:#fff;">{{type}}</span></div>{{/type}}
+      {{#pr}}<div><span style="color:#aaa;">PR:</span> <span style="color:#fff;">{{pr}}</span></div>{{/pr}}
+      {{#charges}}<div><span style="color:#aaa;">Charges:</span> <span style="color:#fff;">{{charges}}</span></div>{{/charges}}
+      {{#range}}<div><span style="color:#aaa;">Range:</span> <span style="color:#fff;">{{range}}"</span></div>{{/range}}
+      {{#area}}<div><span style="color:#aaa;">Area:</span> <span style="color:#fff;">{{area}}"</span></div>{{/area}}
+      {{#duration}}<div><span style="color:#aaa;">Duration:</span> <span style="color:#fff;">{{duration}}</span></div>{{/duration}}
+      {{#linked}}<div><span style="color:#aaa;">Linked Group:</span> <span style="color:#bd93f9;">{{linked}}</span></div>{{/linked}}
+      {{#multi}}<div><span style="color:#aaa;">Multi Group:</span> <span style="color:#bd93f9;">{{multi}}</span></div>{{/multi}}
+      {{#stmod}}<div><span style="color:#aaa;">ST Mod:</span> <span style="color:#fff;">{{stmod}}</span></div>{{/stmod}}
+      {{#enmod}}<div><span style="color:#aaa;">EN Mod:</span> <span style="color:#fff;">{{enmod}}</span></div>{{/enmod}}
+      {{#agmod}}<div><span style="color:#aaa;">AG Mod:</span> <span style="color:#fff;">{{agmod}}</span></div>{{/agmod}}
+      {{#inmod}}<div><span style="color:#aaa;">IN Mod:</span> <span style="color:#fff;">{{inmod}}</span></div>{{/inmod}}
+      {{#clmod}}<div><span style="color:#aaa;">CL Mod:</span> <span style="color:#fff;">{{clmod}}</span></div>{{/clmod}}
+      {{#tohitmod}}<div><span style="color:#aaa;">To-Hit Mod:</span> <span style="color:#fff;">{{tohitmod}}</span></div>{{/tohitmod}}
+      {{#physdef}}<div><span style="color:#aaa;">Phys Def Mod:</span> <span style="color:#fff;">{{physdef}}</span></div>{{/physdef}}
+      {{#mentdef}}<div><span style="color:#aaa;">Ment Def Mod:</span> <span style="color:#fff;">{{mentdef}}</span></div>{{/mentdef}}
+      {{#powermod}}<div><span style="color:#aaa;">Power Mod:</span> <span style="color:#fff;">{{powermod}}</span></div>{{/powermod}}
+      {{#hitsmod}}<div><span style="color:#aaa;">Hits Mod:</span> <span style="color:#fff;">{{hitsmod}}</span></div>{{/hitsmod}}
+      {{#desc}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#aaa;">Description:</div>
+        <div style="color:#fff; white-space:pre-wrap;">{{desc}}</div>
+      </div>
+      {{/desc}}
     </div>
   </div>
 </rolltemplate>
