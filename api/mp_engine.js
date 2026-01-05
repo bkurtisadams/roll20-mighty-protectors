@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.46 (Block attack on 0 charges)
+/* Mighty Protectors Roll20 API Engine v2.47 (Robust mpapi check)
+ * v2.47: More robust mpapi checkbox check
+ *        - Explicitly converts to string, trims whitespace
+ *        - Only processes when exactly "1"
  * v2.46: Block attack when no charges remaining
  *        - Attack is blocked with visible public message instead of proceeding
  *        - Check occurs before power deduction (no wasted resources)
@@ -1269,7 +1272,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (state.MP_Engine.enabled === false) return;
     
     const fields = parseTemplateFields(msg.content);
-    if (!fields.mpapi || fields.mpapi !== "1") return;
+    // Only process if mpapi is explicitly "1" (checked checkbox)
+    const mpapi = String(fields.mpapi || "").trim();
+    if (mpapi !== "1") return;
 
     cleanupPending();
 
