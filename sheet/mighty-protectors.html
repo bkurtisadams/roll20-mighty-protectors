@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.94 - Enhanced Info buttons for attacks, protections, and abilities -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.95 - Reorganized Info buttons, row numbers in chat cards -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -673,8 +673,6 @@
               <option value="perm">Permanent</option>
             </select>
           </div>
-          <span class="sheet-panel-divider"></span>
-          <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{title=@{attack_name}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit_num}}} {{damage=@{attack_damage}}} {{dtype=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{cost=@{attack_cost}}} {{charges=@{attack_charges}}} {{area=@{attack_area}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_save_rec}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{snaretype=@{attack_snare_type}}} {{duration=@{attack_duration_num} @{attack_duration_unit}}} {{notes=@{attack_notes}}}" title="Show attack details">Info</button>
         </div>
 
         <!-- Row 2.5: Duration Details -->
@@ -784,9 +782,10 @@
           </div>
         </div>
 
-        <!-- Help text -->
-        <div class="sheet-panel-help">
-          Notes shorthand: <code>sav:BC:mod:rec</code> | <code>snr:type:bp/max</code> | <code>dtype:none</code>
+        <!-- Help text with Info button -->
+        <div class="sheet-panel-help" style="display:flex; align-items:center; gap:8px;">
+          <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{title=Attack #@{attack_num}: @{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit_num}}} {{damage=@{attack_damage}}} {{dtype=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{cost=@{attack_cost}}} {{charges=@{attack_charges}}} {{area=@{attack_area}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_save_rec}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{snaretype=@{attack_snare_type}}} {{duration=@{attack_duration_num} @{attack_duration_unit}}} {{notes=@{attack_notes}}}" title="Show attack details" style="flex-shrink:0;">Info</button>
+          <span>Notes shorthand: <code>sav:BC:mod:rec</code> | <code>snr:type:bp/max</code> | <code>dtype:none</code></span>
         </div>
       </div>
 
@@ -843,6 +842,7 @@
     <fieldset class="repeating_protection" style="border:none; padding:0; margin:0;">
       <input type="checkbox" name="attr_options_flag" class="sheet-options-flag" title="Toggle settings panel" />
       <input type="hidden" name="attr_prot_rowid" />
+      <input type="hidden" name="attr_prot_num" />
 
       <!-- Hidden checkboxes moved inside indicator cell for CSS styling -->
 
@@ -1093,14 +1093,10 @@
           </div>
         </div>
 
-        <!-- Info button row -->
-        <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
-          <button type="roll" name="roll_prot_info" class="sheet-panel-btn" value="&{template:mpprotinfo} {{title=@{prot_name}}} {{activation=@{prot_activation}}} {{pr=@{prot_pr}}} {{kinetic=@{prot_kinetic}}} {{energy=@{prot_energy}}} {{bio=@{prot_bio}}} {{entropy=@{prot_entropy}}} {{psychic=@{prot_psychic}}} {{other=@{prot_other}}} {{subtype=@{prot_subtype}}} {{coverage=@{prot_coverage}}} {{shield=@{prot_shield}}} {{shielddef=@{prot_shield_def}}} {{afield=@{prot_afield}}} {{damage=@{prot_damage}}} {{dmgtype=@{prot_dmgtype}}} {{kb=@{prot_kb_display}}} {{notes=@{prot_notes}}} {{desc=@{description}}}" title="Show protection details">Info</button>
-        </div>
-
-        <!-- Help text -->
-        <div class="sheet-panel-help">
-          Values: <code>5</code>=prot | <code>5h</code>=hardened | <code>1/4</code>=invuln | <code>1/2</code>=adapt | <code>5h/4/2</code>=all
+        <!-- Help text with Info button -->
+        <div class="sheet-panel-help" style="display:flex; align-items:center; gap:8px;">
+          <button type="roll" name="roll_prot_info" class="sheet-panel-btn" value="&{template:mpprotinfo} {{title=Protection #@{prot_num}: @{prot_name}}} {{activation=@{prot_activation}}} {{pr=@{prot_pr}}} {{kinetic=@{prot_kinetic}}} {{energy=@{prot_energy}}} {{bio=@{prot_bio}}} {{entropy=@{prot_entropy}}} {{psychic=@{prot_psychic}}} {{other=@{prot_other}}} {{subtype=@{prot_subtype}}} {{coverage=@{prot_coverage}}} {{shield=@{prot_shield}}} {{shielddef=@{prot_shield_def}}} {{afield=@{prot_afield}}} {{damage=@{prot_damage}}} {{dmgtype=@{prot_dmgtype}}} {{kb=@{prot_kb_display}}} {{notes=@{prot_notes}}} {{desc=@{description}}}" title="Show protection details" style="flex-shrink:0;">Info</button>
+          <span>Values: <code>5</code>=prot | <code>5h</code>=hardened | <code>1/4</code>=invuln | <code>1/2</code>=adapt | <code>5h/4/2</code>=all</span>
         </div>
       </div>
       <input type="hidden" name="attr_prot_kb_display" value="" />
@@ -1366,18 +1362,16 @@
           <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, absorb:Fire:25..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR" />
         </div>
 
-        <!-- Send to Chat button -->
-        <div style="margin-top:8px; display:flex; gap:8px;">
+        <!-- Info button -->
+        <div style="margin-top:8px;">
           <button type="roll" name="roll_ability_info" class="sheet-panel-btn" 
-            value="&{template:mpabilityinfo} {{title=@{ability_name}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{type=@{ability_type}}} {{pr=@{ability_pr}}} {{charges=@{ability_charges}}} {{range=@{ability_range}}} {{area=@{ability_area}}} {{duration=@{ability_duration_num} @{ability_duration_unit}}} {{linked=@{ability_linked_group}}} {{multi=@{ability_multi_group}}} {{stmod=@{ability_st_mod}}} {{enmod=@{ability_en_mod}}} {{agmod=@{ability_ag_mod}}} {{inmod=@{ability_in_mod}}} {{clmod=@{ability_cl_mod}}} {{tohitmod=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{powermod=@{ability_power_mod}}} {{hitsmod=@{ability_hits_mod}}} {{desc=@{ability_desc}}}"
-            style="font-size:9px; padding:2px 8px;" title="Show ability details summary">Info</button>
-          <button type="roll" name="roll_ability_chat" class="sheet-panel-btn" 
-            value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{type=@{ability_type}}} {{state=@{ability_state}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{pr=@{ability_pr}}} {{desc=@{ability_desc}}} {{st=@{ability_st_mod}}} {{en=@{ability_en_mod}}} {{ag=@{ability_ag_mod}}} {{in=@{ability_in_mod}}} {{cl=@{ability_cl_mod}}} {{tohit=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{profile=@{ability_profile_mod}}} {{weight=@{ability_weight_mod}}} {{init=@{ability_init_mod}}} {{kbres=@{ability_kbres_mod}}} {{power=@{ability_power_mod}}} {{hits=@{ability_hits_mod}}} {{inventing=@{ability_inventing_mod}}}"
-            style="font-size:9px; padding:2px 8px;" title="Send ability details to chat">Send to Chat</button>
+            value="&{template:mpabilityinfo} {{title=Ability #@{ability_num}: @{ability_name}}} {{charname=@{character_name}}} {{state=@{ability_state}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}} {{type=@{ability_type}}} {{pr=@{ability_pr}}} {{charges=@{ability_charges}}} {{range=@{ability_range}}} {{area=@{ability_area}}} {{duration=@{ability_duration_num} @{ability_duration_unit}}} {{linked=@{ability_linked_group}}} {{multi=@{ability_multi_group}}} {{stmod=@{ability_st_mod}}} {{enmod=@{ability_en_mod}}} {{agmod=@{ability_ag_mod}}} {{inmod=@{ability_in_mod}}} {{clmod=@{ability_cl_mod}}} {{tohitmod=@{ability_tohit_mod}}} {{physdef=@{ability_physdef_mod}}} {{mentdef=@{ability_mentdef_mod}}} {{powermod=@{ability_power_mod}}} {{hitsmod=@{ability_hits_mod}}} {{desc=@{ability_desc}}}"
+            style="font-size:9px; padding:2px 8px;" title="Show ability details">Info</button>
         </div>
       </div>
 
       <!-- Hidden attributes for parsed data -->
+      <input type="hidden" name="attr_ability_num" />
       <input type="hidden" name="attr_ability_mod_type" value="" />
       <input type="hidden" name="attr_ability_aura_damage" value="" />
       <input type="hidden" name="attr_ability_aura_dtype" value="" />
@@ -3050,7 +3044,10 @@
       getAttrs(attrList, function(v) {
         var abilities = [];
         var weaknesses = [];
-        ids.forEach(function(id) {
+        var updates = {};
+        ids.forEach(function(id, index) {
+          // Set row number for Info button
+          updates["repeating_abilities_" + id + "_ability_num"] = String(index + 1);
           var name = (v["repeating_abilities_" + id + "_ability_name"] || "").trim();
           var cp = parseFloat(v["repeating_abilities_" + id + "_ability_cp"]) || 0;
           var ip = parseFloat(v["repeating_abilities_" + id + "_ability_ip"]) || 0;
@@ -3065,7 +3062,8 @@
           return arr.map(function(s) { return "• " + s; }).join("<br>");
         }
         var summary = "<b>Abilities</b><br>" + fmt(abilities) + "<br><br><b>Weaknesses</b><br>" + fmt(weaknesses);
-        setAttrs({ abw_summary: summary });
+        updates.abw_summary = summary;
+        setAttrs(updates, { silent: true });
       });
     });
   }
@@ -3224,8 +3222,9 @@
     getSectionIDs("repeating_protection", function(ids) {
       if (!ids || !ids.length) return;
       var updates = {};
-      ids.forEach(function(id) {
+      ids.forEach(function(id, index) {
         updates["repeating_protection_" + id + "_prot_rowid"] = id;
+        updates["repeating_protection_" + id + "_prot_num"] = String(index + 1);
       });
       setAttrs(updates, { silent: true });
     });
