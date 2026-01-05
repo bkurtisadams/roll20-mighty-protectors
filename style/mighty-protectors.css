@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v42.74 - Absorption debug command */
+/* Mighty Protectors Character Sheet CSS v42.87 - add Career Scrollbar styling */
 
 /* ========================================
    ROLL TEMPLATES
@@ -834,4 +834,15 @@
   border-width: 5px;
   border-style: solid;
   border-color: #8be9fd transparent transparent transparent;
+}
+
+/* Scrollbar styling for dark theme */
+.charsheet .career-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4070 #0d0d1a;
+}
+
+.charsheet {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2040 #0d0d1a;
 }

@@ -1,4 +1,4 @@
-/* v38.22 (fix career duplication & migrate legacy Bio/Info to Notes) --> */
+/* v38.23 change scrollbar colors to match theme */
 .sheet-rolltemplate-mpattack .inlinerollresult { background: transparent !important; border: none !important; padding: 0 !important; }
 
 /* Mighty Protectors Title - Logo Style */
@@ -377,3 +377,14 @@
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-power-input { color: #f4d03f !important; }
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-label { color: #e63946 !important; }
 .charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-input { color: #e63946 !important; }
+
+/* Scrollbar styling for dark theme */
+.charsheet .career-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4070 #0d0d1a;
+}
+
+.charsheet {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2040 #0d0d1a;
+}
