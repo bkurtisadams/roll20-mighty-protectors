@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.35 (career tooltip mentions EXP, task chat target-first, IP remaining readonly) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.36 (career tooltip mentions EXP, task chat target-first, IP remaining readonly) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -64,11 +64,11 @@
   <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;">
     <fieldset class="repeating_careers" style="border:none; padding:0; margin:0; width:100%;">
       <div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
-        <button type="roll" name="roll_career_task" title="Roll Task Check (3.0.2.1 Background). Add +1 per Experience Level and any Knowledge bonuses to career bonus field." 
+        <button type="roll" name="roll_career_task" title="Roll Task Check (3.0.2.1 Background)." 
           style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;" 
           value="&{template:mptask} {{name=@{character_name}}} {{career=@{career_name}}} {{mod=?{Background|Common Knowledge/Has Bkgd (+3),3|Common Knowledge/Lacks Bkgd (+0),0|Training Required/Has Bkgd (+0),0|Training Required/Lacks Bkgd (-3),-3|Specialized Training/Has Bkgd (+0),0|Specialized Training/Lacks Bkgd w/ Instr (-3),-3|Specialized Training / *NO Instr (d20 must = 1),0}}} {{roll=[[1d20]]}} {{target=[[?{Which Save?|IN,@{intelligence_save}|AG,@{agility_save}|CL,@{cool_save}} + ?{Background} + @{career_bonus}]]}}">Career</button>
         <input type="text" name="attr_career_name" placeholder="Career" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" style="flex:1; min-width:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; border-radius:0; box-sizing:border-box;" />
-        <input type="text" name="attr_career_bonus" value="0" title="Extra bonus: specialized career or Knowledge Ability" style="width:20px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
+        <input type="text" name="attr_career_bonus" value="0" title="Add +3 for specialized career and +1 per Experience Level" style="width:20px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
       </div>
     </fieldset>
 </div>
