@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.36 (career tooltip mentions EXP, task chat target-first, IP remaining readonly) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.38 (stance displays negative, chat card tooltips) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -423,7 +423,6 @@
       <button type="roll" name="roll_query_help" value="&{template:mpqueryhelp} {{help=1}}" style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px; margin-right:6px;" title="Show query help">?</button>
       <input type="checkbox" name="attr_query_range" value="1" title="Prompt for range penalty" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Range</span>
       <input type="checkbox" name="attr_query_called" value="1" title="Prompt for called shot penalty" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Called</span>
-      <input type="checkbox" name="attr_query_stance" value="1" title="Prompt for target's stance bonus" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Stance</span>
       <input type="checkbox" name="attr_query_aim" value="1" title="Prompt for aim bonus" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Aim</span>
       <input type="checkbox" name="attr_query_push" value="1" title="Prompt for push/hold back modifier" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Push/Hold</span>
       <input type="checkbox" name="attr_query_multi" value="1" title="Prompt for multiple actions" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Multi</span>
@@ -472,7 +471,7 @@
         <input type="hidden" name="attr_attack_atk_full" />
         <input type="hidden" name="attr_attack_pr" />
 
-        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{stance_query}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{tname=@{target|Target|token_name}}} {{tdef=[[((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{deftype=@{attack_atk_full}}} {{stance=[[@{stance_query}]]}} {{rngmod=[[@{range_query}]]}} {{called=[[@{called_query}]]}} {{aim=[[@{aim_query}]]}} {{multi=[[@{multi_query}]]}} {{other=[[@{other_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{tname=@{target|Target|token_name}}} {{tdef=[[((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{deftype=@{attack_atk_full}}} {{stance=[[0-@{target|Target|bar3}]]}} {{rngmod=[[@{range_query}]]}} {{called=[[@{called_query}]]}} {{aim=[[@{aim_query}]]}} {{multi=[[@{multi_query}]]}} {{other=[[@{other_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
       </td>
 
       <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
@@ -723,7 +722,6 @@
 <!-- Global Hidden query attributes -->
 <input type="hidden" name="attr_range_query" value="0" />
 <input type="hidden" name="attr_called_query" value="0" />
-<input type="hidden" name="attr_stance_query" value="0" />
 <input type="hidden" name="attr_aim_query" value="0" />
 <input type="hidden" name="attr_push_query" value="0" />
 <input type="hidden" name="attr_push_dmg_query" value="0" />
@@ -806,7 +804,7 @@
     </table>
     <div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">{{type}} · KB:{{kb}}{{#pr}} · PR:{{pr}}{{/pr}} · Rng:{{range}}"</div>
     <div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs {{tname}} ({{deftype}} Def: {{tdef}})</div>
-    <div style="padding:2px 8px 4px; text-align:center; font-size:9px; color:#555;">Stn:{{stance}} Rng:{{rngmod}} Cld:{{called}} Aim:{{aim}} Mul:{{multi}} Oth:{{other}}</div>
+    <div style="padding:2px 8px 4px; text-align:center; font-size:9px; color:#555;"><span title="4.14.3 Combat Stances: Defensive -3 to hit/+3 Def; Full Defense +6 Def, half Move, costs action">Stn:{{stance}}</span> <span title="Range Penalty: 0-4in=0, 5-9=-1, 10-19=-2, 20-39=-3, 40-79=-4, 80-159=-5, etc.">Rng:{{rngmod}}</span> <span title="4.14.2 Called Shots: Head -6 (2x dmg), Arm/Leg -3 (EN+7 save or lose), Avoid Light Armor -3, Heavy -6, Gear -3">Cld:{{called}}</span> <span title="4.14.1 Aiming: +2 per phase (prone/braced), cumulative: +4=3 phases, +6=7 phases. Must specify target, loses bonus if loses sight">Aim:{{aim}}</span> <span title="4.5.1 Multiple Actions: -3 per extra action (2 actions=-3 each, 3 actions=-6 each)">Mul:{{multi}}</span> <span title="Other situational modifiers">Oth:{{other}}</span></div>
   </div>
 </rolltemplate>
 
@@ -1453,12 +1451,11 @@ var carryDisplay = [
   });
 
   function initQuerySettings() {
-    getAttrs(["query_range", "query_called", "query_stance", "query_aim", "query_push", "query_multi", "query_other"], function(v) {
+    getAttrs(["query_range", "query_called", "query_aim", "query_push", "query_multi", "query_other"], function(v) {
       var updates = {};
       updates.range_query = v.query_range === "1" ? "?{Range Penalty|0-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
       updates.multi_query = v.query_multi === "1" ? "?{Multi-Attack|Single,0|2x: Atk #1,-3|2x: Atk #2,-3|3x: Atk #1,-6|3x: Atk #2,-6|3x: Atk #3,-6|4x: Atk #1,-9|4x: Atk #2,-9|4x: Atk #3,-9|4x: Atk #4,-9}" : "0";
       updates.called_query = v.query_called === "1" ? "?{Called Shot|None,0|Head,-6|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3}" : "0";
-      updates.stance_query = v.query_stance === "1" ? "?{Target Stance|None,0|Defensive,3|Full Defense,6}" : "0";
       updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";
       updates.push_query = v.query_push === "1" ? "?{Push/Hold Back|0}" : "0";
       updates.push_dmg_query = v.query_push === "1" ? "?{Push/Hold Back|0}" : "0";
@@ -1467,7 +1464,7 @@ var carryDisplay = [
     });
   }
 
-  on("change:query_range change:query_called change:query_stance change:query_aim change:query_push change:query_multi change:query_other", function() {
+  on("change:query_range change:query_called change:query_aim change:query_push change:query_multi change:query_other", function() {
     initQuerySettings();
   });
 
