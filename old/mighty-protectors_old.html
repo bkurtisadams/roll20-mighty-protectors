@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.38 (stance displays negative, chat card tooltips, copy newer sheet default color rolls for career) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.40 (mpattack template tstance from target bar3) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -472,7 +472,7 @@
         <input type="hidden" name="attr_attack_atk_full" />
         <input type="hidden" name="attr_attack_pr" />
 
-        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{tname=@{target|Target|token_name}}} {{tdef=[[((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{deftype=@{attack_atk_full}}} {{stance=[[0-@{target|Target|bar3}]]}} {{rngmod=[[@{range_query}]]}} {{called=[[@{called_query}]]}} {{aim=[[@{aim_query}]]}} {{multi=[[@{multi_query}]]}} {{other=[[@{other_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{tname=@{target|Target|token_name}}} {{tdef=[[((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{deftype=@{attack_atk_full}}} {{stance=[[0-@{target|Target|bar3}]]}} {{tstance=@{target|Target|bar3}}} {{rngmod=[[@{range_query}]]}} {{called=[[@{called_query}]]}} {{aim=[[@{aim_query}]]}} {{multi=[[@{multi_query}]]}} {{other=[[@{other_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
       </td>
 
       <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
@@ -803,9 +803,9 @@
         </td>
       </tr>
     </table>
-    <div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">{{type}} · KB:{{kb}}{{#pr}} · PR:{{pr}}{{/pr}} · Rng:{{range}}"</div>
-    <div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs {{tname}} ({{deftype}} Def: {{tdef}})</div>
-    <div style="padding:2px 8px 4px; text-align:center; font-size:9px; color:#555;"><span title="4.14.3 Combat Stances: Defensive -3 to hit/+3 Def; Full Defense +6 Def, half Move, costs action">Stn:{{stance}}</span> <span title="Range Penalty: 0-4in=0, 5-9=-1, 10-19=-2, 20-39=-3, 40-79=-4, 80-159=-5, etc.">Rng:{{rngmod}}</span> <span title="4.14.2 Called Shots: Head -6 (2x dmg), Arm/Leg -3 (EN+7 save or lose), Avoid Light Armor -3, Heavy -6, Gear -3">Cld:{{called}}</span> <span title="4.14.1 Aiming: +2 per phase (prone/braced), cumulative: +4=3 phases, +6=7 phases. Must specify target, loses bonus if loses sight">Aim:{{aim}}</span> <span title="4.5.1 Multiple Actions: -3 per extra action (2 actions=-3 each, 3 actions=-6 each)">Mul:{{multi}}</span> <span title="Other situational modifiers">Oth:{{other}}</span></div>
+    <div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">{{type}} · KB:{{kb}}{{#pr}} · PR:{{pr}}{{/pr}}{{#ch}} · Ch:{{ch}}{{/ch}} · Rng:{{range}}</div>
+    {{#tname}}<div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs {{tname}} ({{deftype}} Def:{{tdef}}, Stance:{{tstance}})</div>{{/tname}}
+    <div style="padding:2px 8px 4px; text-align:center; font-size:10px; color:#555;">Rng:{{rngmod}} | Aim:{{aim}} | Multi:{{multi}} | Other:{{other}} | Called:{{called}} | Push:{{push}}</div>
   </div>
 </rolltemplate>
 
