@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.96 - Fix bar3 empty value crash -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.97 - match old sheet style for career rolls / IP styling -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -67,9 +67,9 @@
         <div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
           <button type="roll" name="roll_career_task" title="Roll Task Check (3.0.2.1 Background)" 
             style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;" 
-            value="&{template:default} {{name=@{character_name} rolls @{career_name} Task}} {{Roll=[[1d20cs<[[?{Which Save?|IN,@{intelligence_save}|AG,@{agility_save}|CL,@{cool_save}} + ?{Background|Common Knowledge/Has Bkgd (+3),3|Common Knowledge/Lacks Bkgd (+0),0|Training Required/Has Bkgd (+0),0|Training Required/Lacks Bkgd (-3),-3|Specialized Training/Has Bkgd (+0),0|Specialized Training/Lacks Bkgd w/ Instr (-3),-3|Specialized Training / *NO Instr (d20 must = 1),0} + @{career_bonus}]]cf>[[?{Which Save?} + ?{Background} + @{career_bonus}]]]]}} {{Target=[[?{Which Save?} + ?{Background} + @{career_bonus}]]-}}">Career</button>
+            value="&{template:default} {{name=@{character_name} rolls @{career_name} Task}} {{Needs=[[?{Which Save?|IN,@{intelligence_save}|AG,@{agility_save}|CL,@{cool_save}} + ?{Background|Common Knowledge/Has Bkgd (+3),3|Common Knowledge/Lacks Bkgd (+0),0|Training Required/Has Bkgd (+0),0|Training Required/Lacks Bkgd (-3),-3|Specialized Training/Has Bkgd (+0),0|Specialized Training/Lacks Bkgd w/ Instr (-3),-3|Specialized Training / *NO Instr (d20 must = 1),0} + @{career_bonus}]]-}} {{Rolls=[[1d20cs<[[?{Which Save?} + ?{Background} + @{career_bonus}]]cf>[[?{Which Save?} + ?{Background} + @{career_bonus}]]]]}}">Career</button>
           <input type="text" name="attr_career_name" placeholder="Career" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" style="flex:1; min-width:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; border-radius:0; box-sizing:border-box;" />
-          <input type="text" name="attr_career_bonus" value="0" title="Extra bonus: specialized career or Knowledge Ability" style="width:20px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
+          <input type="text" name="attr_career_bonus" value="0" title="Add +3 for specialized career and +1 per Experience Level" style="width:20px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
         </div>
       </fieldset>
   </div>
@@ -92,7 +92,7 @@
     <!-- Bottom Row: Total (Right Justified) -->
     <div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; font-size:11px;">
       <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Remaining Inventing Points:</span>
-      <input type="text" name="attr_ip_remaining" title="IPs available" value="" style="width:25px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" />
+      <input type="text" name="attr_ip_remaining" readonly title="🚫 Calculated: Base IPs + IP Mod - spent" value="" style="width:25px; background:#1e1e38; color:#50fa7b; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; cursor:not-allowed;" />
     </div>
 
   </div>
@@ -1461,14 +1461,15 @@
 <rolltemplate class="sheet-rolltemplate-mptask">
   <div style="background:#fff; border:2px solid #7b2d8e; border-radius:6px; font-family:Proxima,sans-serif; font-size:13px; max-width:250px;">
     <div style="background:#7b2d8e; color:#fff; font-weight:bold; padding:6px 10px;">{{name}} rolls Task: {{career}}</div>
-    <div style="background:#eee; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ddd;">
-      <span style="font-weight:bold; color:#333;">Roll</span>
-      {{#rollLess() roll target}}<span style="font-weight:bold; font-size:14px; background:#228b22; color:#fff; padding:1px 4px;">{{roll}}</span>{{/rollLess() roll target}}{{#rollGreater() roll target}}<span style="font-weight:bold; font-size:14px; background:#cc0000; color:#fff; padding:1px 4px;">{{roll}}</span>{{/rollGreater() roll target}}{{^rollLess() roll target}}{{^rollGreater() roll target}}<span style="font-weight:bold; font-size:14px; background:#4169e1; color:#fff; padding:1px 4px;">{{roll}}</span>{{/rollGreater() roll target}}{{/rollLess() roll target}}
-    </div>
     <div style="background:#fff; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ddd;">
-      <span style="font-weight:bold; color:#333;">Target</span>
+      <span style="font-weight:bold; color:#333;">Needs</span>
        <span><span style="font-weight:bold; font-size:14px; background:#ffffcc; color:#000; padding:1px 4px;">{{target}}</span>-</span>
     </div>
+    <div style="background:#eee; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ddd;">
+      <span style="font-weight:bold; color:#333;">Rolls</span>
+      {{#rollLess() roll target}}<span style="font-weight:bold; font-size:14px; background:#228b22; color:#fff; padding:1px 4px;">{{roll}}</span>{{/rollLess() roll target}}{{#rollGreater() roll target}}<span style="font-weight:bold; font-size:14px; background:#cc0000; color:#fff; padding:1px 4px;">{{roll}}</span>{{/rollGreater() roll target}}{{^rollLess() roll target}}{{^rollGreater() roll target}}<span style="font-weight:bold; font-size:14px; background:#4169e1; color:#fff; padding:1px 4px;">{{roll}}</span>{{/rollGreater() roll target}}{{/rollLess() roll target}}
+    </div>
+    
   </div>
 </rolltemplate>
 
