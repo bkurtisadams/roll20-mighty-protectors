@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.47 (Robust mpapi check)
+/* Mighty Protectors Roll20 API Engine v2.48 (Save attack fixes)
+ * v2.48: Fixed save attack recovery TN and push display
+ *        - Recovery TN now correctly includes initial save modifier (saveMod)
+ *          Per 4.9: "same target number as initial save + additional difficulty modifier"
+ *          Was: baseSave + recMod (missing saveMod)
+ *          Now: baseSave + saveMod + recMod
+ *        - Push modifier now passed and displayed separately from Crit
+ *          Shows "Push: -N" in orange in save breakdown
  * v2.47: More robust mpapi checkbox check
  *        - Explicitly converts to string, trims whitespace
  *        - Only processes when exactly "1"
@@ -2646,6 +2653,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       critMod = -3;
     }
     
+    // Push adds penalty to save TN (harder to save)
     const pushMod = pushAmount > 0 ? -pushAmount : 0;
     const totalMod = critMod + pushMod;
     
@@ -2654,8 +2662,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       modLabel = ` (${totalMod > 0 ? '+' : ''}${totalMod})`;
     }
     
-    let buttons = `[Make Save${modLabel}](!mp save --id ${rollId} --critmod ${totalMod}) `;
-    buttons += `[Save + Roll-With${modLabel}](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${totalMod})`;
+    let buttons = `[Make Save${modLabel}](!mp save --id ${rollId} --critmod ${critMod} --pushmod ${pushMod}) `;
+    buttons += `[Save + Roll-With${modLabel}](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod} --pushmod ${pushMod})`;
     
     return buttons;
   }
@@ -3175,6 +3183,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Critical mod (Solid Hit = -3 to save TN for save attacks)
     const critMod = num(args.critmod, 0);
+    
+    // Push mod (penalty to save TN, making it harder to save)
+    const pushMod = num(args.pushmod, 0);
 
     // Vulnerability: for save attacks, "Vulnerable to <Type>" applies as a penalty to the save TN vs that damage type.
     // We reuse getVulnerabilityMods() which encodes vulnerability as +N damage taken; for saves we apply -N.
@@ -3182,16 +3193,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const vulnSaveMod = (vulnData && vulnData.dmgMod) ? -Math.abs(num(vulnData.dmgMod, 0)) : 0;
 
 
-    // Initial save TN = base + init mod + protection (if not damaging poison) + invuln + adapt + roll-with + crit mod + vulnerability
-    const tn = baseSave + num(rec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + rwPaid + critMod + vulnSaveMod;
+    // Initial save TN = base + init mod + protection (if not damaging poison) + invuln + adapt + roll-with + crit mod + push mod + vulnerability
+    const tn = baseSave + num(rec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + rwPaid + critMod + pushMod + vulnSaveMod;
 
     const d20 = randomInteger(20);
     const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
     const pass = !isFumble && (d20 <= tn);
 
-    // Recovery TN is calculated SEPARATELY using recMod (not additive to initial)
-    // Base + Rec mod + protection (if not damaging poison) + invuln + adapt + vulnerability (no roll-with/crit - those were for initial only)
-    const recTN = baseSave + num(rec.recMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod;
+    // Recovery TN per 4.9: "same target number as their initial save but with an additional difficulty modifier"
+    // Initial save includes: baseSave + saveMod + protection (not roll-with/crit - those were one-time for initial)
+    // Recovery adds recMod on top of that
+    const recTN = baseSave + num(rec.saveMod, 0) + num(rec.recMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod;
     const recTime = rec.recTime || "1 round";
 
     let statusLine = "";
@@ -3302,6 +3314,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       (adaptForSave > 0 ? ` | <span style="color:#1abc9c;">Adapt: <b>+${adaptForSave}</b></span>` : "") +
       (rwPaid > 0 ? ` | RW: <b>+${rwPaid}</b>` : "") +
       (critMod !== 0 ? ` | Crit: <b>${critMod}</b>` : "") +
+      (pushMod !== 0 ? ` | <span style="color:#f39c12;">Push: <b>${pushMod}</b></span>` : "") +
       (vulnSaveMod !== 0 ? ` | <span style="color:#e63946;">Vuln: <b>${vulnSaveMod}</b></span>` : "") +
       `<br/>Init Save TN: <b>${tn}-</b> | Roll: <b>${d20}</b>${isFumble ? " (FUMBLE)" : ""} → <b style="color:${pass ? '#27ae60' : '#e94560'}">${pass ? "SAVED" : "FAILED"}</b>` +
       (rwPaid > 0 ? `<br/>Power: ${pow0} → ${pow1}` : "") +
@@ -5967,7 +5980,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.47</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.48</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6050,11 +6063,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.47:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.48:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.47 READY");
+  log("MP ENGINE v2.48 READY");
 });
