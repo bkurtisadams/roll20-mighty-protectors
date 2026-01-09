@@ -1,9 +1,7 @@
 /* Mighty Protectors Roll20 API Engine v2.48 (Save attack fixes)
  * v2.48: Fixed save attack recovery TN and push display
- *        - Recovery TN now correctly includes initial save modifier (saveMod)
+ *        - Recovery TN now includes initial save modifier (saveMod)
  *          Per 4.9: "same target number as initial save + additional difficulty modifier"
- *          Was: baseSave + recMod (missing saveMod)
- *          Now: baseSave + saveMod + recMod
  *        - Push modifier now passed and displayed separately from Crit
  *          Shows "Push: -N" in orange in save breakdown
  * v2.47: More robust mpapi checkbox check
@@ -2653,7 +2651,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       critMod = -3;
     }
     
-    // Push adds penalty to save TN (harder to save)
+    // Push penalty passed separately so it displays correctly
     const pushMod = pushAmount > 0 ? -pushAmount : 0;
     const totalMod = critMod + pushMod;
     
@@ -3184,7 +3182,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Critical mod (Solid Hit = -3 to save TN for save attacks)
     const critMod = num(args.critmod, 0);
     
-    // Push mod (penalty to save TN, making it harder to save)
+    // Push mod (makes save harder)
     const pushMod = num(args.pushmod, 0);
 
     // Vulnerability: for save attacks, "Vulnerable to <Type>" applies as a penalty to the save TN vs that damage type.
@@ -3201,8 +3199,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const pass = !isFumble && (d20 <= tn);
 
     // Recovery TN per 4.9: "same target number as their initial save but with an additional difficulty modifier"
-    // Initial save includes: baseSave + saveMod + protection (not roll-with/crit - those were one-time for initial)
-    // Recovery adds recMod on top of that
+    // Base + saveMod + recMod + protection + invuln + adapt + vulnerability (no roll-with/crit/push - those were for initial only)
     const recTN = baseSave + num(rec.saveMod, 0) + num(rec.recMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod;
     const recTime = rec.recTime || "1 round";
 
@@ -5980,7 +5977,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.48</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.47</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6063,11 +6060,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.48:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.47:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.48 READY");
+  log("MP ENGINE v2.47 READY");
 });

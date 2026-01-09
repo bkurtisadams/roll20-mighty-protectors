@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v42.97 - match old sheet style for career rolls / IP styling -->
+<!-- Mighty Protectors Roll20 Character Sheet v42.98 - add logic for green/red d20 attack roll chat card -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -1502,10 +1502,33 @@
     <div style="background:#e63946; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px; border-bottom:3px solid #000;">{{name}}</div>
     <table style="width:100%; border-collapse:collapse;">
       <tr>
-        <td style="width:50%; text-align:center; padding:8px; border-right:3px solid #000; border-bottom:3px solid #000; background:#fff;">
-          <div style="font-size:26px; font-weight:bold; color:#000;">{{roll}}</div>
-          <div style="font-size:10px; color:#000; font-weight:bold;">ROLL</div>
-        </td>
+
+      <td style="width:50%; text-align:center; padding:8px; border-right:3px solid #000; border-bottom:3px solid #000; background:#fff;">
+        
+        <!-- FAILURE: Roll is HIGHER than Target (Red Box) -->
+        {{#rollGreater() roll target}}
+          <div style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid #d00000; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">
+            {{roll}}
+          </div>
+        {{/rollGreater() roll target}}
+
+        <!-- SUCCESS: Roll is LOWER than Target (Green Box) -->
+        {{#rollLess() roll target}}
+          <div style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid #00a000; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">
+            {{roll}}
+          </div>
+        {{/rollLess() roll target}}
+
+        <!-- SUCCESS: Roll is EQUAL to Target (Green Box) -->
+        {{#rollTotal() roll target}}
+          <div style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid #00a000; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">
+            {{roll}}
+          </div>
+        {{/rollTotal() roll target}}
+
+        <div style="font-size:10px; color:#000; font-weight:bold; margin-top:4px;">ROLL</div>
+      </td>
+
         <td style="width:50%; text-align:center; padding:8px; border-bottom:3px solid #000; background:#fff;">
           <div style="font-size:26px; font-weight:bold; color:#000;">{{confirm}}</div>
           <div style="font-size:10px; color:#000; font-weight:bold;">CONFIRM</div>
