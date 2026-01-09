@@ -1,4 +1,5 @@
-/* Mighty Protectors Roll20 API Engine v2.48 (Save attack fixes)
+/* Mighty Protectors Roll20 API Engine v2.50 (API: Overhauled handleMpAttack output to strictly match the HTML sheet's visual layout, colors, and footer format.
+API: Improved Range/Profile formatting to remove excessive decimals.)
  * v2.48: Fixed save attack recovery TN and push display
  *        - Recovery TN now includes initial save modifier (saveMod)
  *          Per 4.9: "same target number as initial save + additional difficulty modifier"
@@ -1301,7 +1302,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rollIR = inlineTotal(msg, fields.roll);
     const confIR = inlineTotal(msg, fields.confirm);
     const dmgIR = inlineTotal(msg, fields.damage);
-    const targetIR = inlineTotal(msg, fields.target);  // Pre-calculated target from template
+    const targetIR = inlineTotal(msg, fields.target);
 
     if (!rollIR) {
       ch("MP", `/w gm <b>MP:</b> Could not parse roll.`);
@@ -1312,13 +1313,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const roll = num(rollIR.total, 0);
     const confirm = confIR ? num(confIR.total, 0) : 10;
     const damageTotal = dmgIR ? num(dmgIR.total, 0) : 0;
-    const templateTarget = targetIR ? num(targetIR.total, 0) : null;  // Template's pre-calculated target
+    const templateTarget = targetIR ? num(targetIR.total, 0) : null;
     
-    // Called shot type from roll template - extract type name from descriptive text like "Head (-6 / x2 dmg)"
+    // Called shot parsing
     const calledShotRaw = (fields.calledtype || "None").trim();
-    const calledShotType = calledShotRaw.split(" (")[0].trim();  // Extract type before parentheses
-    
-    // Called shot penalty lookup
+    const calledShotType = calledShotRaw.split(" (")[0].trim();
     const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3 };
     const calledShotPenalty = calledShotPenalties[calledShotType] || 0;
     const isCalledShot = calledShotType !== "None" && calledShotType !== "";
@@ -1328,84 +1327,76 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isAvoidArmor = calledShotType === "Avoid Light Armor" || calledShotType === "Avoid Heavy Armor";
     const isGearShot = calledShotType === "Gear";
 
-    const getAtkAttr = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+    const getAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
 
-    const rawAtkType = getAtkAttr("attack_atk");
-    const atkName = atkChar.get("name") + " - " + (getAtkAttr("attack_name") || fields.name || "Attack");
+    const rawAtkType = getAtk("attack_atk");
+    const atkName = atkChar.get("name") + " - " + (getAtk("attack_name") || fields.name || "Attack");
     const defName = defChar.get("name");
 
     const atkTypeCode = rawAtkType || "P";
-    const atkType = getAtkAttr("attack_type") || "std";
-    const atkMod = num(getAtkAttr("attack_mod"), 0);
     
-    // Sheet query modifiers (aim/multi/other) passed as inline roll, or plain number from macros
+    // --- FIX: DEFINE LABELS EARLY FOR USE IN BREAKDOWN ---
+    const atkTypeLabel = atkTypeCode === "M" ? "Mental" : (atkTypeCode === "E" ? "Emot" : "Phys");
+    const defTypeLabel = (atkTypeCode === "M" || atkTypeCode === "E") ? "MDef" : "PDef";
+    // -----------------------------------------------------
+
+    const atkType = getAtk("attack_type") || "std";
+    const atkMod = num(getAtk("attack_mod"), 0);
+    
     const hitmodIR = inlineTotal(msg, fields.hitmod);
     const macroMod = hitmodIR ? hitmodIR.total : num(fields.hitmod, 0);
     
-    // Ability to-hit bonuses (Heightened Expertise, etc.)
     const abilityTohitGlobal = getAttrNum(atkCharId, "ability_tohit_bonus", 0);
-    const atkRowNum = num(getAtkAttr("attack_num"), 1);
+    const atkRowNum = num(getAtk("attack_num"), 1);
     let abilityTohitTargeted = 0;
     try {
       const targetedJson = getAttr(atkCharId, "ability_tohit_targeted") || "{}";
       const targetedObj = JSON.parse(targetedJson);
       abilityTohitTargeted = num(targetedObj[atkRowNum], 0);
-    } catch (e) { /* ignore parse errors */ }
+    } catch (e) { }
     const abilityTohitBonus = abilityTohitGlobal + abilityTohitTargeted;
-    const dmgTypeRaw = (getAtkAttr("attack_dmgtype") || "Kin").toLowerCase();
+    const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
     const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
     const dmgTypeStr = dmgTypeMap[dmgTypeRaw] || fields.type || "Other";
+    const dmgSubtype = (getAtk("attack_subtype") || fields.subtype || "").trim().toLowerCase();
     
-    // Damage sub-type (e.g., Heat, Sonics, Poison) - used to match against specific protection
-    const dmgSubtype = (getAtkAttr("attack_subtype") || fields.subtype || "").trim().toLowerCase();
+    const isSaveAttack = (getAtk("attack_is_save") === "1") || (atkType === "sav");
+    const saveBC = getAtk("attack_save_bc") || "";
+    const saveMod = num(getAtk("attack_save_mod"), 0);
+    const recMod = num(getAtk("attack_save_rec") || getAtk("attack_recovery"), 0);
+    const recTime = getAtk("attack_save_rec_time") || "1 round";
+    const noDamage = (getAtk("attack_no_damage") === "1");
     
-    // Save attack attributes (new v2.13 fields) - defined early for use in noDamageType
-    const isSaveAttack = (getAtkAttr("attack_is_save") === "1") || (atkType === "sav");
-    const saveBC = getAtkAttr("attack_save_bc") || "";
-    const saveMod = num(getAtkAttr("attack_save_mod"), 0);
-    const recMod = num(getAtkAttr("attack_save_rec") || getAtkAttr("attack_recovery"), 0);  // Support both old and new attr names
-    const recTime = getAtkAttr("attack_save_rec_time") || "1 round";
-    const noDamage = (getAtkAttr("attack_no_damage") === "1");
-    
-    // For save attacks with ongoing damage (Damaging Poison), read damage from attack row
-    // since the roll template may not include it when attack_no_damage is checked
-    const atkDamageExpr = getAtkAttr("attack_damage") || "";
+    const atkDamageExpr = getAtk("attack_damage") || "";
     const saveDamage = isSaveAttack ? rollExpr(atkDamageExpr) : 0;
     
-    // Allow save attacks to declare they have no damage type (e.g., Flash) so protection does not apply.
-    const atkNotes = getAtkAttr("attack_notes") || "";
+    const atkNotes = getAtk("attack_notes") || "";
     const noDamageType = isSaveAttack && notesIndicateNoDamageType(atkNotes, atkName);
     const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
-    const range = getAtkAttr("attack_range") || fields.range || "-";
-    const kbChecked = getAtkAttr("attack_kb");
+    const range = getAtk("attack_range") || fields.range || "-";
+    const kbChecked = getAtk("attack_kb");
     const causesKB = (kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes");
 
-    const atkAPRaw = getAtkAttr("attack_ap") || fields.ap || "";
+    const atkAPRaw = getAtk("attack_ap") || fields.ap || "";
     const atkAP = (atkAPRaw === "ALL" || atkAPRaw === "all") ? Infinity : num(atkAPRaw, 0);
     
-    // Snare BP is a dice formula (e.g., "2d8", "d10+d12"), not a static number
-    const snBP = String(getAtkAttr("attack_bp") || "").trim();
-    const snMaxBP = num(getAtkAttr("attack_max_bp"), 0);
-    const snType = getAtkAttr("attack_snare_type") || "";
-    const isSnareAttack = (getAtkAttr("attack_is_snare") === "1") || (atkType === "snr");
+    const snBP = String(getAtk("attack_bp") || "").trim();
+    const snMaxBP = num(getAtk("attack_max_bp"), 0);
+    const snType = getAtk("attack_snare_type") || "";
+    const isSnareAttack = (getAtk("attack_is_snare") === "1") || (atkType === "snr");
     
-    // Area effect: diameter in inches (from attack_area field or template)
-    const areaRaw = getAtkAttr("attack_area") || fields.area || "";
+    const areaRaw = getAtk("attack_area") || fields.area || "";
     const areaDiameter = num(areaRaw, 0);
     const isAreaAttack = areaDiameter > 0;
     const areaRadius = areaDiameter / 2;
     
-    // PR cost from dedicated attack_cost column (simple number)
-    // Skip if nopr flag is set (autofire handles costs upfront)
     const skipCosts = (fields.nopr === "1");
-    const atkPR = skipCosts ? 0 : num(getAtkAttr("attack_cost") || fields.cost || "", 0);
-    // Charges: if attack_charges field has a value, deduct 1 per attack (-1 = unlimited)
-    const atkChgRaw = getAtkAttr("attack_charges");
+    const atkPR = skipCosts ? 0 : num(getAtk("attack_cost") || fields.cost || "", 0);
+    const atkChgRaw = getAtk("attack_charges");
     const hasCharges = !skipCosts && (atkChgRaw !== undefined && atkChgRaw !== null && String(atkChgRaw).trim() !== "");
     const atkChgNum = hasCharges ? num(atkChgRaw, 0) : 0;
     const isUnlimitedCharges = (atkChgNum === -1);
     const atkChgCost = (hasCharges && !isUnlimitedCharges) ? 1 : 0;
-
 
     let atkSaveAttr;
     if (atkTypeCode === "M") atkSaveAttr = "intelligence_save";
@@ -1414,9 +1405,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const atkSave = getAttrNum(atkCharId, atkSaveAttr, 10);
     
-    // Check if attacker is in Defensive stance (bar3 = 3) - they take -3 to hit
-    // Check if attacker is in Full Defense (bar3 = 6) - they cannot attack
-    // Find attacker token on same page as defender
     const defPageId = defTok.get("_pageid");
     const atkTokCandidates = findObjs({ _type: "graphic", represents: atkCharId, _pageid: defPageId });
     if (atkTokCandidates.length > 1) {
@@ -1426,20 +1414,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkTok = atkTokCandidates[0];
     const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
     
-    // Block attacks in Full Defense
     if (atkDefMod === 6) {
       ch("MP", `/w gm <div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;"><b>${esc(atkChar.get("name"))}</b> is in <b>Full Defense</b> and cannot attack!</div>`);
       return;
     }
     
-    const atkStancePenalty = (atkDefMod === 3) ? -3 : 0;  // Defensive stance only
+    const atkStancePenalty = (atkDefMod === 3) ? -3 : 0;
     
-    // Restraint penalty (3.0.2.6): -3 if grappling or grappled, -9 if fully restrained (locked)
     let atkRestraintPenalty = 0;
     let atkRestraintLabel = "";
     if (atkTok) {
       const atkTokId = atkTok.id;
-      // Check if attacker is being grappled
       const grappleRecord = state.MP_Engine.snares[atkTokId];
       if (grappleRecord && grappleRecord.type === "Grapple") {
         if (grappleRecord.locked) {
@@ -1450,50 +1435,34 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           atkRestraintLabel = " (grappled)";
         }
       }
-      // Check if attacker is grappling someone else (has fist marker but not being grappled)
       else if (atkTok.get("status_fist")) {
         atkRestraintPenalty = -3;
         atkRestraintLabel = " (grappling)";
       }
     }
     
-    // Calculate range from token positions (4.7.3)
     const rangeData = calculateRangeWithProfile(atkTok, defTok, atkCharId, defChar.id);
     const rangePenalty = rangeData.penalty;
-    
-    // DEBUG: Log token positions for range troubleshooting
-    if (atkTok && defTok) {
-      const page = getObj("page", defTok.get("_pageid"));
-      const snap = page ? page.get("snapping_increment") : "?";
-      log(`MP RANGE DEBUG: atk(${atkTok.get("left")},${atkTok.get("top")}) def(${defTok.get("left")},${defTok.get("top")}) snap:${snap} => ${rangeData.inches}"`);
-    }
     
     const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty;
 
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
-    
-    // Read defense modifier from bar3 (stances, off balance, etc.)
     const defMod = num(defTok.get(CFG.DEF_MOD_BAR), 0);
     const defValue = defBase + defMod;
 
-    // Area attacks target a location (defenseless immobile target)
-    // Per 4.7.2: Defense = 0, attacker gets +6 for completely immobile target
-    // Always calculate from API's values - templateTarget (if present) is just for display
     let targetTotal;
     if (isAreaAttack) {
-      targetTotal = baseToHit + 6;  // +6 immobile bonus, -0 defense
+      targetTotal = baseToHit + 6;
     } else {
       targetTotal = baseToHit - defValue + calledShotPenalty;
     }
 
-    // Block attack if no charges remaining (check before deducting any resources)
     if (atkChgCost > 0 && num(atkChgRaw, 0) <= 0) {
       ch("MP", `<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkName)}</b>: No charges remaining!</div>`);
       return;
     }
 
-    // Deduct push cost AND attack PR cost from attacker in a single operation
     let prDeducted = 0;
     let totalPowerCost = 0;
     if (atkTok) {
@@ -1508,7 +1477,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    // Deduct 1 charge per attack if Charges column has a value
     let chgDeducted = 0;
     if (atkChgCost > 0 && atkCharId && rowId) {
       const chg0 = num(atkChgRaw, 0);
@@ -1520,20 +1488,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-
-    // If this attack row is flagged as a Grapple, route to grapple subsystem (4.11)
-    // Grapple attacks do NOT deal damage - they only establish the hold
-    const isGrappleAttack = (getAtkAttr("attack_is_grapple") === "1");
+    const isGrappleAttack = (getAtk("attack_is_grapple") === "1");
     if (isGrappleAttack) {
       if (!atkTok) {
-        ch("MP", `/w gm <b>MP:</b> Could not find an attacker token on this page for ${esc(atkChar.get("name"))}.`);
+        ch("MP", `/w gm <b>MP:</b> Could not find an attacker token on this page.`);
         return;
       }
-      const remote = (getAtkAttr("attack_grapple_remote") === "1");
-      const gripType = (getAtkAttr("attack_grip_type") || "hth");
-      const gripDice = String(getAtkAttr("attack_grip_dice") || "").trim();
+      const remote = (getAtk("attack_grapple_remote") === "1");
+      const gripType = (getAtk("attack_grip_type") || "hth");
+      const gripDice = String(getAtk("attack_grip_dice") || "").trim();
 
-      // Use the sheet's already-rolled d20
       cmdGrapple(msg, {
         atk: atkTok.id,
         def: defTok.id,
@@ -1546,7 +1510,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return;
     }
 
-    // Determine outcome
     let outcome = "MISS";
     let isCrit = false;
     let isFumble = false;
@@ -1573,10 +1536,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       outcome = "HIT";
     }
 
-    // Store pending
-    const rollId = String(Date.now()) + "_" + randomInteger(999999);
-    state.MP_Engine.pending[rollId] = {
-      rollId, playerid: msg.playerid, atkCharId, atkName, defTokenId, 
+    const uniqueRollId = String(Date.now()) + "_" + randomInteger(999999);
+    state.MP_Engine.pending[uniqueRollId] = {
+      rollId: uniqueRollId, playerid: msg.playerid, atkCharId, atkName, defTokenId, 
       defCharId: defChar.id, defName, rowId, nat, roll, confirm, targetTotal,
       outcome, isCrit, isFumble, critResult, fumbleResult,
       damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType,
@@ -1588,39 +1550,46 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot
     };
 
-    // For area attacks, handle differently
     if (isAreaAttack) {
-      return handleAreaAttack(msg, rollId, state.MP_Engine.pending[rollId], defTok, atkTok);
+      return handleAreaAttack(msg, uniqueRollId, state.MP_Engine.pending[uniqueRollId], defTok, atkTok);
     }
 
-    // Build output
-    const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
-    const atkTypeLabel = atkTypeCode === "M" ? "Mental" : (atkTypeCode === "E" ? "Emot" : "Phys");
-    const defTypeLabel = (atkTypeCode === "M" || atkTypeCode === "E") ? "MDef" : "PDef";
+    // --- HTML CONSTRUCTION & OUTPUT ---
+    
+    // Extract individual modifier components
+    const aimVal = (inlineTotal(msg, fields.aim) ? inlineTotal(msg, fields.aim).total : num(fields.aim, 0)) || 0;
+    const multiVal = (inlineTotal(msg, fields.multi) ? inlineTotal(msg, fields.multi).total : num(fields.multi, 0)) || 0;
+    const otherVal = (inlineTotal(msg, fields.other) ? inlineTotal(msg, fields.other).total : num(fields.other, 0)) || 0;
 
-    let html;
+    let borderColor = "#d00000"; // Red
     if (outcome === "HIT" || outcome === "CRIT") {
-      html = `<div style="background:#90ee90; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
-      html += `<span style="color:#000; font-weight:bold; font-size:14px;">💥 ${outcome}!</span> `;
-    } else {
-      html = `<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
-      html += `<span style="color:#000; font-weight:bold; font-size:14px;">${outcome}!</span> `;
+        borderColor = "#00a000"; // Green
     }
-    html += `<span style="color:#000;" title="Target">vs ${esc(defName)}</span> `;
-    const defModLabel = defMod !== 0 ? `${defBase}${defMod >= 0 ? '+' : ''}${defMod}` : `${defBase}`;
-    const atkPenaltyNote = atkStancePenalty !== 0 ? ` Stance:${atkStancePenalty}` : "";
-    const rangePenaltyNote = rangePenalty !== 0 ? ` Rng:${rangePenalty}` : "";
-    const macroModNote = macroMod !== 0 ? ` Adj:${macroMod > 0 ? '+' : ''}${macroMod}` : "";
-    const restraintNote = atkRestraintPenalty !== 0 ? ` Rstr:${atkRestraintPenalty}` : "";
-    const distNote = (rangeData && typeof rangeData.inches === "number") ? ` Dist:${rangeData.inches}"` : "";
 
-    const abilityBonusNote = abilityTohitBonus !== 0 ? ` Ht.Exp:+${abilityTohitBonus}` : "";
+    const headerBg = "#e63946";
+    const toHitBg = "#87ceeb";
+    const dmgBg = "#ff6b6b";
+    const mainBorder = "#000";
+    const mainBg = "#fff200";
 
-    // Build detailed hover breakdown
+    // Format Range Display
+    let rangeFooter = "0";
+    if (rangeData && typeof rangeData.inches === "number") {
+        const baseR = rangeData.inches;
+        const adjR = rangeData.profileAdjusted ? rangeData.adjustedInches : baseR;
+        if (rangeData.profileAdjusted && baseR !== adjR) {
+            rangeFooter = `${baseR}" (${adjR.toFixed(1)}")`;
+        } else {
+            rangeFooter = `${baseR}"`;
+        }
+    }
+
+    // Build breakdown for tooltip
     const bcLabel = atkTypeCode === "M" ? "IN" : (atkTypeCode === "E" ? "CL" : "AG");
     const baseChance = atkSave + 3;
     let hoverBreakdown = `${bcLabel} ${atkSave} + 3 = ${baseChance}-`;
     if (atkMod !== 0) hoverBreakdown += `&#10;Atk Mod: ${atkMod >= 0 ? '+' : ''}${atkMod}`;
+    
     if (abilityTohitBonus !== 0) {
       if (abilityTohitTargeted > 0 && abilityTohitGlobal > 0) {
         hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitBonus} (+${abilityTohitGlobal} all, +${abilityTohitTargeted} this)`;
@@ -1630,145 +1599,132 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitGlobal}`;
       }
     }
-    if (macroMod !== 0) hoverBreakdown += `&#10;Aim/Multi/Other: ${macroMod > 0 ? '+' : ''}${macroMod}`;
     
-    // Subtotal before defense/penalties
-    const subtotal = baseChance + atkMod + abilityTohitBonus + macroMod;
+    if (aimVal !== 0) hoverBreakdown += `&#10;Aim: ${aimVal > 0 ? '+' : ''}${aimVal}`;
+    if (multiVal !== 0) hoverBreakdown += `&#10;Multi-Action: ${multiVal}`;
+    if (otherVal !== 0) hoverBreakdown += `&#10;Other: ${otherVal > 0 ? '+' : ''}${otherVal}`;
+    
+    const subtotal = baseChance + atkMod + abilityTohitBonus + aimVal + multiVal + otherVal;
     hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Subtotal: ${subtotal}-`;
     
-    // Defense and penalties
     if (defValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${defValue}`;
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
     if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
     
-    // Range penalty (MP scale: 1" = 5 ft.)
     if (rangeData && typeof rangeData.inches === "number") {
-      const usedInches =
-        (rangeData.profileAdjusted && typeof rangeData.adjustedInches === "number")
-          ? rangeData.adjustedInches
-          : rangeData.inches;
-      // Build profile note showing both profiles if either differs from 1
+      const adjR = rangeData.profileAdjusted ? rangeData.adjustedInches : rangeData.inches;
       let profNote = "";
       if (rangeData.profileAdjusted) {
         const atkP = rangeData.atkProfile !== undefined ? rangeData.atkProfile : 1;
         const defP = rangeData.defProfile !== undefined ? rangeData.defProfile : 1;
-        if (atkP !== 1 && defP !== 1) {
-          profNote = `, AtkProf:${atkP}, TgtProf:${defP}`;
-        } else if (atkP !== 1) {
-          profNote = `, AtkProf:${atkP}`;
-        } else if (defP !== 1) {
-          profNote = `, TgtProf:${defP}`;
-        }
+        if (atkP !== 1 && defP !== 1) profNote = `, AtkProf:${atkP}, TgtProf:${defP}`;
+        else if (atkP !== 1) profNote = `, AtkProf:${atkP}`;
+        else if (defP !== 1) profNote = `, TgtProf:${defP}`;
       }
-      // IMPORTANT: use &quot; so the title="" attribute doesn't get truncated by a raw quote
-      hoverBreakdown += `&#10;Range: ${rangePenalty} (${usedInches}&quot;${profNote})`;
+      hoverBreakdown += `&#10;Range: ${rangePenalty} (${adjR.toFixed(1)}"${profNote})`;
     }
     
-    // Called shot penalty
     if (calledShotPenalty !== 0) hoverBreakdown += `&#10;Called (${calledShotType}): ${calledShotPenalty}`;
-
     hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Final: ${targetTotal}-`;
-    
-    // Build inline display notes
-    const calledShotNote = calledShotPenalty !== 0 ? ` Called:${calledShotPenalty}` : "";
-    
-    html += `<br/><span style="color:#000; font-size:12px;" title="${hoverBreakdown}"><b>To-Hit: ${targetTotal}-</b></span> `;
-    html += `<span style="color:#333; font-size:10px;" title="${hoverBreakdown}">[${atkTypeLabel}] Roll:${roll} | ${defTypeLabel}:${defModLabel}${abilityBonusNote}${atkPenaltyNote}${restraintNote}${rangePenaltyNote}${calledShotNote}${macroModNote}${distNote}</span>`;
+
+    // --- HTML OUTPUT ---
+    let html = `<div style="background:${mainBg}; border:4px solid ${mainBorder}; font-family:Arial,sans-serif; font-size:13px; max-width:250px;">`;
+    html += `<div style="background:${headerBg}; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px; border-bottom:3px solid ${mainBorder};">${esc(atkName)}</div>`;
+    html += `<table style="width:100%; border-collapse:collapse;"><tr>`;
+
+    html += `<td style="width:50%; text-align:center; padding:8px; border-right:3px solid ${mainBorder}; border-bottom:3px solid ${mainBorder}; background:#fff;">`;
+    html += `<div style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid ${borderColor}; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">${roll}</div>`;
+    html += `<div style="font-size:10px; color:#000; font-weight:bold; margin-top:4px;">ROLL</div>`;
+    html += `</td>`;
+
+    html += `<td style="width:50%; text-align:center; padding:8px; border-bottom:3px solid ${mainBorder}; background:#fff;">`;
+    html += `<div style="font-size:26px; font-weight:bold; color:#000;">${confirm}</div>`;
+    html += `<div style="font-size:10px; color:#000; font-weight:bold;">CONFIRM</div>`;
+    html += `</td></tr>`;
+
+    html += `<tr>`;
+    html += `<td style="text-align:center; padding:6px; border-right:3px solid ${mainBorder}; border-bottom:3px solid ${mainBorder}; background:${toHitBg};">`;
+    html += `<div style="font-size:20px; font-weight:bold; color:#000;" title="${hoverBreakdown}">${targetTotal}-</div>`;
+    html += `<div style="font-size:10px; color:#000; font-weight:bold;">TO-HIT</div>`;
+    html += `</td>`;
+    html += `<td style="text-align:center; padding:6px; border-bottom:3px solid ${mainBorder}; background:${dmgBg};">`;
+    html += `<div style="font-size:20px; font-weight:bold; color:#000;">${damageTotal}</div>`;
+    html += `<div style="font-size:10px; color:#000; font-weight:bold;">DAMAGE</div>`;
+    html += `</td></tr></table>`;
+
+    const prStr = atkPR > 0 ? ` · PR:${atkPR}` : "";
+    html += `<div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">${esc(dmgTypeStr)} · KB:${causesKB ? 'Yes' : 'No'}${prStr} · Rng:${rangeFooter}</div>`;
+    html += `<div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs ${esc(defName)} (${defTypeLabel}:${defValue}, Stance:${defMod})</div>`;
+
+    let footerArr = [];
+    footerArr.push(`Rng:${rangePenalty}`);
+    footerArr.push(`Aim:${aimVal}`);
+    footerArr.push(`Multi:${multiVal}`);
+    footerArr.push(`Other:${otherVal}`);
+    footerArr.push(`Called:${calledShotPenalty}`);
+    footerArr.push(`Push:${pushAmount}`);
+    html += `<div style="padding:2px 8px 4px; text-align:center; font-size:10px; color:#555;">${footerArr.join(" | ")}</div>`;
 
     if (isCrit && critResult) {
-      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Critical hit effect">⚡ ${esc(critResult.desc)}</span>`;
-      
-      // Check if HEAD_SHOT is negated by Protected Brain
+      html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; font-weight:bold; color:#000;">⚡ ${esc(critResult.desc)}</div>`;
       if (critResult.type === CRIT_TYPES.HEAD_SHOT) {
         const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
-        if (hasProtectedBrain) {
-          html += `<br/><span style="color:#1a5276; font-size:11px; font-weight:bold;">🧠 PROTECTED BRAIN - Head Shot negated!</span>`;
-        }
+        if (hasProtectedBrain) html += `<div style="color:#1a5276; font-size:11px; font-weight:bold; padding:0 4px;">🧠 PROTECTED BRAIN - Head Shot negated!</div>`;
       }
-      
-      // Auto-apply Off Balance to target
-      if (critResult.type === CRIT_TYPES.OFF_BALANCE) {
-        html += applyOffBalance(defTok, defName);
-      }
-      // Auto-apply Muscle Strain (1 Hit to target)
+      if (critResult.type === CRIT_TYPES.OFF_BALANCE) html += applyOffBalance(defTok, defName);
       if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
         const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
         setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, hits0 - 1));
-        html += `<br/><span style="color:#e94560;"><b>${esc(defName)}</b> takes 1 Hit (muscle strain)! Hits: ${hits0}→${hits0-1}</span>`;
+        html += `<div style="color:#e94560; font-size:11px; padding:0 4px;"><b>${esc(defName)}</b> takes 1 Hit (muscle strain)! Hits: ${hits0}→${hits0-1}</div>`;
       }
     }
+
     if (isFumble && fumbleResult) {
-      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Fumble effect">💥 ${esc(fumbleResult.desc)}</span>`;
-      
-      // Auto-apply Off Balance to attacker
-      if (fumbleResult.type === FUMBLE_TYPES.OFF_BALANCE_ATK) {
-        if (atkTok) {
-          html += applyOffBalance(atkTok, atkChar.get("name"));
-        }
-      }
-      // Auto-apply strain damage to attacker
-      if (fumbleResult.type === FUMBLE_TYPES.MUSCLE_STRAIN_ATK || 
-          fumbleResult.type === FUMBLE_TYPES.LEG_STRAIN ||
-          fumbleResult.type === FUMBLE_TYPES.ARM_STRAIN) {
-        if (atkTok) {
-          const atkHits0 = getResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
-          setResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, atkHits0 - 1));
-          html += `<br/><span style="color:#e94560;"><b>${esc(atkChar.get("name"))}</b> takes 1 Hit (strain)! Hits: ${atkHits0}→${atkHits0-1}</span>`;
-        }
+      html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; font-weight:bold; color:#000;">💥 ${esc(fumbleResult.desc)}</div>`;
+      if (fumbleResult.type === FUMBLE_TYPES.OFF_BALANCE_ATK && atkTok) html += applyOffBalance(atkTok, atkChar.get("name"));
+      if ([FUMBLE_TYPES.MUSCLE_STRAIN_ATK, FUMBLE_TYPES.LEG_STRAIN, FUMBLE_TYPES.ARM_STRAIN].includes(fumbleResult.type) && atkTok) {
+        const atkHits0 = getResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+        setResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, atkHits0 - 1));
+        html += `<div style="color:#e94560; font-size:11px; padding:0 4px;"><b>${esc(atkChar.get("name"))}</b> takes 1 Hit (strain)! Hits: ${atkHits0}→${atkHits0-1}</div>`;
       }
     }
-    if (isPushing) {
-      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Pushing: +${pushAmount} damage, costs ${pushAmount} Power">⚡ PUSH +${pushAmount}!</span>`;
-    } else if (pushAmount < 0) {
-      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;" title="Hold Back: ${pushAmount} damage">🛡️ HOLD BACK ${pushAmount}</span>`;
-    }
-    
-    // Called shot display
+
     if (isCalledShot) {
-      const calledShotLabels = {
-        "Head": "🎯 HEAD SHOT (-6) - Hits DOUBLED after protection!",
-        "Leg": "🎯 LEG SHOT (-3) - EN+7 and AG saves required",
-        "Arm": "🎯 ARM SHOT (-3) - EN+7 and AG saves required",
-        "Avoid Light Armor": "🎯 AVOID LIGHT ARMOR (-3) - Bypasses partial coverage",
-        "Avoid Heavy Armor": "🎯 AVOID HEAVY ARMOR (-6) - Bypasses partial coverage",
-        "Gear": "🎯 GEAR SHOT (-3) - Compare damage to breakpoint"
+      const labels = {
+        "Head": "🎯 HEAD SHOT (-6) - Hits DOUBLED!", "Leg": "🎯 LEG SHOT (-3) - Saves required",
+        "Arm": "🎯 ARM SHOT (-3) - Saves required", "Avoid Light Armor": "🎯 AVOID LIGHT ARMOR (-3)",
+        "Avoid Heavy Armor": "🎯 AVOID HEAVY ARMOR (-6)", "Gear": "🎯 GEAR SHOT (-3)"
       };
-      const calledLabel = calledShotLabels[calledShotType] || `🎯 CALLED SHOT: ${calledShotType}`;
-      html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;">${calledLabel}</span>`;
-      
-      // Check for Protected Brain on deliberate head shot
+      html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; font-weight:bold; color:#000;">${labels[calledShotType] || `🎯 CALLED SHOT: ${calledShotType}`}</div>`;
       if (isHeadShot) {
         const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
-        if (hasProtectedBrain) {
-          html += `<br/><span style="color:#1a5276; font-size:11px; font-weight:bold;">🧠 PROTECTED BRAIN - Head Shot negated!</span>`;
-        }
+        if (hasProtectedBrain) html += `<div style="color:#1a5276; font-size:11px; font-weight:bold; padding:0 4px;">🧠 PROTECTED BRAIN - Head Shot negated!</div>`;
       }
     }
-    
-    if (prDeducted > 0) {
-      html += `<br/><span style="color:#333; font-size:10px;">PR: -${prDeducted}</span>`;
-    }
-    if (chgDeducted > 0) {
-      html += `<br/><span style="color:#333; font-size:10px;">Chg: -${chgDeducted}c</span>`;
+
+    if (prDeducted > 0 || chgDeducted > 0) {
+      html += `<div style="border-top:1px solid ${mainBorder}; padding:2px 4px; font-size:10px; color:#333; text-align:right;">`;
+      if (prDeducted > 0) html += `PR: -${prDeducted} `;
+      if (chgDeducted > 0) html += `Chg: -${chgDeducted}c`;
+      html += `</div>`;
     }
 
     html += `</div>`;
 
     let buttons = "";
     if (outcome === "HIT" || outcome === "CRIT") {
-      // Check isSaveAttack flag first (from checkbox), then fall back to atkType dropdown
       if (isSaveAttack) {
-        buttons = buildSaveAttackButtons(rollId, critResult, pushAmount, noDamage);
+        buttons = buildSaveAttackButtons(uniqueRollId, critResult, pushAmount, noDamage);
       } else if (isSnareAttack) {
-        buttons = buildSnareAttackButtons(rollId, critResult, pushAmount);
+        buttons = buildSnareAttackButtons(uniqueRollId, critResult, pushAmount);
       } else {
-        // Default to standard attack - pass pending record for Absorption/Reflection check
-        buttons = buildStandardAttackButtons(rollId, critResult, causesKB, state.MP_Engine.pending[rollId]);
+        buttons = buildStandardAttackButtons(uniqueRollId, critResult, causesKB, state.MP_Engine.pending[uniqueRollId]);
       }
     }
 
+    const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
     ch("MP", whisper + html + buttons);
   }
 
@@ -5977,7 +5933,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.47</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.50</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6060,11 +6016,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.47:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.50:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.47 READY");
+  log("MP ENGINE v2.50 READY");
 });
