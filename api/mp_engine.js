@@ -1,5 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.50 (API: Overhauled handleMpAttack output to strictly match the HTML sheet's visual layout, colors, and footer format.
-API: Improved Range/Profile formatting to remove excessive decimals.)
+/* Mighty Protectors Roll20 API Engine v2.52 - 2025-01-09
+ * v2.52: Fixed called shot penalty double-counting and miss display
+ *        - Removed duplicate calledShotPenalty from targetTotal (already in macroMod)
+ *        - Called shot effects (doubled damage, protected brain) now only show on hits
+ *        - Missed called shots show "Called shot attempted" instead of effect text
+ * v2.51: Fixed called shot penalty not showing in hover breakdown
+ *        - Sheet sends numeric penalty (e.g. "-6") not type name
+ *        - Added reverse-mapping: -6 -> Head, -3 -> Called (ambiguous)
+ *        - Penalty now displays correctly in tooltip and footer
+ * v2.50: Overhauled handleMpAttack output to match HTML sheet layout
+ *        - Improved Range/Profile formatting to remove excessive decimals
  * v2.48: Fixed save attack recovery TN and push display
  *        - Recovery TN now includes initial save modifier (saveMod)
  *          Per 4.9: "same target number as initial save + additional difficulty modifier"
@@ -1315,11 +1324,36 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const damageTotal = dmgIR ? num(dmgIR.total, 0) : 0;
     const templateTarget = targetIR ? num(targetIR.total, 0) : null;
     
-    // Called shot parsing
+    // Called shot parsing - handles both type names and numeric penalties
     const calledShotRaw = (fields.calledtype || "None").trim();
-    const calledShotType = calledShotRaw.split(" (")[0].trim();
-    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3 };
-    const calledShotPenalty = calledShotPenalties[calledShotType] || 0;
+    const calledShotInput = calledShotRaw.split(" (")[0].trim();
+    
+    // Map for type name lookup (case-insensitive)
+    const calledShotMap = {
+      "none": "None", "head": "Head", "arm": "Arm", "leg": "Leg",
+      "avoid light armor": "Avoid Light Armor", "light": "Avoid Light Armor",
+      "avoid heavy armor": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
+      "gear": "Gear"
+    };
+    
+    // Reverse map: penalty number -> type (for when sheet sends numeric value)
+    // Note: -3 is ambiguous (Arm/Leg/Light/Gear), default to generic "Called"
+    const penaltyToType = { "0": "None", "-6": "Head", "-3": "Called" };
+    
+    // Try name lookup first, then penalty reverse-lookup, then use raw input
+    let calledShotType = calledShotMap[calledShotInput.toLowerCase()];
+    if (!calledShotType) {
+      calledShotType = penaltyToType[calledShotInput] || (calledShotInput === "0" ? "None" : calledShotInput);
+    }
+    
+    // Get penalty: if input was numeric, use it directly; otherwise lookup by type
+    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3 };
+    let calledShotPenalty = calledShotPenalties[calledShotType];
+    if (calledShotPenalty === undefined) {
+      // Input might be raw number like "-6" or "-3"
+      const numVal = parseInt(calledShotInput, 10);
+      calledShotPenalty = isNaN(numVal) ? 0 : numVal;
+    }
     const isCalledShot = calledShotType !== "None" && calledShotType !== "";
     const isHeadShot = calledShotType === "Head";
     const isLegShot = calledShotType === "Leg";
@@ -1455,7 +1489,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isAreaAttack) {
       targetTotal = baseToHit + 6;
     } else {
-      targetTotal = baseToHit - defValue + calledShotPenalty;
+      // Note: calledShotPenalty is already included in macroMod (from sheet's hitmod field)
+      // Do NOT add it again here - it's extracted separately only for hover display
+      targetTotal = baseToHit - defValue;
     }
 
     if (atkChgCost > 0 && num(atkChgRaw, 0) <= 0) {
@@ -1554,7 +1590,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return handleAreaAttack(msg, uniqueRollId, state.MP_Engine.pending[uniqueRollId], defTok, atkTok);
     }
 
-    // --- HTML CONSTRUCTION & OUTPUT ---
+// --- HTML CONSTRUCTION & OUTPUT ---
     
     // Extract individual modifier components
     const aimVal = (inlineTotal(msg, fields.aim) ? inlineTotal(msg, fields.aim).total : num(fields.aim, 0)) || 0;
@@ -1572,19 +1608,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const mainBorder = "#000";
     const mainBg = "#fff200";
 
-    // Format Range Display
+    // Format Range Display for Footer
     let rangeFooter = "0";
     if (rangeData && typeof rangeData.inches === "number") {
         const baseR = rangeData.inches;
         const adjR = rangeData.profileAdjusted ? rangeData.adjustedInches : baseR;
         if (rangeData.profileAdjusted && baseR !== adjR) {
-            rangeFooter = `${baseR}" (${adjR.toFixed(1)}")`;
+            // Clean trailing .0
+            const cleanAdj = adjR.toFixed(1).replace(/\.0$/, '');
+            rangeFooter = `${baseR}" (${cleanAdj}")`;
         } else {
             rangeFooter = `${baseR}"`;
         }
     }
 
-    // Build breakdown for tooltip
+    // --- TOOLTIP BREAKDOWN GENERATION ---
     const bcLabel = atkTypeCode === "M" ? "IN" : (atkTypeCode === "E" ? "CL" : "AG");
     const baseChance = atkSave + 3;
     let hoverBreakdown = `${bcLabel} ${atkSave} + 3 = ${baseChance}-`;
@@ -1612,52 +1650,70 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
     if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
     
+    // Range penalty tooltip
     if (rangeData && typeof rangeData.inches === "number") {
       const adjR = rangeData.profileAdjusted ? rangeData.adjustedInches : rangeData.inches;
       let profNote = "";
       if (rangeData.profileAdjusted) {
         const atkP = rangeData.atkProfile !== undefined ? rangeData.atkProfile : 1;
         const defP = rangeData.defProfile !== undefined ? rangeData.defProfile : 1;
-        if (atkP !== 1 && defP !== 1) profNote = `, AtkProf:${atkP}, TgtProf:${defP}`;
-        else if (atkP !== 1) profNote = `, AtkProf:${atkP}`;
-        else if (defP !== 1) profNote = `, TgtProf:${defP}`;
+        if (atkP !== 1 && defP !== 1) profNote = ` (AtkProf:${atkP}, TgtProf:${defP})`;
+        else if (atkP !== 1) profNote = ` (AtkProf:${atkP})`;
+        else if (defP !== 1) profNote = ` (TgtProf:${defP})`;
       }
-      hoverBreakdown += `&#10;Range: ${rangePenalty} (${adjR.toFixed(1)}"${profNote})`;
+      const cleanAdjHover = adjR.toFixed(1).replace(/\.0$/, '');
+      // Use &quot; for inches symbol inside tooltip attribute
+      hoverBreakdown += `&#10;Range: ${rangePenalty} (${cleanAdjHover}&quot;${profNote})`;
     }
     
-    if (calledShotPenalty !== 0) hoverBreakdown += `&#10;Called (${calledShotType}): ${calledShotPenalty}`;
+    // Called Shot Penalty (Explicitly Added Here)
+    if (calledShotPenalty !== 0) {
+        // Avoid redundant "Called (Called): -3" - just show "Called: -3" for generic type
+        if (calledShotType === "Called") {
+            hoverBreakdown += `&#10;Called: ${calledShotPenalty}`;
+        } else {
+            hoverBreakdown += `&#10;Called (${calledShotType}): ${calledShotPenalty}`;
+        }
+    }
+
     hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Final: ${targetTotal}-`;
 
-    // --- HTML OUTPUT ---
+    // --- GENERATE HTML ---
     let html = `<div style="background:${mainBg}; border:4px solid ${mainBorder}; font-family:Arial,sans-serif; font-size:13px; max-width:250px;">`;
     html += `<div style="background:${headerBg}; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px; border-bottom:3px solid ${mainBorder};">${esc(atkName)}</div>`;
     html += `<table style="width:100%; border-collapse:collapse;"><tr>`;
 
+    // Roll Cell (Using Number + Tooltip)
     html += `<td style="width:50%; text-align:center; padding:8px; border-right:3px solid ${mainBorder}; border-bottom:3px solid ${mainBorder}; background:#fff;">`;
-    html += `<div style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid ${borderColor}; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">${roll}</div>`;
+    html += `<div title="Natural Roll: ${nat}" style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid ${borderColor}; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">${roll}</div>`;
     html += `<div style="font-size:10px; color:#000; font-weight:bold; margin-top:4px;">ROLL</div>`;
     html += `</td>`;
 
+    // Confirm Cell
     html += `<td style="width:50%; text-align:center; padding:8px; border-bottom:3px solid ${mainBorder}; background:#fff;">`;
     html += `<div style="font-size:26px; font-weight:bold; color:#000;">${confirm}</div>`;
     html += `<div style="font-size:10px; color:#000; font-weight:bold;">CONFIRM</div>`;
     html += `</td></tr>`;
 
+    // To Hit & Damage
     html += `<tr>`;
     html += `<td style="text-align:center; padding:6px; border-right:3px solid ${mainBorder}; border-bottom:3px solid ${mainBorder}; background:${toHitBg};">`;
     html += `<div style="font-size:20px; font-weight:bold; color:#000;" title="${hoverBreakdown}">${targetTotal}-</div>`;
     html += `<div style="font-size:10px; color:#000; font-weight:bold;">TO-HIT</div>`;
     html += `</td>`;
+    
+    // Damage Cell
     html += `<td style="text-align:center; padding:6px; border-bottom:3px solid ${mainBorder}; background:${dmgBg};">`;
-    html += `<div style="font-size:20px; font-weight:bold; color:#000;">${damageTotal}</div>`;
+    html += `<div title="Total Damage" style="font-size:20px; font-weight:bold; color:#000;">${damageTotal}</div>`;
     html += `<div style="font-size:10px; color:#000; font-weight:bold;">DAMAGE</div>`;
     html += `</td></tr></table>`;
 
+    // Info
     const prStr = atkPR > 0 ? ` · PR:${atkPR}` : "";
     html += `<div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">${esc(dmgTypeStr)} · KB:${causesKB ? 'Yes' : 'No'}${prStr} · Rng:${rangeFooter}</div>`;
     html += `<div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs ${esc(defName)} (${defTypeLabel}:${defValue}, Stance:${defMod})</div>`;
-
+    
     let footerArr = [];
     footerArr.push(`Rng:${rangePenalty}`);
     footerArr.push(`Aim:${aimVal}`);
@@ -1692,15 +1748,22 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     if (isCalledShot) {
-      const labels = {
-        "Head": "🎯 HEAD SHOT (-6) - Hits DOUBLED!", "Leg": "🎯 LEG SHOT (-3) - Saves required",
-        "Arm": "🎯 ARM SHOT (-3) - Saves required", "Avoid Light Armor": "🎯 AVOID LIGHT ARMOR (-3)",
-        "Avoid Heavy Armor": "🎯 AVOID HEAVY ARMOR (-6)", "Gear": "🎯 GEAR SHOT (-3)"
-      };
-      html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; font-weight:bold; color:#000;">${labels[calledShotType] || `🎯 CALLED SHOT: ${calledShotType}`}</div>`;
-      if (isHeadShot) {
-        const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
-        if (hasProtectedBrain) html += `<div style="color:#1a5276; font-size:11px; font-weight:bold; padding:0 4px;">🧠 PROTECTED BRAIN - Head Shot negated!</div>`;
+      // On a hit: show full effect message. On a miss: just note the called shot attempt
+      if (outcome === "HIT" || outcome === "CRIT") {
+        const labels = {
+          "Head": "🎯 HEAD SHOT (-6) - Hits DOUBLED!", "Leg": "🎯 LEG SHOT (-3) - Saves required",
+          "Arm": "🎯 ARM SHOT (-3) - Saves required", "Avoid Light Armor": "🎯 AVOID LIGHT ARMOR (-3)",
+          "Avoid Heavy Armor": "🎯 AVOID HEAVY ARMOR (-6)", "Gear": "🎯 GEAR SHOT (-3)",
+          "Called": "🎯 CALLED SHOT (-3)"
+        };
+        html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; font-weight:bold; color:#000;">${labels[calledShotType] || `🎯 CALLED SHOT: ${calledShotType}`}</div>`;
+        if (isHeadShot) {
+          const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
+          if (hasProtectedBrain) html += `<div style="color:#1a5276; font-size:11px; font-weight:bold; padding:0 4px;">🧠 PROTECTED BRAIN - Head Shot negated!</div>`;
+        }
+      } else {
+        // Miss/Fumble - just note the called shot attempt without effect text
+        html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; color:#666;">🎯 Called shot attempted (${calledShotType})</div>`;
       }
     }
 
@@ -5933,7 +5996,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.50</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.52</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6016,11 +6079,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.50:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.52:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.50 READY");
+  log("MP ENGINE v2.52 READY");
 });
