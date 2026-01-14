@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.52 - 2025-01-09
+/* Mighty Protectors Roll20 API Engine v2.53 - 2025-01-14
+ * v2.53: Hardened values now use separate fields per damage type
+ *        - New sheet fields: prot_hard_kinetic, prot_hard_energy, etc.
+ *        - Allows different hardened values per damage type (e.g., 5 prot / 3 hardened)
+ *        - Removed 'h' notation parsing (legacy values still strip 'h' for compatibility)
  * v2.52: Fixed called shot penalty double-counting and miss display
  *        - Removed duplicate calledShotPenalty from targetTotal (already in macroMod)
  *        - Called shot effects (doubled damage, protected brain) now only show on hits
@@ -33,7 +37,8 @@
  *        - API reads hitmod from inline roll result (supports computed values)
  * Handles all dmgtype variations: K/Kin/Kinetic, E/Eng/Energy, etc.
  * Separate PR/Charges columns, Armor Piercing rules
- * Protection notation: 5=prot, 5h=hardened, 5/4=invuln, 5/2=adapt, 5h/4/2=all
+ * Protection notation: 5=prot, 5/4=invuln, 5/2=adapt, 5/4/2=all
+ * Hardened: Now uses separate prot_hard_* fields per damage type
  * Range uses edge-to-edge distance (minimum range = 1" per MP rules)
  * v2.11: Fixed range calculation to account for page snapping_increment
  * v2.12: Warns and stops attack if duplicate tokens exist on map
@@ -452,16 +457,13 @@ MP.Engine = (function () {
 
   // Parse protection value - supports:
   // "5" = 5 prot
-  // "5h" = 5 hardened prot
   // "1/4" = invuln only (0 prot)
   // "5/4" = 5 prot + invuln
-  // "5h/4" = 5 hardened + invuln
   // "1/2" = adapt only (0 prot)
   // "5/2" = 5 prot + adapt
-  // "5h/2" = 5 hardened + adapt
   // "5/4/2" = 5 prot + invuln + adapt
-  // "5h/4/2" = 5 hardened + invuln + adapt
-  // Returns { prot: number, hardened: number, invuln: boolean, adapt: boolean }
+  // NOTE: Hardened is now read from separate prot_hard_* fields (not parsed here)
+  // Returns { prot: number, hardened: 0, invuln: boolean, adapt: boolean }
   function parseProtValue(val) {
     const s = String(val || "").toLowerCase().trim();
     if (!s || s === "0") return { prot: 0, hardened: 0, invuln: false, adapt: false };
@@ -480,13 +482,13 @@ MP.Engine = (function () {
     // Strip suffixes to get numeric part
     let withoutSuffixes = s.replace("/4", "").replace("/2", "");
 
-    const isHardened = withoutSuffixes.endsWith("h");
-    const numStr = isHardened ? withoutSuffixes.slice(0, -1) : withoutSuffixes;
+    // Legacy: strip 'h' suffix if present (backward compatibility)
+    const numStr = withoutSuffixes.endsWith("h") ? withoutSuffixes.slice(0, -1) : withoutSuffixes;
     const prot = parseFloat(numStr) || 0;
 
     return {
       prot: prot,
-      hardened: isHardened ? prot : 0,
+      hardened: 0,  // Hardened now read from separate fields
       invuln: hasInvuln,
       adapt: hasAdapt
     };
@@ -501,6 +503,7 @@ MP.Engine = (function () {
   //   - Protection subtype matches attack subtype exactly
   //   - Protection has comma-separated subtypes and one matches
   // NOTE: Absorption and Reflection rows are SKIPPED - they require saved action, not auto-apply
+  // NOTE: Hardened is read from separate prot_hard_* fields (not parsed from protection value)
   function sumProtectionWithHardened(charId, protKey, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
     
@@ -509,6 +512,17 @@ MP.Engine = (function () {
     let totalHardened = 0;
     let hasInvuln = false;
     let hasAdapt = false;
+    
+    // Map protKey to hardened field name
+    const hardKeyMap = {
+      "kinetic": "hard_kinetic",
+      "energy": "hard_energy",
+      "bio": "hard_bio",
+      "entropy": "hard_entropy",
+      "psychic": "hard_psychic",
+      "other": "hard_other"
+    };
+    const hardKey = hardKeyMap[protKey] || null;
     
     // Normalize attack subtype for matching
     const atkSub = (atkSubtype || "").trim().toLowerCase();
@@ -565,12 +579,20 @@ MP.Engine = (function () {
       
       if (!subtypeMatches) return;  // Subtype doesn't match
       
-      // Parse and accumulate protection
+      // Parse protection value (invuln/adapt flags)
       const parsed = parseProtValue(protValue);
       totalProt += parsed.prot;
-      totalHardened += parsed.hardened;
       if (parsed.invuln) hasInvuln = true;
       if (parsed.adapt) hasAdapt = true;
+      
+      // Read hardened from separate field
+      if (hardKey) {
+        const hardAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${hardKey}`);
+        if (hardAttr) {
+          const hardVal = parseInt(hardAttr.get("current"), 10) || 0;
+          totalHardened += hardVal;
+        }
+      }
     });
     
     return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln, adapt: hasAdapt };
@@ -721,6 +743,7 @@ MP.Engine = (function () {
   // Returns { prot, hardened, invuln, adapt } with coverage-adjusted values
   // atkSubtype: the attack's sub-type for matching
   // NOTE: Absorption and Reflection rows are SKIPPED - they require saved action
+  // NOTE: Hardened is read from separate prot_hard_* fields (not parsed from protection value)
   function sumProtectionWithCoverage(charId, protKey, isAreaEffect, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
     
@@ -729,6 +752,17 @@ MP.Engine = (function () {
     let totalHardened = 0;
     let hasInvuln = false;
     let hasAdapt = false;
+    
+    // Map protKey to hardened field name
+    const hardKeyMap = {
+      "kinetic": "hard_kinetic",
+      "energy": "hard_energy",
+      "bio": "hard_bio",
+      "entropy": "hard_entropy",
+      "psychic": "hard_psychic",
+      "other": "hard_other"
+    };
+    const hardKey = hardKeyMap[protKey] || null;
     
     // Normalize attack subtype for matching
     const atkSub = (atkSubtype || "").trim().toLowerCase();
@@ -795,12 +829,19 @@ MP.Engine = (function () {
         }
       }
       
-      // Apply coverage and round up
+      // Apply coverage and round up for protection
       const adjustedProt = Math.ceil(parsed.prot * coverageMult);
-      const adjustedHardened = Math.ceil(parsed.hardened * coverageMult);
-      
       totalProt += adjustedProt;
-      totalHardened += adjustedHardened;
+      
+      // Read hardened from separate field and apply coverage
+      if (hardKey) {
+        const hardAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${hardKey}`);
+        if (hardAttr) {
+          const hardVal = parseInt(hardAttr.get("current"), 10) || 0;
+          const adjustedHardened = Math.ceil(hardVal * coverageMult);
+          totalHardened += adjustedHardened;
+        }
+      }
     });
     
     return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln, adapt: hasAdapt };
@@ -5996,7 +6037,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.52</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.53</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6079,11 +6120,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.52:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.53:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.52 READY");
+  log("MP ENGINE v2.53 READY");
 });
