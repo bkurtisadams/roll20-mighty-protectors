@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.53 - 2025-01-14
+/* Mighty Protectors Roll20 API Engine v2.54 - 2025-01-14
+ * v2.54: Ability Field protection mechanics implemented (2.2.4)
+ *        - AF rows excluded from summed protection (they're reactive, not passive)
+ *        - When attack hits target with active AF, shows attack type buttons
+ *        - Projectile: AF damage subtracts from attack (destroys if reduced to 0)
+ *        - Non-Projectile: AF has no effect, normal damage
+ *        - Melee Weapon: AF damages weapon (may negate attack if destroyed)
+ *        - Unarmed: AF counter-damages attacker (may abort attack if KO'd)
  * v2.53: Hardened values now use separate fields per damage type
  *        - New sheet fields: prot_hard_kinetic, prot_hard_energy, etc.
  *        - Allows different hardened values per damage type (e.g., 5 prot / 3 hardened)
@@ -502,7 +509,7 @@ MP.Engine = (function () {
   //   - Protection has no subtype (blank) = covers full damage type
   //   - Protection subtype matches attack subtype exactly
   //   - Protection has comma-separated subtypes and one matches
-  // NOTE: Absorption and Reflection rows are SKIPPED - they require saved action, not auto-apply
+  // NOTE: Absorption, Reflection, and Ability Field rows are SKIPPED - not passive protection
   // NOTE: Hardened is read from separate prot_hard_* fields (not parsed from protection value)
   function sumProtectionWithHardened(charId, protKey, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
@@ -548,6 +555,10 @@ MP.Engine = (function () {
       const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
       const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
       if (mode === "absorption" || mode === "reflection") return;  // Skip - requires saved action
+      
+      // Check if this is an Ability Field - skip (reactive protection, not passive)
+      const afieldAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_afield`);
+      if (afieldAttr && afieldAttr.get("current") === "1") return;  // Skip - AF is reactive
       
       // Get protection value for this damage type
       const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
@@ -742,7 +753,7 @@ MP.Engine = (function () {
   // coverage: "full" (100%), "heavy" (50%), "light" (25%)
   // Returns { prot, hardened, invuln, adapt } with coverage-adjusted values
   // atkSubtype: the attack's sub-type for matching
-  // NOTE: Absorption and Reflection rows are SKIPPED - they require saved action
+  // NOTE: Absorption, Reflection, and Ability Field rows are SKIPPED - not passive protection
   // NOTE: Hardened is read from separate prot_hard_* fields (not parsed from protection value)
   function sumProtectionWithCoverage(charId, protKey, isAreaEffect, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
@@ -788,6 +799,10 @@ MP.Engine = (function () {
       const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
       const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
       if (mode === "absorption" || mode === "reflection") return;  // Skip - requires saved action
+      
+      // Check if this is an Ability Field - skip (reactive protection, not passive)
+      const afieldAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_afield`);
+      if (afieldAttr && afieldAttr.get("current") === "1") return;  // Skip - AF is reactive
       
       // Get protection value for this damage type
       const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
@@ -899,6 +914,57 @@ MP.Engine = (function () {
     } else {
       createObj("attribute", { _characterid: charId, name: attrName, current: "1" });
     }
+  }
+  
+  // Get character's active Ability Field data (if they have one)
+  // Returns { hasAF, rowId, name, damage, dmgType, pr, causesKB } or null
+  // Ability Fields are protection rows with prot_afield checkbox checked
+  function getAbilityFieldData(charId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    
+    // Get all protection row IDs
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const match = n.match(/^repeating_protection_([^_]+)_/);
+      if (match) rowIds.add(match[1]);
+    });
+    
+    for (const rowId of rowIds) {
+      // Check if this row is an Ability Field
+      const afieldAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_afield`);
+      if (!afieldAttr || afieldAttr.get("current") !== "1") continue;
+      
+      // Check if broken
+      const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+      if (brokenAttr && brokenAttr.get("current") === "1") continue;
+      
+      // Check if active
+      const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+      if (stateAttr && stateAttr.get("current") === "Off") continue;
+      
+      // Get Ability Field properties
+      const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+      const damageAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_damage`);
+      const dmgTypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_dmgtype`);
+      const prAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_pr`);
+      const kbAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_kb`);
+      
+      const damageDice = damageAttr ? damageAttr.get("current") : "";
+      if (!damageDice || damageDice === "0" || damageDice === "") continue;  // No damage = not a real AF
+      
+      return {
+        hasAF: true,
+        rowId: rowId,
+        name: nameAttr ? nameAttr.get("current") : "Ability Field",
+        damage: damageDice,
+        dmgType: dmgTypeAttr ? dmgTypeAttr.get("current") : "Energy",
+        pr: num(prAttr ? prAttr.get("current") : "1", 1),
+        causesKB: kbAttr && kbAttr.get("current") === "1"
+      };
+    }
+    
+    return null;
   }
   
   // Cleanup old pending area effects (older than 5 minutes)
@@ -2614,12 +2680,359 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
   // -------------------------
+  // ABILITY FIELD RESOLUTION
+  // -------------------------
+  
+  // Handle Ability Field interaction when attack hits target with active AF
+  // Per 2.2.4 Ability Field rules:
+  // - Projectile: Roll AF dice, subtract from damage (destroys projectile if reduced to 0)
+  // - Non-Projectile: AF has no effect, resolve damage normally
+  // - Melee Weapon: Roll AF dice vs weapon (may destroy weapon, negating damage)
+  // - Unarmed/HTH: Roll AF dice as counter-damage to attacker (may KO them, aborting attack)
+  function cmdAbilityField(msg, args) {
+    const rollId = args.id;
+    const attackType = (args.type || "").toLowerCase();
+    
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired or not found.`);
+    
+    const afData = rec.afData;
+    if (!afData) return ch("MP", `/w gm <b>MP:</b> No Ability Field data in record.`);
+    
+    const defTok = getObj("graphic", rec.defTokenId);
+    const defChar = getObj("character", rec.defCharId);
+    if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Defender not found.`);
+    
+    const defName = defChar.get("name");
+    const afName = afData.name;
+    const afDmgType = afData.dmgType;
+    
+    // Roll AF damage
+    const afRollResult = rollExpr(afData.damage);
+    const afDmg = afRollResult;
+    
+    let html = `<div style="background:#f39c12; border:3px solid #000; padding:6px 8px; margin-top:4px;">`;
+    html += `<span style="color:#fff; font-weight:bold; font-size:14px;">🔥 ${esc(afName)} ACTIVATED!</span>`;
+    html += `<br/><span style="color:#fff;">${esc(defName)}'s ${esc(afName)} rolls: <b>${afDmg}</b> ${esc(afDmgType)}</span>`;
+    html += `</div>`;
+    
+    let buttons = "";
+    
+    switch (attackType) {
+      case "projectile":
+        // Projectile: AF damage subtracts from attack damage
+        const remainingDmg = Math.max(0, rec.damageTotal - afDmg);
+        html += `<div style="background:#27ae60; border:3px solid #000; padding:4px 8px; margin-top:2px;">`;
+        if (remainingDmg === 0) {
+          html += `<span style="color:#fff; font-weight:bold;">PROJECTILE DESTROYED!</span>`;
+          html += `<br/><span style="color:#fff;">Attack: ${rec.damageTotal} - AF: ${afDmg} = 0 (blocked)</span>`;
+          html += `</div>`;
+          ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+          delete state.MP_Engine.pending[rollId];
+          return;
+        } else {
+          html += `<span style="color:#fff;">Attack reduced: ${rec.damageTotal} - ${afDmg} = <b>${remainingDmg}</b></span>`;
+          html += `</div>`;
+          // Update damage in pending record and show normal damage buttons
+          rec.damageTotal = remainingDmg;
+          rec.afResolved = true;
+          buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
+        }
+        break;
+        
+      case "nonproject":
+        // Non-projectile ranged: AF has no effect
+        html += `<div style="background:#3498db; border:3px solid #000; padding:4px 8px; margin-top:2px;">`;
+        html += `<span style="color:#fff;">Non-projectile attack - Ability Field has no effect</span>`;
+        html += `</div>`;
+        rec.afResolved = true;
+        buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
+        break;
+        
+      case "melee":
+        // Melee Weapon: AF damage vs weapon breakpoint
+        html += `<div style="background:#9b59b6; border:3px solid #000; padding:4px 8px; margin-top:2px;">`;
+        html += `<span style="color:#fff; font-weight:bold;">AF vs Melee Weapon</span>`;
+        html += `<br/><span style="color:#fff;">AF deals <b>${afDmg}</b> ${esc(afDmgType)} to weapon</span>`;
+        html += `<br/><span style="color:#fff; font-size:11px;">Compare to weapon's Breakpoint. If weapon breaks, attack is negated.</span>`;
+        html += `</div>`;
+        rec.afResolved = true;
+        buttons = `[Weapon Survives - Apply Damage](!mp afresume --id ${rollId}) `;
+        buttons += `[Weapon Destroyed - No Damage](!mp afcancel --id ${rollId})`;
+        break;
+        
+      case "unarmed":
+        // Unarmed: AF counter-damages attacker
+        html += `<div style="background:#e74c3c; border:3px solid #000; padding:4px 8px; margin-top:2px;">`;
+        html += `<span style="color:#fff; font-weight:bold;">COUNTER-DAMAGE TO ATTACKER!</span>`;
+        html += `<br/><span style="color:#fff;">${esc(afName)} deals <b>${afDmg}</b> ${esc(afDmgType)} to attacker</span>`;
+        html += `</div>`;
+        
+        // Create pending record for AF counter-damage to attacker
+        const afCounterId = String(Date.now()) + "_afcounter_" + randomInteger(999999);
+        const afProtKey = typeToProtKey(afDmgType);
+        
+        state.MP_Engine.pending[afCounterId] = {
+          rollId: afCounterId,
+          playerid: msg.playerid,
+          defTokenId: rec.defTokenId,  // Original defender (AF owner)
+          defCharId: rec.defCharId,
+          atkCharId: rec.atkCharId,     // Original attacker (takes counter-damage)
+          atkName: rec.atkName,
+          damageTotal: afDmg,
+          dmgTypeStr: afDmgType,
+          protKey: afProtKey,
+          causesKB: afData.causesKB,
+          isAFCounter: true,
+          originalRollId: rollId,
+          created: Date.now()
+        };
+        
+        // Find attacker token
+        const atkToks = findObjs({ _type: "graphic", _subtype: "token", represents: rec.atkCharId });
+        const atkTok = atkToks.length > 0 ? atkToks[0] : null;
+        const atkChar = getObj("character", rec.atkCharId);
+        const atkName = atkChar ? atkChar.get("name") : "Attacker";
+        
+        if (atkTok) {
+          state.MP_Engine.pending[afCounterId].atkTokenId = atkTok.id;
+        }
+        
+        buttons = `<div style="margin-top:4px;"><b>Counter-damage to ${esc(atkName)}:</b></div>`;
+        buttons += `[Apply Counter](!mp afcounter --id ${afCounterId}) `;
+        buttons += `[Counter + RW](!mp afcounter --id ${afCounterId} --rw ?{Roll-With amount|0})`;
+        buttons += `<br/><span style="font-size:10px; color:#666;">If attacker is KO'd, their attack is aborted.</span>`;
+        break;
+        
+      default:
+        html += `<div style="background:#c0392b; padding:4px 8px;">Unknown attack type: ${attackType}</div>`;
+        rec.afResolved = true;
+        buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
+    }
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html + buttons);
+  }
+  
+  // Resume damage application after AF melee weapon check (weapon survived)
+  function cmdAFResume(msg, args) {
+    const rollId = args.id;
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired.`);
+    
+    const buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">Weapon survived - proceeding with damage</div>` + buttons);
+  }
+  
+  // Cancel damage after AF (weapon destroyed or attacker KO'd)
+  function cmdAFCancel(msg, args) {
+    const rollId = args.id;
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired.`);
+    
+    const defChar = getObj("character", rec.defCharId);
+    const defName = defChar ? defChar.get("name") : "Target";
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + `<div style="background:#9b59b6; border:2px solid #000; padding:4px 8px;"><span style="color:#fff; font-weight:bold;">Attack negated!</span><br/><span style="color:#fff;">${esc(defName)} takes no damage.</span></div>`);
+    delete state.MP_Engine.pending[rollId];
+  }
+  
+  // Apply AF counter-damage to attacker (unarmed case)
+  function cmdAFCounter(msg, args) {
+    const rollId = args.id;
+    const rwAmt = num(args.rw, 0);
+    
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Counter-damage record expired.`);
+    
+    // Find attacker token
+    let atkTok = rec.atkTokenId ? getObj("graphic", rec.atkTokenId) : null;
+    if (!atkTok) {
+      const atkToks = findObjs({ _type: "graphic", _subtype: "token", represents: rec.atkCharId });
+      atkTok = atkToks.length > 0 ? atkToks[0] : null;
+    }
+    const atkChar = getObj("character", rec.atkCharId);
+    if (!atkTok || !atkChar) return ch("MP", `/w gm <b>MP:</b> Attacker token not found.`);
+    
+    const atkName = atkChar.get("name");
+    
+    // Get attacker's protection
+    const protData = sumProtectionWithHardened(rec.atkCharId, rec.protKey, "");
+    const prot = protData.prot;
+    const hasInvuln = protData.invuln;
+    const hasAdapt = protData.adapt;
+    const isOtherType = (rec.dmgTypeStr === "Other");
+    
+    // Calculate penetrating damage
+    let afterProt = Math.max(0, rec.damageTotal - prot);
+    
+    if (hasInvuln && afterProt > 0) {
+      afterProt = Math.floor(afterProt / 4);
+    }
+    if (hasAdapt && afterProt > 0) {
+      if (isOtherType) afterProt = 0;
+      else afterProt = Math.floor(afterProt / 2);
+    }
+    
+    // Roll-with
+    const hits0 = getResource(atkTok, rec.atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = getResource(atkTok, rec.atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const maxRW = Math.floor(pow0 / 10);
+    const actualRW = Math.min(rwAmt, maxRW, afterProt);
+    
+    const toHits = Math.max(0, afterProt - actualRW);
+    const toPower = actualRW;
+    
+    const hits1 = Math.max(0, hits0 - toHits);
+    const pow1 = Math.max(0, pow0 - toPower);
+    
+    setResource(atkTok, rec.atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+    setResource(atkTok, rec.atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    
+    // Check for KO
+    const hasPainResistance = (num(getAttr(rec.atkCharId, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    const incapacitated = (hits1 === 0);
+    
+    if (incapacitated) atkTok.set("status_dead", true);
+    else if (unconscious) atkTok.set("status_sleepy", true);
+    
+    let html = `<div style="background:#e74c3c; border:3px solid #000; padding:4px 8px;">`;
+    html += `<span style="color:#fff; font-weight:bold;">⚡ AF Counter-Damage to ${esc(atkName)}</span>`;
+    html += `<br/><span style="color:#fff;">Raw: ${rec.damageTotal} - ${prot} prot`;
+    if (hasInvuln) html += ` [×¼]`;
+    if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
+    html += ` = ${afterProt}</span>`;
+    if (actualRW > 0) html += `<br/><span style="color:#fff;">Roll-With: ${actualRW} to Power</span>`;
+    html += `<br/><span style="color:#fff;">Hits: ${hits0}→${hits1}, Power: ${pow0}→${pow1}</span>`;
+    
+    if (incapacitated || unconscious) {
+      html += `<br/><span style="color:#fff; font-weight:bold; background:#000; padding:2px 4px;">ATTACKER KO'd - ATTACK ABORTED!</span>`;
+      html += `</div>`;
+      ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+      // Clean up both records
+      if (rec.originalRollId) delete state.MP_Engine.pending[rec.originalRollId];
+      delete state.MP_Engine.pending[rollId];
+      return;
+    }
+    
+    html += `</div>`;
+    
+    // Attacker survived - proceed with original attack
+    const origRec = state.MP_Engine.pending[rec.originalRollId];
+    if (origRec) {
+      html += `<div style="margin-top:4px;"><b>Attacker survives - resolve original attack:</b></div>`;
+      const buttons = buildStandardAttackButtonsAfterAF(rec.originalRollId, origRec.critResult, origRec.causesKB, origRec);
+      html += buttons;
+    }
+    
+    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+    delete state.MP_Engine.pending[rollId];
+  }
+  
+  // Build standard attack buttons after AF has been resolved
+  // This is the same as buildStandardAttackButtons but skips the AF check
+  function buildStandardAttackButtonsAfterAF(rollId, critResult, causesKB, rec) {
+    const critType = critResult ? critResult.type : null;
+    let buttons = "";
+    
+    // Check if defender has Protected Brain (negates head shots)
+    const hasProtectedBrain = rec && rec.defCharId && 
+      (num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1);
+    
+    const isHeadShot = rec && rec.isHeadShot;
+    const isLegShot = rec && rec.isLegShot;
+    const isArmShot = rec && rec.isArmShot;
+    const isAvoidArmor = rec && rec.isAvoidArmor;
+    const isGearShot = rec && rec.isGearShot;
+    
+    if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
+      buttons = `[Apply (Head Shot)](!mp apply --id ${rollId} --mode headshot) `;
+      buttons += `[RW + Head Shot](!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0})`;
+    } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && hasProtectedBrain) {
+      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
+      buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax) `;
+      buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+    } else if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
+      buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot) `;
+      buttons += `[RW Max (No Prot)](!mp apply --id ${rollId} --mode noprot_rwmax) `;
+      buttons += `[RW Custom (No Prot)](!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0})`;
+    } else if (critType === CRIT_TYPES.SOLID_HIT) {
+      buttons = `[Apply (+3 Solid)](!mp apply --id ${rollId} --mode solid) `;
+      buttons += `[RW Max (+3)](!mp apply --id ${rollId} --mode solid_rwmax) `;
+      buttons += `[RW Custom (+3)](!mp apply --id ${rollId} --mode solid_rw --amt ?{Divert to Power|0})`;
+    } else if (critType === CRIT_TYPES.PRECISE_HIT) {
+      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
+      buttons += `[RW Max (½)](!mp apply --id ${rollId} --mode precise_rwmax) `;
+      buttons += `[RW Custom (½)](!mp apply --id ${rollId} --mode precise_rw --amt ?{Divert to Power|0})`;
+    } else {
+      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
+      buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax) `;
+      buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+    }
+    
+    if (causesKB) {
+      buttons += ` [KB](!mp kb --id ${rollId})`;
+    }
+    
+    // Check for Absorption or Reflection
+    if (rec && rec.defCharId && rec.protKey) {
+      const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
+      if (absRef) {
+        if (absRef.mode === "absorption") {
+          const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
+          buttons += `<br/><span style="color:#9b59b6; font-weight:bold;">🔮 Absorption available${limitNote}</span>`;
+          buttons += ` [Absorb (¼ dmg, saved action)](!mp absorb --id ${rollId})`;
+        } else if (absRef.mode === "reflection") {
+          const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
+          buttons += `<br/><span style="color:#e67e22; font-weight:bold;">🔄 Reflection available${limitNote}</span>`;
+          buttons += ` [Reflect (¼ dmg, saved action)](!mp reflect --id ${rollId})`;
+        }
+      }
+    }
+    
+    if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
+      buttons += `<br/>[Leg Shot Saves](!mp limbsave --id ${rollId} --limb leg)`;
+    } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
+      buttons += `<br/>[Arm Shot Saves](!mp limbsave --id ${rollId} --limb arm)`;
+    } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
+      buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+    }
+    
+    if (isGearShot) {
+      buttons += `<br/><i>(Compare damage to Gear breakpoint)</i>`;
+    }
+    
+    return buttons;
+  }
+
+  // -------------------------
   // BUTTON BUILDERS
   // -------------------------
 
   function buildStandardAttackButtons(rollId, critResult, causesKB, rec) {
     const critType = critResult ? critResult.type : null;
     let buttons = "";
+    
+    // Check if defender has an active Ability Field
+    if (rec && rec.defCharId) {
+      const afData = getAbilityFieldData(rec.defCharId);
+      if (afData) {
+        // Target has an active Ability Field - show attack type selection buttons
+        buttons = `<div style="color:#e67e22; font-weight:bold; margin-bottom:4px;">🔥 Target has ${esc(afData.name)} active! (${afData.damage} ${afData.dmgType})</div>`;
+        buttons += `<div style="font-size:10px; color:#666; margin-bottom:4px;">Select attack type to resolve Ability Field:</div>`;
+        buttons += `[Projectile](!mp afield --id ${rollId} --type projectile) `;
+        buttons += `[Non-Projectile](!mp afield --id ${rollId} --type nonproject) `;
+        buttons += `[Melee Weapon](!mp afield --id ${rollId} --type melee) `;
+        buttons += `[Unarmed/HTH](!mp afield --id ${rollId} --type unarmed)`;
+        
+        // Store AF data in pending record for later resolution
+        state.MP_Engine.pending[rollId].afData = afData;
+        state.MP_Engine.pending[rollId].critResult = critResult;
+        state.MP_Engine.pending[rollId].causesKB = causesKB;
+        
+        return buttons;
+      }
+    }
     
     // Check if defender has Protected Brain (negates head shots)
     const hasProtectedBrain = rec && rec.defCharId && 
@@ -5919,6 +6332,12 @@ function cmdStance(msg, args) {
       case "reflect": return cmdReflect(msg, args);
       case "reflecthit": return cmdReflectHit(msg, args);
 
+      // Ability Field commands
+      case "afield": return cmdAbilityField(msg, args);
+      case "afresume": return cmdAFResume(msg, args);
+      case "afcancel": return cmdAFCancel(msg, args);
+      case "afcounter": return cmdAFCounter(msg, args);
+
       // Round tracking
       case "round": return cmdRound(msg, args);
 
@@ -6037,7 +6456,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.53</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.54</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6120,11 +6539,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.53:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.54:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.53 READY");
+  log("MP ENGINE v2.54 READY");
 });
