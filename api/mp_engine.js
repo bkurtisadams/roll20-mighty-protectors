@@ -214,7 +214,7 @@ MP.Engine = (function () {
     // Save attacks: protection adds to save target (easier to save)
     SAVE_PROT_ADDS: true,
 
-    // Whisper results to GM
+    // Whisper results to GM (can be overridden by game default setting)
     GM_ONLY_BUTTONS: true,
 
     // Auto-cleanup old pending rolls (ms)
