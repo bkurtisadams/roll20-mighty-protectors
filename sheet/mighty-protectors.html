@@ -1,4 +1,5 @@
-<!-- Mighty Protectors Roll20 Character Sheet v43.03 - fix: Add defaults for target attributes
+<!-- Mighty Protectors Roll20 Character Sheet v43.06 - feat: BC Save modifier query
+v43.06: Added modifier query to BC Save buttons (EN/AG/IN/CL) for situational adjustments, default 0
 v43.03: Fixed new VTT crash when targeting tokens without MP sheet attributes (physical_def, mental_def)
 v43.02: Ability Field reactive protection now handled by API (2.2.4 rules)
 v43.01: Hardened values now have separate input fields in the Protection settings panel.
@@ -262,7 +263,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <td style="text-align:center;"><input type="text" name="attr_endurance_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
           <input type="text" name="attr_endurance_save" readonly style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="EN Save: Resist physical effects, poison, disease, fatigue" />
-          <button type="roll" class="mp-labellink" name="roll_endurance_save" title="Roll EN Save (d20 ≤ EN Save)" value="&{template:default} {{name=@{character_name} rolls EN Save}} {{Roll=[[1d20cs<@{endurance_save}cf>@{endurance_save}]]}} {{Target=[[@{endurance_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">EN</button>
+          <button type="roll" class="mp-labellink" name="roll_endurance_save" title="Roll EN Save (d20 ≤ EN Save)" value="&{template:default} {{name=@{character_name} rolls EN Save}} {{Roll=[[1d20cs<[[@{endurance_save} + ?{Modifier|0}]]cf>[[@{endurance_save} + ?{Modifier|0}]]]]}} {{Target=[[@{endurance_save} + ?{Modifier|0}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">EN</button>
         </td>
         <td style="white-space:nowrap;">
           <span style="color:#aaa; font-size:10px; padding-left:8px;"title="Characters heal their Healing Rate in points per day of rest">Heal Rate:</span>
@@ -300,7 +301,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="text" name="attr_agility_save" readonly
             style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;"
             title="AG Save: Dodge, balance, acrobatics, physical accuracy" />
-          <button type="roll" class="mp-labellink" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)" value="&{template:default} {{name=@{character_name} rolls AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">AG</button>
+          <button type="roll" class="mp-labellink" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)" value="&{template:default} {{name=@{character_name} rolls AG Save}} {{Roll=[[1d20cs<[[@{agility_save} + ?{Modifier|0}]]cf>[[@{agility_save} + ?{Modifier|0}]]]]}} {{Target=[[@{agility_save} + ?{Modifier|0}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">AG</button>
         </td>
 
         <!-- Physical Defense (AG row) -->
@@ -343,7 +344,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="text" name="attr_intelligence_save" readonly
             style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;"
             title="IN Save: Perception, knowledge, mental attacks" />
-          <button type="roll" class="mp-labellink" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)" value="&{template:default} {{name=@{character_name} rolls IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">IN</button>
+          <button type="roll" class="mp-labellink" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)" value="&{template:default} {{name=@{character_name} rolls IN Save}} {{Roll=[[1d20cs<[[@{intelligence_save} + ?{Modifier|0}]]cf>[[@{intelligence_save} + ?{Modifier|0}]]]]}} {{Target=[[@{intelligence_save} + ?{Modifier|0}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">IN</button>
         </td>
 
         <!-- Mental Defense (IN row) -->
@@ -369,7 +370,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <td style="text-align:center;"><input type="text" name="attr_cool_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
         <td style="text-align:center; white-space:nowrap;">
           <input type="text" name="attr_cool_save" readonly style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="CL Save: Willpower, fear, emotional attacks, composure" />
-          <button type="roll" class="mp-labellink" name="roll_cool_save" title="Roll CL Save (d20 ≤ CL Save)" value="&{template:default} {{name=@{character_name} rolls CL Save}} {{Roll=[[1d20cs<@{cool_save}cf>@{cool_save}]]}} {{Target=[[@{cool_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">CL</button>
+          <button type="roll" class="mp-labellink" name="roll_cool_save" title="Roll CL Save (d20 ≤ CL Save)" value="&{template:default} {{name=@{character_name} rolls CL Save}} {{Roll=[[1d20cs<[[@{cool_save} + ?{Modifier|0}]]cf>[[@{cool_save} + ?{Modifier|0}]]]]}} {{Target=[[@{cool_save} + ?{Modifier|0}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">CL</button>
         </td>
         <td style="white-space:nowrap;">
           <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
