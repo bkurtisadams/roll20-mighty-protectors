@@ -1,4 +1,14 @@
-<!-- Mighty Protectors Roll20 Character Sheet v43.07 - feat: Gear Basic Characteristics
+<!-- Mighty Protectors Roll20 Character Sheet v43.08 - feat: Light theme attack chat card
+v43.08: Redesigned non-API mpattack roll template to light theme
+        - 4-column grid: Roll, Confirm, To-Hit, Damage (all 28px uniform)
+        - Light background (#f5f5f0) with rounded corners
+        - Roll border: green on hit, red on miss
+        - To-Hit in dark gold, Damage in dark red
+        - Props row with dot separators on light gray background
+        - Modifiers section with labeled header
+        - Confirm hover text explaining crit/fumble confirmation
+        - Damage type and charges hover text
+        - Fixed stale attack_dmgtype_full: syncAttackRowMeta now syncs on sheet open
 v43.07: Added Gear BC score = floor(Total EPs / 15) + 6, for gear-based ability trait calculations
 v43.06: Added modifier query to BC Save buttons (EN/AG/IN/CL), default 0
 v43.05: Fixed new VTT crash - added 0+ prefix to inline rolls for empty attribute safety
@@ -1543,52 +1553,48 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 <rolltemplate class="sheet-rolltemplate-mpattack">
   <!-- Only show this HTML card if API is OFF (is_api == 0) -->
   {{#rollTotal() is_api 0}}
-  <div style="background:#fff200; border:4px solid #000; border-radius:0; font-family:Arial,sans-serif; font-size:13px; max-width:250px;">
-    <div style="background:#e63946; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px; border-bottom:3px solid #000;">{{name}}</div>
-    <table style="width:100%; border-collapse:collapse;">
+  <div style="background:#f5f5f0; border:2px solid #bbb; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#222; overflow:hidden;">
+    <div style="background:#c0392b; padding:7px 10px; font-size:14px; color:#f8caca;">
+      <b style="color:#fff;">{{name}}</b>
+    </div>
+    {{#tname}}
+    <div style="background:#c0392b; padding:0 10px 7px; font-size:13px; color:#f8caca;">
+      vs <b style="color:#fff;">{{tname}}</b>
+    </div>
+    {{/tname}}
+    <table style="width:100%; border-collapse:collapse; background:#fff; border-top:1px solid #ddd; border-bottom:1px solid #ddd;">
       <tr>
-        <td style="width:50%; text-align:center; padding:8px; border-right:3px solid #000; border-bottom:3px solid #000; background:#fff;">
-          
-          <!-- FAILURE: Red Box -->
+        <td style="width:25%; text-align:center; padding:8px 4px 6px; border-right:1px solid #e0e0e0;">
           {{#rollGreater() roll target}}
-            <div style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid #d00000; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">
-              {{roll}}
-            </div>
+            <div style="display:inline-block; font-size:28px; font-weight:bold; color:#c0392b; border:2px solid #c0392b; padding:0 4px; border-radius:3px; line-height:1.1;">{{roll}}</div>
           {{/rollGreater() roll target}}
-
-          <!-- SUCCESS: Green Box -->
           {{#rollLess() roll target}}
-            <div style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid #00a000; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">
-              {{roll}}
-            </div>
+            <div style="display:inline-block; font-size:28px; font-weight:bold; color:#1a8a3e; border:2px solid #27ae60; padding:0 4px; border-radius:3px; line-height:1.1;">{{roll}}</div>
           {{/rollLess() roll target}}
           {{#rollTotal() roll target}}
-            <div style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid #00a000; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">
-              {{roll}}
-            </div>
+            <div style="display:inline-block; font-size:28px; font-weight:bold; color:#1a8a3e; border:2px solid #27ae60; padding:0 4px; border-radius:3px; line-height:1.1;">{{roll}}</div>
           {{/rollTotal() roll target}}
-
-          <div style="font-size:10px; color:#000; font-weight:bold; margin-top:4px;">ROLL</div>
+          <div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#888; margin-top:3px;">Roll</div>
         </td>
-        <td style="width:50%; text-align:center; padding:8px; border-bottom:3px solid #000; background:#fff;">
-          <div style="font-size:26px; font-weight:bold; color:#000;">{{confirm}}</div>
-          <div style="font-size:10px; color:#000; font-weight:bold;">CONFIRM</div>
+        <td style="width:25%; text-align:center; padding:8px 4px 6px; border-right:1px solid #e0e0e0;">
+          <div style="font-size:28px; font-weight:bold; color:#555; line-height:1.1; padding:2px 0;" title="Confirms Crits (nat 1) and Fumbles (nat 20). Must also hit/miss to confirm.">{{confirm}}</div>
+          <div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#888; margin-top:3px;">Confirm</div>
         </td>
-      </tr>
-      <tr>
-        <td style="text-align:center; padding:6px; border-right:3px solid #000; border-bottom:3px solid #000; background:#87ceeb;">
-          <div style="font-size:20px; font-weight:bold; color:#000;">{{target}}-</div>
-          <div style="font-size:10px; color:#000; font-weight:bold;">TO-HIT</div>
+        <td style="width:25%; text-align:center; padding:8px 4px 6px; border-right:1px solid #e0e0e0;">
+          <div style="font-size:28px; font-weight:bold; color:#b8860b; line-height:1.1; padding:2px 0;">{{target}}-</div>
+          <div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#888; margin-top:3px;">To-Hit</div>
         </td>
-        <td style="text-align:center; padding:6px; border-bottom:3px solid #000; background:#ff6b6b;">
-          <div style="font-size:20px; font-weight:bold; color:#000;">{{damage}}</div>
-          <div style="font-size:10px; color:#000; font-weight:bold;">DAMAGE</div>
+        <td style="width:25%; text-align:center; padding:8px 4px 6px;">
+          <div style="font-size:28px; font-weight:bold; color:#c0392b; line-height:1.1; padding:2px 0;">{{damage}}</div>
+          <div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#c0392b; margin-top:3px;">Damage</div>
         </td>
       </tr>
     </table>
-    <div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">{{type}} · KB:{{kb}}{{#pr}} · PR:{{pr}}{{/pr}}{{#ch}} · Ch:{{ch}}{{/ch}} · Rng:{{range}}"</div>
-    {{#tname}}<div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs {{tname}} ({{deftype}} Def:{{tdef}}, Stance:{{tstance}})</div>{{/tname}}
-    <div style="padding:2px 8px 4px; text-align:center; font-size:10px; color:#555;">Rng:{{rngmod}} | Aim:{{aim}} | Multi:{{multi}} | Other:{{other}} | Called:{{called}} | Push:{{push}}</div>
+    <div style="padding:5px 10px; font-size:12px; color:#777; background:#eee; border-bottom:1px solid #ddd; text-align:center;">Type: <span style="color:#333; font-weight:bold;" title="{{subtype}}">{{type}}</span> · KB: <span style="color:#333; font-weight:bold;">{{kb}}</span>{{#pr}} · PR: <span style="color:#333; font-weight:bold;">{{pr}}</span>{{/pr}}{{#ch}} · Ch: <span style="color:#b8860b; font-weight:bold;" title="Charges remaining">{{ch}}</span>{{/ch}} · Rng: <span style="color:#333; font-weight:bold;">{{range}}"</span></div>
+    <div style="padding:5px 10px; font-size:11px; background:#f5f5f0;">
+      <div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#999; margin-bottom:3px;">Modifiers</div>
+      {{#tname}}<span style="color:#777;">{{deftype}}: <b style="color:#333;">{{tdef}}</b></span> <span style="color:#777;">Stance: <b style="color:#333;">{{tstance}}</b></span> {{/tname}}<span style="color:#777;">Rng: <b style="color:#333;">{{rngmod}}</b></span> <span style="color:#777;">Aim: <b style="color:#333;">{{aim}}</b></span> <span style="color:#777;">Multi: <b style="color:#333;">{{multi}}</b></span> <span style="color:#777;">Other: <b style="color:#333;">{{other}}</b></span> <span style="color:#777;">Called: <b style="color:#333;">{{called}}</b></span> <span style="color:#777;">Push: <b style="color:#333;">{{push}}</b></span>
+    </div>
   </div>
   {{/rollTotal() is_api 0}}
 </rolltemplate>
@@ -3061,9 +3067,21 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   function syncAttackRowMeta() {
     getSectionIDs("repeating_attacks", function(ids) {
       if (!ids || !ids.length) return;
-      const atkAttrs = ids.map(function(id) { return "repeating_attacks_" + id + "_attack_atk"; });
+      const atkAttrs = [];
+      ids.forEach(function(id) {
+        atkAttrs.push("repeating_attacks_" + id + "_attack_atk");
+        atkAttrs.push("repeating_attacks_" + id + "_attack_dmgtype");
+      });
       getAttrs(atkAttrs, function(values) {
         const typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
+        const dmgMap = {
+          "K": "Kinetic", "Kin": "Kinetic", "Kinetic": "Kinetic",
+          "E": "Energy", "Eng": "Energy", "Energy": "Energy",
+          "B": "Biochemical", "Bio": "Biochemical", "Biochemical": "Biochemical",
+          "Ent": "Entropy", "Entropy": "Entropy",
+          "P": "Psychic", "Psy": "Psychic", "Psychic": "Psychic",
+          "O": "Other", "Oth": "Other", "Other": "Other"
+        };
         const updates = {};
         ids.forEach(function(id, index) {
           updates["repeating_attacks_" + id + "_attack_rowid"] = id;
@@ -3071,9 +3089,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           updates["repeating_attacks_" + id + "_attack_idx"] = String(index);
           const code = values["repeating_attacks_" + id + "_attack_atk"] || "P";
           updates["repeating_attacks_" + id + "_attack_atk_full"] = typeMap[code] || "Physical";
-          // Set flags for target defense lookup (P=physical, M/E=mental)
           updates["repeating_attacks_" + id + "_attack_is_physical"] = (code === "P") ? "1" : "0";
           updates["repeating_attacks_" + id + "_attack_is_mental"] = (code === "M" || code === "E") ? "1" : "0";
+          // Sync damage type full name
+          const dmgCode = values["repeating_attacks_" + id + "_attack_dmgtype"] || "Kinetic";
+          updates["repeating_attacks_" + id + "_attack_dmgtype_full"] = dmgMap[dmgCode] || "Kinetic";
         });
         setAttrs(updates, { silent: true });
       });

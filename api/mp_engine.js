@@ -1,4 +1,48 @@
-/* Mighty Protectors Roll20 API Engine v2.55 - 2026-02-14
+/* Mighty Protectors Roll20 API Engine v2.57.2 - 2026-02-16
+ * v2.57.2: Fix double chat card when wtId() falls back to /w gm
+ *        - chBoth, chBothId, chCombat now guard against duplicate /w gm sends
+ *        - cmdApply deduplicates attacker send when same player controls both chars
+ * v2.57.1: Combat buttons (Roll-With, KB, Save, etc.) now visible to defender's player
+ *        - New chCombat() sends button outputs to GM + defender's controlling player
+ *        - getControllingPlayerId() resolves character → player for whisper targeting
+ *        - All 30+ combat resolution outputs converted from GM-only to chCombat
+ *        - Attack card: html → attacker+GM, buttons → defender+GM
+ *        - Apply/KB/Save/Recover/Grapple/Snare/Absorb/Reflect/AF results → defender+GM
+ * v2.57.0: Player permission and whisper targeting overhaul
+ *        - Players now see attack cards, damage results, saves in chat
+ *        - Action buttons (Apply, KB, etc.) remain GM-only when GM_ONLY_BUTTONS=true
+ *        - Error messages whisper to command sender, not always GM
+ *        - Permission helpers: wt(), wtId(), chBoth(), chBothId(), gmOnly(), canControl()
+ *        - cmdQuickAttack/cmdAutofire: canControl() check (players can only attack with own chars)
+ *        - cmdStance: canControl() check, results visible to both GM and player
+ *        - cmdStatus/cmdConditions/cmdRange: results whisper to requester
+ *        - cmdQuickSave: results visible to both GM and player
+ *        - GM-only gates added: debug, round, clearstances, restore, offbal,
+ *          arearollnpcs, areaforceall, areadamageall
+ *        - Player-reactive commands (escape, countergrapple, areaescape, areashield)
+ *          now whisper errors to player
+ * v2.56.3: Additional hover text and uniform number sizing
+ *        - All 4 core numbers now 28px uniform size
+ *        - Confirm hover: explains crit/fumble confirmation purpose
+ *        - Chg hover: shows remaining charges after deduction
+ *        - Damage Type hover: shows subtype (e.g., heat, sonics) when set
+ * v2.56.2: Aligned chat card colors with character sheet palette
+ *        - To-Hit number now gold (#f0c040) matching sheet stat labels
+ *        - Positive modifiers green (#5dde5d) matching sheet buttons
+ *        - Modifier labels warmer tone, MODIFIERS header gold-tinted
+ *        - Cost display (PR/Chg) uses sheet gold
+ * v2.56.1: Chat card fixes
+ *        - Roll border now red on miss/fumble, green on hit/crit
+ *        - Fixed flexbox layouts (not supported in Roll20 chat) to inline/table
+ *        - Apply card: larger Hits/Power numbers (16px), better contrast
+ *        - Fixed prone marker: status_prone -> status_back-pain (valid Roll20 marker)
+ * v2.56: Redesigned attack chat card and apply result card
+ *        - Dark theme with improved visual hierarchy
+ *        - Single-line header: "Attacker attacks Target with Weapon"
+ *        - 4-column core grid: Roll, Confirm, To-Hit, Damage
+ *        - Separated props row (Type, KB, Rng, PR/Chg)
+ *        - Separated modifiers section with color-coded values
+ *        - Redesigned apply result card with cleaner math breakdown
  * v2.55: Improved attack card readability
  *        - Added prominent "vs Target Name" subheader below attacker name
  *        - Added large color-coded outcome banner: HIT (green), CRIT (gold), MISS (gray), FUMBLE (red)
@@ -344,6 +388,90 @@ MP.Engine = (function () {
     return String(s || "").replace(/[<>"'&]/g, c => ({
       "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;"
     }[c]));
+  }
+
+  // --- PERMISSION & WHISPER HELPERS ---
+
+  // Return whisper prefix for the message sender
+  // GM gets "/w gm ", players get "/w PlayerName "
+  function wt(msg) {
+    if (playerIsGM(msg.playerid)) return "/w gm ";
+    const player = getObj("player", msg.playerid);
+    if (!player) return "/w gm ";
+    const name = player.get("_displayname");
+    // Roll20 whisper names with spaces need quotes
+    return `/w "${name}" `;
+  }
+
+  // Return whisper prefix for a stored player ID (from pending records)
+  function wtId(playerId) {
+    if (!playerId || playerIsGM(playerId)) return "/w gm ";
+    const player = getObj("player", playerId);
+    if (!player) return "/w gm ";
+    const name = player.get("_displayname");
+    return `/w "${name}" `;
+  }
+
+  // Send to both GM and player (if player is not GM)
+  function chBoth(who, content, msg) {
+    ch(who, "/w gm " + content);
+    if (msg && msg.playerid && !playerIsGM(msg.playerid)) {
+      const target = wt(msg);
+      if (target !== "/w gm ") ch(who, target + content);
+    }
+  }
+
+  // Send to both GM and a stored playerid (from pending records)
+  function chBothId(who, content, playerId) {
+    ch(who, "/w gm " + content);
+    if (playerId && !playerIsGM(playerId)) {
+      const target = wtId(playerId);
+      if (target !== "/w gm ") ch(who, target + content);
+    }
+  }
+
+  // GM-only gate - returns true if not GM (caller should return)
+  function gmOnly(msg) {
+    if (playerIsGM(msg.playerid)) return false;
+    ch("MP", wt(msg) + "Only the GM can use that command.");
+    return true;
+  }
+
+  // Check if player controls a character (GM always passes)
+  function canControl(msg, charId) {
+    if (playerIsGM(msg.playerid)) return true;
+    const char = getObj("character", charId);
+    if (!char) return false;
+    const controlledBy = char.get("controlledby") || "";
+    return controlledBy.includes(msg.playerid) || controlledBy.includes("all");
+  }
+
+  // Get the first controlling player ID for a character (or null)
+  function getControllingPlayerId(charId) {
+    if (!charId) return null;
+    const char = getObj("character", charId);
+    if (!char) return null;
+    const controlledBy = (char.get("controlledby") || "").split(",");
+    for (const id of controlledBy) {
+      const trimmed = id.trim();
+      if (trimmed && trimmed !== "all" && !playerIsGM(trimmed)) return trimmed;
+    }
+    return null;
+  }
+
+  // Send combat result to GM + defender's controlling player
+  // Used for all button outputs and combat resolution messages
+  function chCombat(who, content, defCharId) {
+    if (!CFG.GM_ONLY_BUTTONS) {
+      ch(who, content);
+      return;
+    }
+    ch(who, "/w gm " + content);
+    const playerId = getControllingPlayerId(defCharId);
+    if (playerId) {
+      const target = wtId(playerId);
+      if (target !== "/w gm ") ch(who, target + content);
+    }
   }
 
   function parseTemplateFields(content) {
@@ -1415,7 +1543,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getCharFromToken(defTok);
 
     if (!atkChar || !defTok || !defChar) {
-      ch("MP", `/w gm <b>MP:</b> Could not resolve attacker/defender. Select a target token.`);
+      ch("MP", `${wt(msg)}<b>MP:</b> Could not resolve attacker/defender. Select a target token.`);
       return;
     }
 
@@ -1425,7 +1553,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const targetIR = inlineTotal(msg, fields.target);
 
     if (!rollIR) {
-      ch("MP", `/w gm <b>MP:</b> Could not parse roll.`);
+      ch("MP", `${wt(msg)}<b>MP:</b> Could not parse roll.`);
       return;
     }
 
@@ -1475,7 +1603,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const getAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
 
     const rawAtkType = getAtk("attack_atk");
-    const atkName = atkChar.get("name") + " - " + (getAtk("attack_name") || fields.name || "Attack");
+    const weaponName = getAtk("attack_name") || fields.name || "Attack";
+    const atkName = atkChar.get("name") + " - " + weaponName;
     const defName = defChar.get("name");
 
     const atkTypeCode = rawAtkType || "P";
@@ -1553,14 +1682,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defPageId = defTok.get("_pageid");
     const atkTokCandidates = findObjs({ _type: "graphic", represents: atkCharId, _pageid: defPageId });
     if (atkTokCandidates.length > 1) {
-      ch("MP", `/w gm <div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkChar.get("name"))}</b> has ${atkTokCandidates.length} tokens on this map! Delete duplicates before attacking.</div>`);
+      ch("MP", `${wt(msg)}<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkChar.get("name"))}</b> has ${atkTokCandidates.length} tokens on this map! Delete duplicates before attacking.</div>`);
       return;
     }
     const atkTok = atkTokCandidates[0];
     const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
     
     if (atkDefMod === 6) {
-      ch("MP", `/w gm <div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;"><b>${esc(atkChar.get("name"))}</b> is in <b>Full Defense</b> and cannot attack!</div>`);
+      ch("MP", `${wt(msg)}<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;"><b>${esc(atkChar.get("name"))}</b> is in <b>Full Defense</b> and cannot attack!</div>`);
       return;
     }
     
@@ -1625,10 +1754,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     let chgDeducted = 0;
+    let chgRemaining = -1; // -1 = no charges tracked
     if (atkChgCost > 0 && atkCharId && rowId) {
       const chg0 = num(atkChgRaw, 0);
       chgDeducted = 1;
       const chg1 = chg0 - 1;
+      chgRemaining = chg1;
       setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
       if (chg1 === 0) {
         sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Last charge used!`);
@@ -1638,7 +1769,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isGrappleAttack = (getAtk("attack_is_grapple") === "1");
     if (isGrappleAttack) {
       if (!atkTok) {
-        ch("MP", `/w gm <b>MP:</b> Could not find an attacker token on this page.`);
+        ch("MP", `${wt(msg)}<b>MP:</b> Could not find an attacker token on this page.`);
         return;
       }
       const remote = (getAtk("attack_grapple_remote") === "1");
@@ -1708,24 +1839,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const multiVal = (inlineTotal(msg, fields.multi) ? inlineTotal(msg, fields.multi).total : num(fields.multi, 0)) || 0;
     const otherVal = (inlineTotal(msg, fields.other) ? inlineTotal(msg, fields.other).total : num(fields.other, 0)) || 0;
 
-    let borderColor = "#d00000"; // Red
-    if (outcome === "HIT" || outcome === "CRIT") {
-        borderColor = "#00a000"; // Green
-    }
-
-    const headerBg = "#e63946";
-    const toHitBg = "#87ceeb";
-    const dmgBg = "#ff6b6b";
-    const mainBorder = "#000";
-    const mainBg = "#fff200";
-
     // Format Range Display for Footer
     let rangeFooter = "0";
+
+    // Roll border: green on hit/crit, red on miss/fumble
+    const rollBorderColor = (outcome === "HIT" || outcome === "CRIT") ? "#27ae60" : "#c0392b";
+    const rollTextColor = (outcome === "HIT" || outcome === "CRIT") ? "#7bed9f" : "#ff6b6b";
     if (rangeData && typeof rangeData.inches === "number") {
         const baseR = rangeData.inches;
         const adjR = rangeData.profileAdjusted ? rangeData.adjustedInches : baseR;
         if (rangeData.profileAdjusted && baseR !== adjR) {
-            // Clean trailing .0
             const cleanAdj = adjR.toFixed(1).replace(/\.0$/, '');
             rangeFooter = `${baseR}" (${cleanAdj}")`;
         } else {
@@ -1773,13 +1896,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         else if (defP !== 1) profNote = ` (TgtProf:${defP})`;
       }
       const cleanAdjHover = adjR.toFixed(1).replace(/\.0$/, '');
-      // Use &quot; for inches symbol inside tooltip attribute
       hoverBreakdown += `&#10;Range: ${rangePenalty} (${cleanAdjHover}&quot;${profNote})`;
     }
     
-    // Called Shot Penalty (Explicitly Added Here)
+    // Called Shot Penalty
     if (calledShotPenalty !== 0) {
-        // Avoid redundant "Called (Called): -3" - just show "Called: -3" for generic type
         if (calledShotType === "Called") {
             hoverBreakdown += `&#10;Called: ${calledShotPenalty}`;
         } else {
@@ -1790,112 +1911,138 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Final: ${targetTotal}-`;
 
-    // --- GENERATE HTML ---
-    // Outcome banner config
+    // --- GENERATE HTML (Dark Theme Card) ---
     const outcomeLabels = {
-      HIT:    { text: "HIT",             bg: "#27ae60", color: "#fff" },
-      CRIT:   { text: "⚡ CRITICAL HIT", bg: "#f1c40f", color: "#000" },
-      MISS:   { text: "MISS",            bg: "#7f8c8d", color: "#fff" },
-      FUMBLE: { text: "💥 FUMBLE",       bg: "#c0392b", color: "#fff" }
+      HIT:    { text: "HIT",    bg: "#27ae60", color: "#fff" },
+      CRIT:   { text: "CRITICAL HIT", bg: "#f1c40f", color: "#000" },
+      MISS:   { text: "MISS",   bg: "#555",    color: "#ccc" },
+      FUMBLE: { text: "FUMBLE", bg: "#c0392b", color: "#fff" }
     };
     const outcomeStyle = outcomeLabels[outcome] || outcomeLabels.MISS;
 
-    let html = `<div style="background:${mainBg}; border:4px solid ${mainBorder}; font-family:Arial,sans-serif; font-size:13px; max-width:250px;">`;
-    html += `<div style="background:${headerBg}; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px;">${esc(atkName)}</div>`;
-    html += `<div style="background:#222; color:#ccc; text-align:center; padding:3px 8px; font-size:12px; border-bottom:2px solid ${mainBorder};">vs <b style="color:#fff;">${esc(defName)}</b></div>`;
-    html += `<div style="background:${outcomeStyle.bg}; color:${outcomeStyle.color}; text-align:center; padding:4px 8px; font-size:16px; font-weight:bold; letter-spacing:1px; border-bottom:3px solid ${mainBorder};">${outcomeStyle.text}</div>`;
-    html += `<table style="width:100%; border-collapse:collapse;"><tr>`;
+    // Color helper for modifier values (matches sheet: red negative, green positive)
+    const modColor = (v) => v < 0 ? "#ff6b6b" : (v > 0 ? "#5dde5d" : "#ddd");
 
-    // Roll Cell (Using Number + Tooltip)
-    html += `<td style="width:50%; text-align:center; padding:8px; border-right:3px solid ${mainBorder}; border-bottom:3px solid ${mainBorder}; background:#fff;">`;
-    html += `<div title="Natural Roll: ${nat}" style="display:inline-block; min-width:40px; font-size:26px; font-weight:bold; color:#000; border:4px solid ${borderColor}; padding:2px 4px; border-radius:4px; box-sizing:border-box; background:#fff;">${roll}</div>`;
-    html += `<div style="font-size:10px; color:#000; font-weight:bold; margin-top:4px;">ROLL</div>`;
+    // --- Card container ---
+    let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden;">`;
+
+    // --- Header: "Attacker attacks Target with Weapon" ---
+    html += `<div style="background:#c0392b; padding:7px 10px; font-size:14px; color:#fdd;">`;
+    html += `<b style="color:#fff;">${esc(atkChar.get("name"))}</b> attacks <b style="color:#fff;">${esc(defName)}</b> with <b style="color:#fff;">${esc(weaponName)}</b>`;
+    html += `</div>`;
+
+    // --- Outcome Banner ---
+    html += `<div style="background:${outcomeStyle.bg}; color:${outcomeStyle.color}; text-align:center; padding:3px; font-weight:bold; font-size:14px; letter-spacing:2px;">`;
+    html += outcomeStyle.text;
+    html += `</div>`;
+
+    // --- Core Numbers: 4-column grid ---
+    html += `<table style="width:100%; border-collapse:collapse; background:#16213e; border-top:1px solid #333; border-bottom:1px solid #333;"><tr>`;
+
+    // Roll
+    html += `<td style="width:25%; text-align:center; padding:8px 4px 6px; border-right:1px solid #2a2a4a;">`;
+    html += `<div title="Natural: ${nat}" style="display:inline-block; font-size:28px; font-weight:bold; color:${rollTextColor}; border:2px solid ${rollBorderColor}; padding:0 4px; border-radius:3px; line-height:1.1;">${roll}</div>`;
+    html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#889; margin-top:3px;">Roll</div>`;
     html += `</td>`;
 
-    // Confirm Cell
-    html += `<td style="width:50%; text-align:center; padding:8px; border-bottom:3px solid ${mainBorder}; background:#fff;">`;
-    html += `<div style="font-size:26px; font-weight:bold; color:#000;">${confirm}</div>`;
-    html += `<div style="font-size:10px; color:#000; font-weight:bold;">CONFIRM</div>`;
-    html += `</td></tr>`;
-
-    // To Hit & Damage
-    html += `<tr>`;
-    html += `<td style="text-align:center; padding:6px; border-right:3px solid ${mainBorder}; border-bottom:3px solid ${mainBorder}; background:${toHitBg};">`;
-    html += `<div style="font-size:20px; font-weight:bold; color:#000;" title="${hoverBreakdown}">${targetTotal}-</div>`;
-    html += `<div style="font-size:10px; color:#000; font-weight:bold;">TO-HIT</div>`;
+    // Confirm
+    html += `<td style="width:25%; text-align:center; padding:8px 4px 6px; border-right:1px solid #2a2a4a;">`;
+    html += `<div title="Confirms Crits (nat 1) and Fumbles (nat 20).&#10;Must also hit/miss to confirm." style="font-size:28px; font-weight:bold; color:#ccc; line-height:1.1; padding:2px 0;">${confirm}</div>`;
+    html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#889; margin-top:3px;">Confirm</div>`;
     html += `</td>`;
-    
-    // Damage Cell
-    html += `<td style="text-align:center; padding:6px; border-bottom:3px solid ${mainBorder}; background:${dmgBg};">`;
-    html += `<div title="Total Damage" style="font-size:20px; font-weight:bold; color:#000;">${damageTotal}</div>`;
-    html += `<div style="font-size:10px; color:#000; font-weight:bold;">DAMAGE</div>`;
-    html += `</td></tr></table>`;
 
-    // Info
-    const prStr = atkPR > 0 ? ` · PR:${atkPR}` : "";
-    html += `<div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">${esc(dmgTypeStr)} · KB:${causesKB ? 'Yes' : 'No'}${prStr} · Rng:${rangeFooter}</div>`;
-    html += `<div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">${defTypeLabel}:${defValue}, Stance:${defMod}</div>`;
-    
-    let footerArr = [];
-    footerArr.push(`Rng:${rangePenalty}`);
-    footerArr.push(`Aim:${aimVal}`);
-    footerArr.push(`Multi:${multiVal}`);
-    footerArr.push(`Other:${otherVal}`);
-    footerArr.push(`Called:${calledShotPenalty}`);
-    footerArr.push(`Push:${pushAmount}`);
-    html += `<div style="padding:2px 8px 4px; text-align:center; font-size:10px; color:#555;">${footerArr.join(" | ")}</div>`;
+    // To-Hit
+    html += `<td style="width:25%; text-align:center; padding:8px 4px 6px; border-right:1px solid #2a2a4a;">`;
+    html += `<div title="${hoverBreakdown}" style="font-size:28px; font-weight:bold; color:#f0c040; line-height:1.1; padding:2px 0;">${targetTotal}-</div>`;
+    html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#889; margin-top:3px;">To-Hit</div>`;
+    html += `</td>`;
 
+    // Damage
+    html += `<td style="width:25%; text-align:center; padding:8px 4px 6px;">`;
+    html += `<div title="Total Damage" style="font-size:28px; font-weight:bold; color:#ff6b6b; line-height:1.1; padding:2px 0;">${damageTotal}</div>`;
+    html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#ff6b6b; margin-top:3px;">Damage</div>`;
+    html += `</td>`;
+
+    html += `</tr></table>`;
+
+    // --- Attack Properties + Cost Row ---
+    const prStr = atkPR > 0 ? ` PR:<span style="color:#ddd; font-weight:bold;">${atkPR}</span>` : "";
+    let costStr = "";
+    if (prDeducted > 0 || chgDeducted > 0) {
+      let costParts = [];
+      if (prDeducted > 0) costParts.push(`PR:-${prDeducted}`);
+      if (chgDeducted > 0) {
+        const chgHover = chgRemaining >= 0 ? ` title="${chgRemaining} charges remaining"` : "";
+        costParts.push(`<span${chgHover}>Chg:-${chgDeducted}c</span>`);
+      }
+      costStr = ` · <span style="color:#f0c040;">${costParts.join(", ")}</span>`;
+    }
+
+    html += `<div style="padding:5px 10px; font-size:12px; color:#aab; background:#16213e; border-bottom:1px solid #2a2a4a; text-align:center;">`;
+    const dmgTypeHover = dmgSubtype ? ` title="Subtype: ${esc(dmgSubtype)}"` : "";
+    html += `Type: <span style="color:#ddd; font-weight:bold;"${dmgTypeHover}>${esc(dmgTypeStr)}</span>`;
+    html += ` · KB: <span style="color:#ddd; font-weight:bold;">${causesKB ? "Yes" : "No"}</span>`;
+    html += ` · Rng: <span style="color:#ddd; font-weight:bold;">${rangeFooter}</span>`;
+    html += costStr;
+    html += `</div>`;
+
+    // --- Modifiers Section ---
+    html += `<div style="padding:5px 10px; font-size:11px; color:#889; background:#1a1a2e;">`;
+    html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#997; margin-bottom:3px;">Modifiers</div>`;
+    html += `<span style="color:#aaa;">${defTypeLabel}: <b style="color:#ddd;">${defValue}</b></span> `;
+    html += `<span style="color:#aaa;">Stance: <b style="color:${modColor(defMod)};">${defMod}</b></span> `;
+    html += `<span style="color:#aaa;">Rng: <b style="color:${modColor(rangePenalty)};">${rangePenalty}</b></span> `;
+    html += `<span style="color:#aaa;">Aim: <b style="color:${modColor(aimVal)};">${aimVal}</b></span> `;
+    html += `<span style="color:#aaa;">Multi: <b style="color:${modColor(multiVal)};">${multiVal}</b></span> `;
+    html += `<span style="color:#aaa;">Other: <b style="color:${modColor(otherVal)};">${otherVal}</b></span> `;
+    html += `<span style="color:#aaa;">Called: <b style="color:${modColor(calledShotPenalty)};">${calledShotPenalty}</b></span> `;
+    html += `<span style="color:#aaa;">Push: <b style="color:${modColor(pushAmount)};">${pushAmount}</b></span>`;
+    html += `</div>`;
+
+    // --- Crit / Fumble / Called Shot Results ---
     if (isCrit && critResult) {
-      html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; font-weight:bold; color:#000;">⚡ ${esc(critResult.desc)}</div>`;
+      html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#f1c40f;">CRIT: ${esc(critResult.desc)}</div>`;
       if (critResult.type === CRIT_TYPES.HEAD_SHOT) {
         const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
-        if (hasProtectedBrain) html += `<div style="color:#1a5276; font-size:11px; font-weight:bold; padding:0 4px;">🧠 PROTECTED BRAIN - Head Shot negated!</div>`;
+        if (hasProtectedBrain) html += `<div style="color:#8be9fd; font-size:11px; font-weight:bold; padding:0 10px;">PROTECTED BRAIN - Head Shot negated!</div>`;
       }
       if (critResult.type === CRIT_TYPES.OFF_BALANCE) html += applyOffBalance(defTok, defName);
       if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
         const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
         setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, hits0 - 1));
-        html += `<div style="color:#e94560; font-size:11px; padding:0 4px;"><b>${esc(defName)}</b> takes 1 Hit (muscle strain)! Hits: ${hits0}→${hits0-1}</div>`;
+        html += `<div style="color:#ff6b6b; font-size:11px; padding:0 10px;"><b>${esc(defName)}</b> takes 1 Hit (muscle strain)! Hits: ${hits0}→${hits0-1}</div>`;
       }
     }
 
     if (isFumble && fumbleResult) {
-      html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; font-weight:bold; color:#000;">💥 ${esc(fumbleResult.desc)}</div>`;
+      html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#c0392b;">FUMBLE: ${esc(fumbleResult.desc)}</div>`;
       if (fumbleResult.type === FUMBLE_TYPES.OFF_BALANCE_ATK && atkTok) html += applyOffBalance(atkTok, atkChar.get("name"));
       if ([FUMBLE_TYPES.MUSCLE_STRAIN_ATK, FUMBLE_TYPES.LEG_STRAIN, FUMBLE_TYPES.ARM_STRAIN].includes(fumbleResult.type) && atkTok) {
         const atkHits0 = getResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
         setResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, atkHits0 - 1));
-        html += `<div style="color:#e94560; font-size:11px; padding:0 4px;"><b>${esc(atkChar.get("name"))}</b> takes 1 Hit (strain)! Hits: ${atkHits0}→${atkHits0-1}</div>`;
+        html += `<div style="color:#ff6b6b; font-size:11px; padding:0 10px;"><b>${esc(atkChar.get("name"))}</b> takes 1 Hit (strain)! Hits: ${atkHits0}→${atkHits0-1}</div>`;
       }
     }
 
     if (isCalledShot) {
-      // On a hit: show full effect message. On a miss: just note the called shot attempt
       if (outcome === "HIT" || outcome === "CRIT") {
         const labels = {
-          "Head": "🎯 HEAD SHOT (-6) - Hits DOUBLED!", "Leg": "🎯 LEG SHOT (-3) - Saves required",
-          "Arm": "🎯 ARM SHOT (-3) - Saves required", "Avoid Light Armor": "🎯 AVOID LIGHT ARMOR (-3)",
-          "Avoid Heavy Armor": "🎯 AVOID HEAVY ARMOR (-6)", "Gear": "🎯 GEAR SHOT (-3)",
-          "Called": "🎯 CALLED SHOT (-3)"
+          "Head": "HEAD SHOT (-6) - Hits DOUBLED!", "Leg": "LEG SHOT (-3) - Saves required",
+          "Arm": "ARM SHOT (-3) - Saves required", "Avoid Light Armor": "AVOID LIGHT ARMOR (-3)",
+          "Avoid Heavy Armor": "AVOID HEAVY ARMOR (-6)", "Gear": "GEAR SHOT (-3)",
+          "Called": "CALLED SHOT (-3)"
         };
-        html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; font-weight:bold; color:#000;">${labels[calledShotType] || `🎯 CALLED SHOT: ${calledShotType}`}</div>`;
+        html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#e67e22;">${labels[calledShotType] || `CALLED SHOT: ${calledShotType}`}</div>`;
         if (isHeadShot) {
           const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
-          if (hasProtectedBrain) html += `<div style="color:#1a5276; font-size:11px; font-weight:bold; padding:0 4px;">🧠 PROTECTED BRAIN - Head Shot negated!</div>`;
+          if (hasProtectedBrain) html += `<div style="color:#8be9fd; font-size:11px; font-weight:bold; padding:0 10px;">PROTECTED BRAIN - Head Shot negated!</div>`;
         }
       } else {
-        // Miss/Fumble - just note the called shot attempt without effect text
-        html += `<div style="border-top:1px solid ${mainBorder}; padding:4px; font-size:11px; color:#666;">🎯 Called shot attempted (${calledShotType})</div>`;
+        html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; color:#889;">Called shot attempted (${calledShotType})</div>`;
       }
     }
 
-    if (prDeducted > 0 || chgDeducted > 0) {
-      html += `<div style="border-top:1px solid ${mainBorder}; padding:2px 4px; font-size:10px; color:#333; text-align:right;">`;
-      if (prDeducted > 0) html += `PR: -${prDeducted} `;
-      if (chgDeducted > 0) html += `Chg: -${chgDeducted}c`;
-      html += `</div>`;
-    }
-
+    // --- Close card ---
     html += `</div>`;
 
     let buttons = "";
@@ -1909,8 +2056,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
-    ch("MP", whisper + html + buttons);
+    if (CFG.GM_ONLY_BUTTONS) {
+      // Send attack card to both GM and attacker
+      chBothId("MP", html, msg.playerid);
+      // Send action buttons to GM and defender's player
+      if (buttons) chCombat("MP", buttons, defChar.id);
+    } else {
+      ch("MP", html + buttons);
+    }
   }
 
   // -------------------------
@@ -2063,7 +2216,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isProne = (args.prone === "1" || args.prone === "true" || args.prone !== undefined && args.prone !== "");
     
     const areaRec = state.MP_Engine.pendingArea[rollId];
-    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    if (!areaRec) return ch("MP", `${wt(msg)}<b>MP:</b> Area effect expired or not found.`);
     
     const tokData = areaRec.tokens[targetId];
     if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
@@ -2104,7 +2257,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       resultHtml += `</div>`;
     }
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + resultHtml);
+    chCombat("MP", resultHtml, char.id);
     
     // Check if all tokens resolved
     checkAreaResolved(rollId);
@@ -2116,7 +2269,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const targetId = args.target;
     
     const areaRec = state.MP_Engine.pendingArea[rollId];
-    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    if (!areaRec) return ch("MP", `${wt(msg)}<b>MP:</b> Area effect expired or not found.`);
     
     const tokData = areaRec.tokens[targetId];
     if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
@@ -2170,7 +2323,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       resultHtml += `</div>`;
     }
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + resultHtml);
+    chCombat("MP", resultHtml, char.id);
     
     checkAreaResolved(rollId);
   }
@@ -2497,7 +2650,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     html += `</div>`;
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+    chCombat("MP", html, rec.defCharId);
     
     // Clean up pending record
     delete state.MP_Engine.pending[rollId];
@@ -2587,7 +2740,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let buttons = `<br/>[Reflect at Original Attacker](!mp reflecthit --id ${reflectRollId} --target original)`;
     buttons += ` [Reflect at Target...](!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id})`;
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html + buttons);
+    chCombat("MP", html + buttons, rec.defCharId);
     
     // Clean up original pending record
     delete state.MP_Engine.pending[rollId];
@@ -2688,7 +2841,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     html += `</div>`;
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+    chCombat("MP", html, targetCharId);
     
     // Clean up
     delete state.MP_Engine.pending[rollId];
@@ -2742,7 +2895,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           html += `<span style="color:#fff; font-weight:bold;">PROJECTILE DESTROYED!</span>`;
           html += `<br/><span style="color:#fff;">Attack: ${rec.damageTotal} - AF: ${afDmg} = 0 (blocked)</span>`;
           html += `</div>`;
-          ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+          chCombat("MP", html, defChar.id);
           delete state.MP_Engine.pending[rollId];
           return;
         } else {
@@ -2825,7 +2978,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
     }
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html + buttons);
+    chCombat("MP", html + buttons, rec.defCharId);
   }
   
   // Resume damage application after AF melee weapon check (weapon survived)
@@ -2835,7 +2988,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired.`);
     
     const buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">Weapon survived - proceeding with damage</div>` + buttons);
+    chCombat("MP", `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">Weapon survived - proceeding with damage</div>` + buttons, rec.defCharId);
   }
   
   // Cancel damage after AF (weapon destroyed or attacker KO'd)
@@ -2847,7 +3000,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getObj("character", rec.defCharId);
     const defName = defChar ? defChar.get("name") : "Target";
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + `<div style="background:#9b59b6; border:2px solid #000; padding:4px 8px;"><span style="color:#fff; font-weight:bold;">Attack negated!</span><br/><span style="color:#fff;">${esc(defName)} takes no damage.</span></div>`);
+    chCombat("MP", `<div style="background:#9b59b6; border:2px solid #000; padding:4px 8px;"><span style="color:#fff; font-weight:bold;">Attack negated!</span><br/><span style="color:#fff;">${esc(defName)} takes no damage.</span></div>`, rec.defCharId);
     delete state.MP_Engine.pending[rollId];
   }
   
@@ -2923,7 +3076,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (incapacitated || unconscious) {
       html += `<br/><span style="color:#fff; font-weight:bold; background:#000; padding:2px 4px;">ATTACKER KO'd - ATTACK ABORTED!</span>`;
       html += `</div>`;
-      ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+      chCombat("MP", html, atkChar.id);
       // Clean up both records
       if (rec.originalRollId) delete state.MP_Engine.pending[rec.originalRollId];
       delete state.MP_Engine.pending[rollId];
@@ -2940,7 +3093,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += buttons;
     }
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+    chCombat("MP", html, atkChar.id);
     delete state.MP_Engine.pending[rollId];
   }
   
@@ -3370,21 +3523,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     let statusLine = "";
     if (incapacitated) {
-      statusLine = `<br/><span style="color:#000; font-weight:bold;">💀 INCAPACITATED!</span>`;
+      statusLine = `<div style="color:#ff6b6b; font-weight:bold; margin-top:4px;">INCAPACITATED!</div>`;
       defTok.set("status_dead", true);
     } else if (unconscious) {
-      statusLine = `<br/><span style="color:#000; font-weight:bold;">😵 UNCONSCIOUS!</span>`;
+      statusLine = `<div style="color:#e67e22; font-weight:bold; margin-top:4px;">UNCONSCIOUS!</div>`;
       defTok.set("status_sleepy", true);
     }
 
     let effectNotes = "";
     if (isHeadShot && !hasProtectedBrain) {
-      effectNotes = ` <span style="color:#e94560;">[HEAD SHOT x2]</span>`;
+      effectNotes = ` <span style="color:#ff6b6b;">[HEAD SHOT x2]</span>`;
     } else if (isHeadShot && hasProtectedBrain) {
-      effectNotes = ` <span style="color:#1a5276; font-weight:bold;">[HEAD SHOT NEGATED - Protected Brain]</span>`;
+      effectNotes = ` <span style="color:#8be9fd; font-weight:bold;">[HEAD SHOT NEGATED - Protected Brain]</span>`;
     }
     if (mode.includes("solid")) {
-      effectNotes += ` <span style="color:#8b4513;">[+3 Solid Hit]</span>`;
+      effectNotes += ` <span style="color:#e67e22;">[+3 Solid Hit]</span>`;
     }
     if (mode.includes("precise")) {
       effectNotes += ` <span style="color:#8be9fd;">[½ Roll-With]</span>`;
@@ -3430,15 +3583,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Build protection display string
     let protDisplay = `${Math.floor(effectiveProt)}`;
     
-    // Invulnerability indicator - dark orange for visibility on yellow
+    // Invulnerability indicator
     let invulnIndicator = "";
     if (hasInvuln && invulnReduction > 0) {
-      invulnIndicator = ` <span style="color:#d35400;" title="Invulnerability: 1/4 damage">[×¼]</span>`;
+      invulnIndicator = ` <span style="color:#e67e22;" title="Invulnerability: 1/4 damage">[×¼]</span>`;
     } else if (hasInvuln && leftoverAP > 0) {
-      invulnIndicator = ` <span style="color:#c0392b;" title="AP bypassed Invulnerability">[Invuln bypassed]</span>`;
+      invulnIndicator = ` <span style="color:#ff6b6b;" title="AP bypassed Invulnerability">[Invuln bypassed]</span>`;
     }
     
-    // Adaptation indicator - teal for visibility
+    // Adaptation indicator
     let adaptIndicator = "";
     if (hasAdapt && isOtherType) {
       adaptIndicator = ` <span style="color:#1abc9c;" title="Adaptation: 100% Immunity to Other">[IMMUNE]</span>`;
@@ -3461,26 +3614,47 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     const msgLine =
-      `<div style="background:#fff200; border:3px solid #000; padding:4px 8px;">` +
-      `<span style="color:#000; font-weight:bold;" title="Target">${esc(rec.defName)}</span>:${effectNotes}` +
-      `<br/><span title="Raw damage">${raw}</span>` +
+      `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
+      `<div style="font-weight:bold; font-size:15px; color:#fff; margin-bottom:6px;">${esc(rec.defName)}${effectNotes}</div>` +
+      `<div style="color:#ccc; margin-bottom:4px; font-size:13px;">` +
+      `<span title="Raw damage">${raw}</span>` +
       ` - <span title="${protHover}">${protDisplay}</span> prot${apIndicator}` +
       (hasInvuln ? ` = ${afterProt}${invulnIndicator}` : "") +
       (hasAdapt ? `${adaptIndicator}` : "") +
-      ` = <span title="Penetrating damage${(vuln && vuln.notes && vuln.notes.length) ? ('&#10;' + vuln.notes.join('&#10;')) : ''}">${penetrating}</span> pen` +
-      ((vuln && vuln.notes && vuln.notes.length) ? ` <span title="${vuln.notes.join('&#10;')}">[vuln]</span>` : "") +
-      (divert > 0 ? `, <span title="Roll-with (max ${maxDivert})">RW ${divert}</span>` : "") +
-      (isHeadShot ? ` → ${penetrating - divert} x2` : "") +
-      ` → <b title="Hits damage">${toHits}</b> to Hits` +
-      (overflow > 0 ? ` <span title="Overflow to Power">(+${overflow} ovf)</span>` : "") +
-      `<br/><span title="Hits">Hits: <b>${hits0}→${hits1}</b></span>` +
-      ` | <span title="Power">Pwr: <b>${pow0}→${pow1}</b></span>` +
+      ` = <span style="color:#ff6b6b; font-weight:bold;" title="Penetrating damage${(vuln && vuln.notes && vuln.notes.length) ? ('&#10;' + vuln.notes.join('&#10;')) : ''}">${penetrating} pen</span>` +
+      ((vuln && vuln.notes && vuln.notes.length) ? ` <span title="${vuln.notes.join('&#10;')}" style="color:#e67e22;">[vuln]</span>` : "") +
+      `</div>` +
+      (divert > 0 ? `<div style="color:#ccc; margin-bottom:6px; font-size:13px;">RW <span title="Roll-with (max ${maxDivert})">${divert}</span>` +
+        (isHeadShot ? ` → ${penetrating - divert} x2` : "") +
+        ` → <b style="color:#ff6b6b;">${toHits}</b> to Hits` +
+        (overflow > 0 ? ` <span style="color:#e67e22;" title="Overflow to Power">(+${overflow} ovf)</span>` : "") +
+        `</div>` :
+        `<div style="color:#ccc; margin-bottom:6px; font-size:13px;">` +
+        (isHeadShot ? `${penetrating} x2 = ` : "") +
+        `<b style="color:#ff6b6b;">${toHits}</b> to Hits` +
+        (overflow > 0 ? ` <span style="color:#e67e22;" title="Overflow to Power">(+${overflow} ovf)</span>` : "") +
+        `</div>`) +
+      `<table style="border-collapse:collapse; margin-top:2px;"><tr>` +
+      `<td style="padding-right:20px;">` +
+      `<div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#889; margin-bottom:2px;">Hits</div>` +
+      `<span style="font-size:16px;"><span style="color:#999; text-decoration:line-through;">${hits0}</span> <span style="color:#667;">→</span> <b style="color:#ff6b6b;">${hits1}</b></span></td>` +
+      `<td>` +
+      `<div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#889; margin-bottom:2px;">Power</div>` +
+      `<span style="font-size:16px;"><span style="color:#999; text-decoration:line-through;">${pow0}</span> <span style="color:#667;">→</span> <b style="color:#ff6b6b;">${pow1}</b></span></td>` +
+      `</tr></table>` +
       statusLine +
-      // Add Try Again button for poison damage recovery
       (rec.condIdx !== undefined ? `<br/>[Try Again](!mp recover --target ${rec.defTokenId} --idx ${rec.condIdx})` : "") +
       `</div>`;
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msgLine);
+    chCombat("MP", msgLine, rec.defCharId);
+    // Also send damage result to attacking player (if different from defender's player)
+    if (CFG.GM_ONLY_BUTTONS && rec.playerid && !playerIsGM(rec.playerid)) {
+      const atkTarget = wtId(rec.playerid);
+      const defPlayerId = getControllingPlayerId(rec.defCharId);
+      if (atkTarget !== "/w gm " && rec.playerid !== defPlayerId) {
+        ch("MP", atkTarget + msgLine);
+      }
+    }
     
     // Store hits taken for limb shot saves (uses actual damage including head shot doubling)
     state.MP_Engine.pending[rollId].hitsTaken = toHits;
@@ -3543,10 +3717,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
     if (!agPass && limb === "leg") {
-      defTok.set("status_prone", true);
+      defTok.set("status_back-pain", true);
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, rec.defCharId);
   }
 
   // -------------------------
@@ -3578,7 +3752,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       msg_out += `<br/>[AG Save vs Knockdown](!mp kbsave --target ${rec.defTokenId} --penalty ${kb})`;
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, rec.defCharId);
   }
 
   function cmdKBSave(msg, args) {
@@ -3599,10 +3773,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `Roll: <b>${roll}</b> → <b>${pass ? "STAYS UP" : "PRONE!"}</b>`;
 
     if (!pass) {
-      tok.set("status_prone", true);
+      tok.set("status_back-pain", true);
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, char.id);
   }
 
   // -------------------------
@@ -3806,7 +3980,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       statusLine +
       damageButtons;
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, rec.defCharId);
   }
   
   // Get human-readable condition description
@@ -3939,7 +4113,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, char.id);
   }
 
   // -------------------------
@@ -3951,12 +4125,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const tok = getObj("graphic", tokId);
     const char = getCharFromToken(tok);
     
-    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
     
     const conditions = state.MP_Engine.conditions[tokId] || [];
     
     if (conditions.length === 0) {
-      return ch("MP", `/w gm <b>${esc(char.get("name"))}</b> has no active conditions.`);
+      return ch("MP", `${wt(msg)}<b>${esc(char.get("name"))}</b> has no active conditions.`);
     }
     
     let msg_out = `<b>Conditions on ${esc(char.get("name"))}</b>`;
@@ -3994,7 +4168,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     });
     
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    ch("MP", wt(msg) + msg_out);
   }
   
   function cmdClearCondition(msg, args) {
@@ -4111,8 +4285,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
       
       if (report.length > 0) {
-        ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + 
-          `<span style="color:#9b59b6;"><b>${esc(char.get("name"))}</b>: Absorption expired - ${report.join(", ")}</span>`);
+        chCombat("MP", `<span style="color:#9b59b6;"><b>${esc(char.get("name"))}</b>: Absorption expired - ${report.join(", ")}</span>`, char.id);
       }
     }
   }
@@ -4165,9 +4338,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const newBp = Math.min(existing.bp + CFG.SNARE_STACK_BONUS, existing.maxBp);
       const oldBp = existing.bp;
       state.MP_Engine.snares[defTok.id].bp = newBp;
-      ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") +
-        `<b>Snare Stacked on ${esc(rec.defName)}</b><br/>` +
-        `BP increased: <b>${oldBp} → ${newBp}</b> (max ${existing.maxBp})`);
+      chCombat("MP", `<b>Snare Stacked on ${esc(rec.defName)}</b><br/>` +
+        `BP increased: <b>${oldBp} → ${newBp}</b> (max ${existing.maxBp})`, rec.defCharId);
       return;
     }
 
@@ -4195,11 +4367,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     defTok.set("status_cobweb", true);
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") +
-      `<b>Snare Applied to ${esc(rec.defName)}</b><br/>` +
+    chCombat("MP", `<b>Snare Applied to ${esc(rec.defName)}</b><br/>` +
       `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
       `BP: ${bpDisplay} | Max: <b>${maxBp}</b>` +
-      `<br/>[Break Free](!mp break --target ${defTok.id})`);
+      `<br/>[Break Free](!mp break --target ${defTok.id})`, rec.defCharId);
   }
 
   function cmdBreak(msg, args) {
@@ -4243,7 +4414,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       msg_out += `<br/>[Try Again](!mp break --target ${tokId}) [Push (+2)](!mp break --target ${tokId} --push 1)`;
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, char.id);
   }
 
   // -------------------------
@@ -4318,7 +4489,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (!hit) {
       msg_out += `Result: <b style="color:#e74c3c;">MISS</b>`;
-      ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+      chCombat("MP", msg_out, defChar.id);
       return;
     }
 
@@ -4360,7 +4531,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `[Escape](!mp escape --target ${defTokId}) ` +
       (remote || lockAttempt ? "" : `[Counter](!mp countergrapple --target ${defTokId})`);
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, defChar.id);
   }
 
   function cmdSqueeze(msg, args) {
@@ -4423,7 +4594,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `[Roll-With...](!mp apply --id ${rollId} --mode rw --amt ?{Roll-With amount|0})`;
     html += `</div>`;
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + html);
+    chCombat("MP", html, defChar.id);
   }
 
   function cmdGrappleBreak(msg, args) {
@@ -4511,7 +4682,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, defChar.id);
   }
 
   function cmdGrappleRelease(msg, args) {
@@ -4547,8 +4718,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") +
-      `<b>${esc(atkChar ? atkChar.get("name") : "Grappler")} releases ${esc(defChar ? defChar.get("name") : "target")}</b>`);
+    chCombat("MP", `<b>${esc(atkChar ? atkChar.get("name") : "Grappler")} releases ${esc(defChar ? defChar.get("name") : "target")}</b>`, defChar ? defChar.id : null);
   }
 
     function cmdGrappleLock(msg, args) {
@@ -4583,7 +4753,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       msg_out += `<br/><i>Target now fully restrained (-9 to physical tasks, -3 to escape/break free)</i>`;
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, defChar.id);
   }
 
     function cmdEscape(msg, args) {
@@ -4592,7 +4762,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const sn = state.MP_Engine.snares[defTokId];
 
     if (!defTok || !sn || sn.type !== "Grapple") {
-      return ch("MP", `/w gm <b>MP:</b> Target is not grappled.`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> Target is not grappled.`);
     }
 
     const atkTokId = sn.grapplerTokenId;
@@ -4601,7 +4771,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getCharFromToken(defTok);
     const atkChar = getCharFromToken(atkTok);
 
-    if (!defChar) return ch("MP", `/w gm <b>MP:</b> Missing defender character.`);
+    if (!defChar) return ch("MP", `${wt(msg)}<b>MP:</b> Missing defender character.`);
 
     const defAg = num(getAttr(defChar.id, "agility_save"), 6);
 
@@ -4649,7 +4819,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, defChar.id);
   }
 
     function cmdCounterGrapple(msg, args) {
@@ -4658,16 +4828,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const sn = state.MP_Engine.snares[defTokId];
 
     if (!defTok || !sn || sn.type !== "Grapple") {
-      return ch("MP", `/w gm <b>MP:</b> Target is not grappled.`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> Target is not grappled.`);
     }
 
     if (sn.locked) {
-      return ch("MP", `/w gm <b>MP:</b> Target is LOCKED and cannot counter-grapple (Escape/Break Free only).`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> Target is LOCKED and cannot counter-grapple (Escape/Break Free only).`);
     }
 
     // Remote grapple blocks counter-grapple (4.11.6)
     if (sn.remote) {
-      return ch("MP", `/w gm <b>MP:</b> Target is held by <b>remote grapple</b> and cannot counter-grapple (requires ranged ability to reach opponent).`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> Target is held by <b>remote grapple</b> and cannot counter-grapple (requires ranged ability to reach opponent).`);
     }
 
     const atkTokId = sn.grapplerTokenId;
@@ -4717,7 +4887,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       msg_out += `<br/><i>Both parties now grappling each other (-3 restraint each)</i>`;
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, char.id);
   }
 
   // -------------------------
@@ -4729,7 +4899,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const tok = getObj("graphic", tokId);
     const char = getCharFromToken(tok);
 
-    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
 
     const hits = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
 
@@ -4749,7 +4919,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       msg_out += `<br/>[Try Again](!mp wakeup --target ${tokId})`;
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    chCombat("MP", msg_out, char.id);
   }
 
   // -------------------------
@@ -4761,7 +4931,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const tok = getObj("graphic", tokId);
     const char = getCharFromToken(tok);
 
-    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
 
     const hits = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
     const hitsMax = getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
@@ -4795,7 +4965,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       msg_out += `<br/><span style="color:#f4d03f">FATIGUED</span>`;
     }
 
-    ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + msg_out);
+    ch("MP", wt(msg) + msg_out);
   }
   
   // Restore selected tokens to full Hits and Power
@@ -4835,7 +5005,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tok.set("status_broken-heart", false); // Off balance
       tok.set("status_broken-leg", false);  // Leg disabled
       tok.set("status_broken-shield", false); // Arm disabled
-      tok.set("status_prone", false);       // Prone
+      tok.set("status_back-pain", false);       // Prone (back-pain marker)
       tok.set("status_purple", false);      // Absorption effect active
       tok.set("status_blue", false);        // Defensive stance
       tok.set("status_white-tower", false); // Full defense
@@ -5096,11 +5266,16 @@ function cmdAttackInfo(msg, args) {
 function cmdStance(msg, args) {
     const tok = getSelectedToken(msg);
     if (!tok) {
-      return ch("MP", `/w gm Select a token first.`);
+      return ch("MP", `${wt(msg)}Select a token first.`);
     }
     
     const char = getCharFromToken(tok);
     const charName = char ? char.get("name") : "Token";
+    
+    // Permission check: player must control the token's character
+    if (char && !canControl(msg, char.id)) {
+      return ch("MP", `${wt(msg)}You don't control ${esc(charName)}.`);
+    }
     
     const stanceArg = (args.stance || "").toLowerCase();
     let stance;
@@ -5130,10 +5305,10 @@ function cmdStance(msg, args) {
         const customMod = parseInt(stanceArg, 10);
         if (!isNaN(customMod)) {
           tok.set(CFG.DEF_MOD_BAR, customMod);
-          ch("MP", `/w gm <b>${esc(charName)}</b>: Defense modifier set to <b>${customMod >= 0 ? '+' : ''}${customMod}</b>`);
+          chBoth("MP", `<b>${esc(charName)}</b>: Defense modifier set to <b>${customMod >= 0 ? '+' : ''}${customMod}</b>`, msg);
           return;
         }
-        return ch("MP", `/w gm <b>Stance Options:</b><br/>
+        return ch("MP", `${wt(msg)}<b>Stance Options:</b><br/>
           <code>!mp stance normal</code> - Clear modifiers<br/>
           <code>!mp stance def</code> - Defensive (+3 def, -3 to hit)<br/>
           <code>!mp stance full</code> - Full Defense (+6 def, ½ move)<br/>
@@ -5155,7 +5330,7 @@ function cmdStance(msg, args) {
     }
     
     const modStr = stance.mod >= 0 ? `+${stance.mod}` : `${stance.mod}`;
-    ch("MP", `/w gm <b>${esc(charName)}</b>: ${stance.name} (Def ${modStr})`);
+    chBoth("MP", `<b>${esc(charName)}</b>: ${stance.name} (Def ${modStr})`, msg);
   }
 
   function cmdClearStances(msg, args) {
@@ -5200,14 +5375,14 @@ function cmdStance(msg, args) {
 
   function cmdRange(msg, args) {
     if (!msg.selected || msg.selected.length < 2) {
-      return ch("MP", `/w gm Select two tokens to check range between them.`);
+      return ch("MP", `${wt(msg)}Select two tokens to check range between them.`);
     }
     
     const tok1 = getObj("graphic", msg.selected[0]._id);
     const tok2 = getObj("graphic", msg.selected[1]._id);
     
     if (!tok1 || !tok2) {
-      return ch("MP", `/w gm Could not find selected tokens.`);
+      return ch("MP", `${wt(msg)}Could not find selected tokens.`);
     }
     
     const char1 = getCharFromToken(tok1);
@@ -5247,7 +5422,7 @@ function cmdStance(msg, args) {
     
     msg_out += `Penalty: <b>${rangeData.penalty}</b>`;
     
-    ch("MP", "/w gm " + msg_out);
+    ch("MP", wt(msg) + msg_out);
   }
 
   // -------------------------
@@ -5797,7 +5972,7 @@ function cmdStance(msg, args) {
     // Clear all status markers
     tok.set("status_dead", false);
     tok.set("status_sleepy", false);
-    tok.set("status_prone", false);
+    tok.set("status_back-pain", false);
     tok.set("status_cobweb", false);
     tok.set("status_grab", false);
     tok.set("status_broken-leg", false);
@@ -5967,28 +6142,33 @@ function cmdStance(msg, args) {
     const atkIndex = parseInt(parts[2], 10);
     
     if (!atkIndex || atkIndex < 1) {
-      return ch("MP", `/w gm Usage: <code>!mp atk N --atk &#64;{selected|token_id} --target &#64;{target|token_id}</code>`);
+      return ch("MP", `${wt(msg)}Usage: <code>!mp atk N --atk &#64;{selected|token_id} --target &#64;{target|token_id}</code>`);
     }
 
     const atkTokenId = args.atk;
-    if (!atkTokenId) return ch("MP", `/w gm No attacker specified. Use --atk &#64;{selected|token_id}`);
+    if (!atkTokenId) return ch("MP", `${wt(msg)}No attacker specified. Use --atk &#64;{selected|token_id}`);
 
     const atkTok = getObj("graphic", atkTokenId);
-    if (!atkTok) return ch("MP", `/w gm Attacker token not found.`);
+    if (!atkTok) return ch("MP", `${wt(msg)}Attacker token not found.`);
 
     const atkChar = getCharFromToken(atkTok);
-    if (!atkChar) return ch("MP", `/w gm Attacker token not linked to character.`);
+    if (!atkChar) return ch("MP", `${wt(msg)}Attacker token not linked to character.`);
     const atkCharId = atkChar.id;
     const atkName = atkChar.get("name");
 
+    // Permission check: player must control the attacking character
+    if (!canControl(msg, atkCharId)) {
+      return ch("MP", `${wt(msg)}You don't control ${esc(atkName)}.`);
+    }
+
     const defTokenId = args.target;
-    if (!defTokenId) return ch("MP", `/w gm No target specified. Use --target &#64;{target|token_id}`);
+    if (!defTokenId) return ch("MP", `${wt(msg)}No target specified. Use --target &#64;{target|token_id}`);
 
     const defTok = getObj("graphic", defTokenId);
-    if (!defTok) return ch("MP", `/w gm Target token not found.`);
+    if (!defTok) return ch("MP", `${wt(msg)}Target token not found.`);
 
     const defChar = getCharFromToken(defTok);
-    if (!defChar) return ch("MP", `/w gm Target token not linked to character.`);
+    if (!defChar) return ch("MP", `${wt(msg)}Target token not linked to character.`);
 
     // Find attack row
     const rowId = findAttackRowByIndex(atkCharId, atkIndex);
@@ -6002,7 +6182,7 @@ function cmdStance(msg, args) {
     // Validate damage is a dice expression (numbers, d, +, -, spaces only)
     const damage = /^[\d\s+\-d*()]+$/i.test(damageRaw) ? damageRaw : "0";
     if (damage === "0" && damageRaw !== "0" && damageRaw !== "") {
-      ch("MP", `/w gm ⚠️ Invalid damage formula "${esc(damageRaw)}" - using 0`);
+      ch("MP", `${wt(msg)}⚠️ Invalid damage formula "${esc(damageRaw)}" - using 0`);
     }
     const tohitNum = num(getAtk("attack_tohit_num"), 10);
     const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
@@ -6047,14 +6227,14 @@ function cmdStance(msg, args) {
 
     const validBC = ["EN", "AG", "IN", "CL"];
     if (!validBC.includes(bcRaw)) {
-      return ch("MP", `/w gm Usage: <code>!mp sv BC [mod]</code> where BC = EN, AG, IN, or CL`);
+      return ch("MP", `${wt(msg)}Usage: <code>!mp sv BC [mod]</code> where BC = EN, AG, IN, or CL`);
     }
 
     const tok = getSelectedToken(msg);
-    if (!tok) return ch("MP", `/w gm Select your token first.`);
+    if (!tok) return ch("MP", `${wt(msg)}Select your token first.`);
 
     const char = getCharFromToken(tok);
-    if (!char) return ch("MP", `/w gm Token not linked to character.`);
+    if (!char) return ch("MP", `${wt(msg)}Token not linked to character.`);
     const charId = char.id;
     const charName = char.get("name");
 
@@ -6084,7 +6264,7 @@ function cmdStance(msg, args) {
     html += `<div style="color:#aaa; font-size:11px;"><b>Target:</b> ${target}- (${saveVal}${mod !== 0 ? (mod > 0 ? '+' : '') + mod : ''}) | <b>Roll:</b> ${nat}</div>`;
     html += `</div>`;
 
-    ch("MP", `/w gm ` + html);
+    chBoth("MP", html, msg);
   }
 
   // -------------------------
@@ -6100,39 +6280,44 @@ function cmdStance(msg, args) {
     const atkIndexOrRate = parseInt(parts[2], 10);
     
     if (!atkIndexOrRate || atkIndexOrRate < 1) {
-      return ch("MP", `/w gm Usage: <code>!mp autofire N --atk &#64;{selected|token_id} --target &#64;{target|token_id}</code><br/>N = attack row number. Uses attack_autofire rate (2-7) from that row.`);
+      return ch("MP", `${wt(msg)}Usage: <code>!mp autofire N --atk &#64;{selected|token_id} --target &#64;{target|token_id}</code><br/>N = attack row number. Uses attack_autofire rate (2-7) from that row.`);
     }
 
     const atkTokenId = args.atk;
-    if (!atkTokenId) return ch("MP", `/w gm No attacker specified. Use --atk &#64;{selected|token_id}`);
+    if (!atkTokenId) return ch("MP", `${wt(msg)}No attacker specified. Use --atk &#64;{selected|token_id}`);
 
     const atkTok = getObj("graphic", atkTokenId);
-    if (!atkTok) return ch("MP", `/w gm Attacker token not found.`);
+    if (!atkTok) return ch("MP", `${wt(msg)}Attacker token not found.`);
 
     const atkChar = getCharFromToken(atkTok);
-    if (!atkChar) return ch("MP", `/w gm Attacker token not linked to character.`);
+    if (!atkChar) return ch("MP", `${wt(msg)}Attacker token not linked to character.`);
     const atkCharId = atkChar.id;
     const atkName = atkChar.get("name");
 
+    // Permission check: player must control the attacking character
+    if (!canControl(msg, atkCharId)) {
+      return ch("MP", `${wt(msg)}You don't control ${esc(atkName)}.`);
+    }
+
     const defTokenId = args.target;
-    if (!defTokenId) return ch("MP", `/w gm No target specified. Use --target &#64;{target|token_id}`);
+    if (!defTokenId) return ch("MP", `${wt(msg)}No target specified. Use --target &#64;{target|token_id}`);
 
     const defTok = getObj("graphic", defTokenId);
-    if (!defTok) return ch("MP", `/w gm Target token not found.`);
+    if (!defTok) return ch("MP", `${wt(msg)}Target token not found.`);
 
     const defChar = getCharFromToken(defTok);
-    if (!defChar) return ch("MP", `/w gm Target token not linked to character.`);
+    if (!defChar) return ch("MP", `${wt(msg)}Target token not linked to character.`);
 
     // Find attack row
     const rowId = findAttackRowByIndex(atkCharId, atkIndexOrRate);
-    if (!rowId) return ch("MP", `/w gm Attack #${atkIndexOrRate} not found for ${esc(atkName)}.`);
+    if (!rowId) return ch("MP", `${wt(msg)}Attack #${atkIndexOrRate} not found for ${esc(atkName)}.`);
 
     const getAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
 
     // Get autofire rate from attack row
     const autofireRate = num(getAtk("attack_autofire"), 0);
     if (autofireRate < 2 || autofireRate > 7) {
-      return ch("MP", `/w gm Attack #${atkIndexOrRate} does not have Autofire (rate 2-7). Set attack_autofire on the Setup tab.`);
+      return ch("MP", `${wt(msg)}Attack #${atkIndexOrRate} does not have Autofire (rate 2-7). Set attack_autofire on the Setup tab.`);
     }
 
     // Get attack attributes
@@ -6141,7 +6326,7 @@ function cmdStance(msg, args) {
     // Validate damage is a dice expression (numbers, d, +, -, spaces only)
     const damage = /^[\d\s+\-d*()]+$/i.test(damageRaw) ? damageRaw : "0";
     if (damage === "0" && damageRaw !== "0" && damageRaw !== "") {
-      ch("MP", `/w gm ⚠️ Invalid damage formula "${esc(damageRaw)}" - using 0`);
+      ch("MP", `${wt(msg)}⚠️ Invalid damage formula "${esc(damageRaw)}" - using 0`);
     }
     const tohitNum = num(getAtk("attack_tohit_num"), 10);
     const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
@@ -6301,9 +6486,11 @@ function cmdStance(msg, args) {
         return cmdRange(msg, args);
       case "clearstances":
       case "clearstance":
+        if (gmOnly(msg)) return;
         return cmdClearStances(msg, args);
       case "offbal":
       case "offbalance":
+        if (gmOnly(msg)) return;
         const offbalTok = getSelectedToken(msg);
         if (!offbalTok) return ch("MP", `/w gm Select a token first.`);
         const offbalChar = getCharFromToken(offbalTok);
@@ -6338,9 +6525,15 @@ function cmdStance(msg, args) {
       // Area effect commands
       case "areaescape": return cmdAreaEscape(msg, args);
       case "areashield": return cmdAreaShield(msg, args);
-      case "arearollnpcs": return cmdAreaRollNPCs(msg, args);
-      case "areaforceall": return cmdAreaForceAll(msg, args);
-      case "areadamageall": return cmdAreaDamageAll(msg, args);
+      case "arearollnpcs":
+        if (gmOnly(msg)) return;
+        return cmdAreaRollNPCs(msg, args);
+      case "areaforceall":
+        if (gmOnly(msg)) return;
+        return cmdAreaForceAll(msg, args);
+      case "areadamageall":
+        if (gmOnly(msg)) return;
+        return cmdAreaDamageAll(msg, args);
 
       // Absorption/Reflection commands
       case "absorb": return cmdAbsorb(msg, args);
@@ -6354,19 +6547,24 @@ function cmdStance(msg, args) {
       case "afcounter": return cmdAFCounter(msg, args);
 
       // Round tracking
-      case "round": return cmdRound(msg, args);
+      case "round":
+        if (gmOnly(msg)) return;
+        return cmdRound(msg, args);
 
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
       case "status": return cmdStatus(msg, args);
       case "stat": return testStatus(msg, args);  // Detailed status with protections, roll-with cap
-      case "restore": return cmdRestore(msg, args);
+      case "restore":
+        if (gmOnly(msg)) return;
+        return cmdRestore(msg, args);
       case "info": return cmdInfo(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "atk": return cmdQuickAttack(msg, args);
       case "autofire": return cmdAutofire(msg, args);
       case "sv": return cmdQuickSave(msg, args);
       case "debug":
+        if (gmOnly(msg)) return;
         const debugArg = msg.content.split(/\s+/)[2];
         if (debugArg === "tokens") {
           // Search current player page only
@@ -6471,7 +6669,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.55</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.57.2</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6554,11 +6752,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.55:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.57.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.55 READY");
+  log("MP ENGINE v2.57.2 READY");
 });
