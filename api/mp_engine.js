@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.57.4 - 2026-02-16
+/* Mighty Protectors Roll20 API Engine v2.57.6 - 2026-02-16
+ * v2.57.6: Add damage roll breakdown hover tooltip on attack card
+ *        - Damage number now shows dice formula and individual results on hover
+ *        - New inlineRollBreakdown() extracts expression from Roll20 inline rolls
+ * v2.57.5: Fix area effect attacks missing normal card and player visibility
+ *        - Area attacks now show the standard attack card before the AE card
+ *        - AE card, damage results, and escape-resolved message sent to attacker's player
+ *        - Store playerid in pendingArea record for follow-up command targeting
  * v2.57.4: Fix attack buttons not visible to attacking player when defender is NPC
  *        - When GM_ONLY_BUTTONS=true, buttons now also whisper to attacker's player
  *          if they are not GM and not already the defender's controller
@@ -515,6 +522,32 @@ MP.Engine = (function () {
       if (!die || typeof die.v !== "number") return null;
       if (r0.sides === 20 && (r0.dice === 1 || r0.dice == null)) return die.v;
       return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Build hover breakdown from inline roll: "2d6(4+5) + 3 = 12"
+  function inlineRollBreakdown(msg, token) {
+    try {
+      const m = /\$\[\[(\d+)\]\]/.exec(token || "");
+      if (!m) return null;
+      const idx = parseInt(m[1], 10);
+      const ir = msg.inlinerolls && msg.inlinerolls[idx];
+      if (!ir || !ir.results) return null;
+      const parts = [];
+      const rolls = ir.results.rolls || [];
+      for (const r of rolls) {
+        if (r.type === "R" && r.results) {
+          const dice = r.results.map(d => d.v);
+          parts.push(`${r.dice || 1}d${r.sides}(${dice.join("+")})`);
+        } else if (r.type === "M" && r.expr) {
+          const val = r.expr.replace(/^\+/, "").trim();
+          if (val !== "0" && val !== "") parts.push(r.expr.trim());
+        }
+      }
+      const expr = parts.join(" ").replace(/^\+\s*/, "").trim();
+      return expr ? `${expr} = ${ir.results.total}` : String(ir.results.total);
     } catch (e) {
       return null;
     }
@@ -1571,6 +1604,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const roll = num(rollIR.total, 0);
     const confirm = confIR ? num(confIR.total, 0) : 10;
     const damageTotal = dmgIR ? num(dmgIR.total, 0) : 0;
+    const damageBreakdown = inlineRollBreakdown(msg, fields.damage) || String(damageTotal);
     const templateTarget = targetIR ? num(targetIR.total, 0) : null;
     
     // Called shot parsing - handles both type names and numeric penalties
@@ -1838,10 +1872,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot
     };
 
-    if (isAreaAttack) {
-      return handleAreaAttack(msg, uniqueRollId, state.MP_Engine.pending[uniqueRollId], defTok, atkTok);
-    }
-
 // --- HTML CONSTRUCTION & OUTPUT ---
     
     // Extract individual modifier components
@@ -1969,7 +1999,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Damage
     html += `<td style="width:25%; text-align:center; padding:8px 4px 6px;">`;
-    html += `<div title="Total Damage" style="font-size:28px; font-weight:bold; color:#ff6b6b; line-height:1.1; padding:2px 0;">${damageTotal}</div>`;
+    html += `<div title="${esc(damageBreakdown)}" style="font-size:28px; font-weight:bold; color:#ff6b6b; line-height:1.1; padding:2px 0;">${damageTotal}</div>`;
     html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#ff6b6b; margin-top:3px;">Damage</div>`;
     html += `</td>`;
 
@@ -2055,6 +2085,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // --- Close card ---
     html += `</div>`;
 
+    // --- Area attacks: send normal card then delegate to area handler ---
+    if (isAreaAttack) {
+      if (CFG.GM_ONLY_BUTTONS) {
+        chBothId("MP", html, originalPlayerId);
+      } else {
+        ch("MP", html);
+      }
+      handleAreaAttack(msg, uniqueRollId, state.MP_Engine.pending[uniqueRollId], defTok, atkTok);
+      return;
+    }
+
     let buttons = "";
     if (outcome === "HIT" || outcome === "CRIT") {
       if (isSaveAttack) {
@@ -2091,7 +2132,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // -------------------------
 
   function handleAreaAttack(msg, rollId, rec, targetTok, atkTok) {
-    const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
     const outcome = rec.outcome;
     const pageId = targetTok.get("_pageid");
     const page = getObj("page", pageId);
@@ -2160,6 +2200,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     state.MP_Engine.pendingArea[rollId] = {
       rollId: rollId,
+      playerid: rec.playerid,
       damage: rec.damageTotal,
       damageType: rec.dmgTypeStr,
       dmgSubtype: rec.dmgSubtype,
@@ -2226,7 +2267,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     html += `</div>`;
-    ch("MP", whisper + html);
+    if (CFG.GM_ONLY_BUTTONS) {
+      chBothId("MP", html, rec.playerid);
+    } else {
+      ch("MP", html);
+    }
   }
 
   // Handle escape attempt for area effect
@@ -2388,7 +2433,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const areaRec = state.MP_Engine.pendingArea[rollId];
     if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
     
-    const whisper = CFG.GM_ONLY_BUTTONS ? "/w gm " : "";
     let html = `<div style="background:#f39c12; border:3px solid #000; padding:4px 8px;">`;
     html += `<span style="color:#000; font-weight:bold;">AREA DAMAGE RESULTS</span>`;
     html += `<br/>${areaRec.damage} ${areaRec.damageType}`;
@@ -2504,7 +2548,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     });
     
     html += `</div>`;
-    ch("MP", whisper + html);
+    if (CFG.GM_ONLY_BUTTONS) {
+      chBothId("MP", html, areaRec.playerid);
+    } else {
+      ch("MP", html);
+    }
     
     // Clean up
     delete state.MP_Engine.pendingArea[rollId];
@@ -2517,8 +2565,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const allResolved = Object.values(areaRec.tokens).every(t => t.escaped !== null);
     if (allResolved) {
-      ch("MP", (CFG.GM_ONLY_BUTTONS ? "/w gm " : "") + 
-        `<div style="background:#3498db; padding:4px;">All escapes resolved. [Apply All Damage](!mp areadamageall --id ${rollId})</div>`);
+      const resolvedHtml = `<div style="background:#3498db; padding:4px;">All escapes resolved. [Apply All Damage](!mp areadamageall --id ${rollId})</div>`;
+      if (CFG.GM_ONLY_BUTTONS) {
+        chBothId("MP", resolvedHtml, areaRec.playerid);
+      } else {
+        ch("MP", resolvedHtml);
+      }
     }
   }
 
@@ -6772,11 +6824,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.57.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.57.6:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.57.4 READY");
+  log("MP ENGINE v2.57.6 READY");
 });
