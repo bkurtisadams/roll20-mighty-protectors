@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.54 - 2025-01-14
+/* Mighty Protectors Roll20 API Engine v2.55 - 2026-02-14
+ * v2.55: Improved attack card readability
+ *        - Added prominent "vs Target Name" subheader below attacker name
+ *        - Added large color-coded outcome banner: HIT (green), CRIT (gold), MISS (gray), FUMBLE (red)
+ *        - Removed redundant defender name from info footer (already in subheader)
  * v2.54: Ability Field protection mechanics implemented (2.2.4)
  *        - AF rows excluded from summed protection (they're reactive, not passive)
  *        - When attack hits target with active AF, shows attack type buttons
@@ -1787,8 +1791,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     hoverBreakdown += `&#10;Final: ${targetTotal}-`;
 
     // --- GENERATE HTML ---
+    // Outcome banner config
+    const outcomeLabels = {
+      HIT:    { text: "HIT",             bg: "#27ae60", color: "#fff" },
+      CRIT:   { text: "⚡ CRITICAL HIT", bg: "#f1c40f", color: "#000" },
+      MISS:   { text: "MISS",            bg: "#7f8c8d", color: "#fff" },
+      FUMBLE: { text: "💥 FUMBLE",       bg: "#c0392b", color: "#fff" }
+    };
+    const outcomeStyle = outcomeLabels[outcome] || outcomeLabels.MISS;
+
     let html = `<div style="background:${mainBg}; border:4px solid ${mainBorder}; font-family:Arial,sans-serif; font-size:13px; max-width:250px;">`;
-    html += `<div style="background:${headerBg}; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px; border-bottom:3px solid ${mainBorder};">${esc(atkName)}</div>`;
+    html += `<div style="background:${headerBg}; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px;">${esc(atkName)}</div>`;
+    html += `<div style="background:#222; color:#ccc; text-align:center; padding:3px 8px; font-size:12px; border-bottom:2px solid ${mainBorder};">vs <b style="color:#fff;">${esc(defName)}</b></div>`;
+    html += `<div style="background:${outcomeStyle.bg}; color:${outcomeStyle.color}; text-align:center; padding:4px 8px; font-size:16px; font-weight:bold; letter-spacing:1px; border-bottom:3px solid ${mainBorder};">${outcomeStyle.text}</div>`;
     html += `<table style="width:100%; border-collapse:collapse;"><tr>`;
 
     // Roll Cell (Using Number + Tooltip)
@@ -1819,7 +1834,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Info
     const prStr = atkPR > 0 ? ` · PR:${atkPR}` : "";
     html += `<div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">${esc(dmgTypeStr)} · KB:${causesKB ? 'Yes' : 'No'}${prStr} · Rng:${rangeFooter}</div>`;
-    html += `<div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs ${esc(defName)} (${defTypeLabel}:${defValue}, Stance:${defMod})</div>`;
+    html += `<div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">${defTypeLabel}:${defValue}, Stance:${defMod}</div>`;
     
     let footerArr = [];
     footerArr.push(`Rng:${rangePenalty}`);
@@ -6456,7 +6471,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.54</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.55</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6539,11 +6554,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.54:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.55:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.54 READY");
+  log("MP ENGINE v2.55 READY");
 });

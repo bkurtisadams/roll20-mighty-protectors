@@ -1,4 +1,5 @@
-<!-- Mighty Protectors Roll20 Character Sheet v43.06 - feat: BC Save modifier query
+<!-- Mighty Protectors Roll20 Character Sheet v43.07 - feat: Gear Basic Characteristics
+v43.07: Added Gear BC score = floor(Total EPs / 15) + 6, for gear-based ability trait calculations
 v43.06: Added modifier query to BC Save buttons (EN/AG/IN/CL), default 0
 v43.05: Fixed new VTT crash - added 0+ prefix to inline rolls for empty attribute safety
 v43.03: Fixed new VTT crash when targeting tokens without MP sheet attributes (physical_def, mental_def)
@@ -1454,6 +1455,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <span style="color:#888;">Disarm</span>
         <input type="text" name="attr_disarm_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Target opponent must beat to tear away worn gear" />
       </div>
+      <span style="color:#444;">│</span>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#888;">Gear BC</span>
+        <input type="text" name="attr_gbc_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Gear Basic Characteristic = floor(Total EPs / 15) + 6. Used for gear ability traits like range." />
+      </div>
     </div>
   </div>
 
@@ -2698,7 +2704,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           dot_cap: (Math.floor(totalEPs / 12.5) + 3) * 2 + 3,
           "break_score": Math.floor(totalEPs / 25) + 5,
           take_score: Math.floor(totalEPs / 25) + 6,
-          disarm_score: Math.floor(totalEPs / 25) + 3
+          disarm_score: Math.floor(totalEPs / 25) + 3,
+          gbc_score: Math.floor(totalEPs / 15) + 6
         });
       });
     });
