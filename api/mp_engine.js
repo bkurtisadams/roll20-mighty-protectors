@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.57.2 - 2026-02-16
+/* Mighty Protectors Roll20 API Engine v2.57.3 - 2026-02-16
+ * v2.57.3: Fix attack card not visible when using !mp atk / !mp autofire macros
+ *        - cmdQuickAttack/cmdAutofire pass original playerid through roll template
+ *        - handleMpAttack uses fields.playerid (fallback msg.playerid) for card targeting
+ *        - Fixes: sendChat("character|ID") sets msg.playerid to API, not original player
  * v2.57.2: Fix double chat card when wtId() falls back to /w gm
  *        - chBoth, chBothId, chCombat now guard against duplicate /w gm sends
  *        - cmdApply deduplicates attacker send when same player controls both chars
@@ -1535,6 +1539,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkCharId = fields.atk;
     const defTokenId = fields.def;
     const rowId = fields.row;
+    // Use playerid from roll template (set by cmdQuickAttack/cmdAutofire) or fall back to msg sender
+    const originalPlayerId = fields.playerid || msg.playerid;
     const pushAmount = num(fields.push, 0);  // 0=no push, 2=normal, 4+=special ability
     const isPushing = pushAmount > 0;
 
@@ -1816,7 +1822,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const uniqueRollId = String(Date.now()) + "_" + randomInteger(999999);
     state.MP_Engine.pending[uniqueRollId] = {
-      rollId: uniqueRollId, playerid: msg.playerid, atkCharId, atkName, defTokenId, 
+      rollId: uniqueRollId, playerid: originalPlayerId, atkCharId, atkName, defTokenId, 
       defCharId: defChar.id, defName, rowId, nat, roll, confirm, targetTotal,
       outcome, isCrit, isFumble, critResult, fumbleResult,
       damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType,
@@ -2058,7 +2064,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (CFG.GM_ONLY_BUTTONS) {
       // Send attack card to both GM and attacker
-      chBothId("MP", html, msg.playerid);
+      chBothId("MP", html, originalPlayerId);
       // Send action buttons to GM and defender's player
       if (buttons) chCombat("MP", buttons, defChar.id);
     } else {
@@ -6208,7 +6214,7 @@ function cmdStance(msg, args) {
     // Push (positive) adds damage, Hold Back (negative) reduces damage
     const pushDmg = pushAmount !== 0 ? (pushAmount > 0 ? `+${pushAmount}` : `${pushAmount}`) : "";
     
-    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{calledtype=${calledType}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
+    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{playerid=${msg.playerid}}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{calledtype=${calledType}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
 
     sendChat(`character|${atkCharId}`, rollMsg);
   }
@@ -6388,7 +6394,7 @@ function cmdStance(msg, args) {
     for (let shot = 1; shot <= autofireRate; shot++) {
       setTimeout(() => {
         // Build roll message - pass nopr=1 since we already deducted PR/charges upfront
-        const rollMsg = `&{template:mpattack} {{mpapi=1}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{nopr=1}} {{name=${atkName} - ${attackName} (Shot ${shot}/${autofireRate})}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
+        const rollMsg = `&{template:mpattack} {{mpapi=1}} {{playerid=${msg.playerid}}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{nopr=1}} {{name=${atkName} - ${attackName} (Shot ${shot}/${autofireRate})}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
         
         sendChat(`character|${atkCharId}`, rollMsg);
       }, (shot - 1) * 500); // 500ms delay between shots
@@ -6669,7 +6675,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.57.2</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.57.3</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6758,5 +6764,5 @@ function cmdStance(msg, args) {
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.57.2 READY");
+  log("MP ENGINE v2.57.3 READY");
 });
