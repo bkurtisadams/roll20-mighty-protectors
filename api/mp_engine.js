@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.57.3 - 2026-02-16
+/* Mighty Protectors Roll20 API Engine v2.57.4 - 2026-02-16
+ * v2.57.4: Fix attack buttons not visible to attacking player when defender is NPC
+ *        - When GM_ONLY_BUTTONS=true, buttons now also whisper to attacker's player
+ *          if they are not GM and not already the defender's controller
+ *        - Fixes: GM joining as player sees attack card but no Roll-With/KB/Save buttons
  * v2.57.3: Fix attack card not visible when using !mp atk / !mp autofire macros
  *        - cmdQuickAttack/cmdAutofire pass original playerid through roll template
  *        - handleMpAttack uses fields.playerid (fallback msg.playerid) for card targeting
@@ -2066,7 +2070,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Send attack card to both GM and attacker
       chBothId("MP", html, originalPlayerId);
       // Send action buttons to GM and defender's player
-      if (buttons) chCombat("MP", buttons, defChar.id);
+      if (buttons) {
+        chCombat("MP", buttons, defChar.id);
+        // Also send buttons to attacking player if they're not GM and not already the defender's controller
+        if (originalPlayerId && !playerIsGM(originalPlayerId)) {
+          const defPlayerId = getControllingPlayerId(defChar.id);
+          if (defPlayerId !== originalPlayerId) {
+            const atkTarget = wtId(originalPlayerId);
+            if (atkTarget !== "/w gm ") ch("MP", atkTarget + buttons);
+          }
+        }
+      }
     } else {
       ch("MP", html + buttons);
     }
@@ -6758,11 +6772,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.57.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.57.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.57.3 READY");
+  log("MP ENGINE v2.57.4 READY");
 });
