@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.57.6 - 2026-02-16
+/* Mighty Protectors Roll20 API Engine v2.58.0 - 2026-02-26
+ * v2.58.0: Add hit/miss SFX support via Roll20 Jukebox
+ *        - playSFX() helper triggers named Jukebox tracks
+ *        - Plays "SFX-Hit" on HIT/CRIT, "SFX-Miss" on MISS/FUMBLE
  * v2.57.6: Add damage roll breakdown hover tooltip on attack card
  *        - Damage number now shows dice formula and individual results on hover
  *        - New inlineRollBreakdown() extracts expression from Roll20 inline rolls
@@ -1269,6 +1272,16 @@ MP.Engine = (function () {
   }
   // ------------------------------------------------------------------------
 
+// SFX helper - plays a Jukebox track by name
+function playSFX(name) {
+  const track = findObjs({ type: "jukeboxtrack", title: name })[0];
+  if (!track) return;
+  track.set({ playing: false, softstop: false });
+  setTimeout(() => {
+    track.set({ playing: true, softstop: false, loop: false });
+  }, 50);
+}
+
 function getRepeatingAttackAttr(charId, rowId, shortName) {
     const searchName = `repeating_attacks_${rowId}_${shortName}`.toLowerCase();
     const attrs = findObjs({ _type: "attribute", _characterid: charId });
@@ -1873,6 +1886,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     };
 
 // --- HTML CONSTRUCTION & OUTPUT ---
+
+    // Play hit/miss SFX
+    if (outcome === "HIT" || outcome === "CRIT") playSFX("SFX-Hit");
+    else playSFX("SFX-Miss");
     
     // Extract individual modifier components
     const aimVal = (inlineTotal(msg, fields.aim) ? inlineTotal(msg, fields.aim).total : num(fields.aim, 0)) || 0;
