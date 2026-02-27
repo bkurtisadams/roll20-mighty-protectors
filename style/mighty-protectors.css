@@ -1,4 +1,26 @@
-/* Mighty Protectors Character Sheet CSS v42.87 - add Career Scrollbar styling */
+/* Mighty Protectors Character Sheet CSS v43.09 - Vehicle tab support */
+
+/* ========================================
+   SHEET TABS - Vehicle toggle
+   ======================================== */
+.sheet-vehicle-toggle {
+  cursor: pointer;
+  opacity: 0.3;
+  width: 10px;
+  height: 10px;
+}
+.sheet-vehicle-toggle:hover { opacity: 1; }
+.sheet-vehicle-label { display: none !important; }
+
+/* When vehicle mode checked: hide character, show vehicle */
+.sheet-vehicle-content { display: none; }
+.sheet-vehicle-toggle:checked ~ .sheet-character-content { display: none !important; }
+.sheet-vehicle-toggle:checked ~ .sheet-vehicle-content { display: block !important; }
+
+/* Hide number input spinners in vehicle sheet */
+.sheet-vehicle-content input[type="number"] { -moz-appearance: textfield; }
+.sheet-vehicle-content input[type="number"]::-webkit-inner-spin-button,
+.sheet-vehicle-content input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* ========================================
    ROLL TEMPLATES
