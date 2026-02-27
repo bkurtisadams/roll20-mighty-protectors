@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v43.09 - Vehicle tab support */
+/* Mighty Protectors Character Sheet CSS v43.14 - Vehicle overhaul */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -16,6 +16,38 @@
 .sheet-vehicle-content { display: none; }
 .sheet-vehicle-toggle:checked ~ .sheet-character-content { display: none !important; }
 .sheet-vehicle-toggle:checked ~ .sheet-vehicle-content { display: block !important; }
+
+/* Vehicle color scheme - lighter blue */
+.sheet-vehicle-content {
+  background: #1a2a4a !important;
+  padding: 4px !important;
+  border-radius: 4px;
+}
+.sheet-vehicle-content div[style*="background:#1e1e38"] {
+  background: #243856 !important;
+}
+.sheet-vehicle-content input[type="text"],
+.sheet-vehicle-content input[type="number"],
+.sheet-vehicle-content select,
+.sheet-vehicle-content textarea {
+  background: #152035 !important;
+  border-color: #3a5070 !important;
+}
+.sheet-vehicle-content input[readonly] {
+  background: #1d3050 !important;
+}
+.sheet-vehicle-content table {
+  border-color: #3a5070 !important;
+}
+.sheet-vehicle-content td {
+  border-color: #3a5070 !important;
+}
+.sheet-vehicle-content details > div {
+  background: #152035 !important;
+}
+.sheet-vehicle-content .repcontainer > .repitem {
+  border-bottom: 1px solid #2a3a5a;
+}
 
 /* Hide number input spinners in vehicle sheet */
 .sheet-vehicle-content input[type="number"] { -moz-appearance: textfield; }
