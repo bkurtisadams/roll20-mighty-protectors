@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v43.14 - Vehicle overhaul */
+/* Mighty Protectors Character Sheet CSS v43.26 - Vehicle layout overhaul */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -46,7 +46,14 @@
   background: #152035 !important;
 }
 .sheet-vehicle-content .repcontainer > .repitem {
+  position: relative;
   border-bottom: 1px solid #2a3a5a;
+}
+.sheet-vehicle-content .sheet-veh-sys-row {
+  margin-left: 5px;
+}
+.sheet-vehicle-content table.sheet-veh-sys-header {
+  /* no special styling needed */
 }
 
 /* Hide number input spinners in vehicle sheet */
