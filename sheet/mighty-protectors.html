@@ -433,7 +433,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
             <span style="color:#aaa; font-size:10px;">Initiative Modifier:</span>
             <input type="text" name="attr_initiative_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative modifier" />
-            <button type="roll" class="mp-labellink" name="roll_initiative" value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} + @{initiative_mod} &{tracker}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040;" title="Roll initiative for combat order">Initiative</button>
+            <button type="roll" class="mp-labellink" name="roll_initiative" value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} + @{initiative_mod} + (@{agility_score} / 100) &{tracker}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040;" title="Roll initiative for combat order">Initiative</button>
             <input type="text" name="attr_initiative_score" style="width:80px; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Initiative die roll (e.g., 1d10+1)" />
             <button type="action" name="act_reset_initiative" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to CL-based initiative">↺</button>
           </div>
@@ -1535,7 +1535,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <td style="color:#f4d03f; padding:2px; width:8%; text-align:right; font-weight:bold;">Name</td>
           <td style="padding:2px; width:30%;"><input type="text" name="attr_vehicle_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
           <td style="color:#aaa; padding:2px; width:8%; text-align:right;">Model</td>
-          <td style="padding:2px; width:20%;"><input type="text" name="attr_vehicle_model" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" placeholder="P-26, F-16, etc." /></td>
+          <td style="padding:2px; width:20%;"><input type="text" name="attr_vehicle_model" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;"  /></td>
           <td style="color:#aaa; padding:2px; width:10%; text-align:right;">Operator</td>
           <td style="padding:2px; width:24%;"><input type="text" name="attr_vehicle_owner" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
         </tr>
@@ -1545,22 +1545,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     <!-- SIZE + VEHICLE MODS -->
     <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
       <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
-        <select name="attr_vehicle_base_cp" style="width:55px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; font-size:11px;">
-          <option value="0">0</option><option value="2.5">2.5</option><option value="5">5</option>
-          <option value="7.5">7.5</option><option value="10">10</option><option value="12.5">12.5</option>
-          <option value="15" selected="selected">15</option><option value="17.5">17.5</option><option value="20">20</option>
-          <option value="22.5">22.5</option><option value="25">25</option><option value="27.5">27.5</option>
-          <option value="30">30</option><option value="32.5">32.5</option><option value="35">35</option>
-          <option value="37.5">37.5</option><option value="40">40</option><option value="42.5">42.5</option>
-          <option value="45">45</option><option value="47.5">47.5</option><option value="50">50</option>
-          <option value="52.5">52.5</option><option value="55">55</option><option value="57.5">57.5</option>
-          <option value="60">60</option><option value="62.5">62.5</option><option value="65">65</option>
-          <option value="67.5">67.5</option><option value="70">70</option><option value="72.5">72.5</option>
-          <option value="75">75</option><option value="77.5">77.5</option><option value="80">80</option>
-          <option value="82.5">82.5</option><option value="85">85</option><option value="87.5">87.5</option>
-          <option value="90">90</option><option value="92.5">92.5</option><option value="95">95</option>
-          <option value="97.5">97.5</option><option value="100">100</option>
-        </select>
+        <input type="number" name="attr_vehicle_base_cp" value="20" style="width:44px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px; font-weight:bold;" title="Base CPs for vehicle size" />
         <span style="color:#f4d03f; font-weight:bold; font-size:11px;">Base CPs</span>
         <span style="color:#888; font-size:10px; margin-left:6px;">Sys Spaces</span>
         <input type="text" name="attr_vehicle_spaces" readonly style="width:50px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
@@ -1626,7 +1611,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     <div style="background:#1e1e38; padding:6px; margin-bottom:0; border-radius:4px 4px 0 0;">
       <div style="margin-bottom:2px;">
         <span style="color:#f4d03f; font-weight:bold; font-size:11px;">VEHICLE SYSTEMS &amp; MODIFIERS</span>
-        <span style="color:#555; font-size:9px; margin-left:6px;">Spaces&#8594;CPs: 1&#8594;5, 2&#8594;10, 3&#8594;12.5, 4&#8594;15, 6&#8594;17.5, 8&#8594;20, 12&#8594;22.5, 16&#8594;25, 24&#8594;27.5, 32&#8594;30, 64&#8594;35</span>
       </div>
       <!-- Column headers -->
       <div style="display:flex; gap:2px; align-items:center; padding:0 0 2px 0; border-bottom:1px solid #2a2040; color:#888; font-size:10px;">
@@ -1649,7 +1633,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
           <input type="text" name="attr_vsys_dmg" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" />
           <input type="text" name="attr_vsys_cp" readonly style="width:32px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System CPs (auto from spaces + hi/lo tech + cost adj)" />
-          <input type="checkbox" name="attr_vsys_central" value="1" title="Central Power System" style="margin:0; flex-shrink:0;" />
           <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px; margin-right:50px;" placeholder="Description, arc, facing..." />
         </div>
       </fieldset>
@@ -1683,8 +1666,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <input type="text" name="attr_vehicle_en_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <span style="color:#888; margin-left:6px;">Turn Rate:</span>
         <input type="number" name="attr_vehicle_turn_rate" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
-        <button type="roll" name="roll_vehicle_init" title="Roll Vehicle Initiative" value="&{template:default} {{name=@{vehicle_name} Initiative}} {{Roll=[[@{vehicle_init_roll} &{tracker}]]}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">Init:</button>
-        <input type="text" name="attr_vehicle_init_die" readonly style="width:40px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_init" title="Roll Vehicle Initiative (adds to tracker)" value="&{template:default} {{name=@{vehicle_name} Initiative}} {{Vehicle=[[@{vehicle_init_roll} + (@{vehicle_ag} / 100) &{tracker}]]}} {{Pilot=[[@{initiative_score} + @{initiative_mod} + (@{agility_score} / 100)]]}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">Initiative</button>
+        <input type="text" name="attr_vehicle_init_die" readonly style="width:60px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
       </div>
       <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px;">
         <span style="color:#888;">AG:</span>
@@ -4123,7 +4106,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   };
 
   function vehicleBCSave(score) {
-    if (score <= 0) return 0;
+    if (score < 0) return 0;
     if (score >= saveTable.length) return saveTable[saveTable.length - 1];
     return saveTable[score];
   }

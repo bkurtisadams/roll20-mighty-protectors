@@ -1,0 +1,2860 @@
+<!-- Mighty Protectors Roll20 Character Sheet v38.50 (v38.41 + Vehicle tab) -->
+
+<div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
+
+  <!-- COMPACT MODE TOGGLE -->
+  <input type="checkbox" name="attr_compact_mode" class="sheet-compact-toggle" title="Toggle compact mode - hides title and character info" />
+  <input type="checkbox" name="attr_color_classic" class="sheet-color-toggle" title="Toggle classic colors (yellow Power, red Hits)" />
+  <input type="checkbox" name="attr_vehicle_mode" class="sheet-vehicle-toggle" title="Toggle Vehicle sheet" />
+  <label class="sheet-compact-label">Compact</label>
+
+  <!-- HEADER SECTION (hidden when compact) -->
+  <div class="sheet-header-section">
+
+    <!-- TITLE -->
+    <div class="mp-title" style="text-align:center;">
+    Mighty Protectors<sup>®</sup>
+    </div>
+ <!-- CHARACTER INFO - Right-justified labels -->
+  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+    <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+      <!-- Row 1: Name, True ID, Player -->
+      <tr>
+        <td style="color:#f4d03f; padding:2px; width:10%; text-align:right;">Name</td>
+        <td style="padding:2px; width:23%;"><input type="text" name="attr_character_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
+        <td style="color:#aaa; padding:2px; width:10%; text-align:right;">True ID</td>
+        <td style="padding:2px; width:23%;"><input type="text" name="attr_true_id" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
+        <td style="color:#aaa; padding:2px; width:10%; text-align:right;">Player</td>
+        <td style="padding:2px; width:24%;"><input type="text" name="attr_player_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
+      </tr>
+      <!-- Row 2: Species, Birthplace, Culture -->
+      <tr>
+        <td style="color:#aaa; padding:2px; text-align:right;">Species</td>
+        <td style="padding:2px;"><input type="text" name="attr_species" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" title="Human, Tech Construct, Mystical Construct, Monster, Mixed" /></td>
+        <td style="color:#aaa; padding:2px; text-align:right;">Birthplace</td>
+        <td style="padding:2px;"><input type="text" name="attr_birthplace" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" title="Local, Foreigner, Stranger, Anachronism, Alien, Extra-Dimensional" /></td>
+        <td style="color:#aaa; padding:2px; text-align:right;">Culture</td>
+        <td style="padding:2px;"><input type="text" name="attr_culture" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" title="Fantasy, Primitive, Mixed, Modern, or High Tech. Affects identification." /></td>
+      </tr>
+      <!-- Row 3: Age, Gender, Origin -->
+      <tr>
+        <td style="color:#aaa; padding:2px; text-align:right;">Age</td>
+        <td style="padding:2px;"><input type="text" name="attr_age" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
+        <td style="color:#aaa; padding:2px; text-align:right;">Gender</td>
+        <td style="padding:2px;"><input type="text" name="attr_gender" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
+        <td style="color:#aaa; padding:2px; text-align:right;">Origin</td>
+        <td style="padding:2px;"><input type="text" name="attr_origin" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" title="Mutated/Evolved, Science Accident, Mystical Accident, Science Project, Mystical Project, Physical Training, Mystical Training" /></td>
+      </tr>
+      <!-- Row 4: Side, Motivation, Group -->
+      <tr>
+        <td style="color:#aaa; padding:2px; text-align:right;">Side</td>
+        <td style="padding:2px;"><input type="text" name="attr_side" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" title="Good, Evil, or Neutral" /></td>
+        <td style="color:#aaa; padding:2px; text-align:right;">Motivation</td>
+        <td style="padding:2px;"><input type="text" name="attr_motivation" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" title="Hero: Penance, Vengeance, Utopian, Thrill Seeker, Duty Bound, Need To Know, For Hire, Self-Defense, Glory Hound, Carnage, Justice" /></td>
+        <td style="color:#aaa; padding:2px; text-align:right;">Group</td>
+        <td style="padding:2px;"><input type="text" name="attr_group" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
+      </tr>
+    </table>
+  </div>
+
+<!-- WRAPPER -->
+<div style="display:flex; gap:4px; font-family:Arial,sans-serif; font-size:12px; align-items:stretch; margin-top:3px; margin-bottom:3px;">
+
+  <!-- COLUMN 1: CAREERS v38.38 -->
+    <!-- justify-content:flex-start ensures top alignment -->
+    <!-- <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;"> -->
+    <div class="career-scroll" style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;">
+      <fieldset class="repeating_careers" style="border:none; padding:0; margin:0; width:100%;">
+        <div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
+          <button type="roll" name="roll_career_task" title="Roll Task Check (3.0.2.1 Background)" 
+            style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;" 
+            value="&{template:default} {{name=@{character_name} rolls @{career_name} Task}} {{Needs=[[?{Which Save?|IN,@{intelligence_save}|AG,@{agility_save}|CL,@{cool_save}} + ?{Background|Common Knowledge/Has Bkgd (+3),3|Common Knowledge/Lacks Bkgd (+0),0|Training Required/Has Bkgd (+0),0|Training Required/Lacks Bkgd (-3),-3|Specialized Training/Has Bkgd (+0),0|Specialized Training/Lacks Bkgd w/ Instr (-3),-3|Specialized Training / *NO Instr (d20 must = 1),0} + @{career_bonus}]]-}} {{Rolls=[[1d20cs<[[?{Which Save?} + ?{Background} + @{career_bonus}]]cf>[[?{Which Save?} + ?{Background} + @{career_bonus}]]]]}}">Career</button>
+          <input type="text" name="attr_career_name" placeholder="Career" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" style="flex:1; min-width:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; border-radius:0; box-sizing:border-box;" />
+          <input type="text" name="attr_career_bonus" value="0" title="Add +3 for specialized career and +1 per Experience Level" style="width:20px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
+        </div>
+      </fieldset>
+  </div>
+
+  <!-- COLUMN 2: INVENTING PTS -->
+  <!-- justify-content:flex-start ensures top alignment -->
+  <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; gap:4px;">
+    
+    <!-- Top Row: Base and Mod -->
+    <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px;">
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#aaa; white-space:nowrap;">Base IPs from IN:</span>
+        <input type="text" name="attr_base_ip" title="IN ÷ 2, rounded up" value="" style="width:25px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" readonly />
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#aaa; white-space:nowrap;">IP Mod:</span>
+        <input type="text" name="attr_ip_mod" value="0" style="width:25px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="+1 IP per CP in Inventing" />
+      </div>
+    </div>
+
+    <!-- Bottom Row: Total (Right Justified) -->
+    <div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; font-size:11px;">
+      <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Remaining Inventing Points:</span>
+      <input type="text" name="attr_ip_remaining" readonly title=" Calculated: Base IPs + IP Mod - spent" value="" style="width:25px; background:#1e1e38; color:#50fa7b; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; cursor:not-allowed;" />
+    </div>
+
+  </div>
+
+  <!-- COLUMN 3: LEGAL STATUS -->
+  <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; font-size:11px;">
+    
+    <!-- Row 1: Status Input -->
+    <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+      <span style="color:#f4d03f; font-weight:bold; white-space:nowrap; font-size:12px;">Legal Status</span>
+      <input type="text" name="attr_legal_status" value="" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
+    </div>
+
+    <!-- Rows 2 & 3: Checkbox Grid -->
+    <div style="display:grid; grid-template-columns: 0.8fr 1.2fr; gap:2px; align-items:center;">
+      
+      <!-- Licensed -->
+      <label style="display:flex; align-items:center; gap:3px; cursor:pointer; margin:0;">
+        <input type="checkbox" name="attr_licensed" title="License to operate as a hero" style="margin:0;" />
+        <span style="color:#aaa; font-size:11px;">Licensed</span>
+      </label>
+
+      <!-- Security Clearance -->
+      <div style="display:flex; align-items:center; gap:3px;">
+        <span style="color:#aaa; white-space:nowrap; font-size:11px;">Security Clearance</span>
+        <input type="checkbox" name="attr_use_security" value="1" title="Enable Security Clearance calculation" style="margin:0;" />
+        <input type="text" name="attr_security_clearance" readonly title="Security Clearance level (IN Save + CL Save + Earned/5 - 20)" value="" style="width:22px; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; text-align:center; font-weight:bold; font-size:11px; padding:0;" />
+      </div>
+
+      <!-- Wanted -->
+      <label style="display:flex; align-items:center; gap:3px; cursor:pointer; margin:0;">
+        <input type="checkbox" name="attr_wanted" title="Authorities want them brought in" style="margin:0;" />
+        <span style="color:#aaa; font-size:11px;">Wanted</span>
+      </label>
+
+      <!-- Criminal Record -->
+      <label style="display:flex; align-items:center; gap:3px; cursor:pointer; margin:0;">
+        <input type="checkbox" name="attr_criminal_record" title="Criminal Record" style="margin:0;" />
+        <span style="color:#aaa; font-size:11px;">Criminal Record</span>
+      </label>
+
+    </div>
+  </div>
+  </div>
+</div>
+
+<!-- PROFILE / WEIGHT / MASS / WEALTH / LUCK ROW -->
+  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
+
+      <span style="color:#888; font-size:10px;" title="Profile affects range penalties">Profile:</span>
+      <input type="text" name="attr_profile" value="1"
+        style="width:45px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        title="Profile (default 1). Size affects range penalties." />
+
+      <span style="color:#aaa; font-size:11px;">Weight</span>
+      <input type="text" name="attr_weight" value="0"
+        style="width:70px; flex-shrink:1; min-width:55px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" />
+      <span style="color:#888; font-size:10px;">lbs</span>
+
+      <!-- MASS BUTTON (Styled Small) -->
+      <button type="roll" class="mp-labellink" name="roll_mass"
+        style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;"
+        value="&{template:default} {{name=@{character_name} rolls Mass}} {{Mass=[[@{mass}]]}}">Mass</button>
+        
+      <input type="text" name="attr_mass"
+        style="width:65px; flex-shrink:1; min-width:40px; background:#1e1e38; color:#eaeaea; border:1px solid #4a4070; padding:3px; text-align:center; box-sizing:border-box;"
+        value="1d4" readonly />
+
+      <span style="color:#888; font-size:10px;" title="KB Resistance: Bonus to Mass roll vs Knockback">KBR:</span>
+      <input type="text" name="attr_kb_resistance" value="0"
+        style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        title="Knockback Resistance bonus (from Inertia)" />
+
+      <!-- WEALTH BUTTON (Styled Small) -->
+      <button type="roll" class="mp-labellink" name="roll_wealth"
+        style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0 0 0 8px; background:#e63946; color:#fff; border:1px solid #2a2040;"
+        value="&{template:default} {{name=@{character_name} rolls Wealth}} {{Roll=[[@{wealth}]]}}">Wealth</button>
+        
+      <input type="text" name="attr_wealth" value="d4"
+        style="width:60px; flex-shrink:1; min-width:40px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;"
+        title="Starting: d4 (~$40k annual income)" />
+
+      <!-- LUCK BUTTON (Styled Small) -->
+      <button type="roll" class="mp-labellink" name="roll_luck"
+        style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;"
+        value="&{template:default} {{name=@{character_name} rolls Luck}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}">Luck</button>
+        
+      <input type="text" name="attr_luck" value="10"
+        style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;"
+        title="Starting: 10- save (average luck)" />
+
+    </div>
+  </div>
+
+
+  <!-- BASIC CHARACTERISTICS with EP Header -->
+  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+    <!-- EP Header Row - Reordered: Total, Starting, Earned, Available -->
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #2a2040;">
+      <div style="display:flex; align-items:center; gap:4px;">
+        <input type="text" name="attr_total_eps" readonly style="width:36px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Total EPs spent on BCs and Abilities" />
+        <span style="color:#f4d03f; font-size:11px;">Total CPs</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <input type="text" name="attr_starting_eps" value="0" style="width:36px; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Starting Experience Points for character creation" />
+        <span style="color:#f4d03f; font-size:11px;">Starting CPs</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <input type="text" name="attr_ep_earned" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Experience Points earned during play" />
+        <span style="color:#eaeaea; font-size:11px; font-weight:bold;">Earned CPs</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <input type="text" name="attr_ep_available" readonly style="width:36px; background:#1e1e38; color:#50fa7b; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="EPs available to spend = Starting + Earned - Total" />
+        <span style="color:#50fa7b; font-size:11px;">Available CPs</span>
+      </div>
+    </div>
+    
+    <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+      <tr style="font-size:10px; color:#888;">
+      <th style="width:38px; text-align:center;" title="Character Points invested in this BC">CPs</th>
+      <th style="width:32px; text-align:center;" title="Temporary or ability-granted modifier">Mod</th>
+      <th style="width:22px; text-align:center;" title="Basic Characteristic">BC</th>
+      <th style="width:38px; text-align:center;" title="Final score (Base + Mod)">Score</th>
+      <th style="width:70px; text-align:left; padding:2px;" title="Saving throw target (roll d20, need equal or under)">Save</th>
+      <!-- <th style="text-align:left;">Derived Values</th> -->
+    </tr>
+      <!-- ST -->
+      <tr>
+        <td style="text-align:center; padding:2px;"><input type="text" name="attr_strength_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_strength_mod" value="0" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center; color:#e63946; font-weight:bold;" title="Strength - physical power, carrying capacity, HTH damage">ST</td>
+        <td style="text-align:center;"><input type="text" name="attr_strength_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
+        <td style="text-align:center; white-space:nowrap;">
+          <span style="display:inline-block; width:26px; text-align:center; color:#666;" title="ST has no saving throw">n/a</span>
+          <button type="button" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:transparent; color:transparent; border:1px solid transparent; cursor:default;">HTH</button>
+        </td>
+        <td>
+          <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
+            <span style="color:#aaa; font-size:10px;">Base HTH:</span>
+            <input type="text" name="attr_hth_damage" readonly style="width:80px; flex-shrink:1; min-width:70px; background:#1e1e38; color:#8be9fd; border:1px solid #4a4070; padding:2px; text-align:center;" title="Hand-to-Hand damage dice" />
+            <!-- <button type="roll" class="mp-labellink" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button> -->
+            <button type="roll" class="mp-labellink sheet-mp-rollbtn" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
+            <span style="color:#aaa; font-size:10px;">Carry:</span>
+            <input type="text" name="attr_carry_capacity" readonly style="width:120px; flex-shrink:1; min-width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="Carrying capacity in pounds" />
+          </div>
+        </td>
+      </tr>
+      <!-- EN -->
+      <tr>
+        <td style="text-align:center; padding:2px;"><input type="text" name="attr_endurance_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_endurance_mod" value="0" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center; color:#e63946; font-weight:bold;" title="Endurance - stamina, healing rate, resistance to physical effects">EN</td>
+        <td style="text-align:center;"><input type="text" name="attr_endurance_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
+        <td style="text-align:center; white-space:nowrap;">
+          <input type="text" name="attr_endurance_save" readonly style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="EN Save: Resist physical effects, poison, disease, fatigue" />
+          <button type="roll" class="mp-labellink" name="roll_endurance_save" title="Roll EN Save (d20 ≤ EN Save)" value="&{template:default} {{name=@{character_name} rolls EN Save}} {{Roll=[[1d20cs<@{endurance_save}cf>@{endurance_save}]]}} {{Target=[[@{endurance_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">EN</button>
+        </td>
+        <td style="white-space:nowrap;">
+          <span style="color:#aaa; font-size:10px; padding-left:8px;">Heal Rate:</span>
+            <input type="text" name="attr_healing_rate" readonly style="width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" />
+            <input type="hidden" name="attr_heal_base" value="0" />
+            <input type="hidden" name="attr_heal_decimal" value="0" />
+            <input type="hidden" name="attr_heal_decimal_target" value="1" />
+            <button type="action" class="mp-labellink sheet-mp-rollbtn" name="act_heal" 
+  style="font-size:9px; font-weight:bold; height:20px; line-height:18px; padding:0 6px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px;" 
+  title="Roll daily healing">Heal</button>
+        </td>
+      </tr>
+      <!-- AG -->
+      <tr>
+        <td style="text-align:center; padding:2px;">
+          <input type="text" name="attr_agility_cost" value="0"
+            style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center;">
+          <input type="text" name="attr_agility_mod" value="0"
+            style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center; color:#e63946; font-weight:bold;"
+            title="Agility - coordination, physical defense, attack accuracy">AG</td>
+
+        <td style="text-align:center;">
+          <input type="text" name="attr_agility_score" readonly
+            style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center; white-space:nowrap;">
+          <input type="text" name="attr_agility_save" readonly
+            style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;"
+            title="AG Save: Dodge, balance, acrobatics, physical accuracy" />
+          <button type="roll" class="mp-labellink" name="roll_agility_save" title="Roll AG Save (d20 ≤ AG Save)" value="&{template:default} {{name=@{character_name} rolls AG Save}} {{Roll=[[1d20cs<@{agility_save}cf>@{agility_save}]]}} {{Target=[[@{agility_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">AG</button>
+        </td>
+
+        <td style="white-space:nowrap;">
+          <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
+            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Physical Defense Modifier:</span>
+            <input type="text" name="attr_physical_def_bonus" value="0"
+              style="width:34px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+              title="Physical Defense Modifier" />
+            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Physical Def:</span>
+            <input type="text" name="attr_physical_def" readonly
+              style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #8be9fd; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
+              title="Total Physical Def = AG Save + Physical Defense Modifier" />
+          </div>
+        </td>
+      </tr>
+
+      <!-- IN -->
+      <tr>
+        <td style="text-align:center; padding:2px;">
+          <input type="text" name="attr_intelligence_cost" value="0"
+            style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center;">
+          <input type="text" name="attr_intelligence_mod" value="0"
+            style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center; color:#e63946; font-weight:bold;"
+            title="Intelligence - mental acuity, inventing, mental defense">IN</td>
+
+        <td style="text-align:center;">
+          <input type="text" name="attr_intelligence_score" readonly
+            style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" />
+        </td>
+
+        <td style="text-align:center; white-space:nowrap;">
+          <input type="text" name="attr_intelligence_save" readonly
+            style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;"
+            title="IN Save: Perception, knowledge, mental attacks" />
+          <button type="roll" class="mp-labellink" name="roll_intelligence_save" title="Roll IN Save (d20 ≤ IN Save)" value="&{template:default} {{name=@{character_name} rolls IN Save}} {{Roll=[[1d20cs<@{intelligence_save}cf>@{intelligence_save}]]}} {{Target=[[@{intelligence_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">IN</button>
+        </td>
+
+        <td style="white-space:nowrap;">
+          <div style="display:inline-grid; grid-template-columns:auto 34px auto 34px; column-gap:6px; align-items:center; justify-content:start; padding-left:8px;">
+            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Mental Defense Modifier:</span>
+            <input type="text" name="attr_mental_def_bonus" value="0"
+              style="width:34px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+              title="Mental Defense Modifier" />
+            <span style="color:#aaa; font-size:10px; white-space:nowrap;">Total Mental Def:</span>
+            <input type="text" name="attr_mental_def" readonly
+              style="width:34px; background:#1e1e38; color:#eaeaea; border:1px solid #8be9fd; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
+              title="Total Mental Def = IN Save + Mental Defense Modifier" />
+          </div>
+        </td>
+      </tr>
+      <!-- CL -->
+      <tr>
+        <td style="text-align:center; padding:2px;"><input type="text" name="attr_cool_cost" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center;"><input type="text" name="attr_cool_mod" value="0" style="width:100%; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+        <td style="text-align:center; color:#e63946; font-weight:bold;" title="Cool - composure, willpower, initiative">CL</td>
+        <td style="text-align:center;"><input type="text" name="attr_cool_score" readonly style="width:100%; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;" /></td>
+        <td style="text-align:center; white-space:nowrap;">
+          <input type="text" name="attr_cool_save" readonly style="width:26px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="CL Save: Willpower, fear, emotional attacks, composure" />
+          <button type="roll" class="mp-labellink" name="roll_cool_save" title="Roll CL Save (d20 ≤ CL Save)" value="&{template:default} {{name=@{character_name} rolls CL Save}} {{Roll=[[1d20cs<@{cool_save}cf>@{cool_save}]]}} {{Target=[[@{cool_save}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040;">CL</button>
+        </td>
+        <td style="white-space:nowrap;">
+          <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
+            <span style="color:#aaa; font-size:10px;">Initiative Modifier:</span>
+            <input type="text" name="attr_initiative_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative modifier" />
+            <button type="roll" class="mp-labellink" name="roll_initiative" value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} + @{initiative_mod} + (@{agility_score} / 100) &{tracker}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040;" title="Roll initiative for combat order">Initiative</button>
+            <input type="text" name="attr_initiative_score" style="width:80px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative die roll (e.g., 1d10+1)" />
+            <button type="action" name="act_reset_initiative" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to CL-based initiative">↺</button>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <div style="margin-top:4px; padding-top:4px; border-top:1px solid #2a2040;">
+      <div style="display:flex; gap:8px;">
+        <!-- Left: Move/Power/Hits stacked -->
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <!-- Move row -->
+          <div style="display:flex; align-items:center; gap:4px;">
+            <span style="color:#aaa; font-size:11px;">Move:</span>
+            <input type="text" name="attr_move" style="width:100px; flex-shrink:1; min-width:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; font-size:11px;" title="Ground movement in inches" />
+            <button type="action" name="act_reset_move" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to (ST+EN+AG)/3">↺</button>
+            <span style="color:#aaa; font-size:11px; margin-left:4px;">Leap Multiplier:</span>
+            <input type="text" name="attr_leap_mult" value="1" style="width:35px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" title="Super Leap multiplier" />
+            <span style="color:#aaa; font-size:11px;">Max Leap:</span>
+            <span class="mp-leapwrap">
+              <input type="text" name="attr_leap_total" readonly style="width:95px; flex-shrink:1; min-width:50px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; font-size:10px;" />
+              <span class="mp-leaptip"><span name="attr_leap_distance"></span></span>
+            </span>
+          </div>
+          <!-- <input type="checkbox" name="attr_color_classic" class="sheet-color-toggle" title="Toggle classic colors (yellow Power, red Hits)" /> -->
+          <!-- Power row -->
+          <div class="sheet-power-row" style="display:flex; align-items:center; gap:4px;">
+            <span class="sheet-power-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">POWER:</span>
+            <span style="color:#aaa; font-size:10px;">Modifier</span>
+            <input type="text" name="attr_power_mod" class="sheet-power-input" value="0" style="width:28px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center;" title="Power modifier" />
+            <span style="color:#aaa; font-size:10px;">Maximum</span>
+            <input type="text" name="attr_power_score_max" class="sheet-power-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Power" />
+            <span style="color:#aaa; font-size:10px;">Current</span>
+            <input type="text" name="attr_power_score" class="sheet-power-input" style="width:36px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Current Power points" />
+          </div>
+          <!-- Hits row -->
+          <div class="sheet-hits-row" style="display:flex; align-items:center; gap:4px;">
+            <span class="sheet-hits-label" style="font-size:11px; font-weight:bold; width:45px; text-align:right;">HITS:</span>
+            <span style="color:#aaa; font-size:10px;">Modifier</span>
+            <input type="text" name="attr_hits_mod" class="sheet-hits-input" value="0" style="width:28px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center;" title="Hits modifier" />
+            <span style="color:#aaa; font-size:10px;">Maximum</span>
+            <input type="text" name="attr_hits_score_max" class="sheet-hits-input" readonly style="width:36px; background:#1e1e38; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Max Hits" />
+            <span style="color:#aaa; font-size:10px;">Current</span>
+            <input type="text" name="attr_hits_score" class="sheet-hits-input" style="width:36px; background:#0d0d1a; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Current Hit points" />
+            <button type="roll" class="mp-labellink" name="roll_wakeup" value="&{template:default} {{name=@{character_name} rolls Wakeup}} {{Roll=[[1d20cs<@{hits_score}cf>@{hits_score}]]}} {{Target=[[@{hits_score}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px;" title="Roll current Hits or less to wake">Wake</button>
+          </div>
+        </div>
+        <!-- Right: Notes -->
+        <div style="display:flex; flex:1; align-self:flex-start; align-items:flex-start; gap:4px;">
+          <span style="color:#aaa; font-size:10px; white-space:nowrap;">Notes:</span>
+          <textarea name="attr_notes" style="flex:1; min-height:18px; height:18px; max-height:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; font-size:10px; resize:vertical;" title="Movement notes, immunities, reminders, etc." placeholder="Flight 20&quot;, Swim 10&quot;, etc."></textarea>
+        </div>
+        </div>
+      </div>
+  </div>
+
+  <!-- ATTACKS -->
+  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+
+    <!-- Combat Query Settings -->
+    <div style="margin-bottom:3px; padding-bottom:6px; border-bottom:1px solid #2a2040;">
+      <span style="color:#888; font-size:10px; margin-right:4px;">Query:</span>
+      <button type="roll" name="roll_query_help" value="&{template:mpqueryhelp} {{help=1}}" style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px; margin-right:6px;" title="Show query help">?</button>
+      <input type="checkbox" name="attr_query_range" value="1" title="Prompt for range penalty" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Range</span>
+      <input type="checkbox" name="attr_query_called" value="1" title="Prompt for called shot penalty" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Called</span>
+      <input type="checkbox" name="attr_query_aim" value="1" title="Prompt for aim bonus" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Aim</span>
+      <input type="checkbox" name="attr_query_push" value="1" title="Prompt for push/hold back modifier" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Push/Hold</span>
+      <input type="checkbox" name="attr_query_multi" value="1" title="Prompt for multiple actions" /><span style="color:#aaa; font-size:10px; margin-right:8px;">Multi</span>
+      <input type="checkbox" name="attr_query_other" value="1" title="Prompt for other modifiers" /><span style="color:#aaa; font-size:10px;">Other</span>
+    </div>
+
+    <!-- Attacks Header -->
+    <table style="width:100%; border-collapse:collapse; margin-bottom:3px; table-layout:fixed;">
+      <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
+        <th style="width:155px; text-align:left; padding:2px 1px; color:#f4d03f; font-size:11px;">Attacks</th>
+        <th style="width:36px;"></th>
+        <th style="width:40px; text-align:center; padding:1px 1px;" title="Attack Type: Physical (AG) / Mental (IN) / Emotion (CL)">
+          <div style="line-height:9px;">Atk<br>Type</div>
+        </th>
+        <th style="width:28px; text-align:center; padding:2px 1px;" title="To-hit modifier">Mod</th>
+        <th style="width:34px; text-align:center; padding:1px 1px;" title="Target number to hit">
+  <div style="line-height:9px;">To<br>Hit</div>
+</th>
+        <th style="width:65px; text-align:center; padding:2px 1px;" title="Damage dice">Damage</th>
+        <!-- <th style="width:60px; text-align:center; padding:2px 1px;" title="Damage dice">DMG TEST</th> -->
+        <th style="width:30px; text-align:center; padding:2px 1px;" title="Range in inches">Rng</th>
+        <th style="width:40px; text-align:center; padding:1px 1px;" title="Damage Type">
+          <div style="line-height:9px;">Dmg<br>Type</div>
+        </th>
+        <th style="width:20px; text-align:center; padding:2px 1px;" title="Knockback">KB</th>
+        <th style="width:35px; text-align:center; padding:2px 1px;" title="Cost: PR, charges (6c), or both (2/6c)">Cost</th>
+        <th style="text-align:left; padding:2px 1px;" title="Special attacks use shorthand">Notes <button type="roll" name="roll_notes_help" value="&{template:mphelp} {{help=1}}" style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px;" title="Show shorthand help">?</button></th>
+      </tr>
+    </table>
+
+<!-- Repeating Attacks -->
+<fieldset class="repeating_attacks" style="border:none; padding:0; margin:0;">
+  <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
+    <tr>
+      <td style="width:155px; padding:1px; vertical-align:middle;">
+        <input type="text" name="attr_attack_name"
+          style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
+      </td>
+
+      <td style="width:36px; text-align:center; padding:1px; vertical-align:middle; overflow:visible;">
+        <!-- NEW: per-row hidden RowID storage -->
+        <input type="hidden" name="attr_attack_rowid" />
+
+        <!-- NEW: auto row number + display labels for info cards -->
+        <input type="hidden" name="attr_attack_num" />
+        <input type="hidden" name="attr_attack_atk_full" />
+        <input type="hidden" name="attr_attack_pr" />
+
+        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{tname=@{target|Target|token_name}}} {{tdef=[[((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{deftype=@{attack_atk_full}}} {{stance=[[0-@{target|Target|bar3}]]}} {{tstance=@{target|Target|bar3}}} {{rngmod=[[@{range_query}]]}} {{called=[[@{called_query}]]}} {{aim=[[@{aim_query}]]}} {{multi=[[@{multi_query}]]}} {{other=[[@{other_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+      </td>
+
+      <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
+        <select name="attr_attack_atk"
+          style="width:100%; height:20px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:0; font-size:11px; box-sizing:border-box;"
+          title="Physical (AG) / Mental (IN) / Emotion (CL)">
+          <option value="P" selected>Phys</option>
+          <option value="M">Ment</option>
+          <option value="E">Emot</option>
+        </select>
+      </td>
+
+      <td style="width:28px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="text" name="attr_attack_mod" value="0"
+          style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+          title="To-hit modifier" />
+      </td>
+
+      <td style="width:34px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="text" name="attr_attack_tohit" readonly
+          style="width:100%; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold; box-sizing:border-box;"
+          title="Target number" />
+      </td>
+
+      <td style="width:65px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="text" name="attr_attack_damage"
+          style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+          title="Damage dice" />
+      </td>
+
+      <td style="width:30px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="text" name="attr_attack_range"
+          style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+          title="Range in inches" />
+      </td>
+
+      <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
+        <select name="attr_attack_dmgtype"
+          style="width:100%; height:20px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:0; font-size:10px; box-sizing:border-box;"
+          title="Damage Type">
+          <option value="Kin" selected>Kin</option>
+          <option value="Eng">Eng</option>
+          <option value="Bio">Bio</option>
+          <option value="Ent">Ent</option>
+          <option value="Psy">Psy</option>
+          <option value="Oth">Oth</option>
+        </select>
+      </td>
+
+      <td style="width:20px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="checkbox" name="attr_attack_kb" value="1" checked="checked" title="Causes Knockback" />
+      </td>
+
+      <td style="width:35px; text-align:center; padding:1px; vertical-align:middle;">
+        <input type="text" name="attr_attack_cost"
+          style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+          title="PR, charges (6c), or both (2/6c)" />
+      </td>
+
+      <td style="padding:1px; vertical-align:middle; overflow:hidden;">
+        <div style="display:flex; gap:2px;">
+          <input type="text" name="attr_attack_notes"
+            style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;"
+            title="Shorthand: sav:BC:mod:rec | snr:type:bp/max | ap:N" />
+          <button type="roll" name="roll_attack_info"
+            value="&{template:mpatkinfo} {{title=@{character_name}: Attack #@{attack_num}}} {{name=@{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit}}} {{damage=@{attack_damage}}} {{range=@{attack_range}}} {{ap=@{attack_ap}}} {{dtype=@{attack_dmgtype_full}}} {{kb=@{attack_kb_display}}} {{cost=@{attack_cost}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_recovery}}} {{snaretype=@{attack_snare_type}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{notes=@{attack_notes}}}"
+            style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
+            title="Show attack info">?</button>
+          
+          <button type="roll" name="roll_macro_gen"
+            value="&{template:mpmac} {{name=@{attack_name}}} {{compact=&amp;#38;&amp;#123;template:default&amp;#125;&amp;#10;&amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; attacks &amp;#42;&amp;#42;&amp;#64;&amp;#123;target&amp;#124;token_name&amp;#125;&amp;#42;&amp;#42; with &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_name&amp;#125;&amp;#42;&amp;#42;, needs &amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_tohit_num&amp;#125; - &amp;#63;&amp;#123;Defense&amp;#124;Physical,&amp;#64;&amp;#123;target&amp;#124;physical_def&amp;#125;&amp;#124;Mental/Emotion,&amp;#64;&amp;#123;target&amp;#124;mental_def&amp;#125;&amp;#125; + &amp;#63;&amp;#123;Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; to hit, d20=&amp;#91;&amp;#91;d20&amp;#93;&amp;#93;&amp;#10;Damage=&amp;#91;&amp;#91; &amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_damage&amp;#125; + &amp;#63;&amp;#123;Damage Modifier?&amp;#124;0&amp;#125; &amp;#93;&amp;#93; &amp;#42;&amp;#42;&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_dmgtype&amp;#125;&amp;#42;&amp;#42;, KB=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_kb_display&amp;#125;, Range=&amp;#64;&amp;#123;selected&amp;#124;repeating_attacks_@{attack_rowid}_attack_range&amp;#125;}}"
+            style="background:transparent; color:#666; border:none; padding:0 1px; cursor:pointer; font-size:10px; flex-shrink:0;"
+            title="Generate copyable macros">⚙</button>
+
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Hidden attributes for roll calculation -->
+  <input type="hidden" name="attr_attack_tohit_num" value="9" />
+  <input type="hidden" name="attr_attack_kb_display" value="Yes" />
+  <input type="hidden" name="attr_attack_dmgtype_full" value="Kinetic" />
+  <input type="hidden" name="attr_attack_is_physical" value="1" />
+  <input type="hidden" name="attr_attack_is_mental" value="0" />
+
+  <!-- Hidden attributes for special attacks -->
+   <input type="hidden" name="attr_attack_idx" />
+  <input type="hidden" name="attr_attack_type" value="std" />
+  <input type="hidden" name="attr_attack_save_bc" value="" />
+  <input type="hidden" name="attr_attack_save_mod" value="" />
+  <input type="hidden" name="attr_attack_recovery" value="" />
+  <input type="hidden" name="attr_attack_snare_type" value="" />
+  <input type="hidden" name="attr_attack_bp" value="" />
+  <input type="hidden" name="attr_attack_max_bp" value="" />
+  <input type="hidden" name="attr_attack_ap" value="" />
+</fieldset>
+
+</div>
+
+  <!-- PROTECTION Header -->
+<div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+  <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+    <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a2040;">
+      <th style="width:155px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;">Protection</th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Kinetic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Kin
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Energy. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Eng
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Biochemical. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Bio
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Entropy. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Ent
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Psychic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Psy
+      </th>
+
+      <th style="width:32px; text-align:center; padding:1px;"
+          title="Other. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: put 'Invulnerability' in the Name field, and enter 1/4 in this column.">
+        Oth
+      </th>
+
+      <th style="width:35px; text-align:center; padding:1px;" title="Cost: PR, charges (6c), or both (2/6c)">Cost</th>
+
+      <th style="text-align:left; padding:1px;">Notes</th>
+    </tr>
+  </table>
+
+  <!-- PROTECTION (Repeating) -->
+  <fieldset class="repeating_protection" style="border:none; padding:0; margin:0;">
+    <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
+      <tr>
+        <td style="width:155px; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_kinetic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_energy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_bio" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_entropy" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_psychic" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_other" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened. Invulnerability: set Name to 'Invulnerability' and enter 1/4 in any damage type you are invulnerable to." /></td>
+        <td style="width:35px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_prot_cost" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" title="PR cost or charges (e.g., 2, 6c, 2/6c)" /></td>
+        <td style="padding:1px; vertical-align:middle; overflow:hidden;"><input type="text" name="attr_prot_notes" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" /></td>
+      </tr>
+    </table>
+  </fieldset>
+</div>
+
+  <!-- ABILITIES / WEAKNESSES (Repeating) -->
+  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:5px;">
+  <div style="color:#f4d03f; font-weight:bold;">
+    Abilities / Weaknesses <span style="color:#666; font-size:10px;">(use negative CPs for weaknesses, max -20)</span>
+  </div>
+  <button type="roll" name="roll_abw_summary"
+    value="&{template:mpabw} {{name=@{character_name}: Abilities & Weaknesses}} {{body=@{abw_summary}}}"
+    style="background:#444; color:#f4d03f; border:1px solid #555; padding:1px 6px; cursor:pointer; font-size:10px;"
+    title="Send all Abilities/Weaknesses to chat">All</button>
+</div>
+    <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+      <tr style="font-size:10px; color:#888;">
+        <th style="width:40px; text-align:center;">CP</th>
+        <th style="width:40px; text-align:center;">IPs</th>
+        <th style="text-align:left;">Name / Notes</th>
+      </tr>
+    </table>
+    <fieldset class="repeating_abilities" style="border:none; padding:0; margin:0;">
+      <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
+        <tr>
+          <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_cp" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+          <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_ability_ip" value="0" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;" /></td>
+          <td style="padding:1px; vertical-align:middle;">
+            <div style="display:flex; gap:2px;">
+              <input type="text" name="attr_ability_name" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" />
+              <button type="roll" name="roll_ability_info"
+                value="&{template:mpability} {{name=@{character_name}}} {{ability=@{ability_name}}} {{cp=@{ability_cp}}} {{ip=@{ability_ip}}}"
+                style="background:transparent; color:#666; border:none; padding:0 3px; cursor:pointer; font-size:10px; flex-shrink:0;" title="Show ability info">?</button>
+            </div>
+          </td>
+        </tr>
+      </table>
+      <!-- Hidden attributes for ability modifiers (parsed from notes) -->
+      <input type="hidden" name="attr_ability_mod_type" value="" />
+      <input type="hidden" name="attr_ability_aura_damage" value="" />
+      <input type="hidden" name="attr_ability_aura_dtype" value="" />
+      <input type="hidden" name="attr_ability_aura_pr" value="" />
+      <input type="hidden" name="attr_ability_absorb_types" value="" />
+      <input type="hidden" name="attr_ability_absorb_limit" value="" />
+      <input type="hidden" name="attr_ability_absorb_effect" value="" />
+      <input type="hidden" name="attr_ability_reflect_types" value="" />
+      <input type="hidden" name="attr_ability_reflect_limit" value="" />
+      <input type="hidden" name="attr_ability_autofire_rof" value="" />
+      <input type="hidden" name="attr_ability_duration_time" value="" />
+      <input type="hidden" name="attr_ability_duration_escape" value="" />
+      <input type="hidden" name="attr_ability_contact_link" value="" />
+      <input type="hidden" name="attr_ability_contact_ind" value="" />
+      <input type="hidden" name="attr_ability_carrier_link" value="" />
+      <input type="hidden" name="attr_ability_carrier_ind" value="" />
+    </fieldset>
+  </div>
+
+  <!-- CAPS & COMBAT FOOTER - Single Row -->
+  <div style="background:#1e1e38; padding:6px 8px; border-radius:4px;">
+    <div style="display:flex; flex-wrap:wrap; gap:4px 12px; font-size:11px; align-items:center;">
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#888;">BC Cap</span>
+        <input type="text" name="attr_bc_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Max BC score = Total EPs / 5 + 10" />
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#888;">Ability Cap</span>
+        <input type="text" name="attr_ability_cap" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Max Ability EP cost = Total EPs / 5" />
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#888;">DoT Cap</span>
+        <input type="text" name="attr_dot_cap" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Damage over Time Cap" />
+      </div>
+      <span style="color:#444;">│</span>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#888;">Break</span>
+        <input type="text" name="attr_break_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Target opponent must beat to break your gear" />
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#888;">Take</span>
+        <input type="text" name="attr_take_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Target opponent must beat to take held gear" />
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span style="color:#888;">Disarm</span>
+        <input type="text" name="attr_disarm_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Target opponent must beat to tear away worn gear" />
+      </div>
+    </div>
+  </div>
+
+
+  <!-- VEHICLE CONTENT (hidden when character tab selected) -->
+  <div class="sheet-vehicle-content">
+
+    <!-- VEHICLE TITLE -->
+    <div style="background:#1e1e38; padding:6px 8px; margin-bottom:3px; border-radius:4px; text-align:center;">
+      <span style="color:#f4d03f; font-weight:bold; font-size:14px; letter-spacing:1px;">MIGHTY PROTECTORS&#8482; VEHICLE RECORD SHEET</span>
+    </div>
+
+    <!-- NAME / MODEL / OPERATOR -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+        <tr>
+          <td style="color:#f4d03f; padding:2px; width:8%; text-align:right; font-weight:bold;">Name</td>
+          <td style="padding:2px; width:30%;"><input type="text" name="attr_vehicle_name" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
+          <td style="color:#aaa; padding:2px; width:8%; text-align:right;">Model</td>
+          <td style="padding:2px; width:20%;"><input type="text" name="attr_vehicle_model" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;"  /></td>
+          <td style="color:#aaa; padding:2px; width:10%; text-align:right;">Operator</td>
+          <td style="padding:2px; width:24%;"><input type="text" name="attr_vehicle_owner" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; box-sizing:border-box;" /></td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- SIZE + VEHICLE MODS -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
+        <input type="number" name="attr_vehicle_base_cp" value="20" style="width:44px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px; font-weight:bold;" title="Base CPs for vehicle size" />
+        <span style="color:#f4d03f; font-weight:bold; font-size:11px;">Base CPs</span>
+        <span style="color:#888; font-size:10px; margin-left:6px;">Sys Spaces</span>
+        <input type="text" name="attr_vehicle_spaces" readonly style="width:50px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#888; font-size:10px;">Profile</span>
+        <input type="text" name="attr_vehicle_profile" readonly style="width:50px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#888; font-size:10px;">Weight</span>
+        <input type="text" name="attr_vehicle_weight" readonly style="width:80px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:10px;" />
+        <span style="color:#888; font-size:10px;">lbs</span>
+        <button type="roll" name="roll_vehicle_mass" title="Roll Vehicle Mass" value="&{template:default} {{name=@{vehicle_name} Mass Roll}} {{Roll=[[@{vehicle_mass_roll}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#3498db; color:#fff; border:1px solid #2a2040; cursor:pointer;">Mass</button>
+        <input type="text" name="attr_vehicle_mass" readonly style="width:80px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:10px;">
+        <span style="color:#888;">Vehicle Mods:</span>
+        <span style="color:#888;">Hi/Lo Tech</span>
+        <input type="number" name="attr_vehicle_hilotech" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" title="Per +5: add +5 CPs to each system. Per -5: subtract 5 CPs from each system." />
+        <span style="color:#888;">Maneuver</span>
+        <input type="number" name="attr_vehicle_maneuver" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" title="Per +5: +1 Turn Rate. Per -5: -1 Turn Rate." />
+        <span style="color:#888;">Won't Explode</span>
+        <input type="checkbox" name="attr_vehicle_wontexplode" value="1" title="+5 to total cost, no explosion" style="margin:0;" />
+      </div>
+    </div>
+
+    <!-- ARMOR -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+        <span style="color:#f4d03f; font-weight:bold; font-size:11px;">ARMOR</span>
+        <span style="color:#888; font-size:10px;">Kinetic</span>
+        <input type="number" name="attr_vehicle_armor_kinetic" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#888; font-size:10px;">Energy</span>
+        <input type="number" name="attr_vehicle_armor_energy" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#888; font-size:10px;">Biochem</span>
+        <input type="number" name="attr_vehicle_armor_biochem" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#888; font-size:10px;">Entropy</span>
+        <input type="number" name="attr_vehicle_armor_entropy" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#888; font-size:10px;">Psychic</span>
+        <input type="number" name="attr_vehicle_armor_psychic" value="0" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+      </div>
+    </div>
+
+    <!-- HITS / REPAIR / POWER / EXPLOSION -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+        <span style="color:#f4d03f; font-weight:bold; font-size:11px;">HITS</span>
+        <input type="number" name="attr_vehicle_hits" style="width:36px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px; font-weight:bold;" />
+        <span style="color:#555;">/</span>
+        <input type="text" name="attr_vehicle_hits_max" readonly style="width:36px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <button type="roll" name="roll_vehicle_repair" title="Roll Repair Task Check" value="&{template:default} {{name=@{vehicle_name} Repair}} {{Roll=[[1d20cs<[[?{Mechanic Save|10} + ?{Modifier|0} - 3]]cf>[[?{Mechanic Save|10} + ?{Modifier|0} - 3]]]]}} {{Target=[[?{Mechanic Save|10} + ?{Modifier|0} - 3]]-}} {{Note=Repairs 1 + margin hits (deduct from spare parts)}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#3498db; color:#fff; border:1px solid #2a2040; cursor:pointer;">Repair</button>
+        <span style="color:#555;">&#9474;</span>
+        <span style="color:#f4d03f; font-weight:bold; font-size:11px;">POWER</span>
+        <input type="number" name="attr_vehicle_power" style="width:36px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px; font-weight:bold;" />
+        <span style="color:#555;">/</span>
+        <input type="text" name="attr_vehicle_power_max" readonly style="width:36px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#555;">&#9474;</span>
+        <button type="roll" name="roll_vehicle_explosion_dmg" title="Roll Explosion Damage" value="&{template:default} {{name=@{vehicle_name} EXPLODES!}} {{Damage=[[@{vehicle_explosion_roll}]]}} {{Area=@{vehicle_explosion_area}&quot;}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#ff5555; color:#fff; border:1px solid #2a2040; cursor:pointer;">Explosion</button>
+        <input type="text" name="attr_vehicle_explosion" readonly style="width:50px; background:#0d0d1a; color:#ff5555; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#888; font-size:10px;">Area</span>
+        <input type="text" name="attr_vehicle_explosion_area" readonly style="width:30px; background:#0d0d1a; color:#ff5555; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <span style="color:#888; font-size:10px;">"</span>
+      </div>
+    </div>
+
+    <!-- SYSTEMS SECTION -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:0; border-radius:4px 4px 0 0;">
+      <div style="margin-bottom:2px;">
+        <span style="color:#f4d03f; font-weight:bold; font-size:11px;">VEHICLE SYSTEMS &amp; MODIFIERS</span>
+      </div>
+      <!-- Column headers -->
+      <div style="display:flex; gap:2px; align-items:center; padding:0 0 2px 0; border-bottom:1px solid #2a2040; color:#888; font-size:10px;">
+        <span style="width:36px; text-align:center;">Cost</span>
+        <span style="width:36px; text-align:center;">Spaces</span>
+        <span style="width:38px; text-align:center;">Profile</span>
+        <span style="width:56px; text-align:center;">Hits</span>
+        <span style="width:36px; text-align:center;">DMG</span>
+        <span style="width:32px; text-align:center;">PTs</span>
+        <span style="flex:1; padding-left:4px;">System Description, Arc &amp; Facing</span>
+      </div>
+    </div>
+    <div style="background:#1e1e38; padding:2px 6px 6px 6px; margin-bottom:0; border-radius:0;">
+      <fieldset class="repeating_vehsystems" style="border:none; padding:0; margin:0;">
+        <div class="sheet-veh-sys-row" style="display:flex; gap:2px; align-items:center; padding:2px 0; border-bottom:1px solid #1a1428;">
+          <input type="number" name="attr_vsys_cost" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System cost adjustment (modifiers)" />
+          <input type="number" name="attr_vsys_spaces" value="1" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
+          <input type="text" name="attr_vsys_profile" readonly style="width:38px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
+          <input type="number" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits" />
+          <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
+          <input type="text" name="attr_vsys_dmg" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" />
+          <input type="text" name="attr_vsys_cp" readonly style="width:32px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System CPs (auto from spaces + hi/lo tech + cost adj)" />
+          <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px; margin-right:50px;" placeholder="Description, arc, facing..." />
+        </div>
+      </fieldset>
+    </div>
+
+    <!-- TOTALS ROW (below systems) -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:0 0 4px 4px;">
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:11px;">
+        <input type="text" name="attr_vehicle_total_cost" readonly style="width:44px; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" />
+        <span style="color:#f4d03f; font-weight:bold;">TOTAL COST</span>
+        <span style="color:#555;">&#9474;</span>
+        <span style="color:#888; font-size:10px;">Spaces Used</span>
+        <input type="text" name="attr_vehicle_spaces_used" readonly style="width:36px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; font-size:10px;">Remaining</span>
+        <input type="text" name="attr_vehicle_spaces_remaining" readonly style="width:36px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; font-size:10px;">Spare Parts</span>
+        <input type="number" name="attr_vehicle_spare_parts" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+      </div>
+    </div>
+
+    <!-- STATS SECTION -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px; margin-bottom:4px;">
+        <span style="color:#888;">ST:</span>
+        <input type="text" name="attr_vehicle_st" readonly style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_hth" title="Roll Vehicle HTH Damage" value="&{template:default} {{name=@{vehicle_name} HTH}} {{Damage=[[@{vehicle_hth_roll}]]}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e67e22; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">Base HTH:</button>
+        <input type="text" name="attr_vehicle_hth" readonly style="width:70px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">EN:</span>
+        <input type="text" name="attr_vehicle_en" readonly style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_en_save" title="Roll Vehicle EN Save" value="&{template:default} {{name=@{vehicle_name} EN Save}} {{Roll=[[1d20cs<[[@{vehicle_en_save} + ?{Modifier|0}]]cf>[[@{vehicle_en_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_en_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">EN Save:</button>
+        <input type="text" name="attr_vehicle_en_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">Turn Rate:</span>
+        <input type="number" name="attr_vehicle_turn_rate" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_init" title="Roll Vehicle Initiative (adds to tracker)" value="&{template:default} {{name=@{vehicle_name} Initiative}} {{Vehicle=[[@{vehicle_init_roll} + (@{vehicle_ag} / 100) &{tracker}]]}} {{Pilot=[[@{initiative_score} + @{initiative_mod} + (@{agility_score} / 100)]]}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">Initiative</button>
+        <input type="text" name="attr_vehicle_init_die" readonly style="width:60px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+      </div>
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px;">
+        <span style="color:#888;">AG:</span>
+        <input type="number" name="attr_vehicle_ag" value="9" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_ag_save" title="Roll Vehicle AG Save" value="&{template:default} {{name=@{vehicle_name} AG Save}} {{Roll=[[1d20cs<[[@{vehicle_ag_save} + ?{Modifier|0}]]cf>[[@{vehicle_ag_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_ag_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">AG Save:</button>
+        <input type="text" name="attr_vehicle_ag_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">Handling:</span>
+        <input type="text" name="attr_vehicle_handling" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">IN:</span>
+        <input type="number" name="attr_vehicle_in" value="0" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_in_save" title="Roll Vehicle IN Save" value="&{template:default} {{name=@{vehicle_name} IN Save}} {{Roll=[[1d20cs<[[@{vehicle_in_save} + ?{Modifier|0}]]cf>[[@{vehicle_in_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_in_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">IN Save:</button>
+        <input type="text" name="attr_vehicle_in_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">CL:</span>
+        <input type="number" name="attr_vehicle_cl" value="9" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_cl_save" title="Roll Vehicle CL Save" value="&{template:default} {{name=@{vehicle_name} CL Save}} {{Roll=[[1d20cs<[[@{vehicle_cl_save} + ?{Modifier|0}]]cf>[[@{vehicle_cl_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_cl_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">CL Save:</button>
+        <input type="text" name="attr_vehicle_cl_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+      </div>
+    </div>
+
+    <!-- DEFENSE / CARRY -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px;">
+        <span style="color:#888;">Defense:</span>
+        <input type="text" name="attr_vehicle_defense" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">Carry:</span>
+        <input type="text" name="attr_vehicle_carry" readonly style="width:140px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:10px;" />
+      </div>
+    </div>
+
+    <!-- NOTES -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <span style="color:#f4d03f; font-weight:bold; font-size:11px;">NOTES</span>
+      <textarea name="attr_vehicle_notes" style="width:100%; height:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px; margin-top:3px; box-sizing:border-box; font-size:11px; font-family:Arial,sans-serif; resize:vertical;" placeholder="Vehicle modifiers, special features, travel abilities, appearance, etc."></textarea>
+    </div>
+
+    <!-- MODIFIERS REFERENCE -->
+    <div style="background:#1e1e38; padding:6px; border-radius:4px;">
+      <details>
+        <summary style="color:#f4d03f; font-weight:bold; font-size:11px; cursor:pointer;">Modifiers Reference</summary>
+        <div style="color:#aaa; font-size:10px; padding:4px; margin-top:4px; line-height:1.5;">
+          <div style="color:#8be9fd; font-weight:bold;">Vehicle Modifiers:</div>
+          <div>&#8226; High Tech (+5 per): +5 CPs to each system (no size/hits change)</div>
+          <div>&#8226; Low Tech (-5 per): -5 CPs from each system (no size/hits change)</div>
+          <div>&#8226; Maneuver (+5 per +1 Turn Rate, -5 per -1 Turn Rate)</div>
+          <div>&#8226; Won't Explode (+5): Central Power won't explode</div>
+          <div style="color:#8be9fd; font-weight:bold; margin-top:4px;">System Modifiers (enter in Cost column):</div>
+          <div>&#8226; Bulky (+2.5 per): +4.3 Hits (round up)</div>
+          <div>&#8226; Delicate (-2.5 per): -4.3 Hits (min 1)</div>
+          <div>&#8226; Integral: &#189; CPs generated, no deck plan</div>
+          <div>&#8226; Open System: &#188; CPs generated, passable</div>
+          <div>&#8226; Gear: Removable, uses Gear breakage rules</div>
+          <div>&#8226; Independent Power: Separate power/explosion</div>
+          <div>&#8226; No Arc (-10): Straight line only</div>
+          <div>&#8226; Wide Arc (+5/+10): 240&#176; or 360&#176;</div>
+          <div style="color:#8be9fd; font-weight:bold; margin-top:4px;">System Spaces &#8594; CPs:</div>
+          <div>1&#8594;5 | 2&#8594;10 | 3&#8594;12.5 | 4&#8594;15 | 6&#8594;17.5 | 8&#8594;20 | 12&#8594;22.5 | 16&#8594;25 | 24&#8594;27.5 | 32&#8594;30 | 48&#8594;32.5 | 64&#8594;35</div>
+        </div>
+      </details>
+    </div>
+
+  </div><!-- END VEHICLE CONTENT -->
+
+</div> <!-- This closes the main container div -->
+
+<!-- Global Hidden query attributes -->
+<input type="hidden" name="attr_vehicle_explosion_roll" value="1d8" />
+<input type="hidden" name="attr_vehicle_init_roll" value="1d4" />
+<input type="hidden" name="attr_vehicle_mass_roll" value="2d6" />
+<input type="hidden" name="attr_vehicle_hth_roll" value="1d6" />
+<input type="hidden" name="attr_vehicle_init_die" value="d4" />
+<input type="hidden" name="attr_vehicle_in_save" value="0" />
+<input type="hidden" name="attr_range_query" value="0" />
+<input type="hidden" name="attr_called_query" value="0" />
+<input type="hidden" name="attr_aim_query" value="0" />
+<input type="hidden" name="attr_push_query" value="0" />
+<input type="hidden" name="attr_push_dmg_query" value="0" />
+<input type="hidden" name="attr_multi_query" value="0" />
+<input type="hidden" name="attr_other_query" value="0" />
+
+<!-- ROLL TEMPLATE -->
+ <rolltemplate class="sheet-rolltemplate-healing">
+    <div class="sheet-template-container">
+        <h3>{{name}}</h3>
+        <div>Rate: {{rate}}</div>
+        <div>Roll: {{roll}} vs {{decimal}}</div>
+        <div>Healed: {{computed::healed}} points</div>
+        <div><i>{{notes}}</i></div>
+    </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mptask">
+  <div style="background:#fff; border:2px solid #7b2d8e; border-radius:6px; font-family:Proxima,sans-serif; font-size:13px; max-width:250px;">
+    <div style="background:#7b2d8e; color:#fff; font-weight:bold; padding:6px 10px;">{{name}} rolls Task: {{career}}</div>
+    <div style="background:#fff; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ddd;">
+      <span style="font-weight:bold; color:#333;">Needed</span>
+       <span><span style="font-weight:bold; font-size:14px; background:#ffffcc; color:#000; padding:1px 4px;">{{target}}</span>-</span>
+    </div>
+    <div style="background:#eee; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #ddd;">
+      <span style="font-weight:bold; color:#333;">Rolled</span>
+       <span style="font-weight:bold; font-size:14px; background:#ffffcc; color:#000; padding:1px 4px;">{{roll}}</span>
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpmac">
+  <div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; padding:8px;">
+    <div style="color:#50fa7b; font-weight:bold; margin-bottom:8px;">Macros: {{name}}</div>
+    {{#compact}}
+    <div style="margin-bottom:8px;">
+      <div style="color:#f4d03f; font-weight:bold; font-size:11px;">COMPACT</div>
+      <div style="color:#eaeaea; font-family:monospace; font-size:10px; white-space:pre-wrap; word-break:break-all; background:#1a1428; padding:4px; border-radius:3px;">{{compact}}</div>
+    </div>
+    {{/compact}}
+    {{#table}}
+    <div style="margin-bottom:8px;">
+      <div style="color:#8be9fd; font-weight:bold; font-size:11px;">TABLE</div>
+      <div style="color:#eaeaea; font-family:monospace; font-size:10px; white-space:pre-wrap; word-break:break-all; background:#1a1428; padding:4px; border-radius:3px;">{{table}}</div>
+    </div>
+    {{/table}}
+    {{#api}}
+    <div>
+      <div style="color:#e63946; font-weight:bold; font-size:11px;">API (requires MP Engine)</div>
+      <div style="color:#eaeaea; font-family:monospace; font-size:10px; white-space:pre-wrap; word-break:break-all; background:#1a1428; padding:4px; border-radius:3px;">{{api}}</div>
+    </div>
+    {{/api}}
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpattack">
+  <div style="background:#fff200; border:4px solid #000; border-radius:0; font-family:Arial,sans-serif; font-size:13px; max-width:250px;">
+    <div style="background:#e63946; color:#fff; font-weight:bold; padding:6px 8px; text-align:center; font-size:13px; border-bottom:3px solid #000;">{{name}}</div>
+    <table style="width:100%; border-collapse:collapse;">
+      <tr>
+        <td style="width:50%; text-align:center; padding:8px; border-right:3px solid #000; border-bottom:3px solid #000; background:#fff;">
+          <div style="font-size:26px; font-weight:bold; color:#000;">{{roll}}</div>
+          <div style="font-size:10px; color:#000; font-weight:bold;">ROLL</div>
+        </td>
+        <td style="width:50%; text-align:center; padding:8px; border-bottom:3px solid #000; background:#fff;">
+          <div style="font-size:26px; font-weight:bold; color:#000;">{{confirm}}</div>
+          <div style="font-size:10px; color:#000; font-weight:bold;">CONFIRM</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="text-align:center; padding:6px; border-right:3px solid #000; border-bottom:3px solid #000; background:#87ceeb;">
+          <div style="font-size:20px; font-weight:bold; color:#000;">{{target}}-</div>
+          <div style="font-size:10px; color:#000; font-weight:bold;">TO-HIT</div>
+        </td>
+        <td style="text-align:center; padding:6px; border-bottom:3px solid #000; background:#ff6b6b;">
+          <div style="font-size:20px; font-weight:bold; color:#000;">{{damage}}</div>
+          <div style="font-size:10px; color:#000; font-weight:bold;">DAMAGE</div>
+        </td>
+      </tr>
+    </table>
+    <div style="padding:4px 8px; text-align:center; font-size:10px; color:#000; font-weight:bold;">{{type}} · KB:{{kb}}{{#pr}} · PR:{{pr}}{{/pr}}{{#ch}} · Ch:{{ch}}{{/ch}} · Rng:{{range}}</div>
+    {{#tname}}<div style="padding:2px 8px; text-align:center; font-size:10px; color:#000;">vs {{tname}} ({{deftype}} Def:{{tdef}}, Stance:{{tstance}})</div>{{/tname}}
+    <div style="padding:2px 8px 4px; text-align:center; font-size:10px; color:#555;">Rng:{{rngmod}} | Aim:{{aim}} | Multi:{{multi}} | Other:{{other}} | Called:{{called}} | Push:{{push}}</div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mphelp">
+  <div style="background:#2b2b3d; border:2px solid #8be9fd; border-radius:6px; font-family:Arial,sans-serif; font-size:12px;">
+    <div style="background:#8be9fd; color:#000; font-weight:bold; padding:6px 10px;">Attack Notes Shorthand</div>
+    <div style="padding:8px 10px; color:#eaeaea;">
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:4px;">SAVE ATTACKS</div>
+      <div style="color:#aaa; margin-bottom:2px;">sav:BC:mod:rec</div>
+      <div style="margin-bottom:8px; font-size:11px;">
+        <div>• BC = Save type (EN, AG, IN, CL)</div>
+        <div>• mod = Save modifier (+5, -3)</div>
+        <div>• rec = Recovery modifier (optional)</div>
+        <div style="color:#8be9fd;">Example: sav:EN:+5:-14</div>
+      </div>
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:4px;">SNARE ATTACKS</div>
+      <div style="color:#aaa; margin-bottom:2px;">snr:type:bp/max</div>
+      <div style="margin-bottom:8px; font-size:11px;">
+        <div>• type = grp (grapnel) or ice</div>
+        <div>• bp = Break Point</div>
+        <div>• max = Max BP (optional)</div>
+        <div style="color:#8be9fd;">Example: snr:ice:9/15</div>
+      </div>
+      <div style="color:#bd93f9; font-weight:bold; margin-bottom:4px;">ARMOR PIERCING</div>
+      <div style="color:#aaa; margin-bottom:2px;">ap or ap:N</div>
+      <div style="margin-bottom:8px; font-size:11px;">
+        <div>• ap:N = Reduces target's protection by N</div>
+        <div>• ap = Ignores ALL protection &amp; Invuln</div>
+        <div>• Hardened negates AP 1:1</div>
+        <div>• Leftover AP (exceeding prot) bypasses Invuln</div>
+        <div style="color:#8be9fd;">Example: ap:5 vs 8 prot = 3 effective prot</div>
+      </div>
+      <div style="color:#e63946; font-weight:bold; margin-bottom:4px;">PUSHING (2 PR)</div>
+      <div style="font-size:11px;">
+        <div>• Declare before rolling</div>
+        <div>• Standard Attack: +2 damage</div>
+        <div>• Save Attack: -2 to target number</div>
+        <div>• Snare Attack: +2 to BP</div>
+        <div>• Movement: x2 Accel &amp; Top Speed</div>
+        <div>• Strength: +2 HTH, x2 Carry</div>
+        <div style="color:#999;">Cannot push Gear-based abilities</div>
+      </div>
+      <div style="color:#8be9fd; font-weight:bold; margin-top:8px; margin-bottom:4px;">HOLD BACK</div>
+      <div style="font-size:11px;">
+        <div>• Enter negative damage modifier</div>
+        <div>• Reduces damage dealt</div>
+      </div>
+      <div style="border-top:1px solid #555; margin-top:8px; padding-top:8px;">
+        <div style="color:#50fa7b; font-weight:bold; margin-bottom:4px;">DEFENDER NOTATION</div>
+        <div style="font-size:11px;">
+          <div><span style="color:#bd93f9;">h suffix:</span> Hardened (e.g. 5h). Negates AP 1:1.</div>
+          <div>
+            <span style="color:#d35400;">1/4 entry:</span>
+            Invulnerability. Put <b>Invulnerability</b> in the Protection Name field, then enter <b>1/4</b> in each damage type you’re invulnerable to (e.g. Kin 1/4, Eng 1/4). Takes ¼ damage (rounded down), +8 vs saves.
+          </div>
+        </div>
+      </div>
+
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpinfo">
+  <div style="background:#2b2b3d; border:2px solid #8be9fd; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#8be9fd; color:#000; font-weight:bold; padding:6px 10px;">{{name}}</div>
+    <div style="padding:8px 10px; color:#eaeaea;">
+      {{#range}}<div><span style="color:#aaa;">Range:</span> <span style="color:#fff;">{{range}}"</span></div>{{/range}}
+            {{#ap}}<div><span style="color:#aaa;">AP:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
+{{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
+      {{#damage}}<div><span style="color:#aaa;">Damage:</span> <span style="color:#8be9fd;">{{damage}}</span></div>{{/damage}}
+      {{#dtype}}<div><span style="color:#aaa;">Type:</span> <span style="color:#fff;">{{dtype}}</span></div>{{/dtype}}
+      {{#kb}}<div><span style="color:#aaa;">Knockback:</span> <span style="color:#fff;">{{kb}}</span></div>{{/kb}}
+      {{#ap}}<div style="color:#f4d03f; font-weight:bold;">⚡ Armor Piercing: Ignores {{ap}} protection</div>{{/ap}}
+      {{#savebc}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;"> SAVE ATTACK</div>
+        <div><span style="color:#aaa;">Save BC:</span> <span style="color:#e63946; font-weight:bold;">{{savebc}}</span></div>
+        {{#savemod}}<div><span style="color:#aaa;">Save Mod:</span> <span style="color:#fff;">{{savemod}}</span></div>{{/savemod}}
+        {{#recovery}}<div><span style="color:#aaa;">Recovery:</span> <span style="color:#fff;">{{recovery}}</span></div>{{/recovery}}
+        <div style="color:#999; font-size:11px; margin-top:6px;">• Target's protection adds to save</div>
+        <div style="color:#999; font-size:11px;">• Roll-with: Power/10 adds to save</div>
+        <div style="color:#999; font-size:11px;">• Recovery roll each between-rounds</div>
+      </div>
+      {{/savebc}}
+      {{#bp}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;"> {{#snaretype}}{{snaretype}} {{/snaretype}}SNARE</div>
+        <div><span style="color:#aaa;">Break Point:</span> <span style="color:#e63946; font-weight:bold;">{{bp}}</span></div>
+        {{#maxbp}}<div><span style="color:#aaa;">Max BP:</span> <span style="color:#fff;">{{maxbp}}</span></div>{{/maxbp}}
+        <div style="color:#999; font-size:11px; margin-top:6px;">• Escape: HTH ≥ BP</div>
+        <div style="color:#999; font-size:11px;">• Exceed by 4+: move OR action only</div>
+        <div style="color:#999; font-size:11px;">• Push escape: +2 to HTH</div>
+        <div style="color:#999; font-size:11px;">• Next hit: +2 BP (max {{maxbp}})</div>
+      </div>
+      {{/bp}}
+      {{#notes}}<div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;"><span style="color:#aaa;">Notes:</span> <span style="color:#fff;">{{notes}}</span></div>{{/notes}}
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpatkinfo">
+  <div style="background:#2b2b3d; border:2px solid #bd93f9; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#bd93f9; color:#000; font-weight:bold; padding:6px 10px;">{{title}}</div>
+    <div style="padding:8px 10px; color:#eaeaea; line-height:1.25;">
+      {{#name}}<div><span style="color:#aaa;">Name:</span> <span style="color:#fff;">{{name}}</span></div>{{/name}}
+      {{#atype}}<div><span style="color:#aaa;">A-Type:</span> <span style="color:#fff;">{{atype}}</span></div>{{/atype}}
+      {{#mod}}<div><span style="color:#aaa;">Modifier:</span> <span style="color:#fff;">{{mod}}</span></div>{{/mod}}
+      {{#tohit}}<div><span style="color:#aaa;">To Hit:</span> <span style="color:#8be9fd;">{{tohit}}</span></div>{{/tohit}}
+      {{#damage}}<div><span style="color:#aaa;">Damage:</span> <span style="color:#8be9fd;">{{damage}}</span></div>{{/damage}}
+      {{#range}}<div><span style="color:#aaa;">Range:</span> <span style="color:#fff;">{{range}}"</span></div>{{/range}}
+      {{#ap}}<div><span style="color:#bd93f9; font-weight:bold;">Armor Piercing:</span> <span style="color:#fff;">{{ap}}</span></div>{{/ap}}
+      {{#dtype}}<div><span style="color:#aaa;">D-Type:</span> <span style="color:#fff;">{{dtype}}</span></div>{{/dtype}}
+      {{#kb}}<div><span style="color:#aaa;">KB:</span> <span style="color:#fff;">{{kb}}</span></div>{{/kb}}
+      {{#cost}}<div><span style="color:#aaa;">Cost:</span> <span style="color:#fff;">{{cost}}</span></div>{{/cost}}
+      {{#savebc}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;"> SAVE ATTACK</div>
+        <div><span style="color:#aaa;">Save BC:</span> <span style="color:#e63946; font-weight:bold;">{{savebc}}</span></div>
+        {{#savemod}}<div><span style="color:#aaa;">Save Mod:</span> <span style="color:#fff;">{{savemod}}</span></div>{{/savemod}}
+        {{#recovery}}<div><span style="color:#aaa;">Recovery:</span> <span style="color:#fff;">{{recovery}}</span></div>{{/recovery}}
+        <div style="color:#666; font-size:11px; margin-top:4px;">• Target's protection adds to save TN</div>
+        <div style="color:#666; font-size:11px;">• Roll-with: Power/10 adds to save TN</div>
+        <div style="color:#666; font-size:11px;">• Recovery roll each between-rounds</div>
+      </div>
+      {{/savebc}}
+      {{#bp}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#f4d03f; font-weight:bold; font-size:14px;"> {{#snaretype}}{{snaretype}} {{/snaretype}}SNARE</div>
+        <div><span style="color:#aaa;">Break Point:</span> <span style="color:#e63946; font-weight:bold;">{{bp}}</span></div>
+        {{#maxbp}}<div><span style="color:#aaa;">Max BP:</span> <span style="color:#fff;">{{maxbp}}</span></div>{{/maxbp}}
+        <div style="color:#666; font-size:11px; margin-top:4px;">• Escape: HTH ≥ BP</div>
+        <div style="color:#666; font-size:11px;">• Exceed by 4+: move OR action only</div>
+        <div style="color:#666; font-size:11px;">• Push escape: +2 to HTH</div>
+        <div style="color:#666; font-size:11px;">• Next hit: +2 BP (max {{maxbp}})</div>
+      </div>
+      {{/bp}}
+      {{#notes}}
+      <div style="border-top:1px solid #555; margin-top:6px; padding-top:6px;">
+        <div style="color:#aaa;">Notes:</div>
+        <div style="color:#fff;">{{notes}}</div>
+      </div>
+      {{/notes}}
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpabw">
+  <div style="background:#2b2b3d; border:2px solid #bd93f9; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#bd93f9; color:#000; font-weight:bold; padding:6px 10px;">{{name}}</div>
+    <div style="padding:8px 10px; color:#eaeaea; line-height:1.35;">
+      {{body}}
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpability">
+  <div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">
+    <div style="background:#50fa7b; color:#000; font-weight:bold; padding:6px 10px;">{{name}}</div>
+    <div style="padding:8px 10px; color:#eaeaea;">
+      <div style="color:#f4d03f; font-weight:bold; font-size:14px; margin-bottom:6px;">{{ability}}</div>
+      <div><span style="color:#aaa;">CP Cost:</span> <span style="color:#8be9fd; font-weight:bold;">{{cp}}</span></div>
+      {{#ip}}<div><span style="color:#aaa;">IP Cost:</span> <span style="color:#8be9fd;">{{ip}}</span></div>{{/ip}}
+    </div>
+  </div>
+</rolltemplate>
+
+<rolltemplate class="sheet-rolltemplate-mpqueryhelp">
+  <div style="background:#2b2b3d; border:2px solid #8be9fd; border-radius:6px; font-family:Arial,sans-serif; font-size:12px;">
+    <div style="background:#8be9fd; color:#000; font-weight:bold; padding:6px 10px;">Combat Query Reference</div>
+    <div style="padding:8px 10px; color:#eaeaea;">
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">RANGE (4.7.3)</div>
+      <div style="font-size:11px; margin-bottom:8px;">0-4": 0 | 5-9": -1 | 10-19": -2 | 20-39": -3 | 40-79": -4 | 80-159": -5 | etc. (doubles each bracket, -1 each)</div>
+      
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">CALLED SHOTS (4.14.2)</div>
+      <div style="font-size:11px; margin-bottom:8px;">
+        <div>• Head -6: Double hits taken after protection</div>
+        <div>• Arm/Leg -3: EN+7 save or lose use; AG save or drop/fall</div>
+        <div>• Avoid Light Armor -3 | Heavy Armor -6</div>
+        <div>• Gear -3: Damage vs breakpoint</div>
+      </div>
+      
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">DEFENSE (4.7.1)</div>
+      <div style="font-size:11px; margin-bottom:8px;">Auto-detected from target token: Physical Def for Phys attacks, Mental Def for Ment/Emot attacks.</div>
+      
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">STANCE (4.14.3)</div>
+      <div style="font-size:11px; margin-bottom:8px;">
+        <div>• Defensive: +3 Def, -3 to hit</div>
+        <div>• Full Defense: +6 Def, ½ Move, costs action to adopt</div>
+      </div>
+      
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">AIM (4.14.1)</div>
+      <div style="font-size:11px; margin-bottom:8px;">Ranged only, must be prone/braced. 1 move phase: +2 | 3 phases: +4 | 7 phases: +6. Lose bonus if target moves out of sight.</div>
+      
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">PUSH (5.5)</div>
+      <div style="font-size:11px; margin-bottom:8px;">
+        <div>Cost: 2 PR. Declare before rolling. Not for Gear.</div>
+        <div>• Standard: +2 damage | Save: -2 target number</div>
+        <div>• Snare: +2 BP | Move: x2 Accel &amp; Speed | ST: +2 HTH, x2 Carry</div>
+      </div>
+      
+      <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">MULTI-ACTION (4.5.1)</div>
+      <div style="font-size:11px;">-3 per extra action. Select attack # from dropdown. 2x: -3 each | 3x: -6 each | 4x: -9 each</div>
+    </div>
+  </div>
+</rolltemplate>
+
+<!-- SHEET WORKERS -->
+<script type="text/worker">
+  // ==================== COMPLETE BC LOOKUP TABLES (0-98) ====================
+  
+  var carryValues = [
+    8,10,12,15,20,24,30,40,48,60,80,96,120,160,192,240,320,384,480,640,768,
+    960,1280,1536,1920,2560,3072,3840,5120,6144,7680,10240,12288,15360,20480,24576,
+    30720,40960,49152,61440,81920,98304,122880,163840,196608,245760,327680,393216,
+    491520,655360,786432,983040,1310720,1572864,1966080,2621440,3145728,3932160,
+    5242880,6291456,7864320,10485760,12582912,15728640,20971520,25165824,31457280,
+    41943040,50331648,62914560,83886080,100663296,125829120,167772160,201326592,
+    251658240,335544320,402653184,503316480,671088640,805306368,1006632960,
+    1342177280,1610612736,2013265920,2684354560,3221225472,4026531840,
+    5368709120,6442450944,8053063680,10737418240,12884901888,16106127360,
+    21474836480,25769803776,32212254720,42949672960,51539607552
+    ];
+
+var carryDisplay = [
+    "8","10","12","15","20","24","30","40","48","60","80","96","120","160","192","240","320","384","480","640","768",
+    "960","1,280","1,536","1,920","2,560","3,072","3,840","5,120","6,144","7,680","10,240","12,288","15,360","20,480","24,576",
+    "30,720","40,960","49,152","61,440","81,920","98,304","122,880","163,840","196,608","245,760","327,680","393,216",
+    "491,520","655,360","786,432","983,040","1,310,720","1,572,864","1,966,080","2,621,440","3,145,728","3,932,160",
+    "5,242,880","6,291,456","7,864,320","10,485,760","12,582,912","15,728,640","20,971,520","25,165,824","31,457,280",
+    "41,943,040","50,331,648","62,914,560","83,886,080","100,663,296","125,829,120","167,772,160","201,326,592",
+    "251,658,240","335,544,320","402,653,184","503,316,480","671,088,640","805,306,368","1,006,632,960",
+    "1,342,177,280","1,610,612,736","2,013,265,920","2,684,354,560","3,221,225,472","4,026,531,840",
+    "5,368,709,120","6,442,450,944","8,053,063,680","10,737,418,240","12,884,901,888","16,106,127,360",
+    "21,474,836,480","25,769,803,776","32,212,254,720","42,949,672,960","51,539,607,552"
+    ];
+  
+  var hthTable = [
+    "1d2-1","1d2-1","1d2-1","1d2","1d2","1d2","1d3","1d3","1d3","1d4","1d4","1d4",
+    "1d6","1d6","1d6","1d6+1","1d6+1","1d6+1","1d8+1","1d8+1","1d8+1",
+    "1d10+1","1d10+1","1d10+1","2d6","2d6","2d6","1d6+1d8","1d6+1d8","1d6+1d8",
+    "2d8","2d8","2d8","1d8+1d10","1d8+1d10","1d8+1d10","2d10","2d10","2d10",
+    "1d10+1d12","1d10+1d12","1d10+1d12","2d12","2d12","2d12","3d8","3d8","3d8",
+    "2d8+1d10","2d8+1d10","2d8+1d10","1d8+2d10","1d8+2d10","1d8+2d10","3d10","3d10","3d10",
+    "2d10+1d12","2d10+1d12","2d10+1d12","1d10+2d12","1d10+2d12","1d10+2d12","3d12","3d12","3d12",
+    "3d12+1","3d12+1","3d12+1","3d12+2","3d12+2","3d12+2","4d10","4d10","4d10",
+    "3d10+1d12","3d10+1d12","3d10+1d12","2d10+2d12","2d10+2d12","2d10+2d12","1d10+3d12","1d10+3d12","1d10+3d12",
+    "4d12","4d12","4d12","4d12+1","4d12+1","4d12+1","5d10","5d10","5d10",
+    "4d10+1d12","4d10+1d12","4d10+1d12","3d10+2d12","3d10+2d12","3d10+2d12"
+    ];
+  
+  var saveTable = [
+    6,7,7,8,8,8,9,9,9,10,10,10,11,11,11,11,11,11,12,12,12,
+    12,12,12,13,13,13,13,13,13,14,14,14,14,14,14,15,15,15,
+    15,15,15,16,16,16,16,16,16,17,17,17,17,17,17,18,18,18,
+    18,18,18,19,19,19,19,19,19,20,20,20,20,20,20,21,21,21,
+    21,21,21,22,22,22,22,22,22,23,23,23,23,23,23,24,24,24,
+    24,24,24,25,25,25
+    ];
+  
+  var hpSTTable = [
+    -3,-3,-3,-2,-2,-2,0,0,0,1,1,1,3,3,3,5,5,5,6,6,6,
+    8,8,8,10,10,10,12,12,12,14,14,14,16,16,16,17,17,17,
+    19,19,19,21,21,21,23,23,23,25,25,25,27,27,27,28,28,28,
+    30,30,30,32,32,32,34,34,34,36,36,36,38,38,38,39,39,39,
+    41,41,41,43,43,43,45,45,45,47,47,47,48,48,48,50,50,50,
+    52,52,52,54,54,54
+  ];
+  
+  var hpENTable = [
+    -5,-5,-5,-3,-3,-3,-1,-1,-1,1,1,1,3,3,3,6,6,6,8,8,8,
+    10,10,10,13,13,13,15,15,15,17,17,17,20,20,20,22,22,22,
+    25,25,25,27,27,27,29,29,29,32,32,32,34,34,34,36,36,36,
+    39,39,39,41,41,41,43,43,43,46,46,46,48,48,48,50,50,50,
+    53,53,53,55,55,55,58,58,58,60,60,60,62,62,62,65,65,65,
+    67,67,67,69,69,69
+  ];
+  
+  var hpAGTable = [
+    -2,-2,-2,-1,-1,-1,0,0,0,1,1,1,2,2,2,3,3,3,5,5,5,
+    6,6,6,7,7,7,8,8,8,9,9,9,10,10,10,12,12,12,
+    13,13,13,14,14,14,15,15,15,16,16,16,17,17,17,19,19,19,
+    20,20,20,21,21,21,22,22,22,23,23,23,25,25,25,26,26,26,
+    27,27,27,28,28,28,29,29,29,30,30,30,32,32,32,33,33,33,
+    34,34,34,35,35,35
+  ];
+  
+  var hpCLTable = [
+    -1,-1,-1,0,0,0,1,1,1,1,1,1,2,2,2,3,3,3,3,3,3,
+    3,3,3,4,4,4,5,5,5,5,5,5,6,6,6,6,6,6,
+    7,7,7,7,7,7,8,8,8,9,9,9,9,9,9,10,10,10,
+    10,10,10,11,11,11,12,12,12,12,12,12,13,13,13,13,13,13,
+    14,14,14,15,15,15,15,15,15,16,16,16,16,16,16,17,17,17,
+    17,17,17,18,18,18
+  ];
+  
+  var healTable = [
+    2,3,5,5,5,5,8,8,8,10,10,10,16,16,16,22,22,22,28,28,28,
+    34,34,34,39,39,39,45,45,45,51,51,51,57,57,57,63,63,63,
+    69,69,69,75,75,75,81,81,81,87,87,87,92,92,92,98,98,98,
+    104,104,104,110,110,110,116,116,116,122,122,122,128,128,128,134,134,134,
+    140,140,140,145,145,145,151,151,151,157,157,157,163,163,163,169,169,169,
+    175,175,175,181,181,181
+  ];
+
+  function clampIndex(val) {
+    var v = parseInt(val) || 0;
+    return Math.max(0, Math.min(98, v));
+  }
+  
+  function findClosestCarryIndex(targetWeight) {
+    var closestIdx = 0;
+    var closestDiff = Math.abs(carryValues[0] - targetWeight);
+    for (var i = 1; i < carryValues.length; i++) {
+      var diff = Math.abs(carryValues[i] - targetWeight);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestIdx = i;
+      }
+    }
+    return closestIdx;
+  }
+
+  function formatNumber(num) {
+    var parts = num.toString().split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  }
+
+  function recalcAll() {
+    getAttrs(["strength_cost", "endurance_cost", "agility_cost", "intelligence_cost", "cool_cost", "strength_mod", "endurance_mod", "agility_mod", "intelligence_mod", "cool_mod", "physical_def_bonus", "mental_def_bonus", "weight", "power_mod", "hits_mod", "power_score", "power_score_max", "hits_score", "hits_score_max"], function(values) {
+        var stBase = parseInt(values.strength_cost) || 0;
+        var enBase = parseInt(values.endurance_cost) || 0;
+        var agBase = parseInt(values.agility_cost) || 0;
+        var inBase = parseInt(values.intelligence_cost) || 0;
+        var clBase = parseInt(values.cool_cost) || 0;
+        
+        var stMod = parseInt(values.strength_mod) || 0;
+        var enMod = parseInt(values.endurance_mod) || 0;
+        var agMod = parseInt(values.agility_mod) || 0;
+        var inMod = parseInt(values.intelligence_mod) || 0;
+        var clMod = parseInt(values.cool_mod) || 0;
+        
+        var st = stBase + stMod;
+        var en = enBase + enMod;
+        var ag = agBase + agMod;
+        var inv = inBase + inMod;
+        var cl = clBase + clMod;
+        
+        var physBonus = parseInt(values.physical_def_bonus) || 0;
+        var mentBonus = parseInt(values.mental_def_bonus) || 0;
+        
+        var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
+        var weight = parseInt(weightRaw) || 1;
+        
+        var stIdx = clampIndex(st);
+        var enIdx = clampIndex(en);
+        var agIdx = clampIndex(ag);
+        var inIdx = clampIndex(inv);
+        var clIdx = clampIndex(cl);
+
+        var enSave = saveTable[enIdx];
+        var agSave = saveTable[agIdx];
+        var inSave = saveTable[inIdx];
+        var clSave = saveTable[clIdx];
+
+        var physDefBase = agSave - 10;
+        var mentDefBase = inSave - 10;
+        
+        var hitsBase = hpSTTable[stIdx] + hpENTable[enIdx] + hpAGTable[agIdx] + hpCLTable[clIdx];
+        var powerBase = st + en + ag + inv;
+        
+        var ipBase = Math.ceil(inv / 2);
+        
+        var powerMod = parseInt(values.power_mod) || 0;
+        var hitsMod = parseInt(values.hits_mod) || 0;
+        
+        var newPowerMax = powerBase + powerMod;
+        var newHitsMax = Math.max(1, hitsBase + hitsMod);
+        
+        var oldPowerMax = parseInt(values.power_score_max) || 0;
+        var oldHitsMax = parseInt(values.hits_score_max) || 0;
+        var curPower = values.power_score;
+        var curHits = values.hits_score;
+
+        var updates = {
+          strength_score: st,
+          endurance_score: en,
+          agility_score: ag,
+          intelligence_score: inv,
+          cool_score: cl,
+          endurance_save: enSave,
+          agility_save: agSave,
+          intelligence_save: inSave,
+          cool_save: clSave,
+          physical_def_base: physDefBase,
+          physical_def: physDefBase + physBonus,
+          mental_def_base: mentDefBase,
+          mental_def: mentDefBase + mentBonus,
+          carry_capacity: carryDisplay[stIdx],
+          hth_damage: hthTable[stIdx],
+          healing_rate: (healTable[enIdx] / 10).toFixed(1),
+          invention_points_base: ipBase,
+          leap_base: formatNumber((carryValues[stIdx] / weight).toFixed(1)),
+          power_base: powerBase,
+          hits_base: Math.max(1, hitsBase),
+          power_score_max: newPowerMax,
+          hits_score_max: newHitsMax
+        };
+        
+        if (curPower === "" || curPower === undefined || parseInt(curPower) === oldPowerMax) {
+          updates.power_score = newPowerMax;
+        }
+        if (curHits === "" || curHits === undefined || parseInt(curHits) === oldHitsMax) {
+          updates.hits_score = newHitsMax;
+        }
+        
+        setAttrs(updates);
+
+        // Calculate movement (ST+EN+AG)/3
+        var moveVal = Math.round((st + en + ag) / 3);
+        getAttrs(["move"], function(mv) {
+          // Only set if empty or already has " suffix (auto-calculated)
+          var curMove = (mv.move || "").trim();
+          if (!curMove || curMove.endsWith('"')) {
+            setAttrs({ move: moveVal + '"' });
+          }
+        });
+
+        getAttrs(["leap_base", "leap_mult"], function(lv) {
+          var base = parseFloat((lv.leap_base || "0").replace(/,/g, '')) || 0;
+          var mult = parseInt(lv.leap_mult) || 1;
+          setAttrs({ leap_total: formatNumber((base * mult).toFixed(1)) });
+        });
+        
+        calcIPTotals();
+    });
+  }
+
+  // healing rate calculation (per 4.13)
+    on("clicked:heal", function() {
+        getAttrs(["character_name", "healing_rate", "heal_base", "heal_decimal"], function(values) {
+            let base = parseInt(values.heal_base) || 0;
+            let decimal = parseInt(values.heal_decimal) || 0;
+            let rate = values.healing_rate || "0";
+            let charName = values.character_name || "Character";
+            
+            startRoll(`&{template:healing} {{name=${charName} rolls Healing}} {{rate=${rate}}} {{roll=[[1d10]]}} {{decimal=${decimal}}} {{healed=[[0]]}} {{notes=Heal Power Points first, then Hit Points.}}`, function(results) {
+                let d10 = results.results.roll.result;
+                let bonus = (decimal > 0 && d10 <= decimal) ? 1 : 0;
+                let total = base + bonus;
+                
+                finishRoll(results.rollId, {
+                    healed: total
+                });
+            });
+        });
+    });
+
+    on("change:healing_rate sheet:opened", function() {
+        getAttrs(["healing_rate"], function(values) {
+            let rate = parseFloat(values.healing_rate) || 0;
+            setAttrs({
+                heal_base: Math.floor(rate),
+                heal_decimal: Math.round((rate % 1) * 10)
+            });
+        });
+    });
+
+    on("change:power_mod", function(eventInfo) {
+    var prevValue = parseInt(eventInfo.previousValue) || 0;
+    var newValue = parseInt(eventInfo.newValue) || 0;
+    var delta = newValue - prevValue;
+    
+    getAttrs(["power_base", "power_score"], function(v) {
+      var powerBase = parseInt(v.power_base) || 0;
+      var powerScore = parseInt(v.power_score) || 0;
+      var newPowerMax = powerBase + newValue;
+      var newPowerScore = Math.max(0, Math.min(newPowerMax, powerScore + delta));
+      
+      setAttrs({
+        power_score_max: newPowerMax,
+        power_score: newPowerScore
+      });
+    });
+  });
+
+  on("change:hits_mod", function(eventInfo) {
+    var prevValue = parseInt(eventInfo.previousValue) || 0;
+    var newValue = parseInt(eventInfo.newValue) || 0;
+    var delta = newValue - prevValue;
+    
+    getAttrs(["hits_base", "hits_score"], function(v) {
+      var hitsBase = parseInt(v.hits_base) || 0;
+      var hitsScore = parseInt(v.hits_score) || 0;
+      var newHitsMax = Math.max(1, hitsBase + newValue);
+      var newHitsScore = Math.max(1, Math.min(newHitsMax, hitsScore + delta));
+      
+      setAttrs({
+        hits_score_max: newHitsMax,
+        hits_score: newHitsScore
+      });
+    });
+  });
+
+  on("change:strength_cost change:endurance_cost change:agility_cost change:intelligence_cost change:cool_cost change:strength_mod change:endurance_mod change:agility_mod change:intelligence_mod change:cool_mod change:physical_def_bonus change:mental_def_bonus", function() {
+    recalcAll();
+  });
+
+  on("change:weight", function() {
+    getAttrs(["weight"], function(values) {
+      var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
+      var weight = parseInt(weightRaw) || 1;
+      
+      var weightFormatted = formatNumber(weight);
+      var halfWeight = weight / 2;
+      var idx = findClosestCarryIndex(halfWeight);
+      setAttrs({ 
+        weight: weightFormatted,
+        mass: hthTable[idx] 
+      });
+    });
+    recalcAll();
+  });
+
+  on("clicked:reset_initiative", function() {
+    getAttrs(["cool_cost", "cool_mod"], function(v) {
+      var cl = (parseInt(v.cool_cost) || 0) + (parseInt(v.cool_mod) || 0);
+      var clIdx = clampIndex(cl);
+      setAttrs({ initiative_score: hthTable[clIdx] });
+    });
+  });
+
+  on("clicked:reset_move", function() {
+    getAttrs(["strength_cost", "strength_mod", "endurance_cost", "endurance_mod", "agility_cost", "agility_mod"], function(v) {
+      var st = (parseInt(v.strength_cost) || 0) + (parseInt(v.strength_mod) || 0);
+      var en = (parseInt(v.endurance_cost) || 0) + (parseInt(v.endurance_mod) || 0);
+      var ag = (parseInt(v.agility_cost) || 0) + (parseInt(v.agility_mod) || 0);
+      setAttrs({ move: Math.round((st + en + ag) / 3) + '"' });
+    });
+  });
+
+  on("change:leap_mult", function() {
+    getAttrs(["leap_base", "leap_mult"], function(lv) {
+      var base = parseFloat((lv.leap_base || "0").replace(/,/g, '')) || 0;
+      var mult = parseInt(lv.leap_mult) || 1;
+      setAttrs({ leap_total: formatNumber((base * mult).toFixed(1)) });
+    });
+  });
+
+  function formatIntWithCommas(n) {
+    const s = String(Math.round(n));
+    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  function calcLeapDistance() {
+    getAttrs(["leap_total"], function(v) {
+      const leapStr = (v.leap_total || "0").replace(/,/g, "");
+      const leapInches = parseFloat(leapStr) || 0;
+
+      // Mighty Protectors: 1" = 5 ft
+      const feet = leapInches * 5;
+      const miles = feet / 5280;
+
+      let display = "";
+
+      if (feet >= 2640) {             // 0.5 miles
+        display = miles.toFixed(1) + " mi";
+      } else if (feet > 0) {
+        display = formatIntWithCommas(feet) + " ft";
+      }
+
+      setAttrs({ leap_distance: display });
+    });
+  }
+
+  on("change:leap_total sheet:opened", calcLeapDistance);
+
+  function calcIPTotals() {
+    getSectionIDs("repeating_abilities", function(abilityIDs) {
+      var attrList = ["invention_points"];
+      abilityIDs.forEach(function(id) {
+        attrList.push("repeating_abilities_" + id + "_ability_ip");
+      });
+      
+      getAttrs(attrList, function(values) {
+        var ipTotal = parseInt(values.invention_points) || 0;
+        
+        var ipUsed = 0;
+        abilityIDs.forEach(function(id) {
+          ipUsed += parseInt(values["repeating_abilities_" + id + "_ability_ip"]) || 0;
+        });
+        
+        var ipRemaining = ipTotal - ipUsed;
+        
+        setAttrs({
+          ip_total: ipTotal,
+          ip_used: ipUsed,
+          ip_remaining: ipRemaining
+        });
+      });
+    });
+  }
+
+  on("change:invention_points change:repeating_abilities:ability_ip remove:repeating_abilities", function() {
+    calcIPTotals();
+  });
+
+  function calcTotalEPs() {
+    getSectionIDs("repeating_abilities", function(abilityIDs) {
+      var attrList = ["strength_cost", "endurance_cost", "agility_cost", "intelligence_cost", "cool_cost", "starting_eps", "ep_earned"];
+      abilityIDs.forEach(function(id) {
+        attrList.push("repeating_abilities_" + id + "_ability_cp");
+      });
+      
+      getAttrs(attrList, function(values) {
+        var bcTotal = (parseInt(values.strength_cost)||0) + (parseInt(values.endurance_cost)||0) + 
+                      (parseInt(values.agility_cost)||0) + (parseInt(values.intelligence_cost)||0) + (parseInt(values.cool_cost)||0);
+        
+        var abilityTotal = 0;
+        abilityIDs.forEach(function(id) {
+          abilityTotal += parseInt(values["repeating_abilities_" + id + "_ability_cp"]) || 0;
+        });
+        
+        var totalEPs = bcTotal + abilityTotal;
+        var startingEPs = parseInt(values.starting_eps) || 0;
+        var earnedEPs = parseInt(values.ep_earned) || 0;
+        var available = (startingEPs + earnedEPs) - totalEPs;
+        
+        setAttrs({
+          total_eps: totalEPs,
+          ep_available: available,
+          bc_score: Math.floor(totalEPs / 5) + 10,
+          ability_cap: Math.floor(totalEPs / 5),
+          dot_cap: (Math.floor(totalEPs / 12.5) + 3) * 2 + 3,
+          "break_score": Math.floor(totalEPs / 25) + 5,
+          take_score: Math.floor(totalEPs / 25) + 6,
+          disarm_score: Math.floor(totalEPs / 25) + 3
+        });
+      });
+    });
+  }
+
+  on("change:strength_cost change:endurance_cost change:agility_cost change:intelligence_cost change:cool_cost change:starting_eps change:ep_earned change:repeating_abilities:ability_cp remove:repeating_abilities", function() {
+    calcTotalEPs();
+  });
+
+  function initQuerySettings() {
+    getAttrs(["query_range", "query_called", "query_aim", "query_push", "query_multi", "query_other"], function(v) {
+      var updates = {};
+      updates.range_query = v.query_range === "1" ? "?{Range Penalty|0-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
+      updates.multi_query = v.query_multi === "1" ? "?{Multi-Attack|Single,0|2x: Atk #1,-3|2x: Atk #2,-3|3x: Atk #1,-6|3x: Atk #2,-6|3x: Atk #3,-6|4x: Atk #1,-9|4x: Atk #2,-9|4x: Atk #3,-9|4x: Atk #4,-9}" : "0";
+      updates.called_query = v.query_called === "1" ? "?{Called Shot|None,0|Head,-6|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3}" : "0";
+      updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";
+      updates.push_query = v.query_push === "1" ? "?{Push/Hold Back|0}" : "0";
+      updates.push_dmg_query = v.query_push === "1" ? "?{Push/Hold Back|0}" : "0";
+      updates.other_query = v.query_other === "1" ? "?{Other Mods|0}" : "0";
+      setAttrs(updates);
+    });
+  }
+
+  on("change:query_range change:query_called change:query_aim change:query_push change:query_multi change:query_other", function() {
+    initQuerySettings();
+  });
+
+  on("sheet:opened", function() {
+    initAbilityNotes();
+    recalcAll();
+    calcTotalEPs();
+    calcSecurityClearance();
+    calcInventingPts();
+    calcIPTotals();
+    //calcLeapDistance();
+    initQuerySettings();
+    initAttackToHits();
+    initAttackKBDisplays();
+    initAttackNotes();
+    initAttackCosts();
+    getAttrs(["weight", "power_score", "power_score_max", "hits_score", "hits_score_max"], function(values) {
+      var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
+      var weight = parseInt(weightRaw) || 1;
+      var halfWeight = weight / 2;
+      var idx = findClosestCarryIndex(halfWeight);
+      var updates = { mass: hthTable[idx] };
+      
+      if (values.weight !== formatNumber(weight)) {
+        updates.weight = formatNumber(weight);
+      }
+      
+      if (values.power_score === "" || values.power_score === undefined) {
+        updates.power_score = values.power_score_max;
+      }
+      if (values.hits_score === "" || values.hits_score === undefined) {
+        updates.hits_score = values.hits_score_max;
+      }
+      
+      setAttrs(updates);
+    });
+  }); // end sheet opened
+
+  on("change:repeating_attacks:attack_atk change:repeating_attacks:attack_mod", function(eventInfo) {
+    getAttrs(["agility_save", "intelligence_save", "cool_save"], function(v) {
+      var agSave = parseInt(v.agility_save) || 6;
+      var inSave = parseInt(v.intelligence_save) || 6;
+      var clSave = parseInt(v.cool_save) || 6;
+      
+      var srcAttr = eventInfo.sourceAttribute;
+      var rowPrefix = srcAttr.replace(/_attack_atk$/, "").replace(/_attack_mod$/, "");
+      
+      getAttrs([rowPrefix + "_attack_atk", rowPrefix + "_attack_mod"], function(atkV) {
+        var atkType = atkV[rowPrefix + "_attack_atk"] || "P";
+        var mod = parseInt(atkV[rowPrefix + "_attack_mod"]) || 0;
+        var baseSave = atkType === "M" ? inSave : (atkType === "E" ? clSave : agSave);
+        var tohitNum = baseSave + 3 + mod;
+        var update = {};
+        update[rowPrefix + "_attack_tohit"] = tohitNum + "-";
+        update[rowPrefix + "_attack_tohit_num"] = tohitNum;
+        // Set defense type flags: P = physical, M/E = mental
+        update[rowPrefix + "_attack_is_physical"] = (atkType === "P") ? "1" : "0";
+        update[rowPrefix + "_attack_is_mental"] = (atkType === "M" || atkType === "E") ? "1" : "0";
+        setAttrs(update);
+      });
+    });
+  });
+
+  on("change:repeating_attacks:attack_name", function(eventInfo) {
+    var srcAttr = eventInfo.sourceAttribute;
+    var rowPrefix = srcAttr.replace(/_attack_name$/, "");
+    
+    getAttrs([rowPrefix + "_attack_tohit", "agility_save", "intelligence_save", "cool_save"], function(v) {
+      if (!v[rowPrefix + "_attack_tohit"] || v[rowPrefix + "_attack_tohit"] === "") {
+        var agSave = parseInt(v.agility_save) || 6;
+        var tohitNum = agSave + 3;
+        var update = {};
+        update[rowPrefix + "_attack_tohit"] = tohitNum + "-";
+        update[rowPrefix + "_attack_tohit_num"] = tohitNum;
+        setAttrs(update);
+      }
+    });
+  });
+
+  // Parse attack notes for special attacks
+  on("change:repeating_attacks:attack_notes", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_notes", "");
+    
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      var notes = (v[eventInfo.sourceAttribute] || "").toLowerCase();
+      var updates = {};
+      
+      // Reset all
+      updates[rowPrefix + "_attack_type"] = "std";
+      updates[rowPrefix + "_attack_save_bc"] = "";
+      updates[rowPrefix + "_attack_save_mod"] = "";
+      updates[rowPrefix + "_attack_recovery"] = "";
+      updates[rowPrefix + "_attack_snare_type"] = "";
+      updates[rowPrefix + "_attack_bp"] = "";
+      updates[rowPrefix + "_attack_max_bp"] = "";
+      updates[rowPrefix + "_attack_ap"] = "";
+      
+      // Save attack: sav:EN:+5:-14
+      var savMatch = notes.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
+      if (savMatch) {
+        updates[rowPrefix + "_attack_type"] = "sav";
+        updates[rowPrefix + "_attack_save_bc"] = savMatch[1].toUpperCase();
+        updates[rowPrefix + "_attack_save_mod"] = savMatch[2];
+        if (savMatch[3]) {
+          updates[rowPrefix + "_attack_recovery"] = savMatch[3];
+        }
+      }
+      
+      // Snare attack: snr:grp:12/24 or snr:ice:9/15
+      var snrMatch = notes.match(/snr:(grp|ice):(\d+)\/?(\d+)?/);
+      if (snrMatch) {
+        updates[rowPrefix + "_attack_type"] = "snr";
+        updates[rowPrefix + "_attack_snare_type"] = snrMatch[1].toUpperCase();
+        updates[rowPrefix + "_attack_bp"] = snrMatch[2];
+        updates[rowPrefix + "_attack_max_bp"] = snrMatch[3] || snrMatch[2];
+      }
+      
+      // Armor Piercing: ap or ap:5
+      var apMatch = notes.match(/ap:?(\d+)?/);
+      if (apMatch) {
+        updates[rowPrefix + "_attack_ap"] = apMatch[1] || "ALL";
+      }
+      
+      setAttrs(updates);
+    });
+  });
+
+  // Parse attack cost for PR
+  on("change:repeating_attacks:attack_cost", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_cost", "");
+    
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      var cost = v[eventInfo.sourceAttribute] || "";
+      var updates = {};
+      
+      updates[rowPrefix + "_attack_pr"] = "";
+      
+      // PR: number not followed by 'c', or number before '/'
+      var prMatch = cost.match(/^(\d+)(?:\/|$)/);
+      if (prMatch && !cost.match(/^\d+c$/i)) {
+        updates[rowPrefix + "_attack_pr"] = prMatch[1];
+      }
+      
+      setAttrs(updates);
+    });
+  });
+
+  // Initialize attack notes parsing on sheet open
+  function initAttackNotes() {
+    getSectionIDs("repeating_attacks", function(ids) {
+      if (ids.length === 0) return;
+      
+      var attrList = [];
+      ids.forEach(function(id) {
+        attrList.push("repeating_attacks_" + id + "_attack_notes");
+      });
+      
+      getAttrs(attrList, function(values) {
+        var updates = {};
+        
+        ids.forEach(function(id) {
+          var prefix = "repeating_attacks_" + id;
+          var notes = (values[prefix + "_attack_notes"] || "").toLowerCase();
+          
+          // Reset all
+          updates[prefix + "_attack_type"] = "std";
+          updates[prefix + "_attack_save_bc"] = "";
+          updates[prefix + "_attack_save_mod"] = "";
+          updates[prefix + "_attack_recovery"] = "";
+          updates[prefix + "_attack_snare_type"] = "";
+          updates[prefix + "_attack_bp"] = "";
+          updates[prefix + "_attack_max_bp"] = "";
+          updates[prefix + "_attack_ap"] = "";
+          
+          // Save attack
+          var savMatch = notes.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
+          if (savMatch) {
+            updates[prefix + "_attack_type"] = "sav";
+            updates[prefix + "_attack_save_bc"] = savMatch[1].toUpperCase();
+            updates[prefix + "_attack_save_mod"] = savMatch[2];
+            if (savMatch[3]) {
+              updates[prefix + "_attack_recovery"] = savMatch[3];
+            }
+          }
+          
+          // Snare attack
+          var snrMatch = notes.match(/snr:(grp|ice):(\d+)\/?(\d+)?/);
+          if (snrMatch) {
+            updates[prefix + "_attack_type"] = "snr";
+            updates[prefix + "_attack_snare_type"] = snrMatch[1].toUpperCase();
+            updates[prefix + "_attack_bp"] = snrMatch[2];
+            updates[prefix + "_attack_max_bp"] = snrMatch[3] || snrMatch[2];
+          }
+          
+          // Armor Piercing
+          var apMatch = notes.match(/ap:?(\d+)?/);
+          if (apMatch) {
+            updates[prefix + "_attack_ap"] = apMatch[1] || "ALL";
+          }
+        });
+        
+        setAttrs(updates);
+      });
+    });
+  }
+
+  // Initialize attack cost parsing on sheet open
+  function initAttackCosts() {
+    getSectionIDs("repeating_attacks", function(ids) {
+      if (ids.length === 0) return;
+      
+      var attrList = [];
+      ids.forEach(function(id) {
+        attrList.push("repeating_attacks_" + id + "_attack_cost");
+      });
+      
+      getAttrs(attrList, function(values) {
+        var updates = {};
+        
+        ids.forEach(function(id) {
+          var prefix = "repeating_attacks_" + id;
+          var cost = values[prefix + "_attack_cost"] || "";
+          
+          updates[prefix + "_attack_pr"] = "";
+          
+          var prMatch = cost.match(/^(\d+)(?:\/|$)/);
+          if (prMatch && !cost.match(/^\d+c$/i)) {
+            updates[prefix + "_attack_pr"] = prMatch[1];
+          }
+        });
+        
+        setAttrs(updates, {silent: true});
+      });
+    });
+  }
+
+  on("change:agility_save change:intelligence_save change:cool_save", function() {
+    getAttrs(["agility_save", "intelligence_save", "cool_save"], function(v) {
+      var agSave = parseInt(v.agility_save) || 6;
+      var inSave = parseInt(v.intelligence_save) || 6;
+      var clSave = parseInt(v.cool_save) || 6;
+      
+      getSectionIDs("repeating_attacks", function(ids) {
+        if (ids.length === 0) return;
+        
+        var attrList = [];
+        ids.forEach(function(id) {
+          attrList.push("repeating_attacks_" + id + "_attack_atk");
+          attrList.push("repeating_attacks_" + id + "_attack_mod");
+        });
+        
+        getAttrs(attrList, function(atkValues) {
+          var updates = {};
+          ids.forEach(function(id) {
+            var atkType = atkValues["repeating_attacks_" + id + "_attack_atk"] || "P";
+            var mod = parseInt(atkValues["repeating_attacks_" + id + "_attack_mod"]) || 0;
+            var baseSave = atkType === "M" ? inSave : (atkType === "E" ? clSave : agSave);
+            var tohitNum = baseSave + 3 + mod;
+            updates["repeating_attacks_" + id + "_attack_tohit"] = tohitNum + "-";
+            updates["repeating_attacks_" + id + "_attack_tohit_num"] = tohitNum;
+          });
+          setAttrs(updates);
+        });
+      });
+    });
+  });
+
+  on("change:repeating_attacks:attack_kb", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_kb", "");
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      var kbVal = v[eventInfo.sourceAttribute] === "1" ? "Yes" : "No";
+      var update = {};
+      update[rowPrefix + "_attack_kb_display"] = kbVal;
+      setAttrs(update);
+    });
+  });
+
+  function initAttackKBDisplays() {
+    getSectionIDs("repeating_attacks", function(ids) {
+      if (ids.length === 0) return;
+      
+      var attrList = [];
+      ids.forEach(function(id) {
+        attrList.push("repeating_attacks_" + id + "_attack_kb");
+      });
+      
+      getAttrs(attrList, function(values) {
+        var updates = {};
+        ids.forEach(function(id) {
+          var kbVal = values["repeating_attacks_" + id + "_attack_kb"] === "1" ? "Yes" : "No";
+          updates["repeating_attacks_" + id + "_attack_kb_display"] = kbVal;
+        });
+        setAttrs(updates);
+      });
+    });
+  }
+
+  function initAttackToHits() {
+    getAttrs(["agility_save", "intelligence_save", "cool_save"], function(v) {
+      var agSave = parseInt(v.agility_save) || 6;
+      var inSave = parseInt(v.intelligence_save) || 6;
+      var clSave = parseInt(v.cool_save) || 6;
+      
+      getSectionIDs("repeating_attacks", function(ids) {
+        if (ids.length === 0) return;
+        
+        var attrList = [];
+        ids.forEach(function(id) {
+          attrList.push("repeating_attacks_" + id + "_attack_atk");
+          attrList.push("repeating_attacks_" + id + "_attack_mod");
+        });
+        
+        getAttrs(attrList, function(atkValues) {
+          var updates = {};
+          ids.forEach(function(id) {
+            var atkType = atkValues["repeating_attacks_" + id + "_attack_atk"] || "P";
+            var mod = parseInt(atkValues["repeating_attacks_" + id + "_attack_mod"]) || 0;
+            var baseSave = atkType === "M" ? inSave : (atkType === "E" ? clSave : agSave);
+            var tohitNum = baseSave + 3 + mod;
+            updates["repeating_attacks_" + id + "_attack_tohit"] = tohitNum + "-";
+            updates["repeating_attacks_" + id + "_attack_tohit_num"] = tohitNum;
+            // Set defense type flags: P = physical, M/E = mental
+            updates["repeating_attacks_" + id + "_attack_is_physical"] = (atkType === "P") ? "1" : "0";
+            updates["repeating_attacks_" + id + "_attack_is_mental"] = (atkType === "M" || atkType === "E") ? "1" : "0";
+          });
+          setAttrs(updates);
+        });
+      });
+    });
+  }
+
+  function calcSecurityClearance() {
+    getAttrs(["use_security", "intelligence_save", "cool_save", "ep_earned"], function(v) {
+      if (v.use_security !== "1") {
+        setAttrs({ security_clearance: "" });
+        return;
+      }
+      var inSave = parseInt(v.intelligence_save) || 6;
+      var clSave = parseInt(v.cool_save) || 6;
+      var earnedEPs = parseInt(v.ep_earned) || 0;
+      var secClr = inSave + clSave + Math.floor(earnedEPs / 5) - 20;
+      setAttrs({ security_clearance: Math.max(1, Math.min(20, secClr)) });
+    });
+  }
+
+
+  // ==================== BASE INVENTING POINTS (IPs) ====================
+  // Rules: Base IPs from IN are IN/2 rounded up. IP Mod is a bonus/penalty added on top.
+  // Total Invention Points used by the sheet are stored in invention_points (used by calcIPTotals()).
+  function calcBaseIPs() {
+    getAttrs(["intelligence_score", "ip_mod"], function(v) {
+      var inScore = parseInt(v.intelligence_score, 10);
+      if (isNaN(inScore)) inScore = 0;
+
+      var baseIP = Math.ceil(inScore / 2);
+
+      var ipMod = parseInt(v.ip_mod, 10);
+      if (isNaN(ipMod)) ipMod = 0;
+
+      var totalIPs = baseIP + ipMod;
+
+      setAttrs({
+        base_ip: baseIP,
+        invention_points: totalIPs
+      }, function() {
+        // Keep remaining IPs in sync with any ability IP spend.
+        try { calcIPTotals(); } catch (e) {}
+      });
+    });
+  }
+
+
+  on("change:use_security change:intelligence_save change:cool_save change:ep_earned", function() {
+    calcSecurityClearance();
+  });
+
+  function calcInventingPts() {
+    getAttrs(["invention_points_base", "invention_points_bonus"], function(v) {
+        var base = parseInt(v.invention_points_base) || 0;
+        var bonus = parseInt(v.invention_points_bonus) || 0;
+        setAttrs({ invention_points: base + bonus });
+    });
+    }
+
+    on("change:invention_points_base change:invention_points_bonus", function() {
+    calcInventingPts();
+    calcIPTotals();
+    });
+
+  on("sheet:opened", function() {
+    getAttrs(["migrated_v37", "migrated_from_old"], function(v) {
+      if (v.migrated_v37 === "1") return;
+      
+      var alreadyMigratedRepeating = (v.migrated_from_old === "1");
+      
+      var oldAttrs = [
+        "identity-name", "skills", "careers", "origin", "origin_type", "group",
+        "starting_cps", "xp_earned", "exp_base", "exp_earned",
+        // legacy Bio & Info fields (legacy sheets)
+        "height", "weight", "eyes", "hair", "base",
+        // legacy notes fields (legacy sheets)
+        "power_notes", "hits_notes",
+        // new-sheet notes (so we can append without overwriting)
+        "notes"
+      ];
+      if (!alreadyMigratedRepeating) {
+        for (var i = 1; i <= 16; i++) {
+          oldAttrs.push("ability" + i + "_desc", "ability" + i + "_cost");
+        }
+        ["one", "two", "three"].forEach(function(slot) {
+          oldAttrs.push("attack_" + slot, "damage_" + slot, "damagetype_" + slot, 
+                        "tohit_" + slot, "knockback_" + slot);
+        });
+        ["one", "two", "three"].forEach(function(slot) {
+          oldAttrs.push("protection_" + slot, "kenetic_" + slot, "kinetic_" + slot, "energy_" + slot,
+                        "entropy_" + slot, "bio_" + slot, "psychic_" + slot, "other_" + slot);
+        });
+      }
+      
+      getAttrs(oldAttrs, function(old) {
+        var updates = {};
+        var hasOldData = false;
+        
+        if (old["identity-name"] && old["identity-name"].trim()) {
+          updates["true_id"] = old["identity-name"];
+          hasOldData = true;
+        }
+        // Legacy sheets have varied naming: some stored careers under "careers", others under "skills".
+        // Import ONLY ONE source to avoid duplicate Career entries.
+        var legacyCareers = (old["careers"] || "").trim();
+        var legacySkills  = (old["skills"]  || "").trim();
+
+        // Prefer explicit careers; fall back to skills.
+        // If both exist and differ, merge into a single entry (still only one repeating row).
+        var careerText = legacyCareers || legacySkills;
+        if (legacyCareers && legacySkills && legacyCareers.toLowerCase() !== legacySkills.toLowerCase()) {
+          careerText = legacyCareers + "\n" + legacySkills;
+        }
+        if (careerText) {
+          var careerRowId = generateRowID();
+          updates["repeating_careers_" + careerRowId + "_career_name"] = careerText;
+          hasOldData = true;
+        }
+
+        if (old["origin_type"] && old["origin_type"].trim()) {
+          updates["origin"] = old["origin_type"];
+          hasOldData = true;
+        } else if (old["origin"] && old["origin"].trim()) {
+          updates["origin"] = old["origin"];
+          hasOldData = true;
+        }
+        if (old["group"] && old["group"].trim()) {
+          updates["group"] = old["group"];
+          hasOldData = true;
+        }
+        // Legacy Bio & Info (and legacy notes) from older sheets
+        // Preserve by appending into Notes exactly once.
+        var legacyBits = [];
+        if (old["height"] && String(old["height"]).trim()) legacyBits.push("Height: " + String(old["height"]).trim());
+        if (old["weight"] && String(old["weight"]).trim()) legacyBits.push("Weight: " + String(old["weight"]).trim());
+        if (old["eyes"] && String(old["eyes"]).trim()) legacyBits.push("Eyes: " + String(old["eyes"]).trim());
+        if (old["hair"] && String(old["hair"]).trim()) legacyBits.push("Hair: " + String(old["hair"]).trim());
+        if (old["base"] && String(old["base"]).trim()) legacyBits.push("Base: " + String(old["base"]).trim());
+        if (old["power_notes"] && String(old["power_notes"]).trim()) legacyBits.push("Power Notes: " + String(old["power_notes"]).trim());
+        if (old["hits_notes"] && String(old["hits_notes"]).trim()) legacyBits.push("Hits Notes: " + String(old["hits_notes"]).trim());
+
+        if (legacyBits.length) {
+          var existingNotes = String(old["notes"] || "");
+          var legacyHeader = "[Legacy Bio & Info]";
+          if (existingNotes.indexOf(legacyHeader) === -1) {
+            var legacyBlock = legacyHeader + "\n" + legacyBits.join("\n");
+            updates["notes"] = (existingNotes && existingNotes.trim())
+              ? (existingNotes + "\n\n" + legacyBlock)
+              : legacyBlock;
+            hasOldData = true;
+          }
+        }
+
+
+        if (old["starting_cps"] && old["starting_cps"].trim()) {
+          updates["starting_eps"] = old["starting_cps"];
+          hasOldData = true;
+        } else if (old["exp_base"]) {
+          var expBase = String(old["exp_base"]).trim();
+          if (expBase) {
+            updates["starting_eps"] = expBase;
+            hasOldData = true;
+          }
+        }
+        if (old["xp_earned"] && old["xp_earned"].trim()) {
+          updates["ep_earned"] = old["xp_earned"];
+          hasOldData = true;
+        } else if (old["exp_earned"]) {
+          var expEarned = String(old["exp_earned"]).trim();
+          if (expEarned) {
+            updates["ep_earned"] = expEarned;
+            hasOldData = true;
+          }
+        }
+        
+        if (!alreadyMigratedRepeating) {
+          for (var i = 1; i <= 16; i++) {
+            var desc = old["ability" + i + "_desc"];
+            var cost = old["ability" + i + "_cost"];
+            // Convert to string and trim, handle null/undefined/number values
+            var descStr = (desc === null || desc === undefined) ? "" : String(desc).trim();
+            if (descStr) {
+              hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_abilities_" + rowId + "_ability_name"] = descStr;
+              updates["repeating_abilities_" + rowId + "_ability_cp"] = (cost === null || cost === undefined) ? "0" : String(cost);
+            }
+          }
+          
+          ["one", "two", "three"].forEach(function(slot) {
+            var name = old["attack_" + slot];
+            if (name && name.trim()) {
+              hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_attacks_" + rowId + "_attack_name"] = name;
+              updates["repeating_attacks_" + rowId + "_attack_damage"] = old["damage_" + slot] || "";
+              updates["repeating_attacks_" + rowId + "_attack_dmgtype"] = old["damagetype_" + slot] || "";
+              updates["repeating_attacks_" + rowId + "_attack_tohit"] = old["tohit_" + slot] || "";
+              var kbVal = String(old["knockback_" + slot] || "").toLowerCase().trim();
+              updates["repeating_attacks_" + rowId + "_attack_kb"] = (kbVal === "yes" || kbVal === "y" || kbVal === "1" || kbVal === "true") ? "1" : "0";
+            }
+          });
+          
+          ["one", "two", "three"].forEach(function(slot) {
+            var name = old["protection_" + slot];
+            if (name && name.trim()) {
+              hasOldData = true;
+              var rowId = generateRowID();
+              updates["repeating_protection_" + rowId + "_prot_name"] = name;
+              var kineticVal = old["kinetic_" + slot] || old["kenetic_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_kinetic"] = kineticVal;
+              updates["repeating_protection_" + rowId + "_prot_energy"] = old["energy_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_bio"] = old["bio_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_entropy"] = old["entropy_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_psychic"] = old["psychic_" + slot] || "0";
+              updates["repeating_protection_" + rowId + "_prot_other"] = old["other_" + slot] || "0";
+            }
+          });
+        }
+        
+        updates["migrated_v37"] = "1";
+        setAttrs(updates);
+        if (hasOldData) {
+          console.log("Mighty Protectors: Migrated character from old sheet format");
+        }
+      });
+    });
+  });
+
+  on("change:repeating_attacks:attack_dmgtype", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_dmgtype", "");
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      var typeMap = {
+        "Kin": "Kinetic", "Eng": "Energy", "Bio": "Biochemical",
+        "Ent": "Entropy", "Psy": "Psychic", "Oth": "Other"
+      };
+      var full = typeMap[v[eventInfo.sourceAttribute]] || "Kinetic";
+      var update = {};
+      update[rowPrefix + "_attack_dmgtype_full"] = full;
+      setAttrs(update);
+    });
+  });
+
+  // --- ATTACK ROW META (no API required) ---
+  function syncAttackRowMeta() {
+    getSectionIDs("repeating_attacks", function(ids) {
+      if (!ids || !ids.length) return;
+
+      // Pull A-Type codes so we can keep a human-readable label for the info card
+      const atkAttrs = ids.map(id => `repeating_attacks_${id}_attack_atk`);
+
+      getAttrs(atkAttrs, function(values) {
+        const typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
+        const updates = {};
+
+        ids.forEach((id, index) => {
+          updates[`repeating_attacks_${id}_attack_rowid`] = id;
+          updates[`repeating_attacks_${id}_attack_num`] = String(index + 1);
+          updates[`repeating_attacks_${id}_attack_idx`] = String(index);  // new for macro generateRowID
+
+          const code = values[`repeating_attacks_${id}_attack_atk`] || "P";
+          updates[`repeating_attacks_${id}_attack_atk_full`] = typeMap[code] || "Physical";
+        });
+
+        // silent avoids triggering loops
+        setAttrs(updates, { silent: true });
+      });
+    });
+  }
+
+  // Run once on sheet open
+  on("sheet:opened", syncAttackRowMeta);
+
+  // Run when rows are added/removed
+  on("change:repeating_attacks remove:repeating_attacks", syncAttackRowMeta);
+
+  // Keep A-Type label fresh when the dropdown changes
+  on("change:repeating_attacks:attack_atk", function(eventInfo) {
+    const rowPrefix = eventInfo.sourceAttribute.replace("_attack_atk", "");
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      const typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
+      const code = v[eventInfo.sourceAttribute] || "P";
+      const update = {};
+      update[rowPrefix + "_attack_atk_full"] = typeMap[code] || "Physical";
+      setAttrs(update);
+    });
+  });
+
+
+
+// --- ABILITIES/WEAKNESSES SUMMARY (no API required) ---
+// --- ABILITIES/WEAKNESSES SUMMARY (no API required) ---
+function rebuildABWSummary() {
+  getSectionIDs("repeating_abilities", function(ids) {
+    if (!ids || !ids.length) {
+      setAttrs({ abw_summary: "<b>Abilities</b><br>None<br><br><b>Weaknesses</b><br>None" });
+      return;
+    }
+
+    var attrList = [];
+    ids.forEach(function(id) {
+      attrList.push("repeating_abilities_" + id + "_ability_name");
+      attrList.push("repeating_abilities_" + id + "_ability_cp");
+      attrList.push("repeating_abilities_" + id + "_ability_ip");
+    });
+
+    getAttrs(attrList, function(v) {
+      var abilities = [];
+      var weaknesses = [];
+
+      ids.forEach(function(id) {
+        var name = (v["repeating_abilities_" + id + "_ability_name"] || "").trim();
+        var cp = parseFloat(v["repeating_abilities_" + id + "_ability_cp"]) || 0;
+        var ip = parseFloat(v["repeating_abilities_" + id + "_ability_ip"]) || 0;
+
+        // Skip truly empty rows
+        if (!name && cp === 0 && ip === 0) return;
+
+        var label = name || "(unnamed)";
+        var line = label + " (CP " + cp + (ip ? (", IP " + ip) : "") + ")";
+        if (cp < 0) weaknesses.push(line);
+        else abilities.push(line);
+      });
+
+      function fmt(arr) {
+        if (!arr.length) return "None";
+        return arr.map(function(s) { return "• " + s; }).join("<br>");
+      }
+
+      var summary = "<b>Abilities</b><br>" + fmt(abilities) + "<br><br><b>Weaknesses</b><br>" + fmt(weaknesses);
+      setAttrs({ abw_summary: summary });
+    });
+  });
+}
+
+on("change:repeating_abilities remove:repeating_abilities", rebuildABWSummary);
+on("sheet:opened", rebuildABWSummary);
+
+
+on("sheet:opened change:intelligence_score change:ip_mod", function() {
+    calcBaseIPs();
+  });
+
+  // ==================== ABILITY MODIFIER NOTES PARSER ====================
+// Shorthand patterns:
+//   aura:d8+1:Energy:1       - Ability Field (damage:type:PR)
+//   absorb:Energy:25:Flame   - Absorption (types:limit:effect)
+//   reflect:Kinetic:20       - Reflection (types:limit)
+//   autofire:3               - Autofire (rate of fire)
+//   conductive               - Conductive (flag)
+//   duration:3rnd:water      - Duration (time:escape)
+//   contact:HTH or contact:HTH:ind - Contact Attack (link, :ind for independent)
+//   carrier:Blade or carrier:Blade:ind - Carrier Attack (link, :ind for independent)
+
+on("change:repeating_abilities:ability_notes", function(eventInfo) {
+  var rowPrefix = eventInfo.sourceAttribute.replace("_ability_notes", "");
+  
+  getAttrs([eventInfo.sourceAttribute], function(v) {
+    var notes = v[eventInfo.sourceAttribute] || "";
+    var notesLower = notes.toLowerCase();
+    var updates = {};
+    
+    // Reset all
+    updates[rowPrefix + "_ability_mod_type"] = "";
+    updates[rowPrefix + "_ability_aura_damage"] = "";
+    updates[rowPrefix + "_ability_aura_dtype"] = "";
+    updates[rowPrefix + "_ability_aura_pr"] = "";
+    updates[rowPrefix + "_ability_absorb_types"] = "";
+    updates[rowPrefix + "_ability_absorb_limit"] = "";
+    updates[rowPrefix + "_ability_absorb_effect"] = "";
+    updates[rowPrefix + "_ability_reflect_types"] = "";
+    updates[rowPrefix + "_ability_reflect_limit"] = "";
+    updates[rowPrefix + "_ability_autofire_rof"] = "";
+    updates[rowPrefix + "_ability_duration_time"] = "";
+    updates[rowPrefix + "_ability_duration_escape"] = "";
+    updates[rowPrefix + "_ability_contact_link"] = "";
+    updates[rowPrefix + "_ability_contact_ind"] = "";
+    updates[rowPrefix + "_ability_carrier_link"] = "";
+    updates[rowPrefix + "_ability_carrier_ind"] = "";
+    
+    // Aura: aura:d8+1:Energy:1
+    var auraMatch = notes.match(/aura:([^:]+):(\w+):(\d+)/i);
+    if (auraMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "aura";
+      updates[rowPrefix + "_ability_aura_damage"] = auraMatch[1];
+      updates[rowPrefix + "_ability_aura_dtype"] = auraMatch[2];
+      updates[rowPrefix + "_ability_aura_pr"] = auraMatch[3];
+    }
+    
+    // Absorb: absorb:Energy:25:Flame or absorb:Energy,Heat:25:Flame
+    var absorbMatch = notes.match(/absorb:([^:]+):(\d+):?(\w*)/i);
+    if (absorbMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "absorption";
+      updates[rowPrefix + "_ability_absorb_types"] = absorbMatch[1];
+      updates[rowPrefix + "_ability_absorb_limit"] = absorbMatch[2];
+      updates[rowPrefix + "_ability_absorb_effect"] = absorbMatch[3] || "";
+    }
+    
+    // Reflect: reflect:Kinetic:20
+    var reflectMatch = notes.match(/reflect:([^:]+):(\d+)/i);
+    if (reflectMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "reflection";
+      updates[rowPrefix + "_ability_reflect_types"] = reflectMatch[1];
+      updates[rowPrefix + "_ability_reflect_limit"] = reflectMatch[2];
+    }
+    
+    // Autofire: autofire:3
+    var autofireMatch = notes.match(/autofire:(\d+)/i);
+    if (autofireMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "autofire";
+      updates[rowPrefix + "_ability_autofire_rof"] = autofireMatch[1];
+    }
+    
+    // Conductive: just the word
+    if (notesLower.indexOf("conductive") !== -1) {
+      updates[rowPrefix + "_ability_mod_type"] = "conductive";
+    }
+    
+    // Duration: duration:3rnd:water or duration:1min
+    var durationMatch = notes.match(/duration:([^:]+):?(.*)?/i);
+    if (durationMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "duration";
+      updates[rowPrefix + "_ability_duration_time"] = durationMatch[1];
+      updates[rowPrefix + "_ability_duration_escape"] = durationMatch[2] || "";
+    }
+    
+    // Contact: contact:HTH or contact:HTH:ind
+    var contactMatch = notes.match(/contact:(\w+):?(ind)?/i);
+    if (contactMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "contact";
+      updates[rowPrefix + "_ability_contact_link"] = contactMatch[1];
+      updates[rowPrefix + "_ability_contact_ind"] = contactMatch[2] ? "1" : "0";
+    }
+    
+    // Carrier: carrier:Blade or carrier:Blade:ind
+    var carrierMatch = notes.match(/carrier:(\w+):?(ind)?/i);
+    if (carrierMatch) {
+      updates[rowPrefix + "_ability_mod_type"] = "carrier";
+      updates[rowPrefix + "_ability_carrier_link"] = carrierMatch[1];
+      updates[rowPrefix + "_ability_carrier_ind"] = carrierMatch[2] ? "1" : "0";
+    }
+
+    // Off: ability is inactive
+    if (notesLower.indexOf("off") !== -1) {
+      updates[rowPrefix + "_ability_active"] = "0";
+    } else {
+      updates[rowPrefix + "_ability_active"] = "1";
+    }
+    
+    setAttrs(updates);
+  });
+});
+
+// Initialize ability notes parsing on sheet open
+function initAbilityNotes() {
+  getSectionIDs("repeating_abilities", function(ids) {
+    if (ids.length === 0) return;
+    
+    var attrList = [];
+    ids.forEach(function(id) {
+      attrList.push("repeating_abilities_" + id + "_ability_notes");
+    });
+    
+    getAttrs(attrList, function(values) {
+      ids.forEach(function(id) {
+        var prefix = "repeating_abilities_" + id;
+        var notes = values[prefix + "_ability_notes"] || "";
+        
+        // Trigger the parser by faking an event
+        // Actually, we need to duplicate the parsing logic here or call setAttrs to trigger change
+        // Simpler: just set the notes value to itself to trigger the change handler
+        // But that's wasteful. Let's duplicate the parse inline:
+        
+        var notesLower = notes.toLowerCase();
+        var updates = {};
+        
+        updates[prefix + "_ability_mod_type"] = "";
+        updates[prefix + "_ability_aura_damage"] = "";
+        updates[prefix + "_ability_aura_dtype"] = "";
+        updates[prefix + "_ability_aura_pr"] = "";
+        updates[prefix + "_ability_absorb_types"] = "";
+        updates[prefix + "_ability_absorb_limit"] = "";
+        updates[prefix + "_ability_absorb_effect"] = "";
+        updates[prefix + "_ability_reflect_types"] = "";
+        updates[prefix + "_ability_reflect_limit"] = "";
+        updates[prefix + "_ability_autofire_rof"] = "";
+        updates[prefix + "_ability_duration_time"] = "";
+        updates[prefix + "_ability_duration_escape"] = "";
+        updates[prefix + "_ability_contact_link"] = "";
+        updates[prefix + "_ability_contact_ind"] = "";
+        updates[prefix + "_ability_carrier_link"] = "";
+        updates[prefix + "_ability_carrier_ind"] = "";
+        
+        var auraMatch = notes.match(/aura:([^:]+):(\w+):(\d+)/i);
+        if (auraMatch) {
+          updates[prefix + "_ability_mod_type"] = "aura";
+          updates[prefix + "_ability_aura_damage"] = auraMatch[1];
+          updates[prefix + "_ability_aura_dtype"] = auraMatch[2];
+          updates[prefix + "_ability_aura_pr"] = auraMatch[3];
+        }
+        
+        var absorbMatch = notes.match(/absorb:([^:]+):(\d+):?(\w*)/i);
+        if (absorbMatch) {
+          updates[prefix + "_ability_mod_type"] = "absorption";
+          updates[prefix + "_ability_absorb_types"] = absorbMatch[1];
+          updates[prefix + "_ability_absorb_limit"] = absorbMatch[2];
+          updates[prefix + "_ability_absorb_effect"] = absorbMatch[3] || "";
+        }
+        
+        var reflectMatch = notes.match(/reflect:([^:]+):(\d+)/i);
+        if (reflectMatch) {
+          updates[prefix + "_ability_mod_type"] = "reflection";
+          updates[prefix + "_ability_reflect_types"] = reflectMatch[1];
+          updates[prefix + "_ability_reflect_limit"] = reflectMatch[2];
+        }
+        
+        var autofireMatch = notes.match(/autofire:(\d+)/i);
+        if (autofireMatch) {
+          updates[prefix + "_ability_mod_type"] = "autofire";
+          updates[prefix + "_ability_autofire_rof"] = autofireMatch[1];
+        }
+        
+        if (notesLower.indexOf("conductive") !== -1) {
+          updates[prefix + "_ability_mod_type"] = "conductive";
+        }
+        
+        var durationMatch = notes.match(/duration:([^:]+):?(.*)?/i);
+        if (durationMatch) {
+          updates[prefix + "_ability_mod_type"] = "duration";
+          updates[prefix + "_ability_duration_time"] = durationMatch[1];
+          updates[prefix + "_ability_duration_escape"] = durationMatch[2] || "";
+        }
+        
+        var contactMatch = notes.match(/contact:(\w+):?(ind)?/i);
+        if (contactMatch) {
+          updates[prefix + "_ability_mod_type"] = "contact";
+          updates[prefix + "_ability_contact_link"] = contactMatch[1];
+          updates[prefix + "_ability_contact_ind"] = contactMatch[2] ? "1" : "0";
+        }
+        
+        var carrierMatch = notes.match(/carrier:(\w+):?(ind)?/i);
+        if (carrierMatch) {
+          updates[prefix + "_ability_mod_type"] = "carrier";
+          updates[prefix + "_ability_carrier_link"] = carrierMatch[1];
+          updates[prefix + "_ability_carrier_ind"] = carrierMatch[2] ? "1" : "0";
+        }
+
+        // Off: ability is inactive
+        if (notesLower.indexOf("off") !== -1) {
+          updates[prefix + "_ability_active"] = "0";
+        } else {
+          updates[prefix + "_ability_active"] = "1";
+        }
+        
+        setAttrs(updates, {silent: true});
+      });
+    });
+  });
+}
+
+// Add initAbilityNotes() call to your sheet:opened handler
+
+  // ==================== VEHICLE SHEET WORKERS ====================
+
+  // Vehicle size lookup table: base_cp -> [spaces, weight_lbs, mass_str, profile, st, en, hits]
+  var vehicleSizeTable = {
+    "0":    [2,360,"d6",1.41,15,15,13],
+    "2.5":  [3,540,"d6+1",1.705,16,17,15],
+    "5":    [4,720,"d6+1",2,18,18,16],
+    "7.5":  [6,1080,"d8+1",2.415,19,20,18],
+    "10":   [8,1440,"d8+1",2.83,21,21,20],
+    "12.5": [12,2160,"d10+1",3.415,22,23,23],
+    "15":   [16,2880,"d10+1",4,24,24,25],
+    "17.5": [24,4320,"2d6",4.83,25,26,27],
+    "20":   [32,5760,"2d6",5.66,27,27,29],
+    "22.5": [48,8640,"d6+d8",6.83,28,29,31],
+    "25":   [64,11520,"d6+d8",8,30,30,33],
+    "27.5": [96,17280,"2d8",9.655,31,32,36],
+    "30":   [128,23040,"2d8",11.31,33,33,38],
+    "32.5": [192,34560,"d8+d10",13.655,34,35,40],
+    "35":   [256,46080,"d8+d10",16,36,36,41],
+    "37.5": [384,69120,"2d10",19.315,37,38,44],
+    "40":   [512,92160,"2d10",22.63,39,39,46],
+    "42.5": [768,138240,"d10+d12",27.315,40,41,48],
+    "45":   [1024,184320,"d10+d12",32,42,42,50],
+    "47.5": [1536,276480,"2d12",38.625,43,44,52],
+    "50":   [2048,368640,"2d12",45.25,45,45,54],
+    "52.5": [3072,552960,"3d8",54.625,46,47,57],
+    "55":   [4096,737280,"3d8",64,48,48,59],
+    "57.5": [6144,1105920,"2d8+d10",77.255,49,50,61],
+    "60":   [8192,1474560,"2d8+d10",90.51,51,51,63],
+    "62.5": [12288,2211840,"d8+2d10",109.255,52,53,65],
+    "65":   [16384,2949120,"d8+2d10",128,54,54,66],
+    "67.5": [24576,4423680,"3d10",154.51,55,56,69],
+    "70":   [32768,5898240,"3d10",181.02,57,57,71]
+  };
+
+  // System spaces -> CPs lookup
+  var systemCPTable = {
+    1:5, 2:10, 3:12.5, 4:15, 6:17.5, 8:20, 12:22.5, 16:25,
+    24:27.5, 32:30, 48:32.5, 64:35, 96:37.5, 128:40,
+    192:42.5, 256:45, 384:47.5, 512:50, 768:52.5, 1024:55,
+    1536:57.5, 2048:60, 3072:62.5, 4096:65, 6144:67.5, 8192:70,
+    12288:72.5, 16384:75, 24576:77.5, 32768:80, 49152:82.5, 65536:85,
+    98304:87.5, 131072:90, 196608:92.5, 262144:95, 393216:97.5, 524288:100
+  };
+
+  var systemProfileTable = {
+    1:1, 2:1.41, 3:1.705, 4:2, 6:2.415, 8:2.83, 12:3.415, 16:4,
+    24:4.83, 32:5.66, 48:6.83, 64:8, 96:9.655, 128:11.31,
+    192:13.655, 256:16, 384:19.315, 512:22.63, 768:27.315, 1024:32,
+    1536:38.625, 2048:45.25, 3072:54.625, 4096:64, 6144:77.255, 8192:90.51,
+    12288:109.255, 16384:128, 24576:154.51, 32768:181.02, 49152:218.51, 65536:256,
+    98304:309.017, 131072:362.034, 196608:437.017, 262144:512, 393216:618.04, 524288:724.08
+  };
+
+  var systemHitsTable = {
+    1:8, 2:13, 3:15, 4:16, 6:18, 8:20, 12:23, 16:25,
+    24:27, 32:29, 48:31, 64:33, 96:36, 128:38,
+    192:40, 256:41, 384:44, 512:46, 768:48, 1024:50,
+    1536:52, 2048:54, 3072:57, 4096:59, 6144:61, 8192:63,
+    12288:65, 16384:66, 24576:69, 32768:71, 49152:73, 65536:75,
+    98304:77, 131072:79, 196608:82, 262144:84, 393216:86, 524288:88
+  };
+
+  function vehicleBCSave(score) {
+    if (score < 0) return 0;
+    if (score >= saveTable.length) return saveTable[saveTable.length - 1];
+    return saveTable[score];
+  }
+
+  function fmtWeight(lbs) {
+    if (lbs >= 1000000) return (lbs / 1000000).toFixed(1) + "M";
+    if (lbs >= 1000) return (lbs / 1000).toFixed(1) + "K";
+    return lbs.toString();
+  }
+
+  function vehicleHTH(st) {
+    if (st < 0) return "0";
+    if (st >= hthTable.length) return hthTable[hthTable.length - 1];
+    return hthTable[st];
+  }
+
+  function vehicleCarry(st) {
+    if (st < 0) return 0;
+    if (st >= carryValues.length) return carryValues[carryValues.length - 1];
+    return carryValues[st];
+  }
+
+  function vehicleInitDie(clSave) {
+    if (clSave <= 0) return "0";
+    if (clSave <= 2) return "d4";
+    if (clSave <= 4) return "d6";
+    if (clSave <= 6) return "d8";
+    if (clSave <= 8) return "d10";
+    if (clSave <= 10) return "d12";
+    if (clSave <= 12) return "d12+d4";
+    if (clSave <= 14) return "d12+d6";
+    if (clSave <= 16) return "d12+d8";
+    if (clSave <= 18) return "d12+d10";
+    return "2d12";
+  }
+
+  // Convert display dice to rollable: "d6+d8" -> "1d6+1d8", "2d6" stays "2d6"
+  function makeRollable(s) {
+    var parts = s.split("+");
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i].trim();
+      if (p.charAt(0) === "d") parts[i] = "1" + p;
+    }
+    return parts.join("+");
+  }
+
+  function calcVehicle() {
+    getAttrs(["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver"], function(v) {
+      var bcp = parseFloat(v.vehicle_base_cp) || 20;
+      // Find best matching key in vehicleSizeTable
+      var keys = Object.keys(vehicleSizeTable).map(Number).sort(function(a,b){return a-b;});
+      var bestKey = keys[0];
+      for (var i = 0; i < keys.length; i++) {
+        if (keys[i] <= bcp) bestKey = keys[i];
+        else break;
+      }
+      var row = vehicleSizeTable[String(bestKey)];
+      if (!row) return;
+
+      var spaces = row[0], weightLbs = row[1], massStr = row[2], profile = row[3];
+      var st = row[4], en = row[5], hits = row[6];
+      var ag = parseInt(v.vehicle_ag) || 9;
+      var inScore = parseInt(v.vehicle_in) || 0;
+      var cl = parseInt(v.vehicle_cl) || 9;
+      var maneuver = parseFloat(v.vehicle_maneuver) || 0;
+
+      var power = st + en + ag + inScore;
+
+      var enSave = vehicleBCSave(en);
+      var agSave = vehicleBCSave(ag);
+      var inSave = vehicleBCSave(inScore);
+      var clSave = vehicleBCSave(cl);
+      var handling = agSave - 10;
+
+      var baseTurnRate = 3;
+      var turnRateAdj = Math.round(maneuver / 5);
+      var turnRate = Math.max(1, baseTurnRate + turnRateAdj);
+
+      var initDie = vehicleInitDie(clSave);
+      var initRoll = makeRollable(initDie);
+
+      var carryVal = vehicleCarry(st);
+      var carryStr = (typeof carryVal === "number" && carryVal >= 1000) ? fmtWeight(carryVal) + " lbs" : carryVal + " lbs";
+      var hthVal = vehicleHTH(st);
+
+      setAttrs({
+        vehicle_spaces: spaces,
+        vehicle_weight: fmtWeight(weightLbs),
+        vehicle_mass: massStr,
+        vehicle_mass_roll: makeRollable(massStr),
+        vehicle_profile: "x" + profile,
+        vehicle_st: st,
+        vehicle_en: en,
+        vehicle_hits: hits,
+        vehicle_hits_max: hits,
+        vehicle_en_save: enSave,
+        vehicle_ag_save: agSave,
+        vehicle_in_save: inSave,
+        vehicle_cl_save: clSave,
+        vehicle_handling: handling,
+        vehicle_defense: agSave - 10,
+        vehicle_power: power,
+        vehicle_power_max: power,
+        vehicle_turn_rate: turnRate,
+        vehicle_init_die: initDie,
+        vehicle_init_roll: initRoll,
+        vehicle_carry: carryStr,
+        vehicle_hth: hthVal,
+        vehicle_hth_roll: makeRollable(hthVal)
+      }, {silent: true});
+    });
+  }
+
+  on("change:vehicle_base_cp change:vehicle_ag change:vehicle_in change:vehicle_cl change:vehicle_hilotech change:vehicle_maneuver change:vehicle_wontexplode", function() { calcVehicle(); recalcAllVehSystems(); calcVehicleTotals(); });
+  on("sheet:opened", function() { calcVehicle(); calcVehicleTotals(); recalcAllVehSystems(); });
+
+  function findBestKey(spaces) {
+    var keys = Object.keys(systemCPTable).map(Number).sort(function(a,b){return a-b;});
+    var bestKey = keys[0];
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i] <= spaces) bestKey = keys[i];
+      else break;
+    }
+    return bestKey;
+  }
+
+  function populateVehSystemRow(rowId) {
+    var prefix = "repeating_vehsystems_" + rowId + "_";
+    getAttrs([prefix + "vsys_spaces", prefix + "vsys_cost", "vehicle_hilotech"], function(v) {
+      var spaces = parseInt(v[prefix + "vsys_spaces"]) || 1;
+      var costAdj = parseFloat(v[prefix + "vsys_cost"]) || 0;
+      var hilotech = parseFloat(v.vehicle_hilotech) || 0;
+      var bestKey = findBestKey(spaces);
+      var baseCp = systemCPTable[bestKey];
+      var sysHits = systemHitsTable[bestKey] || 8;
+      var sysProfile = systemProfileTable[bestKey] || 1;
+      var totalCp = baseCp + hilotech + costAdj;
+      var updates = {};
+      updates[prefix + "vsys_cp"] = totalCp;
+      updates[prefix + "vsys_hits"] = sysHits;
+      updates[prefix + "vsys_hits_max"] = sysHits;
+      updates[prefix + "vsys_profile"] = "x" + sysProfile;
+      setAttrs(updates, {silent: true});
+    });
+  }
+
+  function recalcAllVehSystems() {
+    getSectionIDs("repeating_vehsystems", function(ids) {
+      ids.forEach(function(id) { populateVehSystemRow(id); });
+    });
+  }
+
+  on("change:repeating_vehsystems:vsys_spaces", function(eventInfo) {
+    var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_vsys_spaces", "");
+    populateVehSystemRow(rowId);
+    calcVehicleTotals();
+  });
+
+  // Auto-populate new system rows on add
+  on("change:repeating_vehsystems", function(eventInfo) {
+    var src = eventInfo.sourceAttribute || "";
+    if (src.indexOf("vsys_spaces") !== -1 || src.indexOf("vsys_cost") !== -1) return;
+    // New row added or other field changed - recalc all
+    recalcAllVehSystems();
+    calcVehicleTotals();
+  });
+
+  on("change:repeating_vehsystems:vsys_cost", function(eventInfo) {
+    var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_vsys_cost", "");
+    populateVehSystemRow(rowId);
+    calcVehicleTotals();
+  });
+
+  on("remove:repeating_vehsystems", function() {
+    calcVehicleTotals();
+  });
+
+  function calcVehicleTotals() {
+    getSectionIDs("repeating_vehsystems", function(ids) {
+      var attrs = ["vehicle_base_cp", "vehicle_spaces", "vehicle_maneuver", "vehicle_wontexplode", "vehicle_hilotech", "vehicle_profile"];
+      ids.forEach(function(id) {
+        attrs.push("repeating_vehsystems_" + id + "_vsys_spaces");
+        attrs.push("repeating_vehsystems_" + id + "_vsys_cost");
+      });
+      getAttrs(attrs, function(v) {
+        var totalSpaces = 0;
+        var totalSysCost = 0;
+        ids.forEach(function(id) {
+          totalSpaces += parseInt(v["repeating_vehsystems_" + id + "_vsys_spaces"]) || 0;
+          totalSysCost += parseFloat(v["repeating_vehsystems_" + id + "_vsys_cost"]) || 0;
+        });
+        var baseCost = parseFloat(v.vehicle_base_cp) || 0;
+        var hilotech = parseFloat(v.vehicle_hilotech) || 0;
+        var maneuver = parseFloat(v.vehicle_maneuver) || 0;
+        var wontExplode = (v.vehicle_wontexplode === "1") ? 5 : 0;
+        var maxSpaces = parseInt(v.vehicle_spaces) || 0;
+        var totalCost = baseCost + hilotech + maneuver + wontExplode + totalSysCost;
+
+        // Explosion calc from total cost
+        var explD8 = 1 + Math.floor(totalCost / 5);
+        var explExtra = (totalCost % 5 !== 0) ? "+1d4" : "";
+        var explosion = explD8 + "d8" + explExtra;
+        var explRoll = explD8 + "d8" + explExtra;
+
+        // Explosion area from vehicle profile
+        var profileStr = v.vehicle_profile || "x1";
+        var profileNum = parseFloat(profileStr.replace("x","")) || 1;
+        var explArea = Math.ceil(profileNum);
+        if (explArea % 2 === 0) explArea += 1;
+
+        setAttrs({
+          vehicle_spaces_used: totalSpaces,
+          vehicle_spaces_remaining: maxSpaces - totalSpaces,
+          vehicle_total_cost: totalCost,
+          vehicle_explosion: explosion,
+          vehicle_explosion_roll: explRoll,
+          vehicle_explosion_area: explArea
+        }, {silent: true});
+      });
+    });
+  }
+
+</script>

@@ -1,0 +1,390 @@
+/* v38.23 change scrollbar colors to match theme */
+.sheet-rolltemplate-mpattack .inlinerollresult { background: transparent !important; border: none !important; padding: 0 !important; }
+
+/* Mighty Protectors Title - Logo Style */
+.mp-title {
+  font-family: Impact, 'Arial Black', sans-serif !important;
+  font-size: 28px !important;
+  font-weight: bold !important;
+  color: #ffd700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 2px !important;
+  -webkit-text-stroke: 1px #d35400 !important;
+  text-shadow: 1px 1px 0 #d35400, 0 2px 4px rgba(0,0,0,0.3) !important;
+  margin-top: -22px !important;
+  margin-bottom: 3px !important;
+  padding-bottom: 4px !important;
+  border-bottom: 2px solid #d35400 !important;
+}
+
+.mp-title sup {
+  font-size: 14px !important;
+  vertical-align: super !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+  color: #ffd700 !important;
+}
+
+/* Roll + Action buttons */
+.charsheet button[type="roll"],
+.charsheet button[type="action"]{
+  border-radius: 4px !important;
+  transition: filter 120ms linear, box-shadow 120ms linear, transform 120ms linear !important;
+  outline: none !important;
+}
+
+/* Hover: brighten + soft glow */
+.charsheet button[type="roll"]:hover,
+.charsheet button[type="action"]:hover{
+  filter: brightness(1.35) saturate(1.25) !important;
+  box-shadow:
+    0 0 0 2px rgba(233, 69, 96, 0.40),
+    0 0 10px rgba(233, 69, 96, 0.35) !important;
+}
+
+/* Focus */
+.charsheet button[type="roll"]:focus,
+.charsheet button[type="action"]:focus{
+  filter: brightness(1.25) saturate(1.10) !important;
+  box-shadow:
+    0 0 0 3px rgba(244, 208, 63, 0.55),
+    0 0 12px rgba(244, 208, 63, 0.35) !important;
+}
+
+/* Active */
+.charsheet button[type="roll"]:active,
+.charsheet button[type="action"]:active{
+  transform: translateY(1px) !important;
+  filter: brightness(1.10) saturate(1.05) !important;
+}
+
+/* Disabled (native) */
+.charsheet button[disabled]{
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+/* Repeating section controls: + Add / Modify */
+.charsheet .repcontrol button{
+  border-radius: 6px !important;
+  transition: filter 120ms linear, box-shadow 120ms linear, transform 120ms linear !important;
+}
+
+.charsheet .repcontrol button:hover{
+  filter: brightness(1.15) !important;
+  box-shadow: 0 0 0 2px rgba(244, 208, 63, 0.35), 0 0 10px rgba(244, 208, 63, 0.20) !important;
+}
+
+.charsheet .repcontrol button:active{
+  transform: translateY(1px) !important;
+}
+
+/* allow the tooltip to spill out of the flex row */
+.charsheet { overflow: visible !important; }
+
+.mp-leapwrap{
+  position: relative;
+  display: inline-block;
+}
+
+.mp-leaptip{
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+
+  padding: 2px 6px;
+  border: 1px solid #c0c0c0;
+  background: #ffffe1;
+  color: #000;
+  font: 12px Arial, sans-serif;
+  white-space: nowrap;
+
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  z-index: 9999;
+}
+
+.mp-leapwrap:hover .mp-leaptip{ display: inline-block; }
+
+/* if leap_distance is empty, don’t show a blank tooltip */
+.mp-leaptip:empty{ display:none; }
+
+/* Initiative button (cyan) - override red glow */
+.charsheet button[name="roll_initiative"]:hover{
+  filter: brightness(1.35) saturate(1.25) !important;
+  box-shadow:
+    0 0 0 2px rgba(139, 233, 253, 0.50),
+    0 0 10px rgba(139, 233, 253, 0.45) !important;
+}
+
+.charsheet button[name="roll_initiative"]:focus{
+  filter: brightness(1.25) saturate(1.10) !important;
+  box-shadow:
+    0 0 0 3px rgba(139, 233, 253, 0.55),
+    0 0 12px rgba(139, 233, 253, 0.35) !important;
+}
+
+/* Text-label roll buttons (Mass/Wealth/Luck) */
+.charsheet button.mp-labelroll[type="roll"]{
+  background: #0d0d1a !important;
+  color: #f4d03f !important;
+  border: 1px solid #333 !important;
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 16px !important;
+  height: 22px !important;
+}
+
+/* Hide Roll20's default d20 icon on these buttons */
+.charsheet button.mp-labelroll[type="roll"]::before{
+  content: "" !important;
+}
+
+/* Slight spacing so it reads like a label, not a big button */
+.charsheet button.mp-labelroll{
+  margin-right: 2px !important;
+}
+
+.charsheet input[name="attr_mass"],
+.charsheet input[name="attr_wealth"]{
+  width: 75px !important;   /* adjust to taste */
+  min-width: 65px !important;
+}
+
+/* Force label-roll buttons to use our font sizing (Roll20 sometimes overrides) */
+.charsheet button[type="roll"].mp-labellink{
+  font-size: 12px !important;
+  font-family: Arial, sans-serif !important;
+  font-weight: 700 !important;
+  line-height: 16px !important;
+
+  /* optional: stop weird shrinking */
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+
+  /* keep it from collapsing */
+  min-height: 22px !important;
+}
+
+/* If Roll20 injects a <span> inside the button, force that too */
+.charsheet button[type="roll"].mp-labellink span{
+  font-size: 12px !important;
+  line-height: 16px !important;
+}
+
+/* Defense row: enforce column alignment across AG/IN */
+.charsheet .mp-defrow{
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+/* Column 1: Modifier label (fixed width so inputs align) */
+.charsheet .mp-defmod-label{
+  display: inline-block !important;
+  width: 160px !important;   /* tweak if you need more/less */
+  font-size: 10px !important;
+  color: #aaa !important;
+}
+
+/* Column 2: Modifier input */
+.charsheet .mp-defmod-input{
+  width: 28px !important;
+  background: #0d0d1a !important;
+  color: #eaeaea !important;
+  border: 1px solid #333 !important;
+  padding: 2px !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+/* Column 3: Total label (fixed width + GREEN text) */
+.charsheet .mp-deftotal-label{
+  display: inline-block !important;
+  width: 120px !important;   /* tweak to taste */
+  font-size: 10px !important;
+  color: #50fa7b !important; /* your requested green */
+  margin-left: 6px !important;
+}
+
+/* Column 4: Total input */
+.charsheet .mp-deftotal-input{
+  width: 30px !important;
+  background: #0d0d1a !important;
+  color: #f4d03f !important;
+  border: 1px solid #f4d03f !important;
+  padding: 2px !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  box-sizing: border-box !important;
+}
+
+/* Target the container for the buttons */
+.charsheet .repcontrol {
+    min-height: 20px; /* Reduces the height of the row holding the buttons */
+    margin-top: 2px;
+}
+
+/* Target the Add and Modify buttons specifically */
+.charsheet .repcontrol .btn {
+    font-size: 10px !important; /* Smaller text */
+    padding: 1px 4px !important; /* Smaller clickable area */
+    line-height: 12px;           /* Tighter vertical spacing */
+    height: auto;                /* Let height adjust to the smaller font */
+    background-image: none;      /* Removes default gradient if you want flat color */
+    box-shadow: none;            /* Removes default 3D shadow */
+}
+
+/* BC Stat roll buttons - uniform size and alignment */
+.charsheet button[name="roll_hth"],
+.charsheet button[name="roll_endurance_save"],
+.charsheet button[name="roll_agility_save"],
+.charsheet button[name="roll_intelligence_save"],
+.charsheet button[name="roll_cool_save"] {
+  width: 45px !important;
+  min-width: 45px !important;
+  margin-right: 4px !important;
+  box-sizing: border-box !important;
+}
+
+.sheet-compact-toggle { 
+  cursor: pointer;
+  opacity: 0.3;
+  width: 10px;
+  height: 10px;
+}
+
+.sheet-compact-toggle:hover {
+  opacity: 1;
+}
+
+.sheet-compact-label { 
+  display: none !important;
+}
+
+.sheet-header-section { display: block; }
+.sheet-compact-toggle:checked ~ .sheet-header-section { display: none; }
+
+/* Healing roll template - match default Roll20 style */
+.sheet-rolltemplate-healing .sheet-template-container {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.sheet-rolltemplate-healing h3 {
+    background: #7e2d8a;
+    color: #fff;
+    margin: 0;
+    padding: 5px 8px;
+    font-size: 14px;
+}
+
+.sheet-rolltemplate-healing div {
+    padding: 2px 8px;
+    margin: 0;
+    color: #000;
+    line-height: 1.5;
+}
+
+.sheet-rolltemplate-healing div:last-child {
+    padding-bottom: 6px;
+}
+
+/* Red roll/action buttons (HTH, Heal, saves, etc.) */
+.charsheet button.sheet-mp-rollbtn {
+  font-size: 9px !important;
+  font-weight: bold !important;
+  height: 20px !important;
+  line-height: 18px !important;
+  padding: 0 6px !important;
+  margin: 2px 0 !important;
+  background: #e63946 !important;
+  color: #fff !important;
+  border: 1px solid #a82531 !important;
+  border-radius: 3px !important;
+}
+
+/* BC table - make last column (derived values) flexible */
+.charsheet table[style*="table-layout:fixed"] td:last-child {
+  width: auto !important;
+}
+
+/* Flex containers in BC derived column - allow shrinking */
+.charsheet table td > div[style*="display:flex"],
+.charsheet table td > div[style*="display:inline-grid"] {
+  flex-wrap: wrap !important;
+  min-width: 0 !important;
+}
+
+/* Inputs in BC derived column - allow flex shrinking */
+.charsheet table td input[name="attr_hth_damage"],
+.charsheet table td input[name="attr_carry_capacity"],
+.charsheet table td input[name="attr_healing_rate"],
+.charsheet table td input[name="attr_initiative_score"] {
+  flex: 1 1 auto !important;
+  min-width: 50px !important;
+  max-width: 100px !important;
+}
+
+/* Defense grid rows - use flex instead for better responsiveness */
+.charsheet table td div[style*="inline-grid"] {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px 6px !important;
+}
+
+/* Move/Power/Hits section - allow flex shrinking */
+.charsheet input[name="attr_move"],
+.charsheet input[name="attr_leap_total"] {
+  flex: 1 1 auto !important;
+  min-width: 50px !important;
+}
+
+/* Notes textarea - ensure it fills available space */
+.charsheet textarea[name="attr_notes"] {
+  flex: 1 1 auto !important;
+  min-width: 100px !important;
+}
+
+/* Power/Hits color toggle - tiny checkbox */
+.charsheet input.sheet-color-toggle {
+  width: 10px !important;
+  height: 10px !important;
+  opacity: 0.25 !important;
+  cursor: pointer !important;
+}
+
+.charsheet input.sheet-color-toggle:hover {
+  opacity: 1 !important;
+}
+
+/* Default: red Power, green Hits */
+.charsheet .sheet-power-label { color: #e63946; }
+.charsheet .sheet-power-input { color: #e63946 !important; }
+.charsheet .sheet-hits-label { color: #50fa7b; }
+.charsheet .sheet-hits-input { color: #50fa7b !important; }
+
+/* Classic (checked): yellow Power, red Hits */
+.charsheet input.sheet-color-toggle:checked ~ div .sheet-power-label { color: #f4d03f !important; }
+.charsheet input.sheet-color-toggle:checked ~ div .sheet-power-input { color: #f4d03f !important; }
+.charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-label { color: #e63946 !important; }
+.charsheet input.sheet-color-toggle:checked ~ div .sheet-hits-input { color: #e63946 !important; }
+
+/* Scrollbar styling for dark theme */
+.charsheet .career-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4070 #0d0d1a;
+}
+
+.charsheet {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2040 #0d0d1a;
+}

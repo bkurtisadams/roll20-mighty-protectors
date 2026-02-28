@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v43.26 - Vehicle layout overhaul */
+/* Mighty Protectors Character Sheet CSS v44.00 - Vehicle tab refinements */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -52,14 +52,37 @@
 .sheet-vehicle-content .sheet-veh-sys-row {
   margin-left: 5px;
 }
-.sheet-vehicle-content table.sheet-veh-sys-header {
-  /* no special styling needed */
-}
-
 /* Hide number input spinners in vehicle sheet */
-.sheet-vehicle-content input[type="number"] { -moz-appearance: textfield; }
+.sheet-vehicle-content input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 .sheet-vehicle-content input[type="number"]::-webkit-inner-spin-button,
 .sheet-vehicle-content input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Vehicle buttons: blue instead of red for saves */
+.sheet-vehicle-content button[type="roll"] {
+  background: #3498db !important;
+  border-color: #2176ad !important;
+}
+/* Keep explosion button orange */
+.sheet-vehicle-content button[name="roll_vehicle_explosion_dmg"] {
+  background: #e67e22 !important;
+  border-color: #b8651a !important;
+}
+/* Keep HTH button orange */
+.sheet-vehicle-content button[name="roll_vehicle_hth"] {
+  background: #e67e22 !important;
+  border-color: #b8651a !important;
+}
+/* Keep initiative button cyan */
+.sheet-vehicle-content button[name="roll_vehicle_init"] {
+  background: #8be9fd !important;
+  color: #000 !important;
+  border-color: #5cc5d9 !important;
+}
+.sheet-vehicle-content button[type="roll"]:hover {
+  box-shadow:
+    0 0 0 2px rgba(52, 152, 219, 0.50),
+    0 0 10px rgba(52, 152, 219, 0.45) !important;
+}
 
 /* ========================================
    ROLL TEMPLATES
