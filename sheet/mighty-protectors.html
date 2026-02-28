@@ -1,14 +1,7 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.19 - Vehicle layout overhaul
-v44.19: - Base CPs dropdown now shows input before label
-        - Vehicle Mods row: Hi/Lo Tech (number), Maneuver (number), Won't Explode (checkbox)
-        - Removed BASE COST/CP Mod fields; TOTAL COST section moved below systems rows
-        - TOTAL COST = Base CPs + sum(system PTs) + Maneuver + Won't Explode
-        - PTs column now = base CPs from spaces + Hi/Lo Tech + row Cost adjustment
-        - Hi/Lo Tech change recalculates all system rows' PTs
-        - Maneuver adjusts Turn Rate (+1 per +5, -1 per -5, min 1)
-        - Stats section reorganized to 4 rows matching reference PDF
-        - Column headers switched from table to flex div (matching row layout)
-        - Removed debug logging
+<!-- Mighty Protectors Roll20 Character Sheet v44.21 - Vehicle stat fixes
+v44.21: - Roll buttons colored: Base HTH (orange), EN/AG/IN/CL Save (red), Init (cyan)
+        - Defense auto-calculated = AG Save - 10 (readonly)
+        - Total Cost = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + sum(system Cost column)
         - Systems: table-inside-fieldset (same as repeating_attacks), Cost column, Face dropdown
         - Auto-populate fix: getSectionIDs-based worker + recalcAllVehSystems on sheet:opened
         - Spaces Used/Remaining/Total Cost auto-calculated from repeating rows
@@ -1577,7 +1570,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <input type="text" name="attr_vehicle_weight" readonly style="width:80px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:10px;" />
         <span style="color:#888; font-size:10px;">lbs</span>
         <button type="roll" name="roll_vehicle_mass" title="Roll Vehicle Mass" value="&{template:default} {{name=@{vehicle_name} Mass Roll}} {{Roll=[[@{vehicle_mass_roll}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#3498db; color:#fff; border:1px solid #2a2040; cursor:pointer;">Mass</button>
-        <input type="text" name="attr_vehicle_mass" readonly style="width:40px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
+        <input type="text" name="attr_vehicle_mass" readonly style="width:80px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
       </div>
       <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:10px;">
         <span style="color:#888;">Vehicle Mods:</span>
@@ -1650,7 +1643,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       <fieldset class="repeating_vehsystems" style="border:none; padding:0; margin:0;">
         <div class="sheet-veh-sys-row" style="display:flex; gap:2px; align-items:center; padding:2px 0; border-bottom:1px solid #1a1428;">
           <input type="number" name="attr_vsys_cost" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System cost adjustment (modifiers)" />
-          <input type="number" name="attr_vsys_spaces" value="2" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
+          <input type="number" name="attr_vsys_spaces" value="1" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
           <input type="text" name="attr_vsys_profile" readonly style="width:38px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
           <input type="number" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
@@ -1677,57 +1670,48 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       </div>
     </div>
 
-    <!-- STATS SECTION -->
+    <!-- STATS SECTION (2 rows matching reference) -->
     <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
-      <table style="width:100%; border-collapse:collapse; table-layout:auto; font-size:11px;">
-        <!-- Row 1: ST, Base HTH, EN, EN Save -->
-        <tr>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">ST:</td>
-          <td style="padding:2px;"><input type="text" name="attr_vehicle_st" readonly style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">Base HTH:</td>
-          <td style="padding:2px;"><input type="text" name="attr_vehicle_hth" readonly style="width:60px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="padding:2px;"><button type="roll" name="roll_vehicle_hth" title="Roll Vehicle HTH Damage" value="&{template:default} {{name=@{vehicle_name} HTH}} {{Damage=[[@{vehicle_hth_roll}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e67e22; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">HTH</button></td>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">EN:</td>
-          <td style="padding:2px;"><input type="text" name="attr_vehicle_en" readonly style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="padding:2px;"><button type="roll" name="roll_vehicle_en_save" title="Roll Vehicle EN Save" value="&{template:default} {{name=@{vehicle_name} EN Save}} {{Roll=[[1d20cs<[[@{vehicle_en_save} + ?{Modifier|0}]]cf>[[@{vehicle_en_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_en_save} + ?{Modifier|0}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">EN Save</button></td>
-          <td style="padding:2px;"><input type="text" name="attr_vehicle_en_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-        </tr>
-        <!-- Row 2: AG, AG Save, Handling, IN, IN Save -->
-        <tr>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">AG:</td>
-          <td style="padding:2px;"><input type="number" name="attr_vehicle_ag" value="9" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="padding:2px;"><button type="roll" name="roll_vehicle_ag_save" title="Roll Vehicle AG Save" value="&{template:default} {{name=@{vehicle_name} AG Save}} {{Roll=[[1d20cs<[[@{vehicle_ag_save} + ?{Modifier|0}]]cf>[[@{vehicle_ag_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_ag_save} + ?{Modifier|0}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">AG Save</button></td>
-          <td style="padding:2px;"><input type="text" name="attr_vehicle_ag_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">Handling:</td>
-          <td style="padding:2px;"><input type="text" name="attr_vehicle_handling" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">IN:</td>
-          <td style="padding:2px;"><input type="number" name="attr_vehicle_in" value="0" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="padding:2px;">
-            <button type="roll" name="roll_vehicle_in_save" title="Roll Vehicle IN Save" value="&{template:default} {{name=@{vehicle_name} IN Save}} {{Roll=[[1d20cs<[[@{vehicle_in_save} + ?{Modifier|0}]]cf>[[@{vehicle_in_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_in_save} + ?{Modifier|0}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">IN Save</button>
-            <input type="text" name="attr_vehicle_in_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
-          </td>
-        </tr>
-        <!-- Row 3: CL, CL Save, Turn Rate, Initiative -->
-        <tr>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">CL:</td>
-          <td style="padding:2px;"><input type="number" name="attr_vehicle_cl" value="9" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="padding:2px;"><button type="roll" name="roll_vehicle_cl_save" title="Roll Vehicle CL Save" value="&{template:default} {{name=@{vehicle_name} CL Save}} {{Roll=[[1d20cs<[[@{vehicle_cl_save} + ?{Modifier|0}]]cf>[[@{vehicle_cl_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_cl_save} + ?{Modifier|0}]]-}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">CL Save</button></td>
-          <td style="padding:2px;"><input type="text" name="attr_vehicle_cl_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">Turn Rate:</td>
-          <td style="padding:2px;"><input type="number" name="attr_vehicle_turn_rate" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="padding:2px;" colspan="3">
-            <button type="roll" name="roll_vehicle_init" title="Roll Vehicle Initiative" value="&{template:default} {{name=@{vehicle_name} Initiative}} {{Roll=[[@{vehicle_init_roll} &{tracker}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 4px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">Initiative</button>
-            <input type="text" name="attr_vehicle_init_die" readonly style="width:40px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
-          </td>
-        </tr>
-        <!-- Row 4: Defense, Carry -->
-        <tr>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">Defense:</td>
-          <td style="padding:2px;"><input type="number" name="attr_vehicle_defense" value="0" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" /></td>
-          <td style="color:#888; padding:2px; text-align:right; white-space:nowrap;">Carry:</td>
-          <td style="padding:2px;" colspan="6"><input type="text" name="attr_vehicle_carry" readonly style="width:140px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:10px;" /></td>
-        </tr>
-      </table>
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px; margin-bottom:4px;">
+        <span style="color:#888;">ST:</span>
+        <input type="text" name="attr_vehicle_st" readonly style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_hth" title="Roll Vehicle HTH Damage" value="&{template:default} {{name=@{vehicle_name} HTH}} {{Damage=[[@{vehicle_hth_roll}]]}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e67e22; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">Base HTH:</button>
+        <input type="text" name="attr_vehicle_hth" readonly style="width:70px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">EN:</span>
+        <input type="text" name="attr_vehicle_en" readonly style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_en_save" title="Roll Vehicle EN Save" value="&{template:default} {{name=@{vehicle_name} EN Save}} {{Roll=[[1d20cs<[[@{vehicle_en_save} + ?{Modifier|0}]]cf>[[@{vehicle_en_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_en_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">EN Save:</button>
+        <input type="text" name="attr_vehicle_en_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">Turn Rate:</span>
+        <input type="number" name="attr_vehicle_turn_rate" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_init" title="Roll Vehicle Initiative" value="&{template:default} {{name=@{vehicle_name} Initiative}} {{Roll=[[@{vehicle_init_roll} &{tracker}]]}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">Init:</button>
+        <input type="text" name="attr_vehicle_init_die" readonly style="width:40px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+      </div>
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px;">
+        <span style="color:#888;">AG:</span>
+        <input type="number" name="attr_vehicle_ag" value="9" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_ag_save" title="Roll Vehicle AG Save" value="&{template:default} {{name=@{vehicle_name} AG Save}} {{Roll=[[1d20cs<[[@{vehicle_ag_save} + ?{Modifier|0}]]cf>[[@{vehicle_ag_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_ag_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">AG Save:</button>
+        <input type="text" name="attr_vehicle_ag_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">Handling:</span>
+        <input type="text" name="attr_vehicle_handling" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">IN:</span>
+        <input type="number" name="attr_vehicle_in" value="0" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_in_save" title="Roll Vehicle IN Save" value="&{template:default} {{name=@{vehicle_name} IN Save}} {{Roll=[[1d20cs<[[@{vehicle_in_save} + ?{Modifier|0}]]cf>[[@{vehicle_in_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_in_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">IN Save:</button>
+        <input type="text" name="attr_vehicle_in_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">CL:</span>
+        <input type="number" name="attr_vehicle_cl" value="9" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <button type="roll" name="roll_vehicle_cl_save" title="Roll Vehicle CL Save" value="&{template:default} {{name=@{vehicle_name} CL Save}} {{Roll=[[1d20cs<[[@{vehicle_cl_save} + ?{Modifier|0}]]cf>[[@{vehicle_cl_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_cl_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">CL Save:</button>
+        <input type="text" name="attr_vehicle_cl_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+      </div>
+    </div>
+
+    <!-- DEFENSE / CARRY -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px;">
+        <span style="color:#888;">Defense:</span>
+        <input type="text" name="attr_vehicle_defense" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">Carry:</span>
+        <input type="text" name="attr_vehicle_carry" readonly style="width:140px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:10px;" />
+      </div>
     </div>
 
     <!-- NOTES -->
@@ -4244,6 +4228,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_in_save: inSave,
         vehicle_cl_save: clSave,
         vehicle_handling: handling,
+        vehicle_defense: agSave - 10,
         vehicle_power: power,
         vehicle_power_max: power,
         vehicle_turn_rate: turnRate,
@@ -4322,26 +4307,27 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   });
 
   // Sum spaces used, remaining, and total cost from all system rows
-  // TOTAL COST = Base CPs + sum of all system PTs + Maneuver adj + Won't Explode
+  // TOTAL COST = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + sum(system Cost column)
   function calcVehicleTotals() {
     getSectionIDs("repeating_vehsystems", function(ids) {
-      var attrs = ["vehicle_base_cp", "vehicle_spaces", "vehicle_maneuver", "vehicle_wontexplode"];
+      var attrs = ["vehicle_base_cp", "vehicle_spaces", "vehicle_maneuver", "vehicle_wontexplode", "vehicle_hilotech"];
       ids.forEach(function(id) {
         attrs.push("repeating_vehsystems_" + id + "_vsys_spaces");
-        attrs.push("repeating_vehsystems_" + id + "_vsys_cp");
+        attrs.push("repeating_vehsystems_" + id + "_vsys_cost");
       });
       getAttrs(attrs, function(v) {
         var totalSpaces = 0;
-        var totalSystemPts = 0;
+        var totalSysCost = 0;
         ids.forEach(function(id) {
           totalSpaces += parseInt(v["repeating_vehsystems_" + id + "_vsys_spaces"]) || 0;
-          totalSystemPts += parseFloat(v["repeating_vehsystems_" + id + "_vsys_cp"]) || 0;
+          totalSysCost += parseFloat(v["repeating_vehsystems_" + id + "_vsys_cost"]) || 0;
         });
         var baseCost = parseFloat(v.vehicle_base_cp) || 0;
+        var hilotech = parseFloat(v.vehicle_hilotech) || 0;
         var maneuver = parseFloat(v.vehicle_maneuver) || 0;
         var wontExplode = (v.vehicle_wontexplode === "1") ? 5 : 0;
         var maxSpaces = parseInt(v.vehicle_spaces) || 0;
-        var totalCost = baseCost + totalSystemPts + maneuver + wontExplode;
+        var totalCost = baseCost + hilotech + maneuver + wontExplode + totalSysCost;
         setAttrs({
           vehicle_spaces_used: totalSpaces,
           vehicle_spaces_remaining: maxSpaces - totalSpaces,
