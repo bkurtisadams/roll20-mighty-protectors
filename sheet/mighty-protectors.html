@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.21 - Vehicle stat fixes
+<!-- Mighty Protectors Roll20 Character Sheet v44.22 - Vehicle 0-space fix, protection rows
 v44.21: - Roll buttons colored: Base HTH (orange), EN/AG/IN/CL Save (red), Init (cyan)
         - Defense auto-calculated = AG Save - 10 (readonly)
         - Total Cost = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + sum(system Cost column)
@@ -1571,7 +1571,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     <!-- ARMOR -->
     <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
       <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
-        <span style="color:#f4d03f; font-weight:bold; font-size:11px;">ARMOR</span>
+        <span style="color:#f4d03f; font-weight:bold; font-size:11px;" title="Vehicles have a default Structural Rating (see 5.1) of 3.">ARMOR</span>
         <span style="color:#888; font-size:10px;">Kinetic</span>
         <input type="number" name="attr_vehicle_armor_kinetic" value="3" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" />
         <span style="color:#888; font-size:10px;">Energy</span>
@@ -1587,6 +1587,43 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
     <!-- HITS / REPAIR / POWER / EXPLOSION -->
     <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+
+    <!-- VEHICLE PROTECTION (Repeating) -->
+    <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+      <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+        <tr style="font-size:10px; color:#888; border-bottom:1px solid #2a3a5a;">
+          <th style="width:125px; text-align:left; padding:1px; color:#f4d03f; font-size:11px;"
+              title="Additional Vehicle Armor should be purchased as an Integral System. Invulnerability, Adaptation, and other protection sources can also be listed here.">Additional Protection</th>
+          <th style="width:32px; text-align:center; padding:1px;"
+              title="Kinetic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: enter 1/4.">Kin</th>
+          <th style="width:32px; text-align:center; padding:1px;"
+              title="Energy. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: enter 1/4.">Eng</th>
+          <th style="width:32px; text-align:center; padding:1px;"
+              title="Biochemical. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: enter 1/4.">Bio</th>
+          <th style="width:32px; text-align:center; padding:1px;"
+              title="Entropy. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: enter 1/4.">Ent</th>
+          <th style="width:32px; text-align:center; padding:1px;"
+              title="Psychic. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: enter 1/4.">Psy</th>
+          <th style="width:32px; text-align:center; padding:1px;"
+              title="Other. Enter protection (e.g. 5 or 5h for Hardened). Invulnerability: enter 1/4.">Oth</th>
+          <th style="text-align:left; padding:1px;">Notes</th>
+        </tr>
+      </table>
+      <fieldset class="repeating_vehprotection" style="border:none; padding:0; margin:0;">
+        <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
+          <tr>
+            <td style="width:125px; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_name" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; box-sizing:border-box;" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_kinetic" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_energy" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_bio" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_entropy" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_psychic" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_other" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
+            <td style="padding:1px; vertical-align:middle; overflow:hidden;"><input type="text" name="attr_vprot_notes" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; box-sizing:border-box;" /></td>
+          </tr>
+        </table>
+      </fieldset>
+    </div>
       <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
         <span style="color:#f4d03f; font-weight:bold; font-size:11px;">HITS</span>
         <input type="number" name="attr_vehicle_hits" style="width:36px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px; font-weight:bold;" />
@@ -4246,19 +4283,26 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   function populateVehSystemRow(rowId) {
     var prefix = "repeating_vehsystems_" + rowId + "_";
     getAttrs([prefix + "vsys_spaces", prefix + "vsys_cost", "vehicle_hilotech"], function(v) {
-      var spaces = parseInt(v[prefix + "vsys_spaces"]) || 1;
+      var spaces = parseInt(v[prefix + "vsys_spaces"]) || 0;
       var costAdj = parseFloat(v[prefix + "vsys_cost"]) || 0;
       var hilotech = parseFloat(v.vehicle_hilotech) || 0;
-      var bestKey = findBestKey(spaces);
-      var baseCp = systemCPTable[bestKey];
-      var sysHits = systemHitsTable[bestKey] || 8;
-      var sysProfile = systemProfileTable[bestKey] || 1;
-      var totalCp = baseCp + hilotech + costAdj;
       var updates = {};
-      updates[prefix + "vsys_cp"] = totalCp;
-      updates[prefix + "vsys_hits"] = sysHits;
-      updates[prefix + "vsys_hits_max"] = sysHits;
-      updates[prefix + "vsys_profile"] = "x" + sysProfile;
+      if (spaces <= 0) {
+        updates[prefix + "vsys_cp"] = 0;
+        updates[prefix + "vsys_hits"] = 0;
+        updates[prefix + "vsys_hits_max"] = 0;
+        updates[prefix + "vsys_profile"] = "";
+      } else {
+        var bestKey = findBestKey(spaces);
+        var baseCp = systemCPTable[bestKey];
+        var sysHits = systemHitsTable[bestKey] || 8;
+        var sysProfile = systemProfileTable[bestKey] || 1;
+        var totalCp = baseCp + hilotech + costAdj;
+        updates[prefix + "vsys_cp"] = totalCp;
+        updates[prefix + "vsys_hits"] = sysHits;
+        updates[prefix + "vsys_hits_max"] = sysHits;
+        updates[prefix + "vsys_profile"] = "x" + sysProfile;
+      }
       setAttrs(updates, {silent: true});
     });
   }
