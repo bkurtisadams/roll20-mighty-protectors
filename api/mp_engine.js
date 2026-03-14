@@ -1,8 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.58.1 - 2026-03-14
- * v2.58.1: Fix GM seeing duplicate chat cards when player attacks
- *        - chBoth/chBothId/chCombat: skip /w gm when player whisper sent
- *          (GM already sees all whispers, so explicit /w gm caused duplicates)
- *        - Defensive fallback: resolve character controller when msg.playerid is GM/API
+/* Mighty Protectors Roll20 API Engine v2.58.6 - 2026-03-14
+ * v2.58.6: Fix whisper visibility for GM + player sessions
+ *        - Characters with only "ALL" controller don't receive whispers
+ *        - chToChar/chToChars now always send /w gm, additionally whisper
+ *          characters that have specific (non-ALL) player controllers
+ *        - New hasPlayerController() helper checks controlledby field
+ *        - chCombat 4th arg is atkCharId for attacker visibility
+ *        - Attack output uses chToChars([atkCharId, defCharId])
+ *        - Area records now store atkCharId for whisper targeting
  * v2.58.0: Add hit/miss SFX support via Roll20 Jukebox
  *        - playSFX() helper triggers named Jukebox tracks
  *        - Plays "SFX-Hit" on HIT/CRIT, "SFX-Miss" on MISS/FUMBLE
@@ -434,6 +438,47 @@ MP.Engine = (function () {
     return `/w "${name}" `;
   }
 
+  // Check if character has a specific (non-ALL) player controller
+  function hasPlayerController(charId) {
+    if (!charId) return false;
+    const char = getObj("character", charId);
+    if (!char) return false;
+    const cb = (char.get("controlledby") || "").split(",");
+    return cb.some(id => { const t = id.trim(); return t && t !== "all"; });
+  }
+
+  // Whisper to character if it has a real player controller, otherwise /w gm
+  function chToChar(who, content, charId) {
+    if (charId && hasPlayerController(charId)) {
+      const char = getObj("character", charId);
+      if (char) { ch(who, `/w "${char.get("name")}" ` + content); return; }
+    }
+    ch(who, "/w gm " + content);
+  }
+
+  // Whisper to unique player controllers across all given characters.
+  // Deduplicates by player ID so each player gets one copy.
+  // /w gm fallback only if no player controllers found.
+  function chToChars(who, content, charIds) {
+    const sentPlayers = new Set();
+    for (const cid of charIds) {
+      if (!cid) continue;
+      const char = getObj("character", cid);
+      if (!char) continue;
+      const cb = (char.get("controlledby") || "").split(",");
+      for (const id of cb) {
+        const pid = id.trim();
+        if (!pid || pid === "all" || sentPlayers.has(pid)) continue;
+        const player = getObj("player", pid);
+        if (player) {
+          ch(who, `/w "${player.get("_displayname")}" ` + content);
+          sentPlayers.add(pid);
+        }
+      }
+    }
+    if (sentPlayers.size === 0) ch(who, "/w gm " + content);
+  }
+
   // Send to player if non-GM (GM sees whispers), otherwise /w gm
   function chBoth(who, content, msg) {
     if (msg && msg.playerid && !playerIsGM(msg.playerid)) {
@@ -450,6 +495,20 @@ MP.Engine = (function () {
       if (target !== "/w gm ") { ch(who, target + content); return; }
     }
     ch(who, "/w gm " + content);
+  }
+
+  // Send to all unique non-GM players (GM sees whispers), /w gm fallback if none
+  function chPlayers(who, content, playerIds) {
+    const sent = new Set();
+    for (const pid of playerIds) {
+      if (!pid || playerIsGM(pid)) continue;
+      const target = wtId(pid);
+      if (target !== "/w gm " && !sent.has(target)) {
+        ch(who, target + content);
+        sent.add(target);
+      }
+    }
+    if (sent.size === 0) ch(who, "/w gm " + content);
   }
 
   // GM-only gate - returns true if not GM (caller should return)
@@ -481,18 +540,14 @@ MP.Engine = (function () {
     return null;
   }
 
-  // Send to defender's player if non-GM (GM sees whispers), otherwise /w gm
-  function chCombat(who, content, defCharId) {
+  // Send combat result to defender + attacker characters via whisper
+  // defCharId: defender character ID, atkCharId: optional attacker character ID
+  function chCombat(who, content, defCharId, atkCharId) {
     if (!CFG.GM_ONLY_BUTTONS) {
       ch(who, content);
       return;
     }
-    const playerId = getControllingPlayerId(defCharId);
-    if (playerId) {
-      const target = wtId(playerId);
-      if (target !== "/w gm ") { ch(who, target + content); return; }
-    }
-    ch(who, "/w gm " + content);
+    chToChars(who, content, [defCharId, atkCharId]);
   }
 
   function parseTemplateFields(content) {
@@ -2113,7 +2168,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // --- Area attacks: send normal card then delegate to area handler ---
     if (isAreaAttack) {
       if (CFG.GM_ONLY_BUTTONS) {
-        chBothId("MP", html, originalPlayerId);
+        chToChar("MP", html, atkCharId);
       } else {
         ch("MP", html);
       }
@@ -2133,26 +2188,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     if (CFG.GM_ONLY_BUTTONS) {
-      // Send attack card: player whisper if non-GM, /w gm fallback
-      chBothId("MP", html, originalPlayerId);
-      // Send buttons to unique non-GM players (GM sees whispers), /w gm fallback
-      if (buttons) {
-        const defPlayerId = getControllingPlayerId(defChar.id);
-        const atkIsPlayer = originalPlayerId && !playerIsGM(originalPlayerId);
-        const sent = new Set();
-        // Whisper defender's player
-        if (defPlayerId) {
-          const defTarget = wtId(defPlayerId);
-          if (defTarget !== "/w gm ") { ch("MP", defTarget + buttons); sent.add(defTarget); }
-        }
-        // Whisper attacker's player (if different target)
-        if (atkIsPlayer) {
-          const atkTarget = wtId(originalPlayerId);
-          if (atkTarget !== "/w gm " && !sent.has(atkTarget)) { ch("MP", atkTarget + buttons); sent.add(atkTarget); }
-        }
-        // /w gm only if no player whispers were sent
-        if (sent.size === 0) ch("MP", "/w gm " + buttons);
-      }
+      const charTargets = [atkCharId, defChar.id];
+      chToChars("MP", html, charTargets);
+      if (buttons) chToChars("MP", buttons, charTargets);
     } else {
       ch("MP", html + buttons);
     }
@@ -2232,6 +2270,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     state.MP_Engine.pendingArea[rollId] = {
       rollId: rollId,
       playerid: rec.playerid,
+      atkCharId: rec.atkCharId,
       damage: rec.damageTotal,
       damageType: rec.dmgTypeStr,
       dmgSubtype: rec.dmgSubtype,
@@ -2299,7 +2338,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     html += `</div>`;
     if (CFG.GM_ONLY_BUTTONS) {
-      chBothId("MP", html, rec.playerid);
+      chToChar("MP", html, rec.atkCharId);
     } else {
       ch("MP", html);
     }
@@ -2580,7 +2619,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     html += `</div>`;
     if (CFG.GM_ONLY_BUTTONS) {
-      chBothId("MP", html, areaRec.playerid);
+      chToChar("MP", html, areaRec.atkCharId);
     } else {
       ch("MP", html);
     }
@@ -2598,7 +2637,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (allResolved) {
       const resolvedHtml = `<div style="background:#3498db; padding:4px;">All escapes resolved. [Apply All Damage](!mp areadamageall --id ${rollId})</div>`;
       if (CFG.GM_ONLY_BUTTONS) {
-        chBothId("MP", resolvedHtml, areaRec.playerid);
+        chToChar("MP", resolvedHtml, areaRec.atkCharId);
       } else {
         ch("MP", resolvedHtml);
       }
@@ -2753,7 +2792,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     html += `</div>`;
     
-    chCombat("MP", html, rec.defCharId);
+    chCombat("MP", html, rec.defCharId, rec.atkCharId);
     
     // Clean up pending record
     delete state.MP_Engine.pending[rollId];
@@ -2843,7 +2882,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let buttons = `<br/>[Reflect at Original Attacker](!mp reflecthit --id ${reflectRollId} --target original)`;
     buttons += ` [Reflect at Target...](!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id})`;
     
-    chCombat("MP", html + buttons, rec.defCharId);
+    chCombat("MP", html + buttons, rec.defCharId, rec.atkCharId);
     
     // Clean up original pending record
     delete state.MP_Engine.pending[rollId];
@@ -2998,7 +3037,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           html += `<span style="color:#fff; font-weight:bold;">PROJECTILE DESTROYED!</span>`;
           html += `<br/><span style="color:#fff;">Attack: ${rec.damageTotal} - AF: ${afDmg} = 0 (blocked)</span>`;
           html += `</div>`;
-          chCombat("MP", html, defChar.id);
+          chCombat("MP", html, defChar.id, rec.atkCharId);
           delete state.MP_Engine.pending[rollId];
           return;
         } else {
@@ -3081,7 +3120,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
     }
     
-    chCombat("MP", html + buttons, rec.defCharId);
+    chCombat("MP", html + buttons, rec.defCharId, rec.atkCharId);
   }
   
   // Resume damage application after AF melee weapon check (weapon survived)
@@ -3091,7 +3130,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired.`);
     
     const buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
-    chCombat("MP", `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">Weapon survived - proceeding with damage</div>` + buttons, rec.defCharId);
+    chCombat("MP", `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">Weapon survived - proceeding with damage</div>` + buttons, rec.defCharId, rec.atkCharId);
   }
   
   // Cancel damage after AF (weapon destroyed or attacker KO'd)
@@ -3103,7 +3142,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getObj("character", rec.defCharId);
     const defName = defChar ? defChar.get("name") : "Target";
     
-    chCombat("MP", `<div style="background:#9b59b6; border:2px solid #000; padding:4px 8px;"><span style="color:#fff; font-weight:bold;">Attack negated!</span><br/><span style="color:#fff;">${esc(defName)} takes no damage.</span></div>`, rec.defCharId);
+    chCombat("MP", `<div style="background:#9b59b6; border:2px solid #000; padding:4px 8px;"><span style="color:#fff; font-weight:bold;">Attack negated!</span><br/><span style="color:#fff;">${esc(defName)} takes no damage.</span></div>`, rec.defCharId, rec.atkCharId);
     delete state.MP_Engine.pending[rollId];
   }
   
@@ -3749,7 +3788,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       (rec.condIdx !== undefined ? `<br/>[Try Again](!mp recover --target ${rec.defTokenId} --idx ${rec.condIdx})` : "") +
       `</div>`;
 
-    chCombat("MP", msgLine, rec.defCharId);
+    chCombat("MP", msgLine, rec.defCharId, rec.atkCharId);
     // Also send damage result to attacking player (if different from defender's player)
     if (CFG.GM_ONLY_BUTTONS && rec.playerid && !playerIsGM(rec.playerid)) {
       const atkTarget = wtId(rec.playerid);
@@ -3823,7 +3862,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       defTok.set("status_back-pain", true);
     }
 
-    chCombat("MP", msg_out, rec.defCharId);
+    chCombat("MP", msg_out, rec.defCharId, rec.atkCharId);
   }
 
   // -------------------------
@@ -3855,7 +3894,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       msg_out += `<br/>[AG Save vs Knockdown](!mp kbsave --target ${rec.defTokenId} --penalty ${kb})`;
     }
 
-    chCombat("MP", msg_out, rec.defCharId);
+    chCombat("MP", msg_out, rec.defCharId, rec.atkCharId);
   }
 
   function cmdKBSave(msg, args) {
@@ -4083,7 +4122,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       statusLine +
       damageButtons;
 
-    chCombat("MP", msg_out, rec.defCharId);
+    chCombat("MP", msg_out, rec.defCharId, rec.atkCharId);
   }
   
   // Get human-readable condition description
@@ -6772,7 +6811,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.58.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.58.6</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6855,11 +6894,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.58.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.58.6:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.58.1 READY");
+  log("MP ENGINE v2.58.6 READY");
 });
