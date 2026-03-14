@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.58.0 - 2026-02-26
+/* Mighty Protectors Roll20 API Engine v2.58.1 - 2026-03-14
+ * v2.58.1: Fix GM seeing duplicate chat cards when player attacks
+ *        - chBoth/chBothId/chCombat: skip /w gm when player whisper sent
+ *          (GM already sees all whispers, so explicit /w gm caused duplicates)
+ *        - Defensive fallback: resolve character controller when msg.playerid is GM/API
  * v2.58.0: Add hit/miss SFX support via Roll20 Jukebox
  *        - playSFX() helper triggers named Jukebox tracks
  *        - Plays "SFX-Hit" on HIT/CRIT, "SFX-Miss" on MISS/FUMBLE
@@ -430,22 +434,22 @@ MP.Engine = (function () {
     return `/w "${name}" `;
   }
 
-  // Send to both GM and player (if player is not GM)
+  // Send to player if non-GM (GM sees whispers), otherwise /w gm
   function chBoth(who, content, msg) {
-    ch(who, "/w gm " + content);
     if (msg && msg.playerid && !playerIsGM(msg.playerid)) {
       const target = wt(msg);
-      if (target !== "/w gm ") ch(who, target + content);
+      if (target !== "/w gm ") { ch(who, target + content); return; }
     }
+    ch(who, "/w gm " + content);
   }
 
-  // Send to both GM and a stored playerid (from pending records)
+  // Send to player if non-GM (GM sees whispers), otherwise /w gm
   function chBothId(who, content, playerId) {
-    ch(who, "/w gm " + content);
     if (playerId && !playerIsGM(playerId)) {
       const target = wtId(playerId);
-      if (target !== "/w gm ") ch(who, target + content);
+      if (target !== "/w gm ") { ch(who, target + content); return; }
     }
+    ch(who, "/w gm " + content);
   }
 
   // GM-only gate - returns true if not GM (caller should return)
@@ -477,19 +481,18 @@ MP.Engine = (function () {
     return null;
   }
 
-  // Send combat result to GM + defender's controlling player
-  // Used for all button outputs and combat resolution messages
+  // Send to defender's player if non-GM (GM sees whispers), otherwise /w gm
   function chCombat(who, content, defCharId) {
     if (!CFG.GM_ONLY_BUTTONS) {
       ch(who, content);
       return;
     }
-    ch(who, "/w gm " + content);
     const playerId = getControllingPlayerId(defCharId);
     if (playerId) {
       const target = wtId(playerId);
-      if (target !== "/w gm ") ch(who, target + content);
+      if (target !== "/w gm ") { ch(who, target + content); return; }
     }
+    ch(who, "/w gm " + content);
   }
 
   function parseTemplateFields(content) {
@@ -1590,7 +1593,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defTokenId = fields.def;
     const rowId = fields.row;
     // Use playerid from roll template (set by cmdQuickAttack/cmdAutofire) or fall back to msg sender
-    const originalPlayerId = fields.playerid || msg.playerid;
+    // If msg.playerid resolves to GM/API but character has a player controller, use that instead
+    let originalPlayerId = fields.playerid || msg.playerid;
+    if (playerIsGM(originalPlayerId)) {
+      const controllerPid = getControllingPlayerId(atkCharId);
+      if (controllerPid) originalPlayerId = controllerPid;
+    }
     const pushAmount = num(fields.push, 0);  // 0=no push, 2=normal, 4+=special ability
     const isPushing = pushAmount > 0;
 
@@ -2125,19 +2133,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     if (CFG.GM_ONLY_BUTTONS) {
-      // Send attack card to both GM and attacker
+      // Send attack card: player whisper if non-GM, /w gm fallback
       chBothId("MP", html, originalPlayerId);
-      // Send action buttons to GM and defender's player
+      // Send buttons to unique non-GM players (GM sees whispers), /w gm fallback
       if (buttons) {
-        chCombat("MP", buttons, defChar.id);
-        // Also send buttons to attacking player if they're not GM and not already the defender's controller
-        if (originalPlayerId && !playerIsGM(originalPlayerId)) {
-          const defPlayerId = getControllingPlayerId(defChar.id);
-          if (defPlayerId !== originalPlayerId) {
-            const atkTarget = wtId(originalPlayerId);
-            if (atkTarget !== "/w gm ") ch("MP", atkTarget + buttons);
-          }
+        const defPlayerId = getControllingPlayerId(defChar.id);
+        const atkIsPlayer = originalPlayerId && !playerIsGM(originalPlayerId);
+        const sent = new Set();
+        // Whisper defender's player
+        if (defPlayerId) {
+          const defTarget = wtId(defPlayerId);
+          if (defTarget !== "/w gm ") { ch("MP", defTarget + buttons); sent.add(defTarget); }
         }
+        // Whisper attacker's player (if different target)
+        if (atkIsPlayer) {
+          const atkTarget = wtId(originalPlayerId);
+          if (atkTarget !== "/w gm " && !sent.has(atkTarget)) { ch("MP", atkTarget + buttons); sent.add(atkTarget); }
+        }
+        // /w gm only if no player whispers were sent
+        if (sent.size === 0) ch("MP", "/w gm " + buttons);
       }
     } else {
       ch("MP", html + buttons);
@@ -6758,7 +6772,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.57.3</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.58.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6841,11 +6855,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.57.6:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.58.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.57.6 READY");
+  log("MP ENGINE v2.58.1 READY");
 });
