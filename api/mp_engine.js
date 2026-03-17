@@ -1,9 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.58.8 - 2026-03-16
+/* Mighty Protectors Roll20 API Engine v2.58.9 - 2026-03-16
+ * v2.58.9: Subtype-to-parent mapping in resolveDmgType
+ *        - DMG_TYPE_MAP includes all subtypes mapped to parent types
+ *          (e.g. sharp→Kinetic, heat→Energy, cold→Entropy, poison→Biochemical)
+ *        - Fixes corrupted attack_dmgtype attrs storing subtype instead of parent
  * v2.58.8: Attack buttons (Roll-With, Apply, KB) whispered to defender only
  *        - Attacker sees attack card but not action buttons
  *        - Defender (target) sees card + buttons (their roll-with choice)
  *        - GM sees everything via whisper visibility
- * v2.58.7: Fix: damage type falling through to "Other" for valid types
+ * v2.58.7: Attack buttons (Roll-With, Apply, KB) whispered to defender only
+ *        - Fix: damage type falling through to "Other" for valid types
  *        - New resolveDmgType() helper with substring fallback (e.g. "sharp kinetic" → Kinetic)
  *        - Damage result card sent to GM + defender only (attacker no longer sees target stats)
  * v2.58.6: Fix whisper visibility for GM + player sessions
@@ -668,8 +673,24 @@ MP.Engine = (function () {
   }
 
   // Resolve damage type string from attribute value or template field.
-  // Exact map match first, then substring scan for known types.
-  const DMG_TYPE_MAP = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
+  // Exact map match first, then subtype-to-parent, then substring scan.
+  const DMG_TYPE_MAP = {
+    k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic",
+    e:"Energy", eng:"Energy", energy:"Energy",
+    b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical",
+    ent:"Entropy", entropy:"Entropy",
+    p:"Psychic", psy:"Psychic", psychic:"Psychic",
+    o:"Other", oth:"Other", other:"Other",
+    // Subtypes → parent type (handles corrupted attack_dmgtype values)
+    blunt:"Kinetic", sharp:"Kinetic", sonics:"Kinetic", vibration:"Kinetic",
+    "high pressure":"Kinetic", "low pressure":"Kinetic",
+    heat:"Energy", electricity:"Energy", radiation:"Energy",
+    light:"Energy", electromagnetics:"Energy",
+    disease:"Biochemical", poison:"Biochemical", venom:"Biochemical",
+    cold:"Entropy",
+    gas:"Other", gravity:"Other", disintegration:"Other", transmutation:"Other",
+    healing:"Other", asphyxiation:"Other", drowning:"Other", time:"Other"
+  };
   function resolveDmgType(raw, fallback) {
     const t = String(raw || "").trim().toLowerCase();
     if (DMG_TYPE_MAP[t]) return DMG_TYPE_MAP[t];
@@ -6821,7 +6842,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.58.8</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.58.6</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6904,11 +6925,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.58.8:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.58.6:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.58.8 READY");
+  log("MP ENGINE v2.58.6 READY");
 });
