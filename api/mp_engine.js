@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.58.6 - 2026-03-14
+/* Mighty Protectors Roll20 API Engine v2.58.7 - 2026-03-16
+ * v2.58.7: Attack buttons (Roll-With, Apply, KB) whispered to defender only
+ *        - Attacker sees attack card but not action buttons
+ *        - Defender (target) sees card + buttons (their roll-with choice)
+ *        - GM sees everything via whisper visibility
+ *        - Fix: damage type falling through to "Other" for valid types
+ *        - New resolveDmgType() helper with substring fallback (e.g. "sharp kinetic" → Kinetic)
+ *        - Deduplicated 4 inline dmgTypeMap copies into shared helper
  * v2.58.6: Fix whisper visibility for GM + player sessions
  *        - Characters with only "ALL" controller don't receive whispers
  *        - chToChar/chToChars now always send /w gm, additionally whisper
@@ -658,6 +665,22 @@ MP.Engine = (function () {
       }
     }
     setAttr(charId, attrName, value);
+  }
+
+  // Resolve damage type string from attribute value or template field.
+  // Exact map match first, then substring scan for known types.
+  const DMG_TYPE_MAP = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
+  function resolveDmgType(raw, fallback) {
+    const t = String(raw || "").trim().toLowerCase();
+    if (DMG_TYPE_MAP[t]) return DMG_TYPE_MAP[t];
+    // Substring scan: handles compound values like "sharp kinetic"
+    if (t.includes("kinetic") || t.includes("kin")) return "Kinetic";
+    if (t.includes("energy") || t.includes("eng")) return "Energy";
+    if (t.includes("entropy") || t.includes("ent")) return "Entropy";
+    if (t.includes("psychic") || t.includes("psy")) return "Psychic";
+    if (t.includes("bio") || t.includes("biochem")) return "Biochemical";
+    if (fallback) { const fb = resolveDmgType(fallback); if (fb !== "Other") return fb; }
+    return "Other";
   }
 
   function typeToProtKey(typeStr) {
@@ -1749,9 +1772,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       abilityTohitTargeted = num(targetedObj[atkRowNum], 0);
     } catch (e) { }
     const abilityTohitBonus = abilityTohitGlobal + abilityTohitTargeted;
-    const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
-    const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
-    const dmgTypeStr = dmgTypeMap[dmgTypeRaw] || fields.type || "Other";
+    const dmgTypeStr = resolveDmgType(getAtk("attack_dmgtype") || "Kin", fields.type);
     const dmgSubtype = (getAtk("attack_subtype") || fields.subtype || "").trim().toLowerCase();
     
     const isSaveAttack = (getAtk("attack_is_save") === "1") || (atkType === "sav");
@@ -2190,7 +2211,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (CFG.GM_ONLY_BUTTONS) {
       const charTargets = [atkCharId, defChar.id];
       chToChars("MP", html, charTargets);
-      if (buttons) chToChars("MP", buttons, charTargets);
+      // Buttons only to defender (they decide roll-with); GM sees via whisper
+      if (buttons) chToChar("MP", buttons, defChar.id);
     } else {
       ch("MP", html + buttons);
     }
@@ -5298,9 +5320,7 @@ function cmdAttackInfo(msg, args) {
   const attackName = getAtk("attack_name") || "";
   const notes = getAtk("attack_notes") || "";
   const damage = getAtk("attack_damage") || "";
-  const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
-  const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
-  const dmgTypeFull = dmgTypeMap[dmgTypeRaw] || dmgTypeRaw;
+  const dmgTypeFull = resolveDmgType(getAtk("attack_dmgtype") || "Kin");
   const range = getAtk("attack_range") || "";
   const prCost = getAtk("attack_cost") || "";
   const charges = getAtk("attack_charges") || "";
@@ -6327,9 +6347,7 @@ function cmdStance(msg, args) {
       ch("MP", `${wt(msg)}⚠️ Invalid damage formula "${esc(damageRaw)}" - using 0`);
     }
     const tohitNum = num(getAtk("attack_tohit_num"), 10);
-    const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
-    const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
-    const dmgTypeFull = dmgTypeMap[dmgTypeRaw] || "Other";
+    const dmgTypeFull = resolveDmgType(getAtk("attack_dmgtype") || "Kin");
     const range = getAtk("attack_range") || "0";
     const kbDisplay = getAtk("attack_kb_display") || "No";
     const ap = getAtk("attack_ap") || "";
@@ -6471,9 +6489,7 @@ function cmdStance(msg, args) {
       ch("MP", `${wt(msg)}⚠️ Invalid damage formula "${esc(damageRaw)}" - using 0`);
     }
     const tohitNum = num(getAtk("attack_tohit_num"), 10);
-    const dmgTypeRaw = (getAtk("attack_dmgtype") || "Kin").toLowerCase();
-    const dmgTypeMap = {k:"Kinetic", kin:"Kinetic", kinetic:"Kinetic", e:"Energy", eng:"Energy", energy:"Energy", b:"Biochemical", bio:"Biochemical", biochemical:"Biochemical", ent:"Entropy", entropy:"Entropy", p:"Psychic", psy:"Psychic", psychic:"Psychic", o:"Other", oth:"Other", other:"Other"};
-    const dmgTypeFull = dmgTypeMap[dmgTypeRaw] || "Other";
+    const dmgTypeFull = resolveDmgType(getAtk("attack_dmgtype") || "Kin");
     const range = getAtk("attack_range") || "0";
     const kbDisplay = getAtk("attack_kb_display") || "No";
     const ap = getAtk("attack_ap") || "";
