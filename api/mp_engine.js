@@ -1,11 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.58.7 - 2026-03-16
- * v2.58.7: Attack buttons (Roll-With, Apply, KB) whispered to defender only
+/* Mighty Protectors Roll20 API Engine v2.58.8 - 2026-03-16
+ * v2.58.8: Attack buttons (Roll-With, Apply, KB) whispered to defender only
  *        - Attacker sees attack card but not action buttons
  *        - Defender (target) sees card + buttons (their roll-with choice)
  *        - GM sees everything via whisper visibility
- *        - Fix: damage type falling through to "Other" for valid types
+ * v2.58.7: Fix: damage type falling through to "Other" for valid types
  *        - New resolveDmgType() helper with substring fallback (e.g. "sharp kinetic" → Kinetic)
- *        - Deduplicated 4 inline dmgTypeMap copies into shared helper
+ *        - Damage result card sent to GM + defender only (attacker no longer sees target stats)
  * v2.58.6: Fix whisper visibility for GM + player sessions
  *        - Characters with only "ALL" controller don't receive whispers
  *        - chToChar/chToChars now always send /w gm, additionally whisper
@@ -3777,6 +3777,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
+    // --- Full result card (GM + defender): includes Hits/Power stats ---
     const msgLine =
       `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
       `<div style="font-weight:bold; font-size:15px; color:#fff; margin-bottom:6px;">${esc(rec.defName)}${effectNotes}</div>` +
@@ -3810,15 +3811,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       (rec.condIdx !== undefined ? `<br/>[Try Again](!mp recover --target ${rec.defTokenId} --idx ${rec.condIdx})` : "") +
       `</div>`;
 
-    chCombat("MP", msgLine, rec.defCharId, rec.atkCharId);
-    // Also send damage result to attacking player (if different from defender's player)
-    if (CFG.GM_ONLY_BUTTONS && rec.playerid && !playerIsGM(rec.playerid)) {
-      const atkTarget = wtId(rec.playerid);
-      const defPlayerId = getControllingPlayerId(rec.defCharId);
-      if (atkTarget !== "/w gm " && rec.playerid !== defPlayerId) {
-        ch("MP", atkTarget + msgLine);
-      }
-    }
+    // Damage result to GM + defender only (attacker doesn't see target stats)
+    chToChar("MP", msgLine, rec.defCharId);
     
     // Store hits taken for limb shot saves (uses actual damage including head shot doubling)
     state.MP_Engine.pending[rollId].hitsTaken = toHits;
@@ -6827,7 +6821,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.58.6</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.58.8</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6910,11 +6904,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.58.6:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.58.8:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.58.6 READY");
+  log("MP ENGINE v2.58.8 READY");
 });
