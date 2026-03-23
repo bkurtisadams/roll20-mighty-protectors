@@ -1,4 +1,13 @@
-/* Mighty Protectors Roll20 API Engine v2.58.9 - 2026-03-16
+/* Mighty Protectors Roll20 API Engine v2.59.0 - 2026-03-22
+ * v2.59.0: Force Field support (protection mode = forcefield)
+ *        - getForceFieldData() reads FF protection row: per-type values, accum, threshold
+ *        - sumProtectionWithHardened/Coverage skip forcefield rows (not passive)
+ *        - cmdApply: FF deflection pool tracking, collapse + overflow, Gas block, Gravity bypass
+ *        - cmdFFReset: renew FF (zero accum, PR cost, re-activate)
+ *        - cmdFFReinforce: saved action at collapse, overflow goes onto new field
+ *        - cmdFFToggle: !mp ff to activate/deactivate FF with PR cost and aura
+ *        - Aura2 visual: blue (>50%), yellow (25-50%), red (<25%), cleared on collapse/off
+ *        - FF indicator on damage chat card with pool status
  * v2.58.9: Subtype-to-parent mapping in resolveDmgType
  *        - DMG_TYPE_MAP includes all subtypes mapped to parent types
  *          (e.g. sharp→Kinetic, heat→Energy, cold→Entropy, poison→Biochemical)
@@ -788,6 +797,7 @@ MP.Engine = (function () {
   //   - Protection subtype matches attack subtype exactly
   //   - Protection has comma-separated subtypes and one matches
   // NOTE: Absorption, Reflection, and Ability Field rows are SKIPPED - not passive protection
+  // NOTE: Force Field rows are SKIPPED - handled separately with deflection pool
   // NOTE: Hardened is read from separate prot_hard_* fields (not parsed from protection value)
   function sumProtectionWithHardened(charId, protKey, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
@@ -832,7 +842,7 @@ MP.Engine = (function () {
       // Check mode - skip Absorption and Reflection (they require saved action)
       const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
       const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
-      if (mode === "absorption" || mode === "reflection") return;  // Skip - requires saved action
+      if (mode === "absorption" || mode === "reflection" || mode === "forcefield") return;  // Skip - not passive
       
       // Check if this is an Ability Field - skip (reactive protection, not passive)
       const afieldAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_afield`);
@@ -1032,6 +1042,7 @@ MP.Engine = (function () {
   // Returns { prot, hardened, invuln, adapt } with coverage-adjusted values
   // atkSubtype: the attack's sub-type for matching
   // NOTE: Absorption, Reflection, and Ability Field rows are SKIPPED - not passive protection
+  // NOTE: Force Field rows are SKIPPED - handled separately with deflection pool
   // NOTE: Hardened is read from separate prot_hard_* fields (not parsed from protection value)
   function sumProtectionWithCoverage(charId, protKey, isAreaEffect, atkSubtype) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
@@ -1073,10 +1084,10 @@ MP.Engine = (function () {
       const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
       if (stateAttr && stateAttr.get("current") === "Off") return;  // Skip inactive rows
       
-      // Check mode - skip Absorption and Reflection (they require saved action)
+      // Check mode - skip Absorption, Reflection, and Force Field (not passive)
       const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
       const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
-      if (mode === "absorption" || mode === "reflection") return;  // Skip - requires saved action
+      if (mode === "absorption" || mode === "reflection" || mode === "forcefield") return;  // Skip - not passive
       
       // Check if this is an Ability Field - skip (reactive protection, not passive)
       const afieldAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_afield`);
@@ -1245,6 +1256,140 @@ MP.Engine = (function () {
     return null;
   }
   
+  // Get character's active Force Field data (if they have one)
+  // Returns { hasFF, rowId, name, isGear, accum, threshold, protValues, pr } or null
+  // Force Fields are protection rows with prot_mode = "forcefield"
+  function getForceFieldData(charId, tokenId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const match = n.match(/^repeating_protection_([^_]+)_/);
+      if (match) rowIds.add(match[1]);
+    });
+    
+    for (const rowId of rowIds) {
+      // Check mode
+      const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+      const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
+      if (mode !== "forcefield") continue;
+      
+      // Check if broken
+      const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+      if (brokenAttr && brokenAttr.get("current") === "1") continue;
+      
+      // Check if active
+      const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+      if (stateAttr && stateAttr.get("current") === "Off") continue;
+      
+      const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+      const gearAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_gear`);
+      const accumAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_ff_accum`);
+      const prAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_pr`);
+      
+      const isGear = gearAttr && gearAttr.get("current") === "1";
+      const accum = num(accumAttr ? accumAttr.get("current") : "0", 0);
+      
+      // Read per-type protection values
+      const protValues = {};
+      CFG.PROT_KEYS.forEach(k => {
+        const pa = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${k}`);
+        const parsed = parseProtValue(pa ? pa.get("current") : "0");
+        protValues[k] = parsed.prot;
+      });
+      
+      // Calculate threshold
+      let threshold;
+      if (isGear) {
+        let totalProt = 0;
+        CFG.PROT_KEYS.forEach(k => { totalProt += protValues[k]; });
+        threshold = Math.floor(totalProt * 1.5);
+      } else {
+        // Use current Power
+        const tok = tokenId ? getObj("graphic", tokenId) : null;
+        threshold = tok ? getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR) :
+          num(getAttr(charId, CFG.POWER_ATTR), 0);
+      }
+      
+      // Read hardened values
+      const hardValues = {};
+      const hardKeyMap = { kinetic: "hard_kinetic", energy: "hard_energy", bio: "hard_bio",
+        entropy: "hard_entropy", psychic: "hard_psychic", other: "hard_other" };
+      CFG.PROT_KEYS.forEach(k => {
+        const hk = hardKeyMap[k];
+        if (!hk) { hardValues[k] = 0; return; }
+        const ha = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${hk}`);
+        hardValues[k] = num(ha ? ha.get("current") : "0", 0);
+      });
+      
+      // Read subtype
+      const subtypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_subtype`);
+      
+      return {
+        hasFF: true,
+        rowId: rowId,
+        name: nameAttr ? nameAttr.get("current") : "Force Field",
+        isGear: isGear,
+        accum: accum,
+        threshold: threshold,
+        remaining: Math.max(0, threshold - accum),
+        protValues: protValues,
+        hardValues: hardValues,
+        subtype: subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "",
+        pr: num(prAttr ? prAttr.get("current") : "16", 16)
+      };
+    }
+    
+    return null;
+  }
+  
+  // Update Force Field accumulated deflection on the sheet
+  function setFFAccum(charId, rowId, newAccum) {
+    const attr = findObjs({ _type: "attribute", _characterid: charId,
+      name: `repeating_protection_${rowId}_prot_ff_accum` })[0];
+    if (attr) {
+      attr.set("current", String(newAccum));
+    } else {
+      createObj("attribute", { characterid: charId,
+        name: `repeating_protection_${rowId}_prot_ff_accum`, current: String(newAccum) });
+    }
+  }
+  
+  // Update Force Field aura on token (aura2)
+  // percent: 0-1 remaining capacity ratio. null/undefined = turn off.
+  function updateFFAura(tok, percent) {
+    if (!tok) return;
+    if (percent === null || percent === undefined || percent < 0) {
+      // FF down - clear aura
+      tok.set({ aura2_radius: "", showplayers_aura2: false });
+      return;
+    }
+    // Color shifts: blue (>50%) → yellow (25-50%) → red (<25%)
+    let color;
+    if (percent > 0.5) color = "#3498db";       // blue - healthy
+    else if (percent > 0.25) color = "#f1c40f";  // yellow - warning
+    else color = "#e74c3c";                       // red - critical
+    // Radius 0 = tight to token edge; use small value for snug fit
+    tok.set({
+      aura2_radius: 1,
+      aura2_color: color,
+      aura2_square: false,
+      showplayers_aura2: true
+    });
+  }
+  
+  // Deactivate a Force Field (set state to Off) and clear aura
+  function deactivateFF(charId, rowId, tok) {
+    const attr = findObjs({ _type: "attribute", _characterid: charId,
+      name: `repeating_protection_${rowId}_prot_state` })[0];
+    if (attr) attr.set("current", "Off");
+    const onAttr = findObjs({ _type: "attribute", _characterid: charId,
+      name: `repeating_protection_${rowId}_prot_state_on` })[0];
+    if (onAttr) onAttr.set("current", "0");
+    updateFFAura(tok, null);
+  }
+
   // Cleanup old pending area effects (older than 5 minutes)
   function cleanupPendingArea() {
     const now = Date.now();
@@ -3033,6 +3178,267 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
   // -------------------------
+  // FORCE FIELD COMMANDS
+  // -------------------------
+  
+  // Reset/Renew Force Field: zeros accumulated deflection, costs action + PR
+  // Usage: !mp ffreset --target <tokenId> --row <rowId>
+  function cmdFFReset(msg, args) {
+    let tok;
+    if (args.target) {
+      tok = getObj("graphic", args.target);
+    } else {
+      tok = getSelectedToken(msg);
+    }
+    if (!tok) return ch("MP", `/w gm <b>MP:</b> Select a token or use --target.`);
+    
+    const charId = tok.get("represents");
+    if (!charId) return ch("MP", `/w gm <b>MP:</b> Token not linked to character.`);
+    const defChar = getObj("character", charId);
+    if (!defChar) return ch("MP", `/w gm <b>MP:</b> Character not found.`);
+    
+    // Find the FF row (use --row if provided, otherwise auto-find)
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    let rowId = args.row || null;
+    
+    if (!rowId) {
+      const rowIds = new Set();
+      attrs.forEach(a => {
+        const n = a.get("name");
+        const match = n.match(/^repeating_protection_([^_]+)_/);
+        if (match) rowIds.add(match[1]);
+      });
+      for (const rid of rowIds) {
+        const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rid}_prot_mode`);
+        const mode = modeAttr ? (modeAttr.get("current") || "").toLowerCase() : "";
+        if (mode !== "forcefield") continue;
+        const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rid}_prot_broken`);
+        if (brokenAttr && brokenAttr.get("current") === "1") continue;
+        rowId = rid;
+        break;
+      }
+    }
+    if (!rowId) return ch("MP", `/w gm <b>MP:</b> No Force Field found on ${esc(defChar.get("name"))}.`);
+    
+    const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+    const mode = modeAttr ? (modeAttr.get("current") || "").toLowerCase() : "";
+    if (mode !== "forcefield") return ch("MP", `/w gm <b>MP:</b> Not a Force Field row.`);
+    
+    const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+    const ffName = nameAttr ? nameAttr.get("current") : "Force Field";
+    const prAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_pr`);
+    const pr = num(prAttr ? prAttr.get("current") : "16", 16);
+    
+    // Spend PR from Power
+    const pow0 = getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    if (pow0 < pr) {
+      return ch("MP", `/w gm <b>MP:</b> ${esc(defChar.get("name"))} doesn't have enough Power (${pow0}/${pr}) to renew ${esc(ffName)}.`);
+    }
+    setResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - pr);
+    
+    // Zero accumulated deflection
+    setFFAccum(charId, rowId, 0);
+    
+    // Re-activate the field
+    const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+    if (stateAttr) stateAttr.set("current", "Active");
+    const onAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state_on`);
+    if (onAttr) onAttr.set("current", "1");
+    
+    // Recalc threshold for display
+    const gearAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_gear`);
+    const isGear = gearAttr && gearAttr.get("current") === "1";
+    let threshold;
+    if (isGear) {
+      let totalProt = 0;
+      CFG.PROT_KEYS.forEach(k => {
+        const pa = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${k}`);
+        totalProt += num(pa ? pa.get("current") : "0", 0);
+      });
+      threshold = Math.floor(totalProt * 1.5);
+    } else {
+      threshold = pow0 - pr;  // Power after spending PR
+    }
+    
+    let html = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    html += `<div style="font-weight:bold; font-size:15px; color:#3498db; margin-bottom:6px;">🛡️ ${esc(ffName)} RENEWED</div>`;
+    html += `<div style="color:#ccc;">${esc(defChar.get("name"))} spends action + PR=${pr}</div>`;
+    html += `<div style="color:#ccc;">Pool reset: 0/${threshold} (Power: ${pow0}→${pow0 - pr})</div>`;
+    html += `</div>`;
+    chToChar("MP", html, charId);
+    
+    // Turn on FF aura (full capacity = blue)
+    updateFFAura(tok, 1.0);
+  }
+  
+  // Reinforce Force Field with saved action at moment of collapse
+  // Usage: !mp ffreinforce --id <rollId>
+  function cmdFFReinforce(msg, args) {
+    const rollId = args.id;
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired or not found.`);
+    
+    const defTok = getObj("graphic", rec.defTokenId);
+    const defChar = getObj("character", rec.defCharId);
+    if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Defender not found.`);
+    
+    // Get FF data (may be deactivated already from collapse)
+    const attrs = findObjs({ _type: "attribute", _characterid: rec.defCharId }) || [];
+    
+    // Find the FF row (scan all protection rows for forcefield mode)
+    let ffRowId = null;
+    let ffName = "Force Field";
+    let ffPR = 16;
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const match = n.match(/^repeating_protection_([^_]+)_/);
+      if (match) rowIds.add(match[1]);
+    });
+    for (const rowId of rowIds) {
+      const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+      const mode = modeAttr ? (modeAttr.get("current") || "").toLowerCase() : "";
+      if (mode === "forcefield") {
+        ffRowId = rowId;
+        const na = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+        if (na) ffName = na.get("current");
+        const pa = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_pr`);
+        ffPR = num(pa ? pa.get("current") : "16", 16);
+        break;
+      }
+    }
+    if (!ffRowId) return ch("MP", `/w gm <b>MP:</b> No Force Field found on ${esc(defChar.get("name"))}.`);
+    
+    // Spend PR
+    const pow0 = getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    if (pow0 < ffPR) {
+      return ch("MP", `/w gm <b>MP:</b> Not enough Power (${pow0}/${ffPR}) to reinforce.`);
+    }
+    setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - ffPR);
+    
+    // Zero accum and re-activate
+    setFFAccum(rec.defCharId, ffRowId, 0);
+    const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${ffRowId}_prot_state`);
+    if (stateAttr) stateAttr.set("current", "Active");
+    const onAttr = attrs.find(a => a.get("name") === `repeating_protection_${ffRowId}_prot_state_on`);
+    if (onAttr) onAttr.set("current", "1");
+    
+    // The overflow damage from the collapse goes onto the new FF's deflection pool
+    // (not to Hits — the reinforcement catches it)
+    const overflowDmg = rec.ffOverflow || 0;
+    if (overflowDmg > 0) {
+      setFFAccum(rec.defCharId, ffRowId, overflowDmg);
+    }
+    
+    const newThreshold = pow0 - ffPR;  // Power-based threshold after PR
+    const remaining = Math.max(0, newThreshold - overflowDmg);
+    
+    let html = `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    html += `<div style="font-weight:bold; font-size:15px; color:#27ae60; margin-bottom:6px;">🛡️ ${esc(ffName)} REINFORCED!</div>`;
+    html += `<div style="color:#ccc;">${esc(defChar.get("name"))} uses saved action + PR=${ffPR}</div>`;
+    html += `<div style="color:#ccc;">Overflow ${overflowDmg} absorbed by new field</div>`;
+    html += `<div style="color:#ccc;">Pool: ${overflowDmg}/${newThreshold} (${remaining} left)</div>`;
+    html += `<div style="color:#ccc;">Power: ${pow0}→${pow0 - ffPR}</div>`;
+    html += `</div>`;
+    chToChar("MP", html, rec.defCharId);
+    
+    // Turn on FF aura (color based on remaining capacity)
+    updateFFAura(defTok, newThreshold > 0 ? remaining / newThreshold : 0);
+  }
+  
+  // Toggle Force Field on/off (activate or deactivate + aura)
+  // Usage: !mp ff --target <tokenId>   or   !mp ff (with token selected)
+  function cmdFFToggle(msg, args) {
+    let tok;
+    if (args.target) {
+      tok = getObj("graphic", args.target);
+    } else {
+      tok = getSelectedToken(msg);
+    }
+    if (!tok) return ch("MP", `/w gm <b>MP:</b> Select a token or use --target.`);
+    
+    const charId = tok.get("represents");
+    if (!charId) return ch("MP", `/w gm <b>MP:</b> Token not linked to character.`);
+    const defChar = getObj("character", charId);
+    if (!defChar) return ch("MP", `/w gm <b>MP:</b> Character not found.`);
+    
+    // Find the FF protection row
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const match = n.match(/^repeating_protection_([^_]+)_/);
+      if (match) rowIds.add(match[1]);
+    });
+    
+    let ffRowId = null;
+    for (const rowId of rowIds) {
+      const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+      const mode = modeAttr ? (modeAttr.get("current") || "").toLowerCase() : "";
+      if (mode !== "forcefield") continue;
+      const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+      if (brokenAttr && brokenAttr.get("current") === "1") continue;
+      ffRowId = rowId;
+      break;
+    }
+    if (!ffRowId) return ch("MP", `/w gm <b>MP:</b> No Force Field found on ${esc(defChar.get("name"))}.`);
+    
+    const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${ffRowId}_prot_name`);
+    const ffName = nameAttr ? nameAttr.get("current") : "Force Field";
+    const prAttr = attrs.find(a => a.get("name") === `repeating_protection_${ffRowId}_prot_pr`);
+    const pr = num(prAttr ? prAttr.get("current") : "16", 16);
+    const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${ffRowId}_prot_state`);
+    const currentState = stateAttr ? stateAttr.get("current") : "Off";
+    
+    if (currentState === "Active") {
+      // Turn OFF
+      deactivateFF(charId, ffRowId, tok);
+      let html = `<div style="background:#16213e; border:2px solid #888; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+      html += `<div style="font-weight:bold; font-size:15px; color:#888; margin-bottom:6px;">🛡️ ${esc(ffName)} OFF</div>`;
+      html += `<div style="color:#ccc;">${esc(defChar.get("name"))} deactivates Force Field.</div>`;
+      html += `</div>`;
+      chToChar("MP", html, charId);
+    } else {
+      // Turn ON - spend PR
+      const pow0 = getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      if (pow0 < pr) {
+        return ch("MP", `/w gm <b>MP:</b> ${esc(defChar.get("name"))} doesn't have enough Power (${pow0}/${pr}) to activate ${esc(ffName)}.`);
+      }
+      setResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - pr);
+      
+      // Reset accum and activate
+      setFFAccum(charId, ffRowId, 0);
+      if (stateAttr) stateAttr.set("current", "Active");
+      const onAttr = attrs.find(a => a.get("name") === `repeating_protection_${ffRowId}_prot_state_on`);
+      if (onAttr) onAttr.set("current", "1");
+      
+      // Calculate threshold
+      const gearAttr = attrs.find(a => a.get("name") === `repeating_protection_${ffRowId}_prot_gear`);
+      const isGear = gearAttr && gearAttr.get("current") === "1";
+      let threshold;
+      if (isGear) {
+        let totalProt = 0;
+        CFG.PROT_KEYS.forEach(k => {
+          const pa = attrs.find(a => a.get("name") === `repeating_protection_${ffRowId}_prot_${k}`);
+          totalProt += num(pa ? pa.get("current") : "0", 0);
+        });
+        threshold = Math.floor(totalProt * 1.5);
+      } else {
+        threshold = pow0 - pr;
+      }
+      
+      let html = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+      html += `<div style="font-weight:bold; font-size:15px; color:#3498db; margin-bottom:6px;">🛡️ ${esc(ffName)} ACTIVATED</div>`;
+      html += `<div style="color:#ccc;">${esc(defChar.get("name"))} spends action + PR=${pr}</div>`;
+      html += `<div style="color:#ccc;">Pool: 0/${threshold}${isGear ? " [Gear]" : ""} (Power: ${pow0}→${pow0 - pr})</div>`;
+      html += `</div>`;
+      chToChar("MP", html, charId);
+      
+      updateFFAura(tok, 1.0);
+    }
+  }
+
+  // -------------------------
   // ABILITY FIELD RESOLUTION
   // -------------------------
   
@@ -3540,15 +3946,60 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Get protection, hardened, invuln, and adapt for this damage type and subtype
     const protData = sumProtectionWithHardened(defChar.id, protKey, rec.dmgSubtype);
     let baseProt = protData.prot;
-    const hardened = protData.hardened;
+    let hardened = protData.hardened;
     const hasInvuln = protData.invuln;
     const hasAdapt = protData.adapt;
     
-    // Check if this is an 'Other' damage type for Adaptation immunity
-    const isOtherType = (damageType === "Other");
-    
     // Avoid Armor crits bypass protection entirely
     const bypassProt = mode.includes("noprot");
+    
+    // Force Field: check for active FF and add its protection
+    const ffData = getForceFieldData(defChar.id, rec.defTokenId);
+    let ffActive = false;
+    let ffProt = 0;
+    let ffHardened = 0;
+    let ffDeflected = 0;
+    let ffCollapsed = false;
+    let ffOverflow = 0;
+    let ffGasBlocked = false;
+    let ffGravityBypassed = false;
+    
+    if (ffData && !bypassProt) {
+      const atkSub = (rec.dmgSubtype || "").trim().toLowerCase();
+      
+      // Gravity attacks bypass FF entirely
+      if (atkSub === "gravity" || damageType === "Gravity") {
+        ffGravityBypassed = true;
+      }
+      // Gas attacks are completely blocked (no damage, no deflection cost)
+      else if (atkSub === "gas") {
+        ffGasBlocked = true;
+      } else {
+        ffActive = true;
+        // Get FF protection for this damage type
+        ffProt = ffData.protValues[protKey] || 0;
+        ffHardened = ffData.hardValues[protKey] || 0;
+        
+        // Add FF protection and hardened to totals
+        baseProt += ffProt;
+        hardened += ffHardened;
+      }
+    }
+    
+    // Handle Gas complete block by FF
+    if (ffGasBlocked) {
+      let html = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+      html += `<div style="font-weight:bold; font-size:15px; color:#3498db; margin-bottom:6px;">🛡️ ${esc(ffData.name)} - GAS BLOCKED</div>`;
+      html += `<div style="color:#ccc;">Gas attack completely blocked by Force Field.</div>`;
+      html += `<div style="color:#888; font-size:11px; margin-top:4px;">No damage, no deflection cost.</div>`;
+      html += `</div>`;
+      chToChar("MP", html, rec.defCharId);
+      delete state.MP_Engine.pending[rollId];
+      return;
+    }
+    
+    // Check if this is an 'Other' damage type for Adaptation immunity
+    const isOtherType = (damageType === "Other");
     
     // Get attack's Armor Piercing
     const rawAP = rec.atkAP;
@@ -3648,6 +4099,40 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Add vulnerability damage bonus
     if (vuln.dmgMod) penetrating += vuln.dmgMod;
+
+    // Force Field deflection pool tracking
+    // The amount of damage blocked by the FF accumulates. When accumulated exceeds
+    // threshold (Power for character, total prot x1.5 for Gear), field collapses.
+    // Damage that would have been blocked beyond capacity passes through.
+    if (ffActive && ffData) {
+      // How much did the FF portion actually block this hit?
+      // ffProt was added to baseProt above; figure out how much of effective prot came from FF
+      const ffBlocked = Math.min(raw, ffProt);  // Max the FF could have blocked
+      const actualDeflected = Math.min(ffBlocked, Math.max(0, raw - (baseProt - ffProt)));  // What FF actually stopped
+      
+      const newAccum = ffData.accum + actualDeflected;
+      
+      if (newAccum > ffData.threshold) {
+        // Field collapses! Only deflect up to remaining capacity
+        ffCollapsed = true;
+        const canDeflect = Math.max(0, ffData.threshold - ffData.accum);
+        ffOverflow = actualDeflected - canDeflect;
+        ffDeflected = canDeflect;
+        
+        // Reduce penetrating: add back the overflow (damage that FF couldn't block)
+        penetrating += ffOverflow;
+        
+        // Update accum to threshold and deactivate
+        setFFAccum(defChar.id, ffData.rowId, ffData.threshold);
+        deactivateFF(defChar.id, ffData.rowId, defTok);
+      } else {
+        // Field holds - update accum and aura color
+        ffDeflected = actualDeflected;
+        setFFAccum(defChar.id, ffData.rowId, newAccum);
+        const remaining = Math.max(0, ffData.threshold - newAccum);
+        updateFFAura(defTok, ffData.threshold > 0 ? remaining / ffData.threshold : 0);
+      }
+    }
 
     // Current resources
     const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
@@ -3798,18 +4283,43 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
+    // Force Field indicator
+    let ffIndicator = "";
+    let ffLine = "";
+    if (ffActive && ffData) {
+      if (ffCollapsed) {
+        ffIndicator = ` <span style="color:#e74c3c; font-weight:bold;" title="Force Field collapsed! Deflected ${ffDeflected}, overflow ${ffOverflow}">[FF DOWN]</span>`;
+        const newRemaining = 0;
+        ffLine = `<div style="color:#e74c3c; font-weight:bold; margin-top:2px; font-size:12px;">` +
+          `🛡️ ${esc(ffData.name)} COLLAPSED! Deflected ${ffDeflected}, overflow ${ffOverflow} passes through` +
+          `<br/><span style="font-weight:normal; color:#ccc;">Pool: ${ffData.accum}+${ffDeflected}=${ffData.accum + ffDeflected} / ${ffData.threshold}</span>` +
+          `<br/>[Reinforce (saved action, PR=${ffData.pr})](!mp ffreinforce --id ${rollId})` +
+          ` [Renew Later (PR=${ffData.pr})](!mp ffreset --target ${rec.defTokenId} --row ${ffData.rowId})` +
+          `</div>`;
+      } else if (ffDeflected > 0) {
+        const newAccum = ffData.accum + ffDeflected;
+        const remaining = Math.max(0, ffData.threshold - newAccum);
+        ffIndicator = ` <span style="color:#3498db;" title="Force Field deflected ${ffDeflected}, pool ${newAccum}/${ffData.threshold}">[FF:${remaining}/${ffData.threshold}]</span>`;
+        ffLine = `<div style="color:#3498db; font-size:11px; margin-top:2px;">` +
+          `🛡️ ${esc(ffData.name)}: deflected ${ffDeflected} (pool ${newAccum}/${ffData.threshold}, ${remaining} left)</div>`;
+      }
+    } else if (ffGravityBypassed && ffData) {
+      ffIndicator = ` <span style="color:#e67e22;" title="Gravity bypasses Force Field">[FF:no vs Gravity]</span>`;
+    }
+
     // --- Full result card (GM + defender): includes Hits/Power stats ---
     const msgLine =
       `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
       `<div style="font-weight:bold; font-size:15px; color:#fff; margin-bottom:6px;">${esc(rec.defName)}${effectNotes}</div>` +
       `<div style="color:#ccc; margin-bottom:4px; font-size:13px;">` +
       `<span title="Raw damage">${raw}</span>` +
-      ` - <span title="${protHover}">${protDisplay}</span> prot${apIndicator}` +
+      ` - <span title="${protHover}">${protDisplay}</span> prot${apIndicator}${ffIndicator}` +
       (hasInvuln ? ` = ${afterProt}${invulnIndicator}` : "") +
       (hasAdapt ? `${adaptIndicator}` : "") +
       ` = <span style="color:#ff6b6b; font-weight:bold;" title="Penetrating damage${(vuln && vuln.notes && vuln.notes.length) ? ('&#10;' + vuln.notes.join('&#10;')) : ''}">${penetrating} pen</span>` +
       ((vuln && vuln.notes && vuln.notes.length) ? ` <span title="${vuln.notes.join('&#10;')}" style="color:#e67e22;">[vuln]</span>` : "") +
       `</div>` +
+      ffLine +
       (divert > 0 ? `<div style="color:#ccc; margin-bottom:6px; font-size:13px;">RW <span title="Roll-with (max ${maxDivert})">${divert}</span>` +
         (isHeadShot ? ` → ${penetrating - divert} x2` : "") +
         ` → <b style="color:#ff6b6b;">${toHits}</b> to Hits` +
@@ -3839,6 +4349,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     state.MP_Engine.pending[rollId].hitsTaken = toHits;
     // Store pre-doubled hits for knockback (MP 4.14.2.1: KB is NOT doubled on head shots)
     state.MP_Engine.pending[rollId].hitsForKB = hitsForKB;
+    // Store FF overflow for reinforce command
+    if (ffCollapsed && ffOverflow > 0) {
+      state.MP_Engine.pending[rollId].ffOverflow = ffOverflow;
+    }
   }
 
   // -------------------------
@@ -6259,6 +6773,13 @@ function cmdStance(msg, args) {
       msg_out += `<br/><span style="color:#e94560;"><b>Snared:</b> ${snare.type} (BP ${snare.bp || "N/A"}) by ${snare.source}</span>`;
     }
 
+    // Force Field status
+    const ffStatus = getForceFieldData(char.id, tok.id);
+    if (ffStatus) {
+      msg_out += `<br/><span style="color:#3498db;"><b>🛡️ ${esc(ffStatus.name)}:</b> ${ffStatus.remaining}/${ffStatus.threshold} remaining (deflected ${ffStatus.accum})</span>`;
+      if (ffStatus.isGear) msg_out += ` <span style="color:#888;">[Gear]</span>`;
+    }
+
     msg_out += `</div>`;
 
     ch("MP", "/w gm " + msg_out);
@@ -6719,6 +7240,11 @@ function cmdStance(msg, args) {
       case "afcancel": return cmdAFCancel(msg, args);
       case "afcounter": return cmdAFCounter(msg, args);
 
+      // Force Field commands
+      case "ffreset": return cmdFFReset(msg, args);
+      case "ffreinforce": return cmdFFReinforce(msg, args);
+      case "ff": return cmdFFToggle(msg, args);
+
       // Round tracking
       case "round":
         if (gmOnly(msg)) return;
@@ -6842,7 +7368,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.58.9</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.59.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -6863,7 +7389,10 @@ function cmdStance(msg, args) {
           <code>!mp escape --target TOKID</code><br/>
           <code>!mp grapplebreak --target TOKID --pushdef 0|1 --pushatk 0|1</code><br/>
           <code>!mp countergrapple --target TOKID --wrestle 0|1</code><br/>
-
+          <b>Force Field:</b><br/>
+          <code>!mp ff --target TOKID</code> - Toggle FF on/off (spends PR on activate, toggles aura)<br/>
+          <code>!mp ffreset --target TOKID</code> - Renew FF (zero accum, PR cost)<br/>
+          <code>!mp ffreinforce --id ID</code> - Reinforce FF with saved action at collapse<br/>
           <code>!mp wakeup --target TOKID</code><br/>
           <code>!mp status --target TOKID</code><br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
 
@@ -6925,11 +7454,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.58.9:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.59.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.58.9 READY");
+  log("MP ENGINE v2.59.0 READY");
 });

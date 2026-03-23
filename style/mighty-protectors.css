@@ -617,6 +617,21 @@
   cursor: pointer !important;
 }
 
+/* Force Field row: hidden checkbox + conditional display */
+.charsheet input.sheet-prot-ff-flag {
+  display: none !important;
+}
+.charsheet .sheet-prot-ff-row {
+  display: none !important;
+}
+.charsheet input.sheet-prot-ff-flag:checked ~ .sheet-prot-ff-row {
+  display: flex !important;
+}
+/* Hide Absorption/Reflection fields when Force Field mode is selected */
+.charsheet input.sheet-prot-ff-flag:checked ~ .sheet-prot-absref-field {
+  display: none !important;
+}
+
 /* Ability: Active state - green */
 .charsheet .sheet-state-active-flag:checked ~ input.sheet-ability-type-ind {
   background: #2d5a2d !important;

@@ -1,4 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.22 - Vehicle 0-space fix, protection rows
+<!-- Mighty Protectors Roll20 Character Sheet v44.23 - Force Field mode in protection rows
+v44.23: - Force Field option in protection Mode dropdown (forcefield)
+        - FF settings row: Deflected accumulator, Remaining capacity (auto-calc), Gear checkbox
+        - Sheet workers: mode→ff_flag toggle, accum/power→remaining capacity recalc
+v44.22: - Vehicle 0-space fix, protection rows
 v44.21: - Roll buttons colored: Base HTH (orange), EN/AG/IN/CL Save (red), Init (cyan)
         - Defense auto-calculated = AG Save - 10 (readonly)
         - Total Cost = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + sum(system Cost column)
@@ -1121,21 +1125,23 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
         </div>
 
-        <!-- Row 4: Absorption / Reflection -->
+        <!-- Row 4: Mode / Absorption / Reflection / Force Field -->
         <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
           <div class="sheet-panel-field">
             <label>Mode:</label>
-            <select name="attr_prot_mode" title="Normal=auto-apply, Absorption/Reflection=requires saved action, 1/4 damage" style="width:90px !important;">
+            <select name="attr_prot_mode" title="Normal=auto-apply, Absorption/Reflection=requires saved action, Force Field=deflection pool" style="width:90px !important;">
               <option value="normal" selected>Normal</option>
               <option value="absorption">Absorption</option>
               <option value="reflection">Reflection</option>
+              <option value="forcefield">Force Field</option>
             </select>
           </div>
-          <div class="sheet-panel-field">
+          <input type="checkbox" name="attr_prot_ff_flag" class="sheet-prot-ff-flag" value="1" />
+          <div class="sheet-panel-field sheet-prot-absref-field">
             <label title="Maximum points (Absorption Effect / Reflection Effect limit)">Limit:</label>
             <input type="text" name="attr_prot_limit" maxlength="3" style="width:28px !important;" title="Maximum points from Absorption/Reflection Effect table" />
           </div>
-          <div class="sheet-panel-field">
+          <div class="sheet-panel-field sheet-prot-absref-field">
             <label title="Where absorbed points go (Absorption only)">Absorbs To:</label>
             <select name="attr_prot_absorbs_to" title="Where absorbed points are applied" style="width:70px !important;">
               <option value="hits" selected>Hits</option>
@@ -1149,9 +1155,25 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
               <option value="other">Other...</option>
             </select>
           </div>
-          <div class="sheet-panel-field">
+          <div class="sheet-panel-field sheet-prot-absref-field">
             <label title="Power name when Absorbs To = Other">Power:</label>
             <input type="text" name="attr_prot_absorbs_power" style="width:70px !important;" title="Power name (when Absorbs To = Other)" placeholder="Flame Aura" />
+          </div>
+        </div>
+
+        <!-- Row 4b: Force Field Settings (visible when mode=forcefield) -->
+        <input type="checkbox" name="attr_prot_ff_flag2" class="sheet-prot-ff-flag" value="1" />
+        <div class="sheet-prot-ff-row sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
+          <div class="sheet-panel-field">
+            <label style="color:#3498db;" title="Damage deflected so far (resets on renewal)">Deflected:</label>
+            <input type="text" name="attr_prot_ff_accum" value="0" maxlength="4" style="width:36px !important; color:#3498db;" title="Accumulated deflected damage" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Remaining capacity before collapse">Left:</label>
+            <input type="text" name="attr_prot_ff_remaining" value="" readonly style="width:40px !important; color:#27ae60; background:#111 !important;" title="Remaining deflection capacity (auto-calculated)" />
+          </div>
+          <div class="sheet-panel-field">
+            <label style="color:#888; font-size:9px;" title="Force Fields: PR to activate/renew. Blocks Gas. No effect vs Gravity. Gear FF threshold = total prot x1.5.">FF: blocks Gas, no vs Gravity. Gear=prot×1.5</label>
           </div>
         </div>
 
@@ -3684,6 +3706,75 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var kb = v[eventInfo.sourceAttribute] || "0";
       var update = {};
       update[rowPrefix + "_prot_kb_display"] = (kb === "1") ? "Yes" : "";
+      setAttrs(update, { silent: true });
+    });
+  });
+
+  // Protection: Mode change → set prot_ff_flag + prot_ff_flag2 for CSS toggles
+  on("change:repeating_protection:prot_mode", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_prot_mode", "");
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      var mode = (v[eventInfo.sourceAttribute] || "normal").toLowerCase();
+      var isFF = (mode === "forcefield") ? "1" : "0";
+      var update = {};
+      update[rowPrefix + "_prot_ff_flag"] = isFF;
+      update[rowPrefix + "_prot_ff_flag2"] = isFF;
+      setAttrs(update, { silent: true });
+    });
+  });
+
+  // Protection: FF accum change → recalc remaining capacity
+  on("change:repeating_protection:prot_ff_accum change:repeating_protection:prot_gear change:repeating_protection:prot_kinetic change:repeating_protection:prot_energy change:repeating_protection:prot_bio change:repeating_protection:prot_entropy change:repeating_protection:prot_psychic change:repeating_protection:prot_other change:power_score", function(eventInfo) {
+    var src = eventInfo.sourceAttribute || "";
+    var rowPrefix = "";
+    var match = src.match(/^(repeating_protection_[^_]+)/);
+    if (match) {
+      rowPrefix = match[1];
+    } else {
+      // power_score changed - update all FF rows
+      getSectionIDs("protection", function(ids) {
+        ids.forEach(function(id) {
+          var rp = "repeating_protection_" + id;
+          getAttrs([rp + "_prot_mode", rp + "_prot_ff_accum", rp + "_prot_gear",
+            rp + "_prot_kinetic", rp + "_prot_energy", rp + "_prot_bio",
+            rp + "_prot_entropy", rp + "_prot_psychic", rp + "_prot_other", "power_score"], function(v2) {
+            if ((v2[rp + "_prot_mode"] || "").toLowerCase() !== "forcefield") return;
+            var accum = parseInt(v2[rp + "_prot_ff_accum"], 10) || 0;
+            var isGear = v2[rp + "_prot_gear"] === "1";
+            var threshold;
+            if (isGear) {
+              var total = (parseInt(v2[rp + "_prot_kinetic"], 10) || 0) + (parseInt(v2[rp + "_prot_energy"], 10) || 0) +
+                (parseInt(v2[rp + "_prot_bio"], 10) || 0) + (parseInt(v2[rp + "_prot_entropy"], 10) || 0) +
+                (parseInt(v2[rp + "_prot_psychic"], 10) || 0) + (parseInt(v2[rp + "_prot_other"], 10) || 0);
+              threshold = Math.floor(total * 1.5);
+            } else {
+              threshold = parseInt(v2["power_score"], 10) || 0;
+            }
+            var u = {};
+            u[rp + "_prot_ff_remaining"] = Math.max(0, threshold - accum) + "/" + threshold;
+            setAttrs(u, { silent: true });
+          });
+        });
+      });
+      return;
+    }
+    getAttrs([rowPrefix + "_prot_mode", rowPrefix + "_prot_ff_accum", rowPrefix + "_prot_gear",
+      rowPrefix + "_prot_kinetic", rowPrefix + "_prot_energy", rowPrefix + "_prot_bio",
+      rowPrefix + "_prot_entropy", rowPrefix + "_prot_psychic", rowPrefix + "_prot_other", "power_score"], function(v) {
+      if ((v[rowPrefix + "_prot_mode"] || "").toLowerCase() !== "forcefield") return;
+      var accum = parseInt(v[rowPrefix + "_prot_ff_accum"], 10) || 0;
+      var isGear = v[rowPrefix + "_prot_gear"] === "1";
+      var threshold;
+      if (isGear) {
+        var total = (parseInt(v[rowPrefix + "_prot_kinetic"], 10) || 0) + (parseInt(v[rowPrefix + "_prot_energy"], 10) || 0) +
+          (parseInt(v[rowPrefix + "_prot_bio"], 10) || 0) + (parseInt(v[rowPrefix + "_prot_entropy"], 10) || 0) +
+          (parseInt(v[rowPrefix + "_prot_psychic"], 10) || 0) + (parseInt(v[rowPrefix + "_prot_other"], 10) || 0);
+        threshold = Math.floor(total * 1.5);
+      } else {
+        threshold = parseInt(v["power_score"], 10) || 0;
+      }
+      var update = {};
+      update[rowPrefix + "_prot_ff_remaining"] = Math.max(0, threshold - accum) + "/" + threshold;
       setAttrs(update, { silent: true });
     });
   });
