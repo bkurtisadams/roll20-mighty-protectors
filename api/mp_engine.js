@@ -1,5 +1,5 @@
-/* Mighty Protectors Roll20 API Engine v2.59.0 - 2026-03-22
- * v2.59.0: Force Field support (protection mode = forcefield)
+/* Mighty Protectors Roll20 API Engine v2.59.1 - 2026-03-22
+ * v2.59.1: Force Field support (protection mode = forcefield)
  *        - getForceFieldData() reads FF protection row: per-type values, accum, threshold
  *        - sumProtectionWithHardened/Coverage skip forcefield rows (not passive)
  *        - cmdApply: FF deflection pool tracking, collapse + overflow, Gas block, Gravity bypass
@@ -3943,26 +3943,26 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const protKey = rec.protKey;
     const damageType = rec.dmgTypeStr || "Kinetic";
     
-    // Get protection, hardened, invuln, and adapt for this damage type and subtype
+    // Get armor protection (normal rows - NOT Force Field)
     const protData = sumProtectionWithHardened(defChar.id, protKey, rec.dmgSubtype);
-    let baseProt = protData.prot;
-    let hardened = protData.hardened;
+    let armorProt = protData.prot;
+    let armorHardened = protData.hardened;
     const hasInvuln = protData.invuln;
     const hasAdapt = protData.adapt;
     
     // Avoid Armor crits bypass protection entirely
     const bypassProt = mode.includes("noprot");
     
-    // Force Field: check for active FF and add its protection
+    // ---- STEP 1: FORCE FIELD (applied first, before armor) ----
     const ffData = getForceFieldData(defChar.id, rec.defTokenId);
     let ffActive = false;
     let ffProt = 0;
-    let ffHardened = 0;
     let ffDeflected = 0;
     let ffCollapsed = false;
     let ffOverflow = 0;
     let ffGasBlocked = false;
     let ffGravityBypassed = false;
+    let afterFF = raw;  // Damage after FF, before armor
     
     if (ffData && !bypassProt) {
       const atkSub = (rec.dmgSubtype || "").trim().toLowerCase();
@@ -3976,13 +3976,33 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         ffGasBlocked = true;
       } else {
         ffActive = true;
-        // Get FF protection for this damage type
         ffProt = ffData.protValues[protKey] || 0;
-        ffHardened = ffData.hardValues[protKey] || 0;
         
-        // Add FF protection and hardened to totals
-        baseProt += ffProt;
-        hardened += ffHardened;
+        // FF protection subtracts from raw damage
+        const ffBlocked = Math.min(raw, ffProt);  // How much FF would block
+        
+        // Check deflection pool capacity
+        const newAccum = ffData.accum + ffBlocked;
+        
+        if (newAccum > ffData.threshold) {
+          // Field collapses! Only deflect up to remaining capacity
+          ffCollapsed = true;
+          const canDeflect = Math.max(0, ffData.threshold - ffData.accum);
+          ffDeflected = canDeflect;
+          ffOverflow = ffBlocked - canDeflect;
+          // Damage after FF: raw minus what FF actually blocked
+          afterFF = raw - canDeflect;
+          
+          setFFAccum(defChar.id, ffData.rowId, ffData.threshold);
+          deactivateFF(defChar.id, ffData.rowId, defTok);
+        } else {
+          // Field holds
+          ffDeflected = ffBlocked;
+          afterFF = raw - ffBlocked;
+          setFFAccum(defChar.id, ffData.rowId, newAccum);
+          const remaining = Math.max(0, ffData.threshold - newAccum);
+          updateFFAura(defTok, ffData.threshold > 0 ? remaining / ffData.threshold : 0);
+        }
       }
     }
     
@@ -3998,96 +4018,82 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return;
     }
     
-    // Check if this is an 'Other' damage type for Adaptation immunity
+    // ---- STEP 2: ARMOR (applied to damage that got through FF) ----
     const isOtherType = (damageType === "Other");
     
-    // Get attack's Armor Piercing
+    // Get attack's Armor Piercing (AP applies to armor, not FF)
     const rawAP = rec.atkAP;
     
     // Calculate effective AP after Hardened reduces it
-    // Hardened negates AP on a 1:1 basis
     let effectiveAP = 0;
     let apUsedVsHardened = 0;
     if (rawAP === Infinity) {
       effectiveAP = Infinity;
     } else if (rawAP > 0) {
-      apUsedVsHardened = Math.min(rawAP, hardened);
-      effectiveAP = Math.max(0, rawAP - hardened);
+      apUsedVsHardened = Math.min(rawAP, armorHardened);
+      effectiveAP = Math.max(0, rawAP - armorHardened);
     }
     
-    // Calculate effective protection after AP
-    let effectiveProt = baseProt;
+    // Calculate effective armor protection after AP
+    let effectiveProt = armorProt;
     let apUsedVsProt = 0;
     if (bypassProt) {
       effectiveProt = 0;
     } else if (effectiveAP === Infinity) {
       effectiveProt = 0;
-      apUsedVsProt = baseProt;
+      apUsedVsProt = armorProt;
     } else if (effectiveAP > 0) {
-      apUsedVsProt = Math.min(effectiveAP, baseProt);
-      effectiveProt = Math.max(0, baseProt - effectiveAP);
+      apUsedVsProt = Math.min(effectiveAP, armorProt);
+      effectiveProt = Math.max(0, armorProt - effectiveAP);
     }
     
-    // Calculate leftover AP (AP that exceeded protection)
-    // Leftover AP immunizes that many damage points from Invulnerability/Adaptation
+    // Calculate leftover AP (AP that exceeded armor protection)
     let leftoverAP = 0;
     if (effectiveAP === Infinity) {
       leftoverAP = Infinity;
-    } else if (effectiveAP > baseProt) {
-      leftoverAP = effectiveAP - baseProt;
+    } else if (effectiveAP > armorProt) {
+      leftoverAP = effectiveAP - armorProt;
     }
 
     // Vulnerability (opt-in via repeating abilities notes)
     const vuln = getVulnerabilityMods(defChar.id, damageType);
     if (vuln.protMod) effectiveProt = Math.max(0, effectiveProt + vuln.protMod);
     
-    // Calculate damage after protection
-    let afterProt = Math.max(0, raw - effectiveProt);
+    // Apply armor to damage after FF
+    let afterArmor = Math.max(0, afterFF - effectiveProt);
     
-    // Apply Invulnerability: 1/4 damage (rounded down)
-    // But leftover AP immunizes that many points from the reduction
-    let penetrating = afterProt;
+    // ---- STEP 3: INVULNERABILITY / ADAPTATION (applied to remainder) ----
+    let penetrating = afterArmor;
     let invulnReduction = 0;
-    let afterInvuln = afterProt;  // Track value after invuln for adaptation
-    if (hasInvuln && afterProt > 0) {
+    let afterInvuln = afterArmor;
+    if (hasInvuln && afterArmor > 0) {
       if (leftoverAP === Infinity) {
-        // All AP - Invulnerability completely bypassed
-        penetrating = afterProt;
-        afterInvuln = afterProt;
-      } else if (leftoverAP >= afterProt) {
-        // Leftover AP exceeds damage - all damage bypasses Invuln
-        penetrating = afterProt;
-        afterInvuln = afterProt;
+        penetrating = afterArmor;
+        afterInvuln = afterArmor;
+      } else if (leftoverAP >= afterArmor) {
+        penetrating = afterArmor;
+        afterInvuln = afterArmor;
       } else {
-        // Split: leftoverAP points bypass, rest takes 1/4
         const bypassedDmg = leftoverAP;
-        const reducedDmg = afterProt - leftoverAP;
+        const reducedDmg = afterArmor - leftoverAP;
         afterInvuln = Math.floor(reducedDmg / 4);
         penetrating = bypassedDmg + afterInvuln;
         invulnReduction = reducedDmg - afterInvuln;
       }
     }
     
-    // Apply Adaptation: 1/2 damage (rounded down) for active attacks
-    // 'Other' damage type: 100% immunity (no damage)
-    // Leftover AP immunizes that many points from the reduction
     let adaptReduction = 0;
     if (hasAdapt && penetrating > 0) {
       if (isOtherType) {
-        // Other damage type: complete immunity
         adaptReduction = penetrating;
         penetrating = 0;
       } else if (leftoverAP === Infinity) {
-        // All AP - Adaptation completely bypassed
         // penetrating unchanged
       } else {
-        // Calculate leftover AP after invuln consumed some
-        const leftoverAfterInvuln = Math.max(0, leftoverAP - (hasInvuln ? (afterProt - leftoverAP) : 0));
+        const leftoverAfterInvuln = Math.max(0, leftoverAP - (hasInvuln ? (afterArmor - leftoverAP) : 0));
         if (leftoverAfterInvuln >= penetrating) {
-          // Leftover AP exceeds remaining damage - all bypasses Adapt
           // penetrating unchanged
         } else {
-          // Split: leftoverAP points bypass, rest takes 1/2
           const bypassedDmg = leftoverAfterInvuln;
           const reducedDmg = penetrating - leftoverAfterInvuln;
           const afterAdapt = Math.floor(reducedDmg / 2);
@@ -4099,40 +4105,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Add vulnerability damage bonus
     if (vuln.dmgMod) penetrating += vuln.dmgMod;
-
-    // Force Field deflection pool tracking
-    // The amount of damage blocked by the FF accumulates. When accumulated exceeds
-    // threshold (Power for character, total prot x1.5 for Gear), field collapses.
-    // Damage that would have been blocked beyond capacity passes through.
-    if (ffActive && ffData) {
-      // How much did the FF portion actually block this hit?
-      // ffProt was added to baseProt above; figure out how much of effective prot came from FF
-      const ffBlocked = Math.min(raw, ffProt);  // Max the FF could have blocked
-      const actualDeflected = Math.min(ffBlocked, Math.max(0, raw - (baseProt - ffProt)));  // What FF actually stopped
-      
-      const newAccum = ffData.accum + actualDeflected;
-      
-      if (newAccum > ffData.threshold) {
-        // Field collapses! Only deflect up to remaining capacity
-        ffCollapsed = true;
-        const canDeflect = Math.max(0, ffData.threshold - ffData.accum);
-        ffOverflow = actualDeflected - canDeflect;
-        ffDeflected = canDeflect;
-        
-        // Reduce penetrating: add back the overflow (damage that FF couldn't block)
-        penetrating += ffOverflow;
-        
-        // Update accum to threshold and deactivate
-        setFFAccum(defChar.id, ffData.rowId, ffData.threshold);
-        deactivateFF(defChar.id, ffData.rowId, defTok);
-      } else {
-        // Field holds - update accum and aura color
-        ffDeflected = actualDeflected;
-        setFFAccum(defChar.id, ffData.rowId, newAccum);
-        const remaining = Math.max(0, ffData.threshold - newAccum);
-        updateFFAura(defTok, ffData.threshold > 0 ? remaining / ffData.threshold : 0);
-      }
-    }
 
     // Current resources
     const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
@@ -4218,41 +4190,42 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Build hover tooltip for protection breakdown
     let protHover = `Protection vs ${protKey}`;
-    if (rawAP > 0 || hardened > 0 || hasInvuln || hasAdapt) {
-      protHover += `&#10;Base Prot: ${Math.floor(baseProt)}`;
+    if (ffActive && ffDeflected > 0) {
+      protHover += `&#10;Force Field: ${ffProt} (deflected ${ffDeflected})`;
+      if (ffCollapsed) protHover += ` [COLLAPSED, overflow ${ffOverflow}]`;
+    }
+    protHover += `&#10;Armor: ${Math.floor(armorProt)}`;
+    if (rawAP > 0 || armorHardened > 0) {
       if (rawAP > 0) {
         protHover += `&#10;AP: ${rawAP === Infinity ? 'ALL' : rawAP}`;
-        if (hardened > 0) {
-          protHover += `&#10;Hardened: ${hardened} (negates ${apUsedVsHardened} AP)`;
+        if (armorHardened > 0) {
+          protHover += `&#10;Hardened: ${armorHardened} (negates ${apUsedVsHardened} AP)`;
           protHover += `&#10;Effective AP: ${effectiveAP === Infinity ? 'ALL' : effectiveAP}`;
         }
-        if (apUsedVsProt > 0) protHover += `&#10;AP vs Prot: -${apUsedVsProt}`;
+        if (apUsedVsProt > 0) protHover += `&#10;AP vs Armor: -${apUsedVsProt}`;
       }
-      protHover += `&#10;Effective Prot: ${Math.floor(effectiveProt)}`;
-      if (hasInvuln) {
-        protHover += `&#10;Invulnerability: 1/4 dmg vs ${damageType}`;
-        if (leftoverAP > 0) {
-          protHover += `&#10;Leftover AP: ${leftoverAP === Infinity ? 'ALL' : leftoverAP} (bypasses Invuln)`;
-        }
-        if (invulnReduction > 0) {
-          protHover += `&#10;Invuln reduced: ${afterProt - leftoverAP} → ${Math.floor((afterProt - leftoverAP) / 4)}`;
-        }
+      protHover += `&#10;Effective Armor: ${Math.floor(effectiveProt)}`;
+    }
+    if (hasInvuln) {
+      protHover += `&#10;Invulnerability: 1/4 dmg vs ${damageType}`;
+      if (leftoverAP > 0) {
+        protHover += `&#10;Leftover AP: ${leftoverAP === Infinity ? 'ALL' : leftoverAP} (bypasses Invuln)`;
       }
-      if (hasAdapt) {
-        if (isOtherType) {
-          protHover += `&#10;Adaptation: IMMUNE to ${damageType}`;
-        } else {
-          protHover += `&#10;Adaptation: 1/2 dmg vs ${damageType}`;
-        }
-        if (adaptReduction > 0) {
-          protHover += `&#10;Adapt reduced: ${adaptReduction}`;
-        }
+      if (invulnReduction > 0) {
+        protHover += `&#10;Invuln reduced: ${afterArmor - leftoverAP} → ${Math.floor((afterArmor - leftoverAP) / 4)}`;
+      }
+    }
+    if (hasAdapt) {
+      if (isOtherType) {
+        protHover += `&#10;Adaptation: IMMUNE to ${damageType}`;
+      } else {
+        protHover += `&#10;Adaptation: 1/2 dmg vs ${damageType}`;
+      }
+      if (adaptReduction > 0) {
+        protHover += `&#10;Adapt reduced: ${adaptReduction}`;
       }
     }
 
-    // Build protection display string
-    let protDisplay = `${Math.floor(effectiveProt)}`;
-    
     // Invulnerability indicator
     let invulnIndicator = "";
     if (hasInvuln && invulnReduction > 0) {
@@ -4278,7 +4251,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         apIndicator = ` <span style="color:#bd93f9;" title="Armor Piercing: ALL">[AP:∞]</span>`;
       } else if (effectiveAP > 0) {
         apIndicator = ` <span style="color:#bd93f9;" title="Effective AP after Hardened">[AP:${effectiveAP}]</span>`;
-      } else if (hardened >= rawAP) {
+      } else if (armorHardened >= rawAP) {
         apIndicator = ` <span style="color:#27ae60;" title="Hardened negated all AP">[Hrd blocked AP]</span>`;
       }
     }
@@ -4289,7 +4262,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (ffActive && ffData) {
       if (ffCollapsed) {
         ffIndicator = ` <span style="color:#e74c3c; font-weight:bold;" title="Force Field collapsed! Deflected ${ffDeflected}, overflow ${ffOverflow}">[FF DOWN]</span>`;
-        const newRemaining = 0;
         ffLine = `<div style="color:#e74c3c; font-weight:bold; margin-top:2px; font-size:12px;">` +
           `🛡️ ${esc(ffData.name)} COLLAPSED! Deflected ${ffDeflected}, overflow ${ffOverflow} passes through` +
           `<br/><span style="font-weight:normal; color:#ccc;">Pool: ${ffData.accum}+${ffDeflected}=${ffData.accum + ffDeflected} / ${ffData.threshold}</span>` +
@@ -4307,18 +4279,39 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       ffIndicator = ` <span style="color:#e67e22;" title="Gravity bypasses Force Field">[FF:no vs Gravity]</span>`;
     }
 
+    // Build damage line for chat card
+    // Format: raw [- FF = afterFF] - armor [invuln] [adapt] = pen
+    let dmgLine = `<span title="Raw damage">${raw}</span>`;
+    
+    if (ffActive && ffDeflected > 0) {
+      dmgLine += ` - <span style="color:#3498db;" title="Force Field: ${ffProt}">${ffDeflected} FF</span>`;
+      dmgLine += ` = ${afterFF}`;
+    }
+    
+    if (effectiveProt > 0 || bypassProt) {
+      dmgLine += ` - <span title="${protHover}">${Math.floor(effectiveProt)}</span> armor${apIndicator}`;
+    }
+    
+    if (hasInvuln && invulnReduction > 0) {
+      dmgLine += ` = ${afterArmor}${invulnIndicator}`;
+    } else if (hasInvuln && leftoverAP > 0) {
+      dmgLine += `${invulnIndicator}`;
+    }
+    
+    if (hasAdapt) {
+      dmgLine += `${adaptIndicator}`;
+    }
+    
+    dmgLine += ` = <span style="color:#ff6b6b; font-weight:bold;" title="Penetrating damage${(vuln && vuln.notes && vuln.notes.length) ? ('&#10;' + vuln.notes.join('&#10;')) : ''}">${penetrating} pen</span>`;
+    if (vuln && vuln.notes && vuln.notes.length) {
+      dmgLine += ` <span title="${vuln.notes.join('&#10;')}" style="color:#e67e22;">[vuln]</span>`;
+    }
+
     // --- Full result card (GM + defender): includes Hits/Power stats ---
     const msgLine =
       `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
       `<div style="font-weight:bold; font-size:15px; color:#fff; margin-bottom:6px;">${esc(rec.defName)}${effectNotes}</div>` +
-      `<div style="color:#ccc; margin-bottom:4px; font-size:13px;">` +
-      `<span title="Raw damage">${raw}</span>` +
-      ` - <span title="${protHover}">${protDisplay}</span> prot${apIndicator}${ffIndicator}` +
-      (hasInvuln ? ` = ${afterProt}${invulnIndicator}` : "") +
-      (hasAdapt ? `${adaptIndicator}` : "") +
-      ` = <span style="color:#ff6b6b; font-weight:bold;" title="Penetrating damage${(vuln && vuln.notes && vuln.notes.length) ? ('&#10;' + vuln.notes.join('&#10;')) : ''}">${penetrating} pen</span>` +
-      ((vuln && vuln.notes && vuln.notes.length) ? ` <span title="${vuln.notes.join('&#10;')}" style="color:#e67e22;">[vuln]</span>` : "") +
-      `</div>` +
+      `<div style="color:#ccc; margin-bottom:4px; font-size:13px;">${dmgLine}</div>` +
       ffLine +
       (divert > 0 ? `<div style="color:#ccc; margin-bottom:6px; font-size:13px;">RW <span title="Roll-with (max ${maxDivert})">${divert}</span>` +
         (isHeadShot ? ` → ${penetrating - divert} x2` : "") +
@@ -7454,11 +7447,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.59.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.59.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.59.0 READY");
+  log("MP ENGINE v2.59.1 READY");
 });
