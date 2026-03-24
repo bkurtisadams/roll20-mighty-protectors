@@ -4281,7 +4281,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     return parts.join("+");
   }
 
-  function calcVehicle() {
+  function calcVehicle(resetCurrent) {
     getAttrs(["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver"], function(v) {
       var bcp = v.vehicle_base_cp || "15";
       var row = vehicleSizeTable[bcp];
@@ -4332,7 +4332,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_profile: "x" + profile,
         vehicle_st: st,
         vehicle_en: en,
-        vehicle_hits: hits,
         vehicle_hits_max: hits,
         vehicle_en_save: enSave,
         vehicle_ag_save: agSave,
@@ -4340,7 +4339,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_cl_save: clSave,
         vehicle_handling: handling,
         vehicle_defense: agSave - 10,
-        vehicle_power: power,
         vehicle_power_max: power,
         vehicle_turn_rate: turnRate,
         vehicle_explosion: explosion,
@@ -4352,11 +4350,33 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_hth: hthVal,
         vehicle_hth_roll: makeRollable(hthVal)
       }, {silent: true});
+
+      // Only set current hits/power if they haven't been set yet or vehicle size changed
+      if (resetCurrent) {
+        setAttrs({ vehicle_hits: hits, vehicle_power: power }, {silent: true});
+      } else {
+        getAttrs(["vehicle_hits","vehicle_power"], function(cur) {
+          var curH = cur.vehicle_hits;
+          var curP = cur.vehicle_power;
+          var updates = {};
+          if (curH === undefined || curH === "" || curH === null) updates.vehicle_hits = hits;
+          if (curP === undefined || curP === "" || curP === null) updates.vehicle_power = power;
+          if (Object.keys(updates).length > 0) setAttrs(updates, {silent: true});
+        });
+      }
     });
   }
 
-  on("change:vehicle_base_cp change:vehicle_ag change:vehicle_in change:vehicle_cl change:vehicle_hilotech change:vehicle_maneuver change:vehicle_wontexplode", function() { calcVehicle(); recalcAllVehSystems(); calcVehicleTotals(); });
-  on("sheet:opened", function() { calcVehicle(); calcVehicleTotals(); recalcAllVehSystems(); });
+  on("change:vehicle_base_cp change:vehicle_ag change:vehicle_in change:vehicle_cl change:vehicle_hilotech change:vehicle_maneuver change:vehicle_wontexplode", function(eventInfo) {
+    // When base CP changes, reset hits/power to new max (vehicle rebuilt)
+    if (eventInfo && eventInfo.sourceAttribute === "vehicle_base_cp") {
+      calcVehicle(true);
+    } else {
+      calcVehicle(false);
+    }
+    recalcAllVehSystems(); calcVehicleTotals();
+  });
+  on("sheet:opened", function() { calcVehicle(false); calcVehicleTotals(); recalcAllVehSystems(); });
 
   // Helper: find best matching key from sorted table keys
   function findBestKey(spaces) {
