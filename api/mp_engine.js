@@ -1,5 +1,21 @@
-/* Mighty Protectors Roll20 API Engine v2.59.1 - 2026-03-22
- * v2.59.1: Force Field support (protection mode = forcefield)
+/* Mighty Protectors Roll20 API Engine v2.60.0 - 2026-03-23
+ * v2.60.0: Vehicle combat integration
+ *        - isVehicleMode() detects vehicle_mode checkbox on defender/attacker
+ *        - Vehicle targets use vehicle_hits/vehicle_power instead of character hits/power
+ *        - Vehicle base armor from vehicle_armor_kinetic/energy/biochem/entropy/psychic
+ *        - Additional vehicle protection from repeating_vehprotection rows (invuln/adapt/hardened)
+ *        - FF/Absorption/Reflection from character repeating_protection rows (shared)
+ *        - Vehicles cannot roll-with (buttons suppressed, divert always 0)
+ *        - No overflow to Power, no unconsciousness, no head/limb shots on vehicles
+ *        - VEHICLE INCAPACITATED at 0 Hits, explosion warning when below 0
+ *        - Vehicle-aware: cmdApply, cmdAreaDamageAll, cmdAbsorb, cmdReflect, cmdReflectHit
+ *        - Vehicle-aware: cmdAFCounter, cmdSave, cmdStatus, cmdRestore, cmdWakeup
+ *        - Vehicle-aware: cmdKnockback (vehicle mass), cmdKBSave (vehicle AG save)
+ *        - Vehicle-aware: FF toggle/reset/reinforce (vehicle Power for PR costs)
+ *        - Vehicle-aware: attacker PR/push Power deduction, testHeal, squeeze buttons
+ *        - buildStandardAttackButtons/AfterAF: Apply-only for vehicles, skip limb shots
+ *        - buildSaveAttackButtons: skip roll-with option for vehicle defenders
+ * v2.59.0: Force Field support (protection mode = forcefield)
  *        - getForceFieldData() reads FF protection row: per-type values, accum, threshold
  *        - sumProtectionWithHardened/Coverage skip forcefield rows (not passive)
  *        - cmdApply: FF deflection pool tracking, collapse + overflow, Gas block, Gravity bypass
@@ -279,7 +295,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.42 FILE STARTING");
+log("MP ENGINE v2.60 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -318,6 +334,76 @@ MP.Engine = (function () {
     // Snare stacking bonus per additional hit
     SNARE_STACK_BONUS: 2
   };
+
+  // Vehicle mode detection
+  function isVehicleMode(charId) {
+    const v = getAttr(charId, "vehicle_mode");
+    return v === "on" || v === "1" || v === 1;
+  }
+
+  // Vehicle resource helpers
+  // Dedicated vehicle tokens have bar2→vehicle_hits, bar1→vehicle_power
+  // Uses same getResource/setResource pattern as characters
+  function getVehicleHits(tok, charId) {
+    return getResource(tok, charId, CFG.HITS_BAR, "vehicle_hits");
+  }
+  function setVehicleHits(tok, charId, val) {
+    setResource(tok, charId, CFG.HITS_BAR, "vehicle_hits", val);
+  }
+  function getVehiclePower(tok, charId) {
+    return getResource(tok, charId, CFG.POWER_BAR, "vehicle_power");
+  }
+  function setVehiclePower(tok, charId, val) {
+    setResource(tok, charId, CFG.POWER_BAR, "vehicle_power", val);
+  }
+
+  // Vehicle base armor + repeating_vehprotection rows
+  function getVehicleProtection(charId, protKey) {
+    // Map protKey to vehicle armor attr
+    const armorMap = {
+      kinetic: "vehicle_armor_kinetic",
+      energy: "vehicle_armor_energy",
+      bio: "vehicle_armor_biochem",
+      entropy: "vehicle_armor_entropy",
+      psychic: "vehicle_armor_psychic",
+      other: "vehicle_armor_kinetic"  // Default to kinetic for "other"
+    };
+    let totalProt = getAttrNum(charId, armorMap[protKey] || armorMap.kinetic, 3);
+    let totalHardened = 0;
+    let hasInvuln = false;
+    let hasAdapt = false;
+
+    // Read repeating_vehprotection rows
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const m = a.get("name").match(/^repeating_vehprotection_([^_]+)_/);
+      if (m) rowIds.add(m[1]);
+    });
+
+    const hardKeyMap = {
+      kinetic: "hard_kinetic", energy: "hard_energy", bio: "hard_bio",
+      entropy: "hard_entropy", psychic: "hard_psychic", other: "hard_other"
+    };
+    const hardKey = hardKeyMap[protKey] || null;
+
+    rowIds.forEach(rowId => {
+      const protAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_${protKey}`);
+      if (!protAttr) return;
+      const protValue = protAttr.get("current");
+      if (!protValue || protValue === "0" || protValue === "") return;
+      const parsed = parseProtValue(protValue);
+      totalProt += parsed.prot;
+      if (parsed.invuln) hasInvuln = true;
+      if (parsed.adapt) hasAdapt = true;
+      if (hardKey) {
+        const ha = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_${hardKey}`);
+        if (ha) totalHardened += (parseInt(ha.get("current"), 10) || 0);
+      }
+    });
+
+    return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln, adapt: hasAdapt };
+  }
 
   // Critical hit types
   const CRIT_TYPES = {
@@ -652,11 +738,12 @@ MP.Engine = (function () {
   }
 
   function setAttr(charId, name, value) {
+    const strVal = String(value);
     let a = findObjs({ _type: "attribute", _characterid: charId, name: name })[0];
     if (!a) {
-      a = createObj("attribute", { _characterid: charId, name: name, current: value });
+      a = createObj("attribute", { _characterid: charId, name: name, current: strVal });
     } else {
-      a.set("current", value);
+      a.set("current", strVal);
     }
   }
 
@@ -1306,10 +1393,14 @@ MP.Engine = (function () {
         CFG.PROT_KEYS.forEach(k => { totalProt += protValues[k]; });
         threshold = Math.floor(totalProt * 1.5);
       } else {
-        // Use current Power
+        // Use current Power (vehicle or character)
         const tok = tokenId ? getObj("graphic", tokenId) : null;
-        threshold = tok ? getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR) :
-          num(getAttr(charId, CFG.POWER_ATTR), 0);
+        if (isVehicleMode(charId)) {
+          threshold = getVehiclePower(tok, charId);
+        } else {
+          threshold = tok ? getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR) :
+            num(getAttr(charId, CFG.POWER_ATTR), 0);
+        }
       }
       
       // Read hardened values
@@ -1914,7 +2005,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rawAtkType = getAtk("attack_atk");
     const weaponName = getAtk("attack_name") || fields.name || "Attack";
     const atkName = atkChar.get("name") + " - " + weaponName;
-    const defName = defChar.get("name");
+    const defIsVehName = isVehicleMode(defChar.id);
+    const defName = defIsVehName
+      ? ("Vehicle: " + (getAttr(defChar.id, "vehicle_name") || defChar.get("name")))
+      : defChar.get("name");
 
     const atkTypeCode = rawAtkType || "P";
     
@@ -2049,14 +2143,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let prDeducted = 0;
     let totalPowerCost = 0;
     if (atkTok) {
-      const atkPow0 = getResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      const atkIsVeh = isVehicleMode(atkCharId);
+      const atkPow0 = atkIsVeh ? getVehiclePower(atkTok, atkCharId) : getResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
       if (isPushing) totalPowerCost += pushAmount;
       if (atkPR > 0) {
         prDeducted = Math.min(atkPR, Math.max(0, atkPow0 - (isPushing ? pushAmount : 0)));
         totalPowerCost += atkPR;
       }
       if (totalPowerCost > 0) {
-        setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - totalPowerCost));
+        if (atkIsVeh) {
+          setVehiclePower(atkTok, atkCharId, Math.max(0, atkPow0 - totalPowerCost));
+        } else {
+          setResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, atkPow0 - totalPowerCost));
+        }
       }
     }
 
@@ -2315,8 +2414,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
       if (critResult.type === CRIT_TYPES.OFF_BALANCE) html += applyOffBalance(defTok, defName);
       if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
-        const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-        setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, hits0 - 1));
+        const msDefIsVeh = isVehicleMode(defChar.id);
+        const hits0 = msDefIsVeh ? getVehicleHits(defTok, defChar.id) : getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+        if (msDefIsVeh) {
+          setVehicleHits(defTok, defChar.id, Math.max(0, hits0 - 1));
+        } else {
+          setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, hits0 - 1));
+        }
         html += `<div style="color:#ff6b6b; font-size:11px; padding:0 10px;"><b>${esc(defName)}</b> takes 1 Hit (muscle strain)! Hits: ${hits0}→${hits0-1}</div>`;
       }
     }
@@ -2718,7 +2822,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
       
       const raw = areaRec.damage;
-      const protData = sumProtectionWithCoverage(tokData.charId, areaRec.protKey, true, areaRec.dmgSubtype);
+      const tokIsVehicle = isVehicleMode(tokData.charId);
+      const protData = tokIsVehicle
+        ? getVehicleProtection(tokData.charId, areaRec.protKey)
+        : sumProtectionWithCoverage(tokData.charId, areaRec.protKey, true, areaRec.dmgSubtype);
       const baseProt = protData.prot;
       const hardened = protData.hardened;
       const hasInvuln = protData.invuln;
@@ -2772,22 +2879,26 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
       
       // Apply damage to Hits
-      const hits0 = getResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR);
-      const pow0 = getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      const hits0 = tokIsVehicle ? getVehicleHits(tok, tokData.charId) : getResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR);
+      const pow0 = tokIsVehicle ? getVehiclePower(tok, tokData.charId) : getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
       
       const toHits = penetrating;
       const hitsAfterDmg = Math.max(0, hits0 - toHits);
-      const overflow = Math.max(0, toHits - hits0);
-      const pow1 = Math.max(0, pow0 - overflow);
+      const overflow = tokIsVehicle ? 0 : Math.max(0, toHits - hits0);
+      const pow1 = tokIsVehicle ? pow0 : Math.max(0, pow0 - overflow);
       const hits1 = hitsAfterDmg;
       
-      setResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-      setResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+      if (tokIsVehicle) {
+        setVehicleHits(tok, tokData.charId, hits1);
+      } else {
+        setResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+        setResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+      }
       
       // Status effects
-      // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
-      const hasPainResistance = (num(getAttr(tokData.charId, "willpower_pain_resistance"), 0) === 1);
-      const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+      // Vehicles: incapacitated at 0, no unconsciousness
+      const hasPainResistance = tokIsVehicle ? true : (num(getAttr(tokData.charId, "willpower_pain_resistance"), 0) === 1);
+      const unconscious = !tokIsVehicle && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
       const incapacitated = (hits1 === 0);
       
       let statusNote = "";
@@ -2861,14 +2972,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const excess = absRef.limit > 0 ? Math.max(0, rawDamage - absRef.limit) : 0;
     
     // Get current Hits and Power
-    const hits0 = getResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const pow0 = getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const absDefIsVeh = isVehicleMode(rec.defCharId);
+    const hits0 = absDefIsVeh ? getVehicleHits(defTok, rec.defCharId) : getResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = absDefIsVeh ? getVehiclePower(defTok, rec.defCharId) : getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
     
     // Apply 1/4 damage to Hits first
     const toHits = quarterDamage;
     const hitsAfterDmg = Math.max(0, hits0 - toHits);
-    const overflow = Math.max(0, toHits - hits0);
-    const powAfterDmg = Math.max(0, pow0 - overflow);
+    const overflow = absDefIsVeh ? 0 : Math.max(0, toHits - hits0);
+    const powAfterDmg = absDefIsVeh ? pow0 : Math.max(0, pow0 - overflow);
     
     // Determine absorption target
     const absorbsTo = absRef.absorbsTo;
@@ -2914,8 +3026,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     // Apply Hits/Power changes
-    setResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-    setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    if (absDefIsVeh) {
+      setVehicleHits(defTok, rec.defCharId, hits1);
+      setVehiclePower(defTok, rec.defCharId, pow1);
+    } else {
+      setResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    }
     
     // Create absorption effect for BC stats and Other powers
     if (createEffect) {
@@ -3011,22 +3128,26 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const excess = absRef.limit > 0 ? Math.max(0, rawDamage - absRef.limit) : 0;
     
     // Apply 1/4 damage to Hits
-    const hits0 = getResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const pow0 = getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const refDefIsVeh = isVehicleMode(rec.defCharId);
+    const hits0 = refDefIsVeh ? getVehicleHits(defTok, rec.defCharId) : getResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = refDefIsVeh ? getVehiclePower(defTok, rec.defCharId) : getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
     
     const toHits = quarterDamage;
     const hitsAfterDmg = Math.max(0, hits0 - toHits);
-    const overflow = Math.max(0, toHits - hits0);
-    const pow1 = Math.max(0, pow0 - overflow);
+    const overflow = refDefIsVeh ? 0 : Math.max(0, toHits - hits0);
+    const pow1 = refDefIsVeh ? pow0 : Math.max(0, pow0 - overflow);
     const hits1 = hitsAfterDmg;
     
-    setResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-    setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    if (refDefIsVeh) {
+      setVehicleHits(defTok, rec.defCharId, hits1);
+    } else {
+      setResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    }
     
     // Status effects
-    // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
-    const hasPainResistance = (num(getAttr(rec.defCharId, "willpower_pain_resistance"), 0) === 1);
-    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    const hasPainResistance = refDefIsVeh ? true : (num(getAttr(rec.defCharId, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !refDefIsVeh && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
     
     if (incapacitated) defTok.set("status_dead", true);
@@ -3111,7 +3232,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const targetName = targetChar.get("name");
     
     // Get target's protection
-    const protData = sumProtectionWithHardened(targetCharId, rec.protKey, rec.dmgSubtype);
+    const rhTargetIsVeh = isVehicleMode(targetCharId);
+    const protData = rhTargetIsVeh
+      ? getVehicleProtection(targetCharId, rec.protKey)
+      : sumProtectionWithHardened(targetCharId, rec.protKey, rec.dmgSubtype);
     const prot = protData.prot;
     const hasInvuln = protData.invuln;
     const hasAdapt = protData.adapt;
@@ -3135,22 +3259,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     // Apply damage
-    const hits0 = getResource(targetTok, targetCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const pow0 = getResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const hits0 = rhTargetIsVeh ? getVehicleHits(targetTok, targetCharId) : getResource(targetTok, targetCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = rhTargetIsVeh ? getVehiclePower(targetTok, targetCharId) : getResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
     
     const toHits = penetrating;
     const hitsAfterDmg = Math.max(0, hits0 - toHits);
-    const overflow = Math.max(0, toHits - hits0);
-    const pow1 = Math.max(0, pow0 - overflow);
+    const overflow = rhTargetIsVeh ? 0 : Math.max(0, toHits - hits0);
+    const pow1 = rhTargetIsVeh ? pow0 : Math.max(0, pow0 - overflow);
     const hits1 = hitsAfterDmg;
     
-    setResource(targetTok, targetCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-    setResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    if (rhTargetIsVeh) {
+      setVehicleHits(targetTok, targetCharId, hits1);
+    } else {
+      setResource(targetTok, targetCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      setResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    }
     
     // Status effects
-    // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
-    const hasPainResistance = (num(getAttr(targetCharId, "willpower_pain_resistance"), 0) === 1);
-    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    const hasPainResistance = rhTargetIsVeh ? true : (num(getAttr(targetCharId, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !rhTargetIsVeh && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
     
     if (incapacitated) targetTok.set("status_dead", true);
@@ -3230,11 +3357,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const pr = num(prAttr ? prAttr.get("current") : "16", 16);
     
     // Spend PR from Power
-    const pow0 = getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const ffResIsVeh = isVehicleMode(charId);
+    const pow0 = ffResIsVeh ? getVehiclePower(tok, charId) : getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
     if (pow0 < pr) {
       return ch("MP", `/w gm <b>MP:</b> ${esc(defChar.get("name"))} doesn't have enough Power (${pow0}/${pr}) to renew ${esc(ffName)}.`);
     }
-    setResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - pr);
+    if (ffResIsVeh) {
+      setVehiclePower(tok, charId, pow0 - pr);
+    } else {
+      setResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - pr);
+    }
     
     // Zero accumulated deflection
     setFFAccum(charId, rowId, 0);
@@ -3310,11 +3442,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!ffRowId) return ch("MP", `/w gm <b>MP:</b> No Force Field found on ${esc(defChar.get("name"))}.`);
     
     // Spend PR
-    const pow0 = getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const ffReinIsVeh = isVehicleMode(rec.defCharId);
+    const pow0 = ffReinIsVeh ? getVehiclePower(defTok, rec.defCharId) : getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
     if (pow0 < ffPR) {
       return ch("MP", `/w gm <b>MP:</b> Not enough Power (${pow0}/${ffPR}) to reinforce.`);
     }
-    setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - ffPR);
+    if (ffReinIsVeh) {
+      setVehiclePower(defTok, rec.defCharId, pow0 - ffPR);
+    } else {
+      setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - ffPR);
+    }
     
     // Zero accum and re-activate
     setFFAccum(rec.defCharId, ffRowId, 0);
@@ -3400,11 +3537,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       chToChar("MP", html, charId);
     } else {
       // Turn ON - spend PR
-      const pow0 = getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      const ffTogIsVeh = isVehicleMode(charId);
+      const pow0 = ffTogIsVeh ? getVehiclePower(tok, charId) : getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
       if (pow0 < pr) {
         return ch("MP", `/w gm <b>MP:</b> ${esc(defChar.get("name"))} doesn't have enough Power (${pow0}/${pr}) to activate ${esc(ffName)}.`);
       }
-      setResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - pr);
+      if (ffTogIsVeh) {
+        setVehiclePower(tok, charId, pow0 - pr);
+      } else {
+        setResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - pr);
+      }
       
       // Reset accum and activate
       setFFAccum(charId, ffRowId, 0);
@@ -3615,7 +3757,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkName = atkChar.get("name");
     
     // Get attacker's protection
-    const protData = sumProtectionWithHardened(rec.atkCharId, rec.protKey, "");
+    const afcAtkIsVeh = isVehicleMode(rec.atkCharId);
+    const protData = afcAtkIsVeh
+      ? getVehicleProtection(rec.atkCharId, rec.protKey)
+      : sumProtectionWithHardened(rec.atkCharId, rec.protKey, "");
     const prot = protData.prot;
     const hasInvuln = protData.invuln;
     const hasAdapt = protData.adapt;
@@ -3632,24 +3777,28 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       else afterProt = Math.floor(afterProt / 2);
     }
     
-    // Roll-with
-    const hits0 = getResource(atkTok, rec.atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const pow0 = getResource(atkTok, rec.atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const maxRW = Math.floor(pow0 / 10);
-    const actualRW = Math.min(rwAmt, maxRW, afterProt);
+    // Roll-with (vehicles cannot roll-with)
+    const hits0 = afcAtkIsVeh ? getVehicleHits(atkTok, rec.atkCharId) : getResource(atkTok, rec.atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = afcAtkIsVeh ? getVehiclePower(atkTok, rec.atkCharId) : getResource(atkTok, rec.atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const maxRW = afcAtkIsVeh ? 0 : Math.floor(pow0 / 10);
+    const actualRW = afcAtkIsVeh ? 0 : Math.min(rwAmt, maxRW, afterProt);
     
     const toHits = Math.max(0, afterProt - actualRW);
     const toPower = actualRW;
     
     const hits1 = Math.max(0, hits0 - toHits);
-    const pow1 = Math.max(0, pow0 - toPower);
+    const pow1 = afcAtkIsVeh ? pow0 : Math.max(0, pow0 - toPower);
     
-    setResource(atkTok, rec.atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-    setResource(atkTok, rec.atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    if (afcAtkIsVeh) {
+      setVehicleHits(atkTok, rec.atkCharId, hits1);
+    } else {
+      setResource(atkTok, rec.atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      setResource(atkTok, rec.atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    }
     
     // Check for KO
-    const hasPainResistance = (num(getAttr(rec.atkCharId, "willpower_pain_resistance"), 0) === 1);
-    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    const hasPainResistance = afcAtkIsVeh ? true : (num(getAttr(rec.atkCharId, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !afcAtkIsVeh && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
     
     if (incapacitated) atkTok.set("status_dead", true);
@@ -3694,8 +3843,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const critType = critResult ? critResult.type : null;
     let buttons = "";
     
+    // Vehicle targets: no roll-with, no head shot, no limb shots
+    const defIsVeh = rec && rec.defCharId && isVehicleMode(rec.defCharId);
+    
     // Check if defender has Protected Brain (negates head shots)
-    const hasProtectedBrain = rec && rec.defCharId && 
+    const hasProtectedBrain = !defIsVeh && rec && rec.defCharId && 
       (num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1);
     
     const isHeadShot = rec && rec.isHeadShot;
@@ -3704,7 +3856,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isAvoidArmor = rec && rec.isAvoidArmor;
     const isGearShot = rec && rec.isGearShot;
     
-    if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
+    if (defIsVeh) {
+      // Vehicles: Apply only, no roll-with options
+      if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
+        buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot)`;
+      } else if (critType === CRIT_TYPES.SOLID_HIT) {
+        buttons = `[Apply (+3 Solid)](!mp apply --id ${rollId} --mode solid)`;
+      } else {
+        buttons = `[Apply](!mp apply --id ${rollId} --mode noroll)`;
+      }
+    } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
       buttons = `[Apply (Head Shot)](!mp apply --id ${rollId} --mode headshot) `;
       buttons += `[RW + Head Shot](!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0})`;
     } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && hasProtectedBrain) {
@@ -3733,8 +3894,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       buttons += ` [KB](!mp kb --id ${rollId})`;
     }
     
-    // Check for Absorption or Reflection
-    if (rec && rec.defCharId && rec.protKey) {
+    // Check for Absorption or Reflection (not for vehicles)
+    if (!defIsVeh && rec && rec.defCharId && rec.protKey) {
       const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
       if (absRef) {
         if (absRef.mode === "absorption") {
@@ -3749,12 +3910,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
     
-    if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
-      buttons += `<br/>[Leg Shot Saves](!mp limbsave --id ${rollId} --limb leg)`;
-    } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
-      buttons += `<br/>[Arm Shot Saves](!mp limbsave --id ${rollId} --limb arm)`;
-    } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
-      buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+    if (!defIsVeh) {
+      if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
+        buttons += `<br/>[Leg Shot Saves](!mp limbsave --id ${rollId} --limb leg)`;
+      } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
+        buttons += `<br/>[Arm Shot Saves](!mp limbsave --id ${rollId} --limb arm)`;
+      } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
+        buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+      }
     }
     
     if (isGearShot) {
@@ -3772,8 +3935,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const critType = critResult ? critResult.type : null;
     let buttons = "";
     
-    // Check if defender has an active Ability Field
-    if (rec && rec.defCharId) {
+    // Vehicle target detection
+    const defIsVeh = rec && rec.defCharId && isVehicleMode(rec.defCharId);
+    
+    // Check if defender has an active Ability Field (not for vehicles)
+    if (!defIsVeh && rec && rec.defCharId) {
       const afData = getAbilityFieldData(rec.defCharId);
       if (afData) {
         // Target has an active Ability Field - show attack type selection buttons
@@ -3794,7 +3960,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     // Check if defender has Protected Brain (negates head shots)
-    const hasProtectedBrain = rec && rec.defCharId && 
+    const hasProtectedBrain = !defIsVeh && rec && rec.defCharId && 
       (num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1);
     
     // Called shot info from pending record
@@ -3804,9 +3970,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isAvoidArmor = rec && rec.isAvoidArmor;
     const isGearShot = rec && rec.isGearShot;
     
-    // Determine which apply mode to use based on crit type AND called shot type
-    // Head shots: crit OR deliberate called shot (both double damage)
-    if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
+    if (defIsVeh) {
+      // Vehicles: Apply only, no roll-with options
+      if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
+        buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot)`;
+      } else if (critType === CRIT_TYPES.SOLID_HIT) {
+        buttons = `[Apply (+3 Solid)](!mp apply --id ${rollId} --mode solid)`;
+      } else {
+        buttons = `[Apply](!mp apply --id ${rollId} --mode noroll)`;
+      }
+    } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
       // Head shot: apply damage then double after prot/roll-with
       buttons = `[Apply (Head Shot)](!mp apply --id ${rollId} --mode headshot) `;
       buttons += `[RW + Head Shot](!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0})`;
@@ -3841,8 +4014,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       buttons += ` [KB](!mp kb --id ${rollId})`;
     }
     
-    // Check for Absorption or Reflection (requires saved action)
-    if (rec && rec.defCharId && rec.protKey) {
+    // Check for Absorption or Reflection (requires saved action, not for vehicles)
+    if (!defIsVeh && rec && rec.defCharId && rec.protKey) {
       const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
       if (absRef) {
         if (absRef.mode === "absorption") {
@@ -3857,13 +4030,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
     
-    // Add limb shot saves if applicable (crit OR deliberate called shot)
-    if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
-      buttons += `<br/>[Leg Shot Saves](!mp limbsave --id ${rollId} --limb leg)`;
-    } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
-      buttons += `<br/>[Arm Shot Saves](!mp limbsave --id ${rollId} --limb arm)`;
-    } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
-      buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+    // Add limb shot saves if applicable (crit OR deliberate called shot) - not for vehicles
+    if (!defIsVeh) {
+      if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
+        buttons += `<br/>[Leg Shot Saves](!mp limbsave --id ${rollId} --limb leg)`;
+      } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
+        buttons += `<br/>[Arm Shot Saves](!mp limbsave --id ${rollId} --limb arm)`;
+      } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
+        buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+      }
     }
     
     // Gear shot info
@@ -3892,8 +4067,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       modLabel = ` (${totalMod > 0 ? '+' : ''}${totalMod})`;
     }
     
+    // Check if defender is a vehicle (no roll-with)
+    const saveRec = state.MP_Engine.pending[rollId];
+    const saveDefIsVeh = saveRec && saveRec.defCharId && isVehicleMode(saveRec.defCharId);
+    
     let buttons = `[Make Save${modLabel}](!mp save --id ${rollId} --critmod ${critMod} --pushmod ${pushMod}) `;
-    buttons += `[Save + Roll-With${modLabel}](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod} --pushmod ${pushMod})`;
+    if (!saveDefIsVeh) {
+      buttons += `[Save + Roll-With${modLabel}](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod} --pushmod ${pushMod})`;
+    }
     
     return buttons;
   }
@@ -3932,6 +4113,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getObj("character", rec.defCharId);
     if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
 
+    const defIsVehicle = isVehicleMode(defChar.id);
+
     // Base raw damage
     let raw = num(rec.damageTotal, 0);
     
@@ -3944,7 +4127,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const damageType = rec.dmgTypeStr || "Kinetic";
     
     // Get armor protection (normal rows - NOT Force Field)
-    const protData = sumProtectionWithHardened(defChar.id, protKey, rec.dmgSubtype);
+    const protData = defIsVehicle
+      ? getVehicleProtection(defChar.id, protKey)
+      : sumProtectionWithHardened(defChar.id, protKey, rec.dmgSubtype);
     let armorProt = protData.prot;
     let armorHardened = protData.hardened;
     const hasInvuln = protData.invuln;
@@ -3954,7 +4139,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const bypassProt = mode.includes("noprot");
     
     // ---- STEP 1: FORCE FIELD (applied first, before armor) ----
-    const ffData = getForceFieldData(defChar.id, rec.defTokenId);
+    // Vehicle mode: skip character's FF (vehicle protection is self-contained)
+    const ffData = defIsVehicle ? null : getForceFieldData(defChar.id, rec.defTokenId);
     let ffActive = false;
     let ffProt = 0;
     let ffDeflected = 0;
@@ -4107,29 +4293,26 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (vuln.dmgMod) penetrating += vuln.dmgMod;
 
     // Current resources
-    const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const pow0 = getResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const hits0 = defIsVehicle ? getVehicleHits(defTok, defChar.id) : getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = defIsVehicle ? getVehiclePower(defTok, defChar.id) : getResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR);
 
-    // Roll-with capacity: max divert = floor(current Power / 10)
-    let maxDivert = Math.floor(pow0 / 10);
-    
-    // Fortitude (Willpower) doubles roll-with capacity
-    const hasFortitude = (num(getAttr(defChar.id, "willpower_fortitude"), 0) === 1);
-    if (hasFortitude) {
-      maxDivert = maxDivert * 2;
-    }
-    
-    // Precise Hit halves roll-with capacity
-    if (mode.includes("precise")) {
-      maxDivert = Math.floor(maxDivert / 2);
+    // Roll-with capacity (vehicles cannot roll-with)
+    let maxDivert = 0;
+    if (!defIsVehicle) {
+      maxDivert = Math.floor(pow0 / 10);
+      const hasFortitude = (num(getAttr(defChar.id, "willpower_fortitude"), 0) === 1);
+      if (hasFortitude) maxDivert = maxDivert * 2;
+      if (mode.includes("precise")) maxDivert = Math.floor(maxDivert / 2);
     }
 
     let divert = 0;
-    if (mode.includes("rwmax") || mode === "rollwithmax") {
-      divert = Math.min(maxDivert, penetrating);
-    } else if (mode.includes("rw") || mode === "rollwithcustom") {
-      const want = num(args.amt, 0);
-      divert = Math.min(maxDivert, penetrating, Math.max(0, want));
+    if (!defIsVehicle) {
+      if (mode.includes("rwmax") || mode === "rollwithmax") {
+        divert = Math.min(maxDivert, penetrating);
+      } else if (mode.includes("rw") || mode === "rollwithcustom") {
+        const want = num(args.amt, 0);
+        divert = Math.min(maxDivert, penetrating, Math.max(0, want));
+      }
     }
 
     // Damage to Hits after roll-with
@@ -4138,34 +4321,49 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Store pre-doubled value for knockback (MP 4.14.2.1: KB is NOT doubled on head shots)
     const hitsForKB = toHits;
     
-    // Head Shot: DOUBLE Hits after protection and roll-with
-    // Protected Brain negates head shot effect
+    // Head Shot: DOUBLE Hits after protection and roll-with (not applicable to vehicles)
     const isHeadShot = mode.includes("headshot");
-    const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
-    if (isHeadShot && !hasProtectedBrain) {
+    const hasProtectedBrain = defIsVehicle ? false : (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
+    if (isHeadShot && !hasProtectedBrain && !defIsVehicle) {
       toHits = toHits * 2;
     }
 
-    // Apply to Hits; overflow spills to Power (4.8.4)
+    // Apply to Hits; overflow spills to Power for characters (4.8.4)
+    // Vehicles: damage to Hits only, no overflow to Power
     const hitsAfterDmg = Math.max(0, hits0 - toHits);
-    const overflow = Math.max(0, toHits - hits0);
+    const overflow = defIsVehicle ? 0 : Math.max(0, toHits - hits0);
 
-    // Power reduction: diverted amount + overflow
-    const pow1 = Math.max(0, pow0 - divert - overflow);
+    // Power reduction: diverted amount + overflow (vehicles: no change)
+    const pow1 = defIsVehicle ? pow0 : Math.max(0, pow0 - divert - overflow);
     const hits1 = hitsAfterDmg;
 
-    setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-    setResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    if (defIsVehicle) {
+      setVehicleHits(defTok, defChar.id, hits1);
+      // Vehicle Power not affected by incoming damage
+    } else {
+      setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      setResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    }
 
-    // Check for unconsciousness (over half remaining hits in one attack)
-    // Pain Resistance (Willpower): only knocked out at Hits = 0, not at half
-    const hasPainResistance = (num(getAttr(defChar.id, "willpower_pain_resistance"), 0) === 1);
-    const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    // Status checks
+    // Vehicles: incapacitated at 0 Hits, no unconsciousness. Below 0 = explosion.
+    // Characters: unconscious if > half hits in one blow, incapacitated at 0.
+    const hasPainResistance = defIsVehicle ? true : (num(getAttr(defChar.id, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !defIsVehicle && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
+    const vehicleBelowZero = defIsVehicle && (hits0 - toHits) < 0;
 
     let statusLine = "";
     if (incapacitated) {
-      statusLine = `<div style="color:#ff6b6b; font-weight:bold; margin-top:4px;">INCAPACITATED!</div>`;
+      if (defIsVehicle) {
+        statusLine = `<div style="color:#ff6b6b; font-weight:bold; margin-top:4px;">VEHICLE INCAPACITATED!</div>`;
+        if (vehicleBelowZero) {
+          const vehName = getAttr(defChar.id, "vehicle_name") || "Vehicle";
+          statusLine += `<div style="color:#ff5555; font-weight:bold;">⚠ EXPLOSION CHECK — Hits below 0!</div>`;
+        }
+      } else {
+        statusLine = `<div style="color:#ff6b6b; font-weight:bold; margin-top:4px;">INCAPACITATED!</div>`;
+      }
       defTok.set("status_dead", true);
     } else if (unconscious) {
       statusLine = `<div style="color:#e67e22; font-weight:bold; margin-top:4px;">UNCONSCIOUS!</div>`;
@@ -4173,7 +4371,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     let effectNotes = "";
-    if (isHeadShot && !hasProtectedBrain) {
+    if (isHeadShot && !hasProtectedBrain && !defIsVehicle) {
       effectNotes = ` <span style="color:#ff6b6b;">[HEAD SHOT x2]</span>`;
     } else if (isHeadShot && hasProtectedBrain) {
       effectNotes = ` <span style="color:#8be9fd; font-weight:bold;">[HEAD SHOT NEGATED - Protected Brain]</span>`;
@@ -4181,7 +4379,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (mode.includes("solid")) {
       effectNotes += ` <span style="color:#e67e22;">[+3 Solid Hit]</span>`;
     }
-    if (mode.includes("precise")) {
+    if (mode.includes("precise") && !defIsVehicle) {
       effectNotes += ` <span style="color:#8be9fd;">[½ Roll-With]</span>`;
     }
     if (mode.includes("noprot")) {
@@ -4422,7 +4620,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getObj("character", rec.defCharId);
     if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
 
-    const massExpr = getAttr(defChar.id, "mass") || "1d4";
+    const kbDefIsVeh = isVehicleMode(defChar.id);
+    const massExpr = kbDefIsVeh
+      ? (getAttr(defChar.id, "vehicle_mass") || getAttr(defChar.id, "vehicle_mass_roll") || "1d4")
+      : (getAttr(defChar.id, "mass") || "1d4");
     const massRoll = rollExpr(massExpr);
 
     // Use hitsForKB (non-doubled for head shots per MP 4.14.2.1), fallback to hitsTaken
@@ -4449,7 +4650,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const char = getCharFromToken(tok);
     if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
 
-    const agSave = getAttrNum(char.id, "agility_save", 10);
+    const kbsIsVeh = isVehicleMode(char.id);
+    const agSave = kbsIsVeh
+      ? getAttrNum(char.id, "vehicle_ag_save", 10)
+      : getAttrNum(char.id, "agility_save", 10);
     const tn = Math.max(1, agSave - penalty);
     const roll = randomInteger(20);
     const pass = (roll !== 20) && (roll <= tn);
@@ -4493,12 +4697,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return ch("MP", `/w gm <b>MP:</b> Save BC "${rec.saveBC || "(not set)"}" not valid. Set the Save BC field (EN/AG/IN/CL) on the attack.`);
     }
 
-    const baseSave = getAttrNum(defChar.id, saveAttr, 10);
+    const saveDefIsVeh = isVehicleMode(defChar.id);
+
+    // For vehicles, use vehicle EN save attr if save BC is EN
+    const baseSave = saveDefIsVeh
+      ? getAttrNum(defChar.id, "vehicle_" + saveAttr, 10)
+      : getAttrNum(defChar.id, saveAttr, 10);
 
     // Protection adds to save (makes it easier) per 4.9
     // EXCEPTION: Damaging Poison - protection only applies to damage, NOT to save TN
     // Also check for invulnerability (+8 bonus) and adaptation (+5 bonus)
-    const protData = sumProtectionWithHardened(defChar.id, rec.protKey, rec.dmgSubtype);
+    const protData = saveDefIsVeh
+      ? getVehicleProtection(defChar.id, rec.protKey)
+      : sumProtectionWithHardened(defChar.id, rec.protKey, rec.dmgSubtype);
     const prot = protData.prot;
     const invulnBonus = protData.invuln ? 8 : 0;
     const adaptBonus = protData.adapt ? 5 : 0;
@@ -4518,14 +4729,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Roll-with for saves: spend Power to add to save TN (4.8.3.1)
     // Cost is 1 Power per +1 bonus to save TN
-    // Maximum bonus = floor(current Power / 10)
-    const rwPowerRequested = Math.max(0, num(args.rollwith, 0));
-    const pow0 = getResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const maxBonus = Math.floor(pow0 / 10);           // Max bonus based on current Power
-    const rwPaid = Math.min(rwPowerRequested, maxBonus);  // Actual bonus granted (capped at max)
-    const rwCost = rwPaid;                            // Power cost: 1 per +1 bonus
+    // Vehicles cannot roll-with
+    const rwPowerRequested = saveDefIsVeh ? 0 : Math.max(0, num(args.rollwith, 0));
+    const pow0 = saveDefIsVeh ? getVehiclePower(defTok, defChar.id) : getResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const maxBonus = saveDefIsVeh ? 0 : Math.floor(pow0 / 10);
+    const rwPaid = Math.min(rwPowerRequested, maxBonus);
+    const rwCost = rwPaid;
     const pow1 = pow0 - rwCost;
-    setResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    if (saveDefIsVeh) {
+      // No power cost for vehicles (they can't roll-with)
+    } else {
+      setResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    }
 
     // Critical mod (Solid Hit = -3 to save TN for save attacks)
     const critMod = num(args.critmod, 0);
@@ -5272,12 +5487,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     };
 
     // Build output with damage buttons
+    const sqDefIsVeh = isVehicleMode(defChar.id);
     let html = `<div style="background:#e8daef; border:2px solid #9b59b6; padding:4px 8px;">`;
     html += `<b>${esc(atkChar.get("name"))} Squeezes ${esc(defChar.get("name"))}</b>${gripLabel}<br/>`;
     html += `Damage: <span title="${hthExpr}"><b>${damage}</b></span> (Kinetic, no KB)<br/>`;
-    html += `[No Roll-With](!mp apply --id ${rollId} --mode noroll) `;
-    html += `[Roll-With Max](!mp apply --id ${rollId} --mode rwmax) `;
-    html += `[Roll-With...](!mp apply --id ${rollId} --mode rw --amt ?{Roll-With amount|0})`;
+    if (sqDefIsVeh) {
+      html += `[Apply](!mp apply --id ${rollId} --mode noroll)`;
+    } else {
+      html += `[No Roll-With](!mp apply --id ${rollId} --mode noroll) `;
+      html += `[Roll-With Max](!mp apply --id ${rollId} --mode rwmax) `;
+      html += `[Roll-With...](!mp apply --id ${rollId} --mode rw --amt ?{Roll-With amount|0})`;
+    }
     html += `</div>`;
 
     chCombat("MP", html, defChar.id);
@@ -5587,6 +5807,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
 
+    if (isVehicleMode(char.id)) {
+      return ch("MP", `/w gm <b>MP:</b> Vehicles don't go unconscious. Use Repair to restore Hits.`);
+    }
+
     const hits = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
 
     if (hits <= 0) {
@@ -5619,15 +5843,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
 
-    const hits = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const hitsMax = getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
-    const pow = getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const powMax = getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const statIsVeh = isVehicleMode(char.id);
+    const hits = statIsVeh ? getVehicleHits(tok, char.id) : getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const hitsMax = statIsVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const pow = statIsVeh ? getVehiclePower(tok, char.id) : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const powMax = statIsVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
 
     const snare = state.MP_Engine.snares[tokId];
     const conditions = state.MP_Engine.conditions[tokId] || [];
 
-    let msg_out = `<b>${esc(char.get("name"))} Status</b><br/>` +
+    const label = statIsVeh ? (getAttr(char.id, "vehicle_name") || char.get("name")) : char.get("name");
+    let msg_out = `<b>${esc(label)} Status</b>${statIsVeh ? " 🚗" : ""}<br/>` +
       `Hits: <b>${hits}/${hitsMax}</b> | Power: <b>${pow}/${powMax}</b>`;
 
     if (snare) {
@@ -5673,6 +5899,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (!char) return;
       
       const tokId = tok.id;
+      const restIsVeh = isVehicleMode(char.id);
+      
+      if (restIsVeh) {
+        // Restore vehicle hits and power from vehicle max attrs
+        const vHitsMax = getAttrNum(char.id, "vehicle_hits_max", 20);
+        const vPowMax = getAttrNum(char.id, "vehicle_power_max", 40);
+        setVehicleHits(tok, char.id, vHitsMax);
+        setVehiclePower(tok, char.id, vPowMax);
+        // Also sync token bars
+        tok.set("bar2_max", vHitsMax);
+        tok.set("bar1_max", vPowMax);
+        
+        // Clear status markers
+        tok.set("status_dead", false);
+        tok.set(CFG.DEF_MOD_BAR, 0);
+        
+        restored.push((getAttr(char.id, "vehicle_name") || char.get("name")) + ` 🚗 (H:${vHitsMax} P:${vPowMax})`);
+        return;
+      }
       
       // Get max from token bar max (same source as cmdStatus)
       const hitsMax = parseInt(tok.get("bar2_max"), 10) || 20;
@@ -5733,6 +5978,46 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     } else {
       ch("MP", `/w gm <b>MP:</b> No valid tokens to restore.`);
     }
+  }
+
+  // -------------------------
+  // VEHICLE MODE TOGGLE
+  // -------------------------
+
+  function cmdVehicle(msg, args) {
+    const selected = msg.selected || [];
+    if (selected.length === 0) {
+      return ch("MP", `/w gm <b>MP:</b> Select one or more tokens first.`);
+    }
+
+    selected.forEach(sel => {
+      if (sel._type !== "graphic") return;
+      const tok = getObj("graphic", sel._id);
+      if (!tok) return;
+      const char = getCharFromToken(tok);
+      if (!char) return;
+
+      const current = getAttr(char.id, "vehicle_mode");
+      const wasVehicle = (current === "on" || current === "1" || current === 1);
+
+      let goVehicle;
+      if (args.on) goVehicle = true;
+      else if (args.off) goVehicle = false;
+      else goVehicle = !wasVehicle;
+
+      setAttr(char.id, "vehicle_mode", goVehicle ? "on" : "0");
+
+      if (goVehicle) {
+        const vName = getAttr(char.id, "vehicle_name") || char.get("name");
+        const vHits = getResource(tok, char.id, CFG.HITS_BAR, "vehicle_hits");
+        const vHitsMax = getAttrNum(char.id, "vehicle_hits_max", 0) || vHits;
+        const vPow = getResource(tok, char.id, CFG.POWER_BAR, "vehicle_power");
+        const vPowMax = getAttrNum(char.id, "vehicle_power_max", 0) || vPow;
+        ch("MP", `/w gm <b>🚗 VEHICLE MODE ON:</b> ${esc(vName)}<br/>Hits: ${vHits}/${vHitsMax} | Power: ${vPow}/${vPowMax}<br/><span style="font-size:11px; color:#888;">Set up token with bar2→vehicle_hits, bar1→vehicle_power</span>`);
+      } else {
+        ch("MP", `/w gm <b>👤 VEHICLE MODE OFF:</b> ${esc(char.get("name"))}`);
+      }
+    });
   }
 
   // -------------------------
@@ -6605,17 +6890,21 @@ function cmdStance(msg, args) {
     const healAmount = num(args.amount, 10);
     const healPower = num(args.power, 0);
 
-    const hits0 = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const hitsMax = getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
-    const pow0 = getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const powMax = getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const healIsVeh = isVehicleMode(char.id);
+    const hits0 = healIsVeh ? getVehicleHits(tok, char.id) : getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const hitsMax = healIsVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const pow0 = healIsVeh ? getVehiclePower(tok, char.id) : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const powMax = healIsVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
 
     const hits1 = Math.min(hitsMax, hits0 + healAmount);
     const pow1 = Math.min(powMax, pow0 + healPower);
 
-    setResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-    if (healPower > 0) {
-      setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    if (healIsVeh) {
+      setVehicleHits(tok, char.id, hits1);
+      if (healPower > 0) setVehiclePower(tok, char.id, pow1);
+    } else {
+      setResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      if (healPower > 0) setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
     }
 
     // Clear status markers if healed above thresholds
@@ -7250,6 +7539,10 @@ function cmdStance(msg, args) {
       case "restore":
         if (gmOnly(msg)) return;
         return cmdRestore(msg, args);
+      case "vehicle":
+      case "veh":
+        if (gmOnly(msg)) return;
+        return cmdVehicle(msg, args);
       case "info": return cmdInfo(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "atk": return cmdQuickAttack(msg, args);
@@ -7361,7 +7654,7 @@ function cmdStance(msg, args) {
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.59.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.60.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -7388,6 +7681,8 @@ function cmdStance(msg, args) {
           <code>!mp ffreinforce --id ID</code> - Reinforce FF with saved action at collapse<br/>
           <code>!mp wakeup --target TOKID</code><br/>
           <code>!mp status --target TOKID</code><br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
+          <b>Vehicle:</b><br/>
+          <code>!mp vehicle [--on|--off]</code> - Toggle vehicle mode on dedicated vehicle token<br/>
 
           <b>Stances (Bar3):</b><br/>
           <code>!mp stance normal|def|full|offbal|N</code><br/>
@@ -7447,11 +7742,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.59.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.60.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.59.1 READY");
+  log("MP ENGINE v2.60.0 READY");
 });
