@@ -1,11 +1,17 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.23 - Force Field mode in protection rows
+<!-- Mighty Protectors Roll20 Character Sheet v44.25 - DOT Cap hover tooltip on damage field
+        - Damage input wrapped in container with hover tooltip showing "Avg X + ToHit Y = Z / DoT Cap N"
+        - Damage turns red when attack DOT value exceeds character's DoT Cap
+        - No-damage attacks (save-only) compare against Ability Cap instead
+        - diceAvg() parser handles NdX, dX, mixed dice (d6+d8), +/- constants
+        - Recalcs on damage/tohit/no_damage change, dot_cap/ability_cap change, and sheet:opened
+v44.24: - Base checkbox on vehicle tab
 v44.23: - Force Field option in protection Mode dropdown (forcefield)
         - FF settings row: Deflected accumulator, Remaining capacity (auto-calc), Gear checkbox
         - Sheet workers: mode→ff_flag toggle, accum/power→remaining capacity recalc
 v44.22: - Vehicle 0-space fix, protection rows
 v44.21: - Roll buttons colored: Base HTH (orange), EN/AG/IN/CL Save (red), Init (cyan)
         - Defense auto-calculated = AG Save - 10 (readonly)
-        - Total Cost = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + sum(system Cost column)
+        - Total Cost = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + Base Adj + sum(system Cost column)
         - Systems: table-inside-fieldset (same as repeating_attacks), Cost column, Face dropdown
         - Auto-populate fix: getSectionIDs-based worker + recalcAllVehSystems on sheet:opened
         - Spaces Used/Remaining/Total Cost auto-calculated from repeating rows
@@ -604,7 +610,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             </div>
           </td>
           <td style="text-align:center; padding:1px;">
-            <input type="text" name="attr_attack_damage" value="0" title="Damage dice/formula" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
+            <div class="sheet-dot-container">
+              <input type="checkbox" name="attr_attack_dot_over" class="sheet-dot-over-flag" value="1" />
+              <input type="text" name="attr_attack_damage" value="0" title="Damage dice/formula" class="sheet-dot-damage-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
+              <input type="text" name="attr_attack_dot_tooltip" readonly class="sheet-dot-tooltip" value="" />
+            </div>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_range" title="Range in inches" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -863,6 +873,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <input type="hidden" name="attr_attack_idx" />
             <input type="hidden" name="attr_attack_type" value="std" />
             <input type="hidden" name="attr_attack_recovery" value="" />
+            <input type="hidden" name="attr_attack_dot_value" value="0" />
           </fieldset>
         </div>
 
@@ -1547,7 +1558,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
     <!-- VEHICLE TITLE -->
     <div style="background:#1e1e38; padding:6px 8px; margin-bottom:3px; border-radius:4px; text-align:center;">
-      <span style="color:#f4d03f; font-weight:bold; font-size:14px; letter-spacing:1px;">MIGHTY PROTECTORS&#8482; VEHICLE RECORD SHEET</span>
+      <span style="color:#f4d03f; font-weight:bold; font-size:14px; letter-spacing:1px;">MIGHTY PROTECTORS&#8482;</span>
+      <input type="text" name="attr_vehicle_type_label" value="VEHICLE" readonly style="background:transparent; color:#f4d03f; font-weight:bold; font-size:14px; letter-spacing:1px; border:none; width:80px; text-align:center; padding:0; margin:0; vertical-align:baseline; line-height:normal; display:inline; height:auto;" />
+      <span style="color:#f4d03f; font-weight:bold; font-size:14px; letter-spacing:1px;">RECORD SHEET</span>
     </div>
 
     <!-- NAME / MODEL / OPERATOR -->
@@ -1587,6 +1600,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <input type="number" name="attr_vehicle_maneuver" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px;" title="Per +5: +1 Turn Rate. Per -5: -1 Turn Rate." />
         <span style="color:#888;">Won't Explode</span>
         <input type="checkbox" name="attr_vehicle_wontexplode" value="1" title="+5 to total cost, no explosion" style="margin:0;" />
+        <span style="color:#888;">Base</span>
+        <input type="checkbox" name="attr_vehicle_base_mode" value="1" title="Base: -15 cost adjustment. Movement limited to pre-determined paths only." style="margin:0;" />
       </div>
     </div>
 
@@ -3187,6 +3202,71 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     });
   });
 
+  // ---- DOT Cap computation per attack row ----
+  // Average dice formula: handles NdX, dX, +/- constants, mixed dice (d6+d8)
+  function diceAvg(formula) {
+    if (!formula || formula === "0") return 0;
+    var s = String(formula).replace(/\s+/g, "");
+    var total = 0;
+    // Split on + or - but keep the sign
+    var terms = s.match(/[+-]?[^+-]+/g) || [];
+    for (var i = 0; i < terms.length; i++) {
+      var t = terms[i];
+      var m = t.match(/^([+-]?\d*)d(\d+)$/i);
+      if (m) {
+        var n = parseInt(m[1]) || (m[1] === "-" ? -1 : 1);
+        var faces = parseInt(m[2]);
+        total += n * (faces + 1) / 2;
+      } else {
+        total += parseFloat(t) || 0;
+      }
+    }
+    return Math.round(total * 10) / 10;
+  }
+
+  function recalcDot(rowPrefix) {
+    getAttrs([
+      rowPrefix + "_attack_damage",
+      rowPrefix + "_attack_tohit_num",
+      rowPrefix + "_attack_no_damage",
+      "dot_cap", "ability_cap"
+    ], function(v) {
+      var dmgFormula = v[rowPrefix + "_attack_damage"] || "0";
+      var tohit = parseInt(v[rowPrefix + "_attack_tohit_num"]) || 0;
+      var noDmg = v[rowPrefix + "_attack_no_damage"] === "1";
+      var dotCap = parseInt(v.dot_cap) || 0;
+      var abilityCap = parseInt(v.ability_cap) || 0;
+
+      var avg = diceAvg(dmgFormula);
+      var dotValue = avg + tohit;
+      var cap = noDmg ? abilityCap : dotCap;
+      var capLabel = noDmg ? "Ability Cap" : "DoT Cap";
+      var over = dotValue > cap;
+
+      var tooltip = "Avg " + avg + " + ToHit " + tohit + " = " + dotValue + " / " + capLabel + " " + cap;
+
+      var update = {};
+      update[rowPrefix + "_attack_dot_value"] = dotValue;
+      update[rowPrefix + "_attack_dot_over"] = over ? "1" : "0";
+      update[rowPrefix + "_attack_dot_tooltip"] = tooltip;
+      setAttrs(update);
+    });
+  }
+
+  on("change:repeating_attacks:attack_damage change:repeating_attacks:attack_tohit_num change:repeating_attacks:attack_no_damage", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace(/_attack_(damage|tohit_num|no_damage)$/, "");
+    recalcDot(rowPrefix);
+  });
+
+  // Recalc all attack DOT values when dot_cap or ability_cap changes
+  on("change:dot_cap change:ability_cap", function() {
+    getSectionIDs("repeating_attacks", function(ids) {
+      ids.forEach(function(id) {
+        recalcDot("repeating_attacks_" + id);
+      });
+    });
+  });
+
   on("change:repeating_attacks:attack_name", function(eventInfo) {
     var srcAttr = eventInfo.sourceAttribute;
     var rowPrefix = srcAttr.replace(/_attack_name$/, "");
@@ -3826,6 +3906,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     initAttackKBDisplays();
     initAttackNotes();
     syncAttackRowMeta();
+    // Recalc DOT cap values for all attack rows
+    getSectionIDs("repeating_attacks", function(ids) {
+      ids.forEach(function(id) {
+        recalcDot("repeating_attacks_" + id);
+      });
+    });
     syncProtectionRowIds();
     rebuildABWSummary();
 
@@ -4367,18 +4453,24 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     });
   }
 
-  on("change:vehicle_base_cp change:vehicle_ag change:vehicle_in change:vehicle_cl change:vehicle_hilotech change:vehicle_maneuver change:vehicle_wontexplode", function(eventInfo) {
+  on("change:vehicle_base_cp change:vehicle_ag change:vehicle_in change:vehicle_cl change:vehicle_hilotech change:vehicle_maneuver change:vehicle_wontexplode change:vehicle_base_mode", function(eventInfo) {
     // When base CP changes, reset hits/power to new max (vehicle rebuilt)
     if (eventInfo && eventInfo.sourceAttribute === "vehicle_base_cp") {
       calcVehicle(true);
     } else {
       calcVehicle(false);
     }
-    recalcAllVehSystems(); calcVehicleTotals();
+    recalcAllVehSystems(); calcVehicleTotals(); updateBaseLabel();
   });
-  on("sheet:opened", function() { calcVehicle(false); calcVehicleTotals(); recalcAllVehSystems(); });
+  on("sheet:opened", function() { calcVehicle(false); calcVehicleTotals(); recalcAllVehSystems(); updateBaseLabel(); });
 
   // Helper: find best matching key from sorted table keys
+  function updateBaseLabel() {
+    getAttrs(["vehicle_base_mode"], function(v) {
+      setAttrs({ vehicle_type_label: (v.vehicle_base_mode === "1") ? "BASE" : "VEHICLE" }, {silent: true});
+    });
+  }
+
   function findBestKey(spaces) {
     var keys = Object.keys(systemCPTable).map(Number).sort(function(a,b){return a-b;});
     var bestKey = keys[0];
@@ -4445,10 +4537,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   });
 
   // Sum spaces used, remaining, and total cost from all system rows
-  // TOTAL COST = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + sum(system Cost column)
+  // TOTAL COST = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + Base Adj + sum(system Cost column)
   function calcVehicleTotals() {
     getSectionIDs("repeating_vehsystems", function(ids) {
-      var attrs = ["vehicle_base_cp", "vehicle_spaces", "vehicle_maneuver", "vehicle_wontexplode", "vehicle_hilotech"];
+      var attrs = ["vehicle_base_cp", "vehicle_spaces", "vehicle_maneuver", "vehicle_wontexplode", "vehicle_hilotech", "vehicle_base_mode"];
       ids.forEach(function(id) {
         attrs.push("repeating_vehsystems_" + id + "_vsys_spaces");
         attrs.push("repeating_vehsystems_" + id + "_vsys_cost");
@@ -4464,8 +4556,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var hilotech = parseFloat(v.vehicle_hilotech) || 0;
         var maneuver = parseFloat(v.vehicle_maneuver) || 0;
         var wontExplode = (v.vehicle_wontexplode === "1") ? 5 : 0;
+        var baseAdj = (v.vehicle_base_mode === "1") ? -15 : 0;
         var maxSpaces = parseInt(v.vehicle_spaces) || 0;
-        var totalCost = baseCost + hilotech + maneuver + wontExplode + totalSysCost;
+        var totalCost = baseCost + hilotech + maneuver + wontExplode + baseAdj + totalSysCost;
         setAttrs({
           vehicle_spaces_used: totalSpaces,
           vehicle_spaces_remaining: maxSpaces - totalSpaces,

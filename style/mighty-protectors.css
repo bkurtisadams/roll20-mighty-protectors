@@ -935,6 +935,70 @@
   border-color: #8be9fd transparent transparent transparent;
 }
 
+/* ---- DOT Cap damage container ---- */
+.charsheet .sheet-dot-container {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.charsheet .sheet-dot-over-flag {
+  display: none !important;
+}
+
+/* When DOT exceeded, damage input turns red */
+.charsheet .sheet-dot-over-flag:checked ~ .sheet-dot-damage-input {
+  color: #e63946 !important;
+  border-color: #e63946 !important;
+  background: #1a0d0d !important;
+}
+
+/* DOT tooltip - hidden by default */
+.charsheet .sheet-dot-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2b2b3d;
+  color: #eaeaea;
+  border: 1px solid #888;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 9px;
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+
+/* Red border on tooltip when over cap */
+.charsheet .sheet-dot-over-flag:checked ~ .sheet-dot-tooltip {
+  border-color: #e63946;
+  color: #ff6b6b;
+}
+
+/* Show tooltip on container hover */
+.charsheet .sheet-dot-container:hover .sheet-dot-tooltip {
+  display: block;
+}
+
+/* Arrow pointer for DOT tooltip */
+.charsheet .sheet-dot-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #888 transparent transparent transparent;
+}
+
+.charsheet .sheet-dot-over-flag:checked ~ .sheet-dot-tooltip::after {
+  border-color: #e63946 transparent transparent transparent;
+}
+
 /* Scrollbar styling for dark theme */
 .charsheet .career-scroll {
   scrollbar-width: thin;
