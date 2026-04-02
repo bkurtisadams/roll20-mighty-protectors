@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.60.0 - 2026-03-23
+/* Mighty Protectors Roll20 API Engine v2.61.0 - 2026-04-01
+ * v2.61.0: MP Builder import/export
+ *        - !mp export: select token, exports character to handout JSON for MP Builder
+ *        - !mp import --name HandoutName: imports MP Builder JSON from handout
+ *        - Maps identity, BCs, abilities, attacks, careers, protection
+ *        - Creates/updates character, rebuilds repeating sections
  * v2.60.0: Vehicle combat integration
  *        - isVehicleMode() detects vehicle_mode checkbox on defender/attacker
  *        - Vehicle targets use vehicle_hits/vehicle_power instead of character hits/power
@@ -7652,9 +7657,17 @@ function cmdStance(msg, args) {
           return ch("MP", `/w gm ` + out);
         }
         return ch("MP", "/w gm Debug commands: <code>!mp debug tokens</code>, <code>!mp debug deltoken X,Y</code>, <code>!mp debug absorb</code>");
+      // ── MP Builder Import/Export ──
+      case "export":
+        if (gmOnly(msg)) return;
+        return cmdMPExport(msg);
+      case "import":
+        if (gmOnly(msg)) return;
+        return cmdMPImport(msg, args);
+
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.60.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.61.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -7695,11 +7708,311 @@ function cmdStance(msg, args) {
           <code>!mp round +N</code> - Advance N rounds<br/>
           <code>!mp round set N</code> - Set to round N<br/>
           <code>!mp round show</code> - Show current round<br/>
+          <b>MP Builder Sync:</b><br/>
+          <code>!mp export</code> - Export selected token to handout JSON (for MP Builder)<br/>
+          <code>!mp import --name HandoutName</code> - Import MP Builder JSON from handout<br/>
           <b>Test Commands:</b><br/>
           <code>!mp test</code> - Show all test commands<br/>
           <code>!mp test grapple [TOHIT] [lock]</code> - Grapple harness (select 2 tokens: grappler, target)
    `);
     }
+  }
+
+  // -------------------------
+  // MP BUILDER IMPORT/EXPORT
+  // -------------------------
+
+  // BC mapping: builder stats key → Roll20 prefix
+  const MP_BC_MAP = { st:'strength', en:'endurance', ag:'agility', 'in':'intelligence', cl:'cool' };
+
+  function cmdMPExport(msg) {
+    const tok = getSelectedToken(msg);
+    if (!tok) return ch("MP", "/w gm Select a token to export.");
+    const char = getCharFromToken(tok);
+    if (!char) return ch("MP", "/w gm Token not linked to character.");
+    const charId = char.id;
+    const allAttrs = findObjs({ type: 'attribute', characterid: charId });
+    const a = {};
+    allAttrs.forEach(attr => { a[attr.get('name')] = attr.get('current'); });
+
+    const data = {};
+    // Character name from the character object (not attr)
+    data.name = char.get('name') || a['character_name'] || '';
+    // Identity
+    data.trueId = a['true_id'] || '';
+    data.side = a['side'] || '';
+    data.birthplace = a['birthplace'] || '';
+    data.species = a['species'] || '';
+    data.culture = a['culture'] || '';
+    data.age = a['age'] || '';
+    data.gender = a['gender'] || '';
+    data.weight = a['weight'] || '';
+    data.mass = a['mass'] || '';
+    data.motivation = a['motivation'] || '';
+    data.wealth = a['wealth'] || '';
+    data.originType = a['origin'] || '';
+    data.luck = a['luck'] || '';
+    data.legalStatus = a['legal_status'] || '';
+    data.player = a['player_name'] || '';
+    data.inventing = a['base_ip'] || '';
+
+    // XP: starting_eps is the base budget, total_eps is BC+Ability costs
+    // xpBase on builder = starting_eps
+    // xpEarned on builder = ep_earned
+    // xpSpent on builder = total_eps - starting_eps (how much earned XP was consumed)
+    // xpTotal on builder = total_eps (or starting_eps + ep_earned for cap purposes)
+    const startingEps = parseInt(a['starting_eps']) || 0;
+    const epEarned = parseInt(a['ep_earned']) || 0;
+    const totalEps = parseInt(a['total_eps']) || 0;
+    data.xpBase = String(startingEps);
+    data.xpEarned = String(epEarned);
+    data.xpSpent = String(Math.max(0, totalEps - startingEps));
+    data.xpTotal = String(startingEps + epEarned);
+
+    // Power level (inferred from starting_eps = base CP budget)
+    const plMap = { 50: 'normal', 100: 'low', 150: 'standard', 200: 'high' };
+    data.powerLevel = plMap[startingEps] || (startingEps > 150 ? 'high' : startingEps > 100 ? 'standard' : startingEps > 50 ? 'low' : 'normal');
+
+    // Story/Bio from character bio field (not an attribute)
+    char.get('bio', function(bio) {
+      if (bio) {
+        // Strip HTML
+        data.story = bio.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+      } else {
+        data.story = '';
+      }
+
+      finishExport(char, charId, allAttrs, a, data, msg);
+    });
+  }
+
+  function finishExport(char, charId, allAttrs, a, data, msg) {
+
+    // BCs
+    data.stats = {};
+    Object.keys(MP_BC_MAP).forEach(bk => {
+      const p = MP_BC_MAP[bk];
+      data.stats[bk] = { cp: a[p + '_cost'] || '0', score: a[p + '_score'] || '0', save: a[p + '_save'] || '' };
+    });
+
+    // Derived
+    data.carry = a['carry_capacity'] || '';
+    data.baseDmg = a['hth_damage'] || '';
+    data.initiative = a['initiative_score'] || '';
+    data.move = a['move'] || '';
+    data.power = a['power_score'] || '';
+    data.powerSrc = a['power_score_max'] || '';
+    data.hitPts = a['hits_score'] || '';
+    data.hitPtsSrc = a['hits_score_max'] || '';
+    data.healing = a['healing_rate'] || '';
+    data.defPhysical = a['physical_def'] || '';
+    data.defMental = a['mental_def'] || '';
+
+    // Abilities (repeating)
+    data.abilities = [];
+    const abilityIds = [];
+    allAttrs.forEach(attr => {
+      const m = attr.get('name').match(/^repeating_abilities_([^_]+)_ability_name$/);
+      if (m) abilityIds.push(m[1]);
+    });
+    abilityIds.forEach(id => {
+      data.abilities.push({
+        cp: a['repeating_abilities_' + id + '_ability_cp'] || '',
+        desc: a['repeating_abilities_' + id + '_ability_name'] || '',
+        ip: a['repeating_abilities_' + id + '_ability_ip'] || '',
+      });
+    });
+    while (data.abilities.length < 12) data.abilities.push({ cp: '', desc: '', ip: '' });
+
+    // Attacks (repeating)
+    data.attacks = [];
+    const attackIds = [];
+    allAttrs.forEach(attr => {
+      const m = attr.get('name').match(/^repeating_attacks_([^_]+)_attack_name$/);
+      if (m) attackIds.push(m[1]);
+    });
+    attackIds.forEach(id => {
+      data.attacks.push({
+        name: a['repeating_attacks_' + id + '_attack_name'] || '',
+        toHit: a['repeating_attacks_' + id + '_attack_tohit'] || '',
+        damage: a['repeating_attacks_' + id + '_attack_damage'] || '',
+        dmgType: a['repeating_attacks_' + id + '_attack_dmgtype'] || '',
+        kb: a['repeating_attacks_' + id + '_attack_kb'] || '',
+      });
+    });
+    while (data.attacks.length < 3) data.attacks.push({ name: '', toHit: '', damage: '', dmgType: '', kb: '' });
+
+    // Careers → background
+    const careerIds = [];
+    allAttrs.forEach(attr => {
+      const m = attr.get('name').match(/^repeating_careers_([^_]+)_career_name$/);
+      if (m) careerIds.push(m[1]);
+    });
+    data.background = careerIds.map(id => a['repeating_careers_' + id + '_career_name'] || '').filter(Boolean).join(', ');
+
+    // Protection (repeating → protKinetic, protKinetic2, etc.)
+    const protIds = [];
+    allAttrs.forEach(attr => {
+      const m = attr.get('name').match(/^repeating_protection_([^_]+)_prot_name$/);
+      if (m) protIds.push(m[1]);
+    });
+    const protTypes = ['kinetic', 'energy', 'bio', 'entropy', 'psychic', 'other'];
+    protIds.forEach((id, idx) => {
+      const suffix = idx === 0 ? '' : String(idx + 1);
+      protTypes.forEach(t => {
+        const key = 'prot' + t.charAt(0).toUpperCase() + t.slice(1) + suffix;
+        data[key] = a['repeating_protection_' + id + '_prot_' + t] || '';
+      });
+    });
+
+    // Write to handout
+    const charName = char.get('name') || 'export';
+    const handoutName = 'MP Export: ' + charName;
+    let handout = findObjs({ type: 'handout', name: handoutName })[0];
+    if (!handout) handout = createObj('handout', { name: handoutName });
+    handout.set('notes', '<pre>' + JSON.stringify(data, null, 2) + '</pre>');
+
+    ch("MP", `/w gm Exported <b>${esc(charName)}</b> → handout <b>${esc(handoutName)}</b>. Copy the JSON to import into MP Builder.`);
+  }
+
+  function cmdMPImport(msg, args) {
+    const handoutName = args.name || args.handout || '';
+    if (!handoutName) return ch("MP", "/w gm Usage: <code>!mp import --name HandoutName</code>");
+
+    const handout = findObjs({ type: 'handout', name: handoutName })[0];
+    if (!handout) return ch("MP", `/w gm Handout "${esc(handoutName)}" not found.`);
+
+    handout.get('gmnotes', function(gmnotes) {
+      handout.get('notes', function(notes) {
+        let raw = gmnotes || notes || '';
+        raw = raw.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+
+        let data;
+        try { data = JSON.parse(raw); } catch(e) {
+          return ch("MP", `/w gm Failed to parse JSON: ${esc(e.message)}`);
+        }
+
+        const charName = data.name || 'Imported Character';
+        let char = findObjs({ type: 'character', name: charName })[0];
+        if (!char) char = createObj('character', { name: charName });
+        // Set name on the character object (Roll20 uses this, not the attribute)
+        char.set('name', charName);
+        const charId = char.id;
+
+        // Set bio (character & bio tab) if story is present
+        if (data.story) {
+          char.set('bio', data.story);
+        }
+
+        function setAttr(name, val) {
+          if (val === undefined || val === null || val === '') return;
+          const existing = findObjs({ type: 'attribute', characterid: charId, name: name })[0];
+          if (existing) existing.set('current', String(val));
+          else createObj('attribute', { characterid: charId, name: name, current: String(val) });
+        }
+
+        // Identity
+        setAttr('character_name', data.name);
+        setAttr('true_id', data.trueId);
+        setAttr('side', data.side);
+        setAttr('birthplace', data.birthplace);
+        setAttr('species', data.species);
+        setAttr('culture', data.culture);
+        setAttr('age', data.age);
+        setAttr('gender', data.gender);
+        setAttr('weight', data.weight);
+        setAttr('mass', data.mass);
+        setAttr('motivation', data.motivation);
+        setAttr('wealth', data.wealth);
+        setAttr('origin', data.originType);
+        setAttr('luck', data.luck);
+        setAttr('legal_status', data.legalStatus);
+        setAttr('player_name', data.player);
+        setAttr('base_ip', data.inventing);
+        // XP: starting_eps = base budget, ep_earned = earned during play
+        // total_eps on Roll20 is auto-calculated by sheet workers (BC+Ability costs)
+        // So we only set starting_eps and ep_earned; the sheet recalculates total_eps
+        setAttr('starting_eps', data.xpBase);
+        setAttr('ep_earned', data.xpEarned);
+
+        // BCs
+        if (data.stats) {
+          Object.keys(MP_BC_MAP).forEach(bk => {
+            const p = MP_BC_MAP[bk];
+            const s = data.stats[bk];
+            if (s) setAttr(p + '_cost', s.cp);
+          });
+        }
+
+        // Repeating: Abilities
+        if (data.abilities) {
+          findObjs({ type: 'attribute', characterid: charId })
+            .filter(a => a.get('name').startsWith('repeating_abilities_'))
+            .forEach(a => a.remove());
+          data.abilities.forEach((ab, idx) => {
+            if (!ab.desc && !ab.cp) return;
+            const rowId = generateRowID();
+            const p = 'repeating_abilities_' + rowId + '_';
+            createObj('attribute', { characterid: charId, name: p + 'ability_name', current: ab.desc || '' });
+            createObj('attribute', { characterid: charId, name: p + 'ability_cp', current: ab.cp || '' });
+            createObj('attribute', { characterid: charId, name: p + 'ability_ip', current: ab.ip || '' });
+            createObj('attribute', { characterid: charId, name: p + 'ability_num', current: String(idx + 1) });
+          });
+        }
+
+        // Repeating: Attacks
+        if (data.attacks) {
+          findObjs({ type: 'attribute', characterid: charId })
+            .filter(a => a.get('name').startsWith('repeating_attacks_'))
+            .forEach(a => a.remove());
+          data.attacks.forEach((atk, idx) => {
+            if (!atk.name && !atk.damage) return;
+            const rowId = generateRowID();
+            const p = 'repeating_attacks_' + rowId + '_';
+            createObj('attribute', { characterid: charId, name: p + 'attack_name', current: atk.name || '' });
+            createObj('attribute', { characterid: charId, name: p + 'attack_tohit', current: atk.toHit || '' });
+            createObj('attribute', { characterid: charId, name: p + 'attack_damage', current: atk.damage || '' });
+            createObj('attribute', { characterid: charId, name: p + 'attack_dmgtype', current: atk.dmgType || '' });
+            createObj('attribute', { characterid: charId, name: p + 'attack_kb', current: atk.kb || '' });
+            createObj('attribute', { characterid: charId, name: p + 'attack_num', current: String(idx + 1) });
+          });
+        }
+
+        // Repeating: Careers
+        if (data.background) {
+          findObjs({ type: 'attribute', characterid: charId })
+            .filter(a => a.get('name').startsWith('repeating_careers_'))
+            .forEach(a => a.remove());
+          data.background.split(',').map(s => s.trim()).filter(Boolean).forEach(career => {
+            const rowId = generateRowID();
+            createObj('attribute', { characterid: charId, name: 'repeating_careers_' + rowId + '_career_name', current: career });
+          });
+        }
+
+        // Repeating: Protection
+        const protTypes = ['kinetic', 'energy', 'bio', 'entropy', 'psychic', 'other'];
+        findObjs({ type: 'attribute', characterid: charId })
+          .filter(a => a.get('name').startsWith('repeating_protection_'))
+          .forEach(a => a.remove());
+        for (let row = 0; row < 3; row++) {
+          const suffix = row === 0 ? '' : String(row + 1);
+          const hasData = protTypes.some(t => {
+            const key = 'prot' + t.charAt(0).toUpperCase() + t.slice(1) + suffix;
+            return data[key] && data[key] !== '';
+          });
+          if (!hasData) continue;
+          const rowId = generateRowID();
+          const p = 'repeating_protection_' + rowId + '_';
+          createObj('attribute', { characterid: charId, name: p + 'prot_name', current: 'Protection ' + (row + 1) });
+          protTypes.forEach(t => {
+            const key = 'prot' + t.charAt(0).toUpperCase() + t.slice(1) + suffix;
+            if (data[key]) createObj('attribute', { characterid: charId, name: p + 'prot_' + t, current: data[key] });
+          });
+        }
+
+        ch("MP", `/w gm Imported <b>${esc(charName)}</b> from handout <b>${esc(handoutName)}</b>.`);
+      });
+    });
   }
 
   // -------------------------
@@ -7742,11 +8055,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.60.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.61.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.60.0 READY");
+  log("MP ENGINE v2.61.0 READY");
 });
