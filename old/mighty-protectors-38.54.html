@@ -1,4 +1,4 @@
-<!-- Mighty Protectors Roll20 Character Sheet v38.53 (v38.52 + fix Macro Gen missing bar3 stance in to-hit) -->
+<!-- Mighty Protectors Roll20 Character Sheet v38.54 (v38.53 + remove bar3 stance, stance TBD) -->
 
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
@@ -262,6 +262,8 @@
             <button type="action" class="mp-labellink sheet-mp-rollbtn" name="act_heal" 
   style="font-size:9px; font-weight:bold; height:20px; line-height:18px; padding:0 6px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #a82531; border-radius:3px;" 
   title="Roll daily healing">Heal</button>
+            <span style="color:#aaa; font-size:10px; margin-left:56px;">Stance</span>
+              <input type="text" name="attr_stance" value="0" style="width:28px; background:#0d0d1a; color:#f4d03f; border:1px solid #f4d03f; padding:2px; text-align:center; font-size:10px;" title="Defensive stance modifier (subtracted from attacker's to-hit)" />
         </td>
       </tr>
       <!-- AG -->
@@ -473,7 +475,7 @@
         <input type="hidden" name="attr_attack_atk_full" />
         <input type="hidden" name="attr_attack_pr" />
 
-        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{tname=@{target|Target|token_name}}} {{tdef=[[((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{deftype=@{attack_atk_full}}} {{stance=[[0-@{target|Target|bar3}]]}} {{tstance=@{target|Target|bar3}}} {{rngmod=[[@{range_query}]]}} {{called=[[@{called_query}]]}} {{aim=[[@{aim_query}]]}} {{multi=[[@{multi_query}]]}} {{other=[[@{other_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
+        <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=1}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))+@{range_query}+@{called_query}+@{aim_query}+@{multi_query}+@{other_query}]]}} {{damage=[[@{attack_damage}+@{push_dmg_query}]]}} {{type=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{pr=@{attack_pr}}} {{tname=@{target|Target|token_name}}} {{tdef=[[((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{deftype=@{attack_atk_full}}} {{stance=[[0]]}} {{tstance=0}} {{rngmod=[[@{range_query}]]}} {{called=[[@{called_query}]]}} {{aim=[[@{aim_query}]]}} {{multi=[[@{multi_query}]]}} {{other=[[@{other_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 4px; cursor:pointer; font-size:10px;">Roll</button>
       </td>
 
       <td style="width:40px; text-align:center; padding:1px; vertical-align:middle;">
