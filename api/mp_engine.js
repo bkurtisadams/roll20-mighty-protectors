@@ -6,9 +6,11 @@
  *          so Roll20 won't evaluate @{}, ?{}, %{}, etc. when shown
  *        - escMacro() helper added next to esc() (escapes &, <, >, {, }, ?, @,
  *          [, ], |, =, %)
- *        - Sheet-replicating macros (HTH/Init/Mass/Wealth/Luck) use
- *          %{selected|roll_X} to delegate to sheet buttons instead of duplicating
- *          their roll templates (single source of truth on the sheet side)
+ *        - Sheet macros (HTH/Init/Mass/Wealth/Luck) inline the sheet button's
+ *          roll template directly so they work whether installed as Collections
+ *          macros or as character abilities; %{selected|...} delegation does not
+ *          work because Roll20's %{...} syntax requires an explicit character
+ *          name or ID, not the "selected" keyword
  * v2.61.0: MP Builder import/export
  *        - !mp export: select token, exports character to handout JSON for MP Builder
  *        - !mp import --name HandoutName: imports MP Builder JSON from handout
@@ -327,12 +329,20 @@
  * Wake     !mp wakeup --target @{selected|token_id}
  * Restore  !mp restore  (GM only)
  *
- * ── SHEET ROLLS (delegate to sheet button via %{selected|...} syntax) ──
- * HTH      %{selected|roll_hth}
- * Init     %{selected|roll_initiative}
- * Mass     %{selected|roll_mass}
- * Wealth   %{selected|roll_wealth}
- * Luck     %{selected|roll_luck}
+ * ── SHEET ROLLS (inline templates duplicating sheet button values) ──
+ * HTH      &{template:default} {{name=@{selected|character_name} rolls HTH Damage}}
+ *          {{Damage=[[@{selected|hth_damage}]]}}
+ * Init     &{template:default} {{name=@{selected|character_name} rolls Initiative}}
+ *          {{Roll=[[@{selected|initiative_score} + @{selected|initiative_mod}
+ *          + (@{selected|agility_score} / 100) &{tracker}]]}}
+ * Mass     &{template:default} {{name=@{selected|character_name} rolls Mass}}
+ *          {{Mass=[[@{selected|mass} + @{selected|kb_resistance}]]}}
+ *          {{KBR=@{selected|kb_resistance}}}
+ * Wealth   &{template:default} {{name=@{selected|character_name} rolls Wealth}}
+ *          {{Roll=[[@{selected|wealth}]]}}
+ * Luck     &{template:default} {{name=@{selected|character_name} rolls Luck}}
+ *          {{Roll=[[1d20cs<@{selected|luck}cf>@{selected|luck}]]}}
+ *          {{Target=[[@{selected|luck}]]-}}
  * ────────────────────────────────────────────────────────────────
  */
 log("MP ENGINE v2.62 FILE STARTING");
@@ -7436,16 +7446,16 @@ function cmdStance(msg, args) {
       action: "!mp wakeup --target @{selected|token_id}" },
     { name: "Restore", cat: "API",   desc: "Restore selected tokens to full (GM only)",
       action: "!mp restore" },
-    { name: "HTH",     cat: "Sheet", desc: "Roll HTH damage (delegates to sheet button roll_hth)",
-      action: "%{selected|roll_hth}" },
-    { name: "Init",    cat: "Sheet", desc: "Roll initiative (delegates to sheet button roll_initiative)",
-      action: "%{selected|roll_initiative}" },
-    { name: "Mass",    cat: "Sheet", desc: "Mass roll for knockback (delegates to sheet button roll_mass)",
-      action: "%{selected|roll_mass}" },
-    { name: "Wealth",  cat: "Sheet", desc: "Wealth roll (delegates to sheet button roll_wealth)",
-      action: "%{selected|roll_wealth}" },
-    { name: "Luck",    cat: "Sheet", desc: "Luck save (delegates to sheet button roll_luck)",
-      action: "%{selected|roll_luck}" }
+    { name: "HTH",     cat: "Sheet", desc: "Roll HTH damage",
+      action: "&{template:default} {{name=@{selected|character_name} rolls HTH Damage}} {{Damage=[[@{selected|hth_damage}]]}}" },
+    { name: "Init",    cat: "Sheet", desc: "Roll initiative (adds to turn tracker)",
+      action: "&{template:default} {{name=@{selected|character_name} rolls Initiative}} {{Roll=[[@{selected|initiative_score} + @{selected|initiative_mod} + (@{selected|agility_score} / 100) &{tracker}]]}}" },
+    { name: "Mass",    cat: "Sheet", desc: "Mass roll for knockback (includes KB Resistance)",
+      action: "&{template:default} {{name=@{selected|character_name} rolls Mass}} {{Mass=[[@{selected|mass} + @{selected|kb_resistance}]]}} {{KBR=@{selected|kb_resistance}}}" },
+    { name: "Wealth",  cat: "Sheet", desc: "Wealth roll",
+      action: "&{template:default} {{name=@{selected|character_name} rolls Wealth}} {{Roll=[[@{selected|wealth}]]}}" },
+    { name: "Luck",    cat: "Sheet", desc: "Luck save (1d20 vs luck score)",
+      action: "&{template:default} {{name=@{selected|character_name} rolls Luck}} {{Roll=[[1d20cs<@{selected|luck}cf>@{selected|luck}]]}} {{Target=[[@{selected|luck}]]-}}" }
   ];
 
   // Usage: !mp macros               list everything
@@ -7459,26 +7469,29 @@ function cmdStance(msg, args) {
       ? CANONICAL_MACROS.filter(m => m.name.toLowerCase().includes(filter) || m.cat.toLowerCase().includes(filter))
       : CANONICAL_MACROS;
 
-    let out = `<div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; padding:8px; font-family:Arial,sans-serif; font-size:11px; color:#eaeaea;">`;
-    out += `<div style="color:#50fa7b; font-weight:bold; margin-bottom:6px;">MP Macros${filter ? ` (filter: ${esc(filter)})` : ""}</div>`;
+    let out = `<div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">`;
+    out += `<div style="background:#50fa7b; color:#000; font-weight:bold; padding:6px 10px;">MP Macros${filter ? ` (filter: ${esc(filter)})` : ""}</div>`;
+    out += `<div style="padding:8px 10px; color:#eaeaea;">`;
 
     if (macros.length === 0) {
-      out += `<div style="color:#888;"><i>No macros match.</i></div>`;
+      out += `<div style="color:#999; font-style:italic;">No macros match.</div>`;
     } else {
       let lastCat = "";
       for (const m of macros) {
         if (m.cat !== lastCat) {
-          out += `<div style="color:#f4d03f; font-weight:bold; font-size:10px; margin-top:6px;">── ${esc(m.cat)} ──</div>`;
+          if (lastCat !== "") {
+            out += `<div style="border-top:1px solid #555; margin:8px 0 6px 0;"></div>`;
+          }
+          out += `<div style="color:#f4d03f; font-weight:bold; margin-bottom:4px;">${esc(m.cat.toUpperCase())}</div>`;
           lastCat = m.cat;
         }
-        out += `<div style="margin-bottom:4px;">`;
-        out += `<div style="color:#8be9fd; font-weight:bold;">${esc(m.name)}</div>`;
-        out += `<div style="color:#aaa; font-size:9px; font-style:italic;">${esc(m.desc)}</div>`;
-        out += `<pre style="color:#eaeaea; background:#1a1428; padding:3px; border-radius:3px; white-space:pre-wrap; word-break:break-all; margin:2px 0; font-size:9px;">${escMacro(m.action)}</pre>`;
+        out += `<div style="margin-bottom:6px;">`;
+        out += `<div><span style="color:#8be9fd; font-weight:bold;">${esc(m.name)}</span> <span style="color:#aaa; font-size:11px;">${esc(m.desc)}</span></div>`;
+        out += `<div style="color:#eaeaea; font-family:monospace; font-size:10px; white-space:pre-wrap; word-break:break-all; background:#1a1428; padding:4px; border-radius:3px; margin-top:2px;">${escMacro(m.action)}</div>`;
         out += `</div>`;
       }
     }
-    out += `</div>`;
+    out += `</div></div>`;
 
     ch("MP", wt(msg) + out);
   }
@@ -7777,7 +7790,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.61.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.62.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8165,11 +8178,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.61.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.62.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.61.0 READY");
+  log("MP ENGINE v2.62.0 READY");
 });
