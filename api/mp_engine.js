@@ -1,16 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.62.0 - 2026-05-12
- * v2.62.0: Player macro reference + !mp macros command
- *        - PLAYER MACRO REFERENCE block (top of file) documents canonical macros
- *        - CANONICAL_MACROS array near cmdMacros is the runtime source of truth
- *        - !mp macros [filter] whispers a card listing every macro, entity-escaped
- *          so Roll20 won't evaluate @{}, ?{}, %{}, etc. when shown
- *        - escMacro() helper added next to esc() (escapes &, <, >, {, }, ?, @,
- *          [, ], |, =, %)
- *        - Sheet macros (HTH/Init/Mass/Wealth/Luck) inline the sheet button's
- *          roll template directly so they work whether installed as Collections
- *          macros or as character abilities; %{selected|...} delegation does not
- *          work because Roll20's %{...} syntax requires an explicit character
- *          name or ID, not the "selected" keyword
+/* Mighty Protectors Roll20 API Engine v2.61.0 - 2026-04-01
  * v2.61.0: MP Builder import/export
  *        - !mp export: select token, exports character to handout JSON for MP Builder
  *        - !mp import --name HandoutName: imports MP Builder JSON from handout
@@ -312,40 +300,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-
-/* ─── PLAYER MACRO REFERENCE ─────────────────────────────────────
- * Share these with players (Collections > Macros, or paste as a
- * character ability). CANONICAL_MACROS near cmdMacros is the runtime
- * source for !mp macros; keep this block in sync when editing.
- * Players can list them in-game with: !mp macros [filter]
- *
- * ── API-DRIVEN ──
- * ATK-N    !mp atk N --atk @{selected|token_id} --target @{target|token_id}
- *          --push ?{Push|0|2} --mod ?{Modifier|0}
- *          --called ?{Called|None|Head|Arm|Leg|Light|Heavy|Gear}
- *          (N = attack row number; install as ATK-1, ATK-2, etc.)
- * Save     !mp sv ?{BC|EN|AG|IN|CL} ?{Mod|0}
- * Status   !mp status --target @{selected|token_id}
- * Wake     !mp wakeup --target @{selected|token_id}
- * Restore  !mp restore  (GM only)
- *
- * ── SHEET ROLLS (inline templates duplicating sheet button values) ──
- * HTH      &{template:default} {{name=@{selected|character_name} rolls HTH Damage}}
- *          {{Damage=[[@{selected|hth_damage}]]}}
- * Init     &{template:default} {{name=@{selected|character_name} rolls Initiative}}
- *          {{Roll=[[@{selected|initiative_score} + @{selected|initiative_mod}
- *          + (@{selected|agility_score} / 100) &{tracker}]]}}
- * Mass     &{template:default} {{name=@{selected|character_name} rolls Mass}}
- *          {{Mass=[[@{selected|mass} + @{selected|kb_resistance}]]}}
- *          {{KBR=@{selected|kb_resistance}}}
- * Wealth   &{template:default} {{name=@{selected|character_name} rolls Wealth}}
- *          {{Roll=[[@{selected|wealth}]]}}
- * Luck     &{template:default} {{name=@{selected|character_name} rolls Luck}}
- *          {{Roll=[[1d20cs<@{selected|luck}cf>@{selected|luck}]]}}
- *          {{Target=[[@{selected|luck}]]-}}
- * ────────────────────────────────────────────────────────────────
- */
-log("MP ENGINE v2.62 FILE STARTING");
+log("MP ENGINE v2.60 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -571,18 +526,6 @@ MP.Engine = (function () {
     return String(s || "").replace(/[<>"'&]/g, c => ({
       "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "&": "&amp;"
     }[c]));
-  }
-
-  // Entity-escape macro text so Roll20 won't evaluate @{}, ?{}, %{}, etc. when shown
-  function escMacro(s) {
-    return String(s || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/\{/g, "&#123;").replace(/\}/g, "&#125;")
-      .replace(/\?/g, "&#63;").replace(/@/g, "&#64;")
-      .replace(/\[/g, "&#91;").replace(/\]/g, "&#93;")
-      .replace(/\|/g, "&#124;").replace(/=/g, "&#61;")
-      .replace(/%/g, "&#37;");
   }
 
   // --- PERMISSION & WHISPER HELPERS ---
@@ -7433,69 +7376,6 @@ function cmdStance(msg, args) {
     }
   }
 
-  // Runtime source for !mp macros chat command. Mirrors the PLAYER MACRO
-  // REFERENCE block at the top of this file; keep both in sync when editing.
-  const CANONICAL_MACROS = [
-    { name: "ATK-N",   cat: "API",   desc: "Attack row N (install as ATK-1, ATK-2, etc.)",
-      action: "!mp atk N --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0|2} --mod ?{Modifier|0} --called ?{Called|None|Head|Arm|Leg|Light|Heavy|Gear}" },
-    { name: "Save",    cat: "API",   desc: "BC save with success/fail card",
-      action: "!mp sv ?{BC|EN|AG|IN|CL} ?{Mod|0}" },
-    { name: "Status",  cat: "API",   desc: "Show Hits/Power/conditions/snare",
-      action: "!mp status --target @{selected|token_id}" },
-    { name: "Wake",    cat: "API",   desc: "Roll d20 vs Hits to regain consciousness",
-      action: "!mp wakeup --target @{selected|token_id}" },
-    { name: "Restore", cat: "API",   desc: "Restore selected tokens to full (GM only)",
-      action: "!mp restore" },
-    { name: "HTH",     cat: "Sheet", desc: "Roll HTH damage",
-      action: "&{template:default} {{name=@{selected|character_name} rolls HTH Damage}} {{Damage=[[@{selected|hth_damage}]]}}" },
-    { name: "Init",    cat: "Sheet", desc: "Roll initiative (adds to turn tracker)",
-      action: "&{template:default} {{name=@{selected|character_name} rolls Initiative}} {{Roll=[[@{selected|initiative_score} + @{selected|initiative_mod} + (@{selected|agility_score} / 100) &{tracker}]]}}" },
-    { name: "Mass",    cat: "Sheet", desc: "Mass roll for knockback (includes KB Resistance)",
-      action: "&{template:default} {{name=@{selected|character_name} rolls Mass}} {{Mass=[[@{selected|mass} + @{selected|kb_resistance}]]}} {{KBR=@{selected|kb_resistance}}}" },
-    { name: "Wealth",  cat: "Sheet", desc: "Wealth roll",
-      action: "&{template:default} {{name=@{selected|character_name} rolls Wealth}} {{Roll=[[@{selected|wealth}]]}}" },
-    { name: "Luck",    cat: "Sheet", desc: "Luck save (1d20 vs luck score)",
-      action: "&{template:default} {{name=@{selected|character_name} rolls Luck}} {{Roll=[[1d20cs<@{selected|luck}cf>@{selected|luck}]]}} {{Target=[[@{selected|luck}]]-}}" }
-  ];
-
-  // Usage: !mp macros               list everything
-  //        !mp macros atk           filter by name substring
-  //        !mp macros --filter api  filter by name or category
-  function cmdMacros(msg, args) {
-    const parts = msg.content.split(/\s+/);
-    const positional = (parts[2] && !parts[2].startsWith("--")) ? parts[2] : "";
-    const filter = String(args.filter || positional || "").toLowerCase();
-    const macros = filter
-      ? CANONICAL_MACROS.filter(m => m.name.toLowerCase().includes(filter) || m.cat.toLowerCase().includes(filter))
-      : CANONICAL_MACROS;
-
-    let out = `<div style="background:#2b2b3d; border:2px solid #50fa7b; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">`;
-    out += `<div style="background:#50fa7b; color:#000; font-weight:bold; padding:6px 10px;">MP Macros${filter ? ` (filter: ${esc(filter)})` : ""}</div>`;
-    out += `<div style="padding:8px 10px; color:#eaeaea;">`;
-
-    if (macros.length === 0) {
-      out += `<div style="color:#999; font-style:italic;">No macros match.</div>`;
-    } else {
-      let lastCat = "";
-      for (const m of macros) {
-        if (m.cat !== lastCat) {
-          if (lastCat !== "") {
-            out += `<div style="border-top:1px solid #555; margin:8px 0 6px 0;"></div>`;
-          }
-          out += `<div style="color:#f4d03f; font-weight:bold; margin-bottom:4px;">${esc(m.cat.toUpperCase())}</div>`;
-          lastCat = m.cat;
-        }
-        out += `<div style="margin-bottom:6px;">`;
-        out += `<div><span style="color:#8be9fd; font-weight:bold;">${esc(m.name)}</span> <span style="color:#aaa; font-size:11px;">${esc(m.desc)}</span></div>`;
-        out += `<div style="color:#eaeaea; font-family:monospace; font-size:10px; white-space:pre-wrap; word-break:break-all; background:#1a1428; padding:4px; border-radius:3px; margin-top:2px;">${escMacro(m.action)}</div>`;
-        out += `</div>`;
-      }
-    }
-    out += `</div></div>`;
-
-    ch("MP", wt(msg) + out);
-  }
-
   function cmdConfig(msg, args) {
     if (!playerIsGM(msg.playerid)) {
       return ch("MP", "/w " + msg.who + " Only GM can change config.");
@@ -7601,9 +7481,6 @@ function cmdStance(msg, args) {
       case "config": 
         const configParts = msg.content.split(/\s+/);
         return cmdConfig(msg, { setting: args.setting || configParts[2], value: args.value || configParts[3] });
-      case "macros":
-      case "macro":
-        return cmdMacros(msg, args);
       case "apply": return cmdApply(msg, args);
       case "limbsave": return cmdLimbSave(msg, args);
       case "save": return cmdSave(msg, args);
@@ -7790,7 +7667,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.62.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.61.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8178,11 +8055,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.62.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.61.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.62.0 READY");
+  log("MP ENGINE v2.61.0 READY");
 });
