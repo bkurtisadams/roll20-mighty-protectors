@@ -4368,7 +4368,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   }
 
   function calcVehicle(resetCurrent) {
-    getAttrs(["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver"], function(v) {
+    getAttrs(["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver","vehicle_hits","vehicle_hits_max","vehicle_power","vehicle_power_max"], function(v) {
       var bcp = v.vehicle_base_cp || "15";
       var row = vehicleSizeTable[bcp];
       if (!row) return;
@@ -4441,14 +4441,14 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       if (resetCurrent) {
         setAttrs({ vehicle_hits: hits, vehicle_power: power }, {silent: true});
       } else {
-        getAttrs(["vehicle_hits","vehicle_power"], function(cur) {
-          var curH = cur.vehicle_hits;
-          var curP = cur.vehicle_power;
-          var updates = {};
-          if (curH === undefined || curH === "" || curH === null) updates.vehicle_hits = hits;
-          if (curP === undefined || curP === "" || curP === null) updates.vehicle_power = power;
-          if (Object.keys(updates).length > 0) setAttrs(updates, {silent: true});
-        });
+        var curH = v.vehicle_hits;
+        var curP = v.vehicle_power;
+        var oldHitsMax = parseInt(v.vehicle_hits_max) || 0;
+        var oldPowerMax = parseInt(v.vehicle_power_max) || 0;
+        var updates = {};
+        if (curH === undefined || curH === "" || curH === null || parseInt(curH) === oldHitsMax) updates.vehicle_hits = hits;
+        if (curP === undefined || curP === "" || curP === null || parseInt(curP) === oldPowerMax) updates.vehicle_power = power;
+        if (Object.keys(updates).length > 0) setAttrs(updates, {silent: true});
       }
     });
   }
