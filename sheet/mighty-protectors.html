@@ -1,4 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.25 - DOT Cap hover tooltip on damage field
+<!-- Mighty Protectors Roll20 Character Sheet v44.26 - Preserve vehicle current Hits/Power on recalc
+        - calcVehicle reads vehicle_hits/_power and prior _max values up front
+        - On non-reset recalc: track to new max only if current was empty or equal to old max
+        - Damaged/expended vehicles retain their damage/power loss when AG/IN/maneuver change
+v44.25: - DOT Cap hover tooltip on damage field
         - Damage input wrapped in container with hover tooltip showing "Avg X + ToHit Y = Z / DoT Cap N"
         - Damage turns red when attack DOT value exceeds character's DoT Cap
         - No-damage attacks (save-only) compare against Ability Cap instead
