@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.61.0 - 2026-04-01
+/* Mighty Protectors Roll20 API Engine v2.61.1 - 2026-05-16
+ * v2.61.1: Fix area-effect escape buttons not rendering for players
+ *        - handleAreaAttack: per-token escape buttons were whispered using
+ *          t.controller (a player ID) as the /w target, so /w "${playerId}"
+ *          silently delivered to no one. Route through chToChar(t.charId)
+ *          so the character's controllers are resolved by name.
  * v2.61.0: MP Builder import/export
  *        - !mp export: select token, exports character to handout JSON for MP Builder
  *        - !mp import --name HandoutName: imports MP Builder JSON from handout
@@ -2623,7 +2628,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           const playerButtons = `[Leap Clear (${escapeTN}-)](!mp areaescape --id ${rollId} --target ${t.tokenId}) ` +
             `[Dive Prone (${escapeTNProne}-)](!mp areaescape --id ${rollId} --target ${t.tokenId} --prone)` +
             (shield ? ` [Shield Block (${shieldTN}-)](!mp areashield --id ${rollId} --target ${t.tokenId})` : "");
-          sendChat("MP", `/w "${t.controller}" <b>AREA EFFECT vs ${esc(t.name)}</b><br/>${playerButtons}`);
+          // chToChar resolves the character's controllers to display names;
+          // t.controller is a player ID (not a display name) so /w "${t.controller}" silently fails.
+          chToChar("MP", `<b>AREA EFFECT vs ${esc(t.name)}</b><br/>${playerButtons}`, t.charId);
         }
       });
       
@@ -7667,7 +7674,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.61.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.61.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8055,11 +8062,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.61.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.61.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.61.0 READY");
+  log("MP ENGINE v2.61.1 READY");
 });
