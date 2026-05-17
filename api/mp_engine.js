@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.61.2 - 2026-05-16
+/* Mighty Protectors Roll20 API Engine v2.61.3 - 2026-05-17
+ * v2.61.3: Fix Stance display on attack chat card
+ *        - Previously showed only defender's bar3 (defMod), so an attacker in
+ *          Defensive Stance saw "Stance: 0" even though their -3 to-hit was
+ *          being applied. Now shows both: "Stance: A:-3 D:+3" with A=attacker's
+ *          stance penalty and D=defender's stance bonus. Sign prefix on D so
+ *          +3/+6 bonuses are obvious. Title tooltip lists the stance commands.
  * v2.61.2: Add !mp showbars for toggling player bar visibility
  *        - cmdShowBars sets showplayers_bar1/2/3 on selected tokens
  *        - GM-only, supports --bars 1,2,3 and --off
@@ -2410,7 +2416,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<div style="padding:5px 10px; font-size:11px; color:#889; background:#1a1a2e;">`;
     html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#997; margin-bottom:3px;">Modifiers</div>`;
     html += `<span style="color:#aaa;">${defTypeLabel}: <b style="color:#ddd;">${defValue}</b></span> `;
-    html += `<span style="color:#aaa;">Stance: <b style="color:${modColor(defMod)};">${defMod}</b></span> `;
+    html += `<span style="color:#aaa; cursor:help;" title="Change stance: !mp stance [def | full | offbal | normal]&#10;A = attacker's to-hit penalty, D = defender's bonus to defense">Stance: A:<b style="color:${modColor(atkStancePenalty)};">${atkStancePenalty}</b> D:<b style="color:${modColor(defMod)};">${defMod > 0 ? '+' : ''}${defMod}</b></span> `;
     html += `<span style="color:#aaa;">Rng: <b style="color:${modColor(rangePenalty)};">${rangePenalty}</b></span> `;
     html += `<span style="color:#aaa;">Aim: <b style="color:${modColor(aimVal)};">${aimVal}</b></span> `;
     html += `<span style="color:#aaa;">Multi: <b style="color:${modColor(multiVal)};">${multiVal}</b></span> `;
@@ -7704,7 +7710,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.61.2</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.61.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8092,11 +8098,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.61.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.61.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.61.2 READY");
+  log("MP ENGINE v2.61.0 READY");
 });
