@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.61.1 - 2026-05-16
+/* Mighty Protectors Roll20 API Engine v2.61.2 - 2026-05-16
+ * v2.61.2: Add !mp showbars for toggling player bar visibility
+ *        - cmdShowBars sets showplayers_bar1/2/3 on selected tokens
+ *        - GM-only, supports --bars 1,2,3 and --off
+ *        - Use case: testing, quickly seeing Hits/Power on every token
  * v2.61.1: Fix area-effect escape buttons not rendering for players
  *        - handleAreaAttack: per-token escape buttons were whispered using
  *          t.controller (a player ID) as the /w target, so /w "${playerId}"
@@ -5993,6 +5997,29 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
   // -------------------------
+  // TOKEN BAR VISIBILITY
+  // -------------------------
+  // Usage: !mp showbars [--bars 1,2,3] [--off]
+  // Default: turn on player visibility for all three bars on selected tokens.
+  // Useful for testing when you want to see Hits/Power at a glance across
+  // every token on the page.
+
+  function cmdShowBars(msg, args) {
+    const toks = (msg.selected || [])
+      .map(s => getObj("graphic", s._id))
+      .filter(Boolean);
+    if (!toks.length) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Select one or more tokens first.`);
+    }
+    const bars = args.bars
+      ? String(args.bars).split(/[,\s]+/).map(s => s.trim()).filter(Boolean)
+      : ["1", "2", "3"];
+    const on = args.off === undefined;
+    toks.forEach(t => bars.forEach(b => t.set(`showplayers_bar${b}`, on)));
+    ch("MP", `/w gm <b>MP:</b> ${on ? "Showed" : "Hid"} bar${bars.length > 1 ? "s" : ""} ${bars.join(",")} on ${toks.length} token${toks.length > 1 ? "s" : ""}.`);
+  }
+
+  // -------------------------
   // VEHICLE MODE TOGGLE
   // -------------------------
 
@@ -7555,6 +7582,9 @@ function cmdStance(msg, args) {
       case "veh":
         if (gmOnly(msg)) return;
         return cmdVehicle(msg, args);
+      case "showbars":
+        if (gmOnly(msg)) return;
+        return cmdShowBars(msg, args);
       case "info": return cmdInfo(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "atk": return cmdQuickAttack(msg, args);
@@ -7674,7 +7704,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.61.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.61.2</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8062,11 +8092,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.61.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.61.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.61.1 READY");
+  log("MP ENGINE v2.61.2 READY");
 });
