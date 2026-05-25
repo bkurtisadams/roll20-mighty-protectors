@@ -7928,7 +7928,7 @@ function cmdStance(msg, args) {
     handout.get('gmnotes', function(gmnotes) {
       handout.get('notes', function(notes) {
         let raw = gmnotes || notes || '';
-        raw = raw.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+        raw = raw.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;|\u00a0/g, ' ').replace(/[\u201c\u201d]/g, '"').replace(/[\u2018\u2019]/g, "'").trim();
 
         let data;
         try { data = JSON.parse(raw); } catch(e) {
