@@ -1,6 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.61.3 - 2026-05-17
- * v2.61.3: Fix Stance display on attack chat card
- *        - Previously showed only defender's bar3 (defMod), so an attacker in
+/* Mighty Protectors Roll20 API Engine v2.61.4 - 2026-05-25
+ * v2.61.4: Define generateRowID/generateUUID (was undefined) so
+ *          !mp import can build its repeating rows — abilities,
+ *          attacks, careers, protection. Import previously threw
+ *          ReferenceError after BCs, leaving only basic characteristics.
+ * v2.61.3: Fix Stance display on attack chat card *        - Previously showed only defender's bar3 (defMod), so an attacker in
  *          Defensive Stance saw "Stance: 0" even though their -3 to-hit was
  *          being applied. Now shows both: "Stance: A:-3 D:+3" with A=attacker's
  *          stance penalty and D=defender's stance bonus. Sign prefix on D so
@@ -526,6 +529,36 @@ MP.Engine = (function () {
   // -------------------------
   // UTILITY FUNCTIONS
   // -------------------------  
+  // --- Roll20 repeating-row id generator (standard implementation) ---
+var generateUUID = (function () {
+  "use strict";
+  var a = 0, b = [];
+  return function () {
+    var c = (new Date()).getTime() + 0, d = c === a;
+    a = c;
+    var e = new Array(8), f;
+    for (f = 7; f >= 0; f--) {
+      e[f] = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz".charAt(c % 64);
+      c = Math.floor(c / 64);
+    }
+    c = e.join("");
+    if (d) {
+      for (f = 11; f >= 0 && b[f] === 63; f--) { b[f] = 0; }
+      b[f]++;
+    } else {
+      for (f = 0; f < 12; f++) { b[f] = Math.floor(64 * Math.random()); }
+    }
+    for (f = 0; f < 12; f++) {
+      c += "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz".charAt(b[f]);
+    }
+    return c;
+  };
+}());
+
+function generateRowID() {
+  "use strict";
+  return generateUUID().replace(/_/g, "Z");
+}
 
   function ch(who, msg) {
     sendChat(who, msg, null, { noarchive: true });
