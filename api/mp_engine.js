@@ -1,4 +1,19 @@
-/* Mighty Protectors Roll20 API Engine v2.62.0 - 2026-06-07
+/* Mighty Protectors Roll20 API Engine v2.63.1 - 2026-06-07
+ * v2.63.1: Fix Undo not clearing status-effect badges. Restore now
+ *          toggles markers via the per-marker status_<name> API (diffing
+ *          current vs. snapshot) instead of setting the aggregate
+ *          "statusmarkers" string, which did not reliably remove a badge
+ *          that was turned on with status_<name>.
+ * v2.63.0: Add Undo to combat chat cards.
+ *          - New undo store + snapshot/restore of a token's bars, status
+ *            markers, FF aura, and conditions; pruned to last 40 entries.
+ *          - Damage result card (!mp apply) and save card (!mp save) show
+ *            [↩ Undo] restoring the target's full pre-resolution state.
+ *          - Attack to-hit card shows [↩ Undo] to cancel a misfired attack:
+ *            refunds attacker PR/charges and voids the pending so its
+ *            apply/save buttons stop working.
+ *          - New command/router case: !mp undo --id ID (GM only).
+ *          - Area attacks are not yet undoable (specialized path).
  * v2.62.0: Implement Duration modifier (MP Modifiers, "Duration").
  *          - Attack build now reads attack_duration_num/unit/active/escape.
  *          - On a confirmed hit, a durational attack sets an ongoing-effect
@@ -475,6 +490,7 @@ MP.Engine = (function () {
     snares: {},
     conditions: {},  // Token conditions: { tokenId: [{ type, sourceAtk, saveTN, recTN, recTime, marker, created, effectDesc, atkCharId }] }
     currentRound: 1,  // Combat round counter
+    undo: {},  // Reversible snapshots: { undoId: { label, ts, tokenSnaps[], extra } }
     autoroll: true,
     enabled: true
   };
@@ -485,6 +501,8 @@ MP.Engine = (function () {
   if (!state.MP_Engine.pendingArea) state.MP_Engine.pendingArea = {};
   // Ensure currentRound exists for existing state
   if (!state.MP_Engine.currentRound) state.MP_Engine.currentRound = 1;
+  // Ensure undo store exists for existing state
+  if (!state.MP_Engine.undo) state.MP_Engine.undo = {};
 
   // Status markers for save attack conditions
   const CONDITION_MARKERS = {
@@ -591,6 +609,112 @@ MP.Engine = (function () {
       }
     }
     return snippet;
+  }
+
+  // ============ UNDO SYSTEM ============
+  // Combat commands register a reversible snapshot keyed by an undo id; the chat
+  // card shows an [↩ Undo] button. A token snapshot captures bars, all status
+  // markers, FF aura, and the conditions array — enough to reverse a command's
+  // effect on that token. "extra" optionally restores attacker resources.
+  function pruneUndo() {
+    const u = state.MP_Engine.undo || {};
+    const ids = Object.keys(u);
+    if (ids.length <= 40) return;
+    ids.map(id => ({ id, ts: u[id].ts || 0 }))
+       .sort((a, b) => a.ts - b.ts)
+       .slice(0, ids.length - 40)
+       .forEach(e => { delete u[e.id]; });
+  }
+
+  function snapshotToken(tokenId) {
+    const tok = tokenId ? getObj("graphic", tokenId) : null;
+    if (!tok) return null;
+    return {
+      tokenId: tokenId,
+      bar1: tok.get("bar1_value"),
+      bar2: tok.get("bar2_value"),
+      bar3: tok.get("bar3_value"),
+      statusmarkers: tok.get("statusmarkers"),
+      aura2_radius: tok.get("aura2_radius"),
+      aura2_color: tok.get("aura2_color"),
+      showplayers_aura2: tok.get("showplayers_aura2"),
+      conditions: JSON.parse(JSON.stringify(state.MP_Engine.conditions[tokenId] || []))
+    };
+  }
+
+  // Parse a Roll20 statusmarkers string ("skull,stopwatch@3") into base marker names.
+  function parseMarkers(s) {
+    return String(s || "").split(",").map(m => m.trim().split("@")[0]).filter(Boolean);
+  }
+
+  function restoreTokenSnapshot(snap) {
+    if (!snap) return;
+    const tok = getObj("graphic", snap.tokenId);
+    if (tok) {
+      tok.set({
+        bar1_value: snap.bar1,
+        bar2_value: snap.bar2,
+        bar3_value: snap.bar3,
+        aura2_radius: snap.aura2_radius,
+        aura2_color: snap.aura2_color,
+        showplayers_aura2: snap.showplayers_aura2
+      });
+      // Restore status markers using the same per-marker status_<name> API the rest
+      // of the engine uses to set them — setting the aggregate "statusmarkers" string
+      // does not reliably clear a badge that was turned on via status_<name>.
+      const target = parseMarkers(snap.statusmarkers);
+      const current = parseMarkers(tok.get("statusmarkers"));
+      const targetHas = {}; target.forEach(m => { targetHas[m] = true; });
+      const currentHas = {}; current.forEach(m => { currentHas[m] = true; });
+      current.forEach(m => { if (!targetHas[m]) tok.set("status_" + m, false); });
+      target.forEach(m => { if (!currentHas[m]) tok.set("status_" + m, true); });
+    }
+    state.MP_Engine.conditions[snap.tokenId] = snap.conditions || [];
+  }
+
+  // tokenSnaps: array from snapshotToken(). extra: optional attacker-resource refund.
+  function registerUndo(undoId, label, tokenSnaps, extra) {
+    if (!state.MP_Engine.undo) state.MP_Engine.undo = {};
+    state.MP_Engine.undo[undoId] = {
+      label: label || "action",
+      ts: Date.now(),
+      tokenSnaps: (tokenSnaps || []).filter(Boolean),
+      extra: extra || null
+    };
+    pruneUndo();
+  }
+
+  function undoButton(undoId) {
+    return `<br/><span style="font-size:11px;">[↩ Undo](!mp undo --id ${undoId})</span>`;
+  }
+
+  function cmdUndo(msg, args) {
+    const undoId = args.id;
+    const rec = undoId ? state.MP_Engine.undo[undoId] : null;
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> Nothing to undo (expired or already undone).`);
+
+    (rec.tokenSnaps || []).forEach(restoreTokenSnapshot);
+
+    const ex = rec.extra;
+    if (ex) {
+      // Refund attacker Power
+      if (ex.atkTokenId && ex.powerBefore != null) {
+        const atok = getObj("graphic", ex.atkTokenId);
+        if (ex.isVeh) setVehiclePower(atok, ex.atkCharId, num(ex.powerBefore, 0));
+        else setResource(atok, ex.atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR, num(ex.powerBefore, 0));
+      }
+      // Refund a spent charge (repeating attack attr)
+      if (ex.chgCharId && ex.chgRowId && ex.chgBefore !== undefined && ex.chgBefore !== "") {
+        setRepeatingAttackAttr(ex.chgCharId, ex.chgRowId, "attack_charges", ex.chgBefore);
+      }
+      // Void the pending attack so its damage buttons can't be applied after undo
+      if (ex.voidPending && state.MP_Engine.pending[ex.voidPending]) {
+        delete state.MP_Engine.pending[ex.voidPending];
+      }
+    }
+
+    delete state.MP_Engine.undo[undoId];
+    return ch("MP", `/w gm <div style="background:#2c3e50; border:2px solid #95a5a6; border-radius:6px; padding:6px 10px; color:#ecf0f1; font-family:Arial,sans-serif;">↩ <b>Undone:</b> ${esc(rec.label)}</div>`);
   }
 
   // -------------------------
@@ -2273,9 +2397,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     let prDeducted = 0;
     let totalPowerCost = 0;
+    let undoAtkIsVeh = false;
+    let undoAtkPowerBefore = null;
     if (atkTok) {
       const atkIsVeh = isVehicleMode(atkCharId);
       const atkPow0 = atkIsVeh ? getVehiclePower(atkTok, atkCharId) : getResource(atkTok, atkCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      undoAtkIsVeh = atkIsVeh;
+      undoAtkPowerBefore = atkPow0;
       if (isPushing) totalPowerCost += pushAmount;
       if (atkPR > 0) {
         prDeducted = Math.min(atkPR, Math.max(0, atkPow0 - (isPushing ? pushAmount : 0)));
@@ -2609,6 +2737,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         buttons = buildStandardAttackButtons(uniqueRollId, critResult, causesKB, state.MP_Engine.pending[uniqueRollId]);
       }
     }
+
+    // Undo: cancel this attack — refund attacker PR/charges and void the pending,
+    // so a misfired attack can be taken back before (or instead of) applying it.
+    const atkUndoId = "atk_" + uniqueRollId;
+    registerUndo(atkUndoId, esc(atkName) + " attack (cancel)", [], {
+      atkTokenId: atkTok ? atkTok.id : null,
+      atkCharId: atkCharId,
+      isVeh: undoAtkIsVeh,
+      powerBefore: undoAtkPowerBefore,
+      chgCharId: chgDeducted ? atkCharId : null,
+      chgRowId: chgDeducted ? rowId : null,
+      chgBefore: chgDeducted ? atkChgRaw : undefined,
+      voidPending: uniqueRollId
+    });
+    html += undoButton(atkUndoId);
 
     if (CFG.GM_ONLY_BUTTONS) {
       const charTargets = [atkCharId, defChar.id];
@@ -4247,6 +4390,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getObj("character", rec.defCharId);
     if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
 
+    // Undo: snapshot target state before any mutation (damage, markers, conditions).
+    const undoSnap = snapshotToken(rec.defTokenId);
+
     const defIsVehicle = isVehicleMode(defChar.id);
 
     // Base raw damage
@@ -4672,8 +4818,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       (rec.condIdx !== undefined ? `<br/>[Try Again](!mp recover --target ${rec.defTokenId} --idx ${rec.condIdx})` : "") +
       `</div>`;
 
+    // Undo: register the pre-mutation snapshot and append a button to the card.
+    const applyUndoId = "apply_" + rollId + "_" + randomInteger(999999);
+    registerUndo(applyUndoId, esc(rec.defName) + " — " + esc(rec.atkName || "attack") + " damage", [undoSnap], null);
+
     // Damage result to GM + defender only (attacker doesn't see target stats)
-    chToChar("MP", msgLine, rec.defCharId);
+    chToChar("MP", msgLine + undoButton(applyUndoId), rec.defCharId);
     
     // Store hits taken for limb shot saves (uses actual damage including head shot doubling)
     state.MP_Engine.pending[rollId].hitsTaken = toHits;
@@ -4830,6 +4980,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defTok = getObj("graphic", rec.defTokenId);
     const defChar = getObj("character", rec.defCharId);
     if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+
+    // Undo: snapshot target state before the save resolves (power, markers, conditions).
+    const undoSnap = snapshotToken(rec.defTokenId);
 
     const saveAttr = bcToSaveAttr(rec.saveBC);
     if (!saveAttr) {
@@ -5019,6 +5172,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       (rwPaid > 0 ? `<br/>Power: ${pow0} → ${pow1}` : "") +
       statusLine +
       damageButtons;
+
+    // Undo: register pre-save snapshot and append a button.
+    const saveUndoId = "save_" + rollId + "_" + randomInteger(999999);
+    registerUndo(saveUndoId, esc(rec.defName) + " — " + esc(rec.atkName || "save") + " save", [undoSnap], null);
+    msg_out += undoButton(saveUndoId);
 
     chCombat("MP", msg_out, rec.defCharId, rec.atkCharId);
   }
@@ -7708,6 +7866,11 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdRound(msg, args);
 
+      // Undo
+      case "undo":
+        if (gmOnly(msg)) return;
+        return cmdUndo(msg, args);
+
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
       case "status": return cmdStatus(msg, args);
@@ -7841,7 +8004,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.62.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.63.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -7882,6 +8045,8 @@ function cmdStance(msg, args) {
           <code>!mp round +N</code> - Advance N rounds<br/>
           <code>!mp round set N</code> - Set to round N<br/>
           <code>!mp round show</code> - Show current round<br/>
+          <b>Undo:</b><br/>
+          <code>!mp undo --id ID</code> - Undo a combat card (use the card's ↩ Undo button)<br/>
           <b>MP Builder Sync:</b><br/>
           <code>!mp export</code> - Export selected token to handout JSON (for MP Builder)<br/>
           <code>!mp import --name HandoutName</code> - Import MP Builder JSON from handout<br/>
@@ -8291,11 +8456,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.62.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.63.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.62.0 READY");
+  log("MP ENGINE v2.63.1 READY");
 });
