@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.63.5 - 2026-06-07
+/* Mighty Protectors Roll20 API Engine v2.63.6 - 2026-06-07
+ * v2.63.6: Match duration-tick damage buttons to the standard set. The
+ *          !mp round ongoing-damage prompt now offers Apply / Roll-With
+ *          Max / Roll-With Custom (modes noroll / rollwithmax /
+ *          rollwithcustom) like a normal damage card, instead of the
+ *          non-matching "Apply Damage" / "Roll-With" pair.
  * v2.63.5: Stop duplicate recovery-roll prompts. Save conditions now
  *          refresh in place instead of stacking a same-type duplicate
  *          (cmdSave), and !mp round emits at most one recovery prompt
@@ -8038,7 +8043,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.63.5</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.63.6</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8423,8 +8428,9 @@ function cmdStance(msg, args) {
                 created: Date.now()
               };
               frag += `<br/><span style="color:#f4d03f;">⏱ ${esc(name)}: ${esc(cond.sourceAtk)} — <b>${rolled}</b> ${esc(cond.dmgType || "")} this round</span>`;
-              frag += `<br/>[Apply Damage](!mp apply --id ${rid} --mode straight) `;
-              frag += `[Roll-With](!mp apply --id ${rid} --mode rollwithcustom --amt ?{Power to divert|0})`;
+              frag += `<br/>[Apply](!mp apply --id ${rid} --mode noroll) `;
+              frag += `[Roll-With Max](!mp apply --id ${rid} --mode rollwithmax) `;
+              frag += `[Roll-With Custom](!mp apply --id ${rid} --mode rollwithcustom --amt ?{Divert to Power|0})`;
             }
           }
         }
@@ -8537,11 +8543,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.63.5:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.63.6:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.63.5 READY");
+  log("MP ENGINE v2.63.6 READY");
 });
