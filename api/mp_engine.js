@@ -1,4 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.61.4 - 2026-05-25
+/* Mighty Protectors Roll20 API Engine v2.62.0 - 2026-06-07
+ * v2.62.0: Implement Duration modifier (MP Modifiers, "Duration").
+ *          - Attack build now reads attack_duration_num/unit/active/escape.
+ *          - On a confirmed hit, a durational attack sets an ongoing-effect
+ *            badge (status_stopwatch) on the target token and tracks it as a
+ *            "duration" condition. Re-hits from the same source are cumulative
+ *            in duration (not damage), per the rules.
+ *          - !mp round (forward) ticks each effect: rolls per-round damage,
+ *            routes it through !mp apply so protection/Roll-With apply, then
+ *            decrements; clears the badge when no duration effects remain.
+ *          - !mp conditions shows duration effects with rounds left + escape.
  * v2.61.4: Define generateRowID/generateUUID (was undefined) so
  *          !mp import can build its repeating rows — abilities,
  *          attacks, careers, protection. Import previously threw
@@ -487,6 +497,7 @@ MP.Engine = (function () {
     poisoned: "skull",
     damaging_poison: "skull",
     feared: "screaming",
+    duration: "stopwatch",
     generic: "padlock"
   };
 
@@ -524,6 +535,62 @@ MP.Engine = (function () {
   // Check if condition deals damage on failed recovery
   function conditionDealsDamage(condType) {
     return condType === "damaging_poison";
+  }
+
+  // Apply / extend a durational attack effect on a target token (MP Modifiers, "Duration").
+  // Sets the ongoing-effect badge and tracks repeating damage. When the same source hits
+  // again, duration is cumulative (damage is not). Returns a chat-card status snippet.
+  function applyDurationEffect(rec, defTok) {
+    if (!rec || !rec.hasDuration || !defTok) return "";
+
+    const marker = CONDITION_MARKERS.duration;
+    const unitLabel = rec.durNum
+      ? `${rec.durNum} ${rec.durUnit || "round"}${rec.durNum === 1 ? "" : "s"}`
+      : (rec.durUnit || "ongoing");
+    const ticks = num(rec.durRounds, 0); // rounds of auto-repeat (0 for non-round units)
+
+    if (!state.MP_Engine.conditions[rec.defTokenId]) {
+      state.MP_Engine.conditions[rec.defTokenId] = [];
+    }
+    const conds = state.MP_Engine.conditions[rec.defTokenId];
+
+    // Cumulative: extend an existing duration effect from the same source.
+    const existing = conds.find(c => c.type === "duration" && c.sourceAtk === rec.atkName);
+    let snippet;
+    if (existing) {
+      existing.roundsRemaining = num(existing.roundsRemaining, 0) + ticks;
+      defTok.set("status_" + marker, true);
+      snippet = `<br/><span style="color:#f4d03f; font-weight:bold;">⏱ DURATION extended</span>` +
+        `<br/><span style="font-size:11px;">${esc(rec.atkName)} — ${existing.roundsRemaining} round(s) of effect remain (cumulative)</span>`;
+    } else {
+      conds.push({
+        type: "duration",
+        sourceAtk: rec.atkName,
+        atkCharId: rec.atkCharId,
+        dmgType: rec.dmgTypeStr || null,
+        protKey: rec.protKey || null,
+        damageExpr: rec.durDamageExpr || "",
+        roundsRemaining: ticks,
+        unitLabel: unitLabel,
+        escape: rec.durEscape || "",
+        marker: marker,
+        startRound: state.MP_Engine.currentRound,
+        created: Date.now()
+      });
+      defTok.set("status_" + marker, true);
+      snippet = `<br/><span style="color:#f4d03f; font-weight:bold;">⏱ ONGOING EFFECT (${esc(unitLabel)})</span>`;
+      if (ticks > 0 && rec.durDamageExpr) {
+        snippet += `<br/><span style="font-size:11px;">Repeats <b>${esc(rec.durDamageExpr)}</b> ${esc(rec.dmgTypeStr || "")} each round for ${ticks} round(s)</span>`;
+      } else if (ticks > 0) {
+        snippet += `<br/><span style="font-size:11px;">Effect persists ${ticks} more round(s)</span>`;
+      } else {
+        snippet += `<br/><span style="font-size:11px;">Effect persists for ${esc(unitLabel)} (track manually)</span>`;
+      }
+      if (rec.durEscape) {
+        snippet += `<br/><span style="font-size:11px; color:#9ad;">Escape: ${esc(rec.durEscape)}</span>`;
+      }
+    }
+    return snippet;
   }
 
   // -------------------------
@@ -2105,6 +2172,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const kbChecked = getAtk("attack_kb");
     const causesKB = (kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes");
 
+    // Duration modifier (MP Modifiers, "Duration"): a durational attack repeats its
+    // effect on each subsequent Phase 0 until it expires. 1 Round = Instant (no badge).
+    // Round-unit durations auto-tick each round; longer units are badged but GM-managed.
+    const durNum = num(getAtk("attack_duration_num"), 0);
+    const durUnit = (getAtk("attack_duration_unit") || "").trim().toLowerCase();
+    const durActiveFlag = (getAtk("attack_duration_active") === "1");
+    const durEscape = (getAtk("attack_duration_escape") || "").trim();
+    const durUnitRounds = /round/.test(durUnit);
+    const durRounds = durUnitRounds ? durNum : 0;
+    const hasDuration = durActiveFlag || durRounds >= 2 || (!durUnitRounds && durUnit !== "" && durNum >= 1);
+
     const atkAPRaw = getAtk("attack_ap") || fields.ap || "";
     const atkAP = (atkAPRaw === "ALL" || atkAPRaw === "all") ? Infinity : num(atkAPRaw, 0);
     
@@ -2284,7 +2362,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType,
       isAreaAttack, areaRadius, areaDiameter,
-      calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot
+      calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot,
+      hasDuration, durNum, durUnit, durRounds, durEscape, durDamageExpr: atkDamageExpr
     };
 
 // --- HTML CONSTRUCTION & OUTPUT ---
@@ -4560,6 +4639,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       dmgLine += ` <span title="${vuln.notes.join('&#10;')}" style="color:#e67e22;">[vuln]</span>`;
     }
 
+    // --- Durational attack (MP Modifiers, "Duration"): hit applies an ongoing effect ---
+    if (rec.hasDuration) {
+      statusLine += applyDurationEffect(rec, defTok);
+    }
+
     // --- Full result card (GM + defender): includes Hits/Power stats ---
     const msgLine =
       `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
@@ -5109,6 +5193,20 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           msg_out += `<br/><span style="color:#e74c3c; font-size:11px;">⚠️ EXPIRED</span>`;
         }
         msg_out += `<br/>[Clear Effect](!mp clearcondition --target ${tokId} --idx ${idx})`;
+      } else if (cond.type === "duration") {
+        // Durational ongoing effect
+        msg_out += `<br/><br/><b>${idx + 1}. ⏱ DURATION</b>`;
+        msg_out += `<br/><span style="font-size:11px;">Source: ${esc(cond.sourceAtk)}</span>`;
+        const rem = num(cond.roundsRemaining, 0);
+        if (rem > 0) {
+          msg_out += `<br/><span style="color:#f4d03f; font-size:11px;">${rem} round(s) remaining`;
+          if (cond.damageExpr) msg_out += ` — ${esc(cond.damageExpr)} ${esc(cond.dmgType || "")}/round`;
+          msg_out += `</span>`;
+        } else {
+          msg_out += `<br/><span style="font-size:11px;">Persists for ${esc(cond.unitLabel || "ongoing")} (manual)</span>`;
+        }
+        if (cond.escape) msg_out += `<br/><span style="font-size:11px; color:#9ad;">Escape: ${esc(cond.escape)}</span>`;
+        msg_out += `<br/>[End Effect](!mp clearcondition --target ${tokId} --idx ${idx})`;
       } else {
         // Standard condition
         const condLabel = cond.type.replace(/_/g, " ").toUpperCase();
@@ -7743,7 +7841,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.61.4</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.62.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8095,12 +8193,67 @@ function cmdStance(msg, args) {
   // ROUND TRACKING (Minimal)
   // -------------------------
   // Simple round counter with reminder to check durations
+  // Advance durational effects (MP Modifiers, "Duration"): on each Phase 0 the effect
+  // repeats. Rolls per-round damage (routed through !mp apply so protection / Roll-With
+  // apply normally), decrements remaining rounds, clears the badge when nothing remains.
+  function tickDurationEffects(advancedRounds) {
+    const steps = Math.max(1, num(advancedRounds, 1));
+    let frag = "";
+    const allTokenIds = Object.keys(state.MP_Engine.conditions || {});
+    allTokenIds.forEach(tokId => {
+      const conds = state.MP_Engine.conditions[tokId] || [];
+      if (!conds.some(c => c.type === "duration")) return;
+      const tok = getObj("graphic", tokId);
+      const char = tok ? getCharFromToken(tok) : null;
+      const name = char ? char.get("name") : "Target";
+      const keep = [];
+      conds.forEach(cond => {
+        if (cond.type !== "duration") { keep.push(cond); return; }
+        let rem = num(cond.roundsRemaining, 0);
+        if (rem <= 0) { keep.push(cond); return; } // non-round / GM-managed effect
+        const ticks = Math.min(steps, rem);
+        for (let i = 0; i < ticks; i++) {
+          if (cond.damageExpr && tok && char) {
+            const rolled = rollExpr(cond.damageExpr);
+            if (rolled > 0) {
+              const rid = String(Date.now()) + "_dur_" + randomInteger(999999);
+              state.MP_Engine.pending[rid] = {
+                rollId: rid, defTokenId: tokId, defCharId: char.id, defName: name,
+                damageTotal: rolled, dmgTypeStr: cond.dmgType || "Energy",
+                protKey: cond.protKey || null, atkName: cond.sourceAtk + " (Duration)",
+                created: Date.now()
+              };
+              frag += `<br/><span style="color:#f4d03f;">⏱ ${esc(name)}: ${esc(cond.sourceAtk)} — <b>${rolled}</b> ${esc(cond.dmgType || "")} this round</span>`;
+              frag += `<br/>[Apply Damage](!mp apply --id ${rid} --mode straight) `;
+              frag += `[Roll-With](!mp apply --id ${rid} --mode rollwithcustom --amt ?{Power to divert|0})`;
+            }
+          }
+        }
+        rem -= ticks;
+        cond.roundsRemaining = rem;
+        if (rem > 0) {
+          keep.push(cond);
+        } else {
+          frag += `<br/><span style="color:#9ad;">⏱ ${esc(name)}: ${esc(cond.sourceAtk)} duration expired`;
+          if (cond.escape) frag += ` (escape: ${esc(cond.escape)})`;
+          frag += `</span>`;
+        }
+      });
+      state.MP_Engine.conditions[tokId] = keep;
+      if (tok && !keep.some(c => c.type === "duration")) {
+        tok.set("status_" + CONDITION_MARKERS.duration, false);
+      }
+    });
+    return frag;
+  }
+
   function cmdRound(msg, args) {
     const parts = msg.content.split(/\s+/);
     const subCmd = parts[2] || "";
     const subArg = parts[3] || "";
     
     let newRound = state.MP_Engine.currentRound;
+    const oldRound = state.MP_Engine.currentRound;
     
     if (subCmd === "" || subCmd === "next") {
       newRound++;
@@ -8118,9 +8271,16 @@ function cmdStance(msg, args) {
     
     state.MP_Engine.currentRound = newRound;
     
+    // Tick durational effects only when the clock moves forward.
+    let durFrag = "";
+    if (newRound > oldRound) {
+      durFrag = tickDurationEffects(newRound - oldRound);
+    }
+    
     let report = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">`;
     report += `<b>⚔️ Round ${newRound}</b><br/>`;
     report += `<span style="color:#f4d03f;">⏱️ Check active durations - deduct PR/charges as needed</span>`;
+    report += durFrag;
     report += `</div>`;
     
     return ch("MP", `/w gm ` + report);
@@ -8131,11 +8291,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.61.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.62.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.61.4 READY");
+  log("MP ENGINE v2.62.0 READY");
 });
