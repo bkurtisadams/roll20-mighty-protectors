@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.63.3 - 2026-06-07
+/* Mighty Protectors Roll20 API Engine v2.63.4 - 2026-06-07
+ * v2.63.4: !mp round now surfaces due recovery saves. Active save-attack
+ *          conditions (paralyzed, mind control, poison, etc.) get a
+ *          [Recovery Roll] prompt when their recovery interval comes due,
+ *          gated per-condition (1-round effects prompt every round; an
+ *          N-round/Duration effect prompts every N). Conditions stamp the
+ *          round they were applied (startRound) to anchor the schedule.
  * v2.63.3: Fix crash on save attacks ("Assignment to constant variable"
  *          in cmdSave). The v2.63.0 undo button appended to msg_out, which
  *          was declared const; changed to let. Affected every save attack.
@@ -5099,6 +5105,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         saveTN: tn,
         recTN: recTN,
         recTime: recTime,
+        startRound: state.MP_Engine.currentRound,
         marker: marker,
         created: Date.now(),
         permanent: isPermanent,
@@ -8019,7 +8026,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.63.3</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.63.4</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8427,6 +8434,47 @@ function cmdStance(msg, args) {
     return frag;
   }
 
+  // Parse a recovery interval ("1 round", "3 rounds") into rounds. Non-round units
+  // (minutes/hours/etc.) return 0 — those are GM-managed and not auto-prompted.
+  function recTimeToRounds(recTime) {
+    const s = String(recTime || "").toLowerCase().trim();
+    const m = s.match(/(\d+)\s*round/);
+    if (m) return Math.max(1, parseInt(m[1], 10));
+    if (s === "" || s === "round") return 1;
+    return 0;
+  }
+
+  // On round advance, surface recovery saves that have come due for active save-attack
+  // conditions (paralyzed, mind control, poison, etc.), each with its [Recovery Roll]
+  // button. Gated by the condition's recovery interval so multi-round effects only
+  // prompt on schedule. Duration/absorption conditions are handled elsewhere.
+  function promptDueRecoveries(newRound) {
+    let frag = "";
+    Object.keys(state.MP_Engine.conditions || {}).forEach(tokId => {
+      const list = state.MP_Engine.conditions[tokId] || [];
+      if (!list.length) return;
+      const tok = getObj("graphic", tokId);
+      const char = tok ? getCharFromToken(tok) : null;
+      const name = char ? char.get("name") : (tok ? (tok.get("name") || "Target") : "Target");
+      list.forEach((cond, idx) => {
+        if (cond.type === "duration" || cond.type === "absorption") return;
+        if (cond.permanent) return;
+        if (typeof cond.recTN !== "number") return; // not a recoverable save-condition
+        const interval = recTimeToRounds(cond.recTime);
+        if (interval <= 0) return; // non-round recovery — GM-managed
+        if (cond.nextRecRound == null) cond.nextRecRound = (cond.startRound || newRound) + interval;
+        if (newRound >= cond.nextRecRound) {
+          const label = String(cond.type).replace(/_/g, " ").toUpperCase();
+          frag += `<br/><span style="color:#e94560; font-weight:bold;">${esc(name)}: ${label}</span> ` +
+            `<span style="font-size:11px;">recovery due — ${esc(cond.saveBC)} at <b>${cond.recTN}-</b></span>` +
+            `<br/>[Recovery Roll](!mp recover --target ${tokId} --idx ${idx})`;
+          cond.nextRecRound = newRound + interval; // schedule next opportunity
+        }
+      });
+    });
+    return frag ? `<br/><b>Recovery saves due:</b>${frag}` : "";
+  }
+
   function cmdRound(msg, args) {
     const parts = msg.content.split(/\s+/);
     const subCmd = parts[2] || "";
@@ -8453,14 +8501,17 @@ function cmdStance(msg, args) {
     
     // Tick durational effects only when the clock moves forward.
     let durFrag = "";
+    let recFrag = "";
     if (newRound > oldRound) {
       durFrag = tickDurationEffects(newRound - oldRound);
+      recFrag = promptDueRecoveries(newRound);
     }
     
     let report = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">`;
     report += `<b>⚔️ Round ${newRound}</b><br/>`;
     report += `<span style="color:#f4d03f;">⏱️ Check active durations - deduct PR/charges as needed</span>`;
     report += durFrag;
+    report += recFrag;
     report += `</div>`;
     
     return ch("MP", `/w gm ` + report);
@@ -8471,11 +8522,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.63.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.63.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.63.3 READY");
+  log("MP ENGINE v2.63.4 READY");
 });
