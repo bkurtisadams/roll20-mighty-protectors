@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.63.1 - 2026-06-07
+/* Mighty Protectors Roll20 API Engine v2.63.3 - 2026-06-07
+ * v2.63.3: Fix crash on save attacks ("Assignment to constant variable"
+ *          in cmdSave). The v2.63.0 undo button appended to msg_out, which
+ *          was declared const; changed to let. Affected every save attack.
+ * v2.63.2: Save attacks with Duration now recover on the durational
+ *          schedule. Per MP Modifiers ("Duration"), on a save attack the
+ *          Duration is the interval between recovery saves (first save
+ *          still immediate); recTime is set from the duration span instead
+ *          of defaulting to 1/round. Save card tags it "(Duration)".
  * v2.63.1: Fix Undo not clearing status-effect badges. Restore now
  *          toggles markers via the per-marker status_<name> API (diffing
  *          current vs. snapshot) instead of setting the aggregate
@@ -2283,7 +2291,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const saveBC = getAtk("attack_save_bc") || "";
     const saveMod = num(getAtk("attack_save_mod"), 0);
     const recMod = num(getAtk("attack_save_rec") || getAtk("attack_recovery"), 0);
-    const recTime = getAtk("attack_save_rec_time") || "1 round";
+    let recTime = getAtk("attack_save_rec_time") || "1 round";
     const noDamage = (getAtk("attack_no_damage") === "1");
     
     const atkDamageExpr = getAtk("attack_damage") || "";
@@ -2306,6 +2314,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const durUnitRounds = /round/.test(durUnit);
     const durRounds = durUnitRounds ? durNum : 0;
     const hasDuration = durActiveFlag || durRounds >= 2 || (!durUnitRounds && durUnit !== "" && durNum >= 1);
+
+    // MP Modifiers, "Duration" on a save attack: the duration sets the interval between
+    // recovery saves (the first save is still made immediately, in cmdSave). Override the
+    // default recovery time so the condition recurs on the durational schedule, not 1/round.
+    if (isSaveAttack && hasDuration && durNum > 0) {
+      recTime = `${durNum} ${durUnit || "round"}${durNum === 1 ? "" : "s"}`;
+    }
 
     const atkAPRaw = getAtk("attack_ap") || fields.ap || "";
     const atkAP = (atkAPRaw === "ALL" || atkAPRaw === "all") ? Infinity : num(atkAPRaw, 0);
@@ -5145,7 +5160,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         statusLine += `<br/><span style="font-size:11px;">Takes <b>${condDamage}</b> ${rec.dmgTypeStr} dmg each failed recovery</span>`;
       }
       
-      statusLine += `<br/><span style="font-size:11px;">Rec Save: ${rec.saveBC} at <b>${recTN}-</b> every <b>${recTime}</b></span>`;
+      statusLine += `<br/><span style="font-size:11px;">Rec Save: ${rec.saveBC} at <b>${recTN}-</b> every <b>${recTime}</b>${rec.hasDuration ? ` <span style="color:#f4d03f;">(Duration)</span>` : ""}</span>`;
       
       if (isPermanent) {
         statusLine += `<br/><span style="color:#ff0000; font-weight:bold;">💀 FUMBLE - Effect is PERMANENT!</span>`;
@@ -5155,7 +5170,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    const msg_out =
+    let msg_out =
       `<b>Save Attack</b> (${esc(rec.saveBC)}) vs <b>${esc(rec.defName)}</b><br/>` +
       `Base: <b>${baseSave}</b> | Init: <b>${rec.saveMod}</b>` +
       // Show protection: for damaging poison it doesn't apply to save, for others it does
@@ -8004,7 +8019,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.63.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.63.3</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8456,11 +8471,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.63.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.63.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.63.1 READY");
+  log("MP ENGINE v2.63.3 READY");
 });
