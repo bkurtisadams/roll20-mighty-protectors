@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.63.4 - 2026-06-07
+/* Mighty Protectors Roll20 API Engine v2.63.5 - 2026-06-07
+ * v2.63.5: Stop duplicate recovery-roll prompts. Save conditions now
+ *          refresh in place instead of stacking a same-type duplicate
+ *          (cmdSave), and !mp round emits at most one recovery prompt
+ *          per condition type per token.
  * v2.63.4: !mp round now surfaces due recovery saves. Active save-attack
  *          conditions (paralyzed, mind control, poison, etc.) get a
  *          [Recovery Roll] prompt when their recovery interval comes due,
@@ -5116,12 +5120,20 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         protKey: hasDamage ? rec.protKey : null
       };
       
-      // Add to conditions tracking
+      // Add to conditions tracking. Refresh a same-type condition in place instead of
+      // stacking a duplicate, so re-applying the same effect doesn't create multiple
+      // recovery prompts for one target.
       if (!state.MP_Engine.conditions[rec.defTokenId]) {
         state.MP_Engine.conditions[rec.defTokenId] = [];
       }
-      state.MP_Engine.conditions[rec.defTokenId].push(condition);
-      const condIdx = state.MP_Engine.conditions[rec.defTokenId].length - 1;
+      const condList = state.MP_Engine.conditions[rec.defTokenId];
+      let condIdx = condList.findIndex(c => c.type === condType);
+      if (condIdx >= 0) {
+        condList[condIdx] = condition;
+      } else {
+        condList.push(condition);
+        condIdx = condList.length - 1;
+      }
       conditionApplied = true;
       
       // Apply status marker
@@ -8026,7 +8038,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.63.4</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.63.5</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8456,14 +8468,17 @@ function cmdStance(msg, args) {
       const tok = getObj("graphic", tokId);
       const char = tok ? getCharFromToken(tok) : null;
       const name = char ? char.get("name") : (tok ? (tok.get("name") || "Target") : "Target");
+      const seenTypes = {};
       list.forEach((cond, idx) => {
         if (cond.type === "duration" || cond.type === "absorption") return;
         if (cond.permanent) return;
         if (typeof cond.recTN !== "number") return; // not a recoverable save-condition
+        if (seenTypes[cond.type]) return; // one prompt per condition type per token
         const interval = recTimeToRounds(cond.recTime);
         if (interval <= 0) return; // non-round recovery — GM-managed
         if (cond.nextRecRound == null) cond.nextRecRound = (cond.startRound || newRound) + interval;
         if (newRound >= cond.nextRecRound) {
+          seenTypes[cond.type] = true;
           const label = String(cond.type).replace(/_/g, " ").toUpperCase();
           frag += `<br/><span style="color:#e94560; font-weight:bold;">${esc(name)}: ${label}</span> ` +
             `<span style="font-size:11px;">recovery due — ${esc(cond.saveBC)} at <b>${cond.recTN}-</b></span>` +
@@ -8522,11 +8537,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.63.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.63.5:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.63.4 READY");
+  log("MP ENGINE v2.63.5 READY");
 });
