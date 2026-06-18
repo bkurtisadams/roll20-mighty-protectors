@@ -2,6 +2,10 @@
  * Companion data script for mp_engine.js (>= v2.65.0). Load BOTH as API scripts.
  * Consumed by: !mp gwspawn --name NAME [--form FORM]
  * Generated from gw-mp-bestiary.md v0.9.2. 48 creatures / 54 forms.
+ * v0.3.2: Speed reworked to honor GW intent. move_mod now = max(0, targetMove -
+ *   calculated Move), where targetMove is the GW tabletop MV (or, for anti-grav
+ *   robots given only kph, the MP Speed-table Acceleration matching that kph).
+ *   Swim/overland "turn" Speeds and immobile (MV N/A) creatures get no ground mod.
  * v0.3.1: Heightened Defense wired -> physdef_mod/mentdef_mod (+1 per 5 CP
  *   both, or +1 per 2.5 CP Only-Physical/Only-Mental); aggregates into
  *   physical_def_bonus/mental_def_bonus. Orlen bundled case assumes 5 CP share.
@@ -628,10 +632,7 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Speed +6 swim (5 CP — for MV 20)",
      "cp": "5",
-     "ip": "",
-     "mods": {
-      "move_mod": 6
-     }
+     "ip": ""
     },
     {
      "desc": "Change Environment Damaging Hard Radiation 11\" diameter (12.5 CP — supplement, defensive trigger when attacked, 10m oil slick area, 5 Devit Entropy/round in calm water for 10 min)",
@@ -675,8 +676,7 @@ var MP_GW_BESTIARY = {
    "aggmods": {
     "strength_mod": -1,
     "endurance_mod": 6,
-    "profile": 0.6666666666666666,
-    "move_mod": 6
+    "profile": 0.6666666666666666
    }
   }
  ],
@@ -998,7 +998,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "A/P Mammal Standard (20 CP — Speed, Heightened Agility, Natural Weaponry hooves+bite — kicks 2d6/forehoof + bite 3d6 modeled as +d6 blunt and +d8 sharp)",
      "cp": "20",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 3
+     }
     },
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
@@ -1026,10 +1029,7 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Speed +3 (2.5 CP — for MV 18)",
      "cp": "2.5",
-     "ip": "",
-     "mods": {
-      "move_mod": 3
-     }
+     "ip": ""
     },
     {
      "desc": "Armor 5 = 3/1/0/1 K/E/B/Ent (7.5 CP — partial muscled hide)",
@@ -1209,7 +1209,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "A/P Mammal Standard (20 CP — Speed, Heightened Agility, Natural Weaponry hooves/mandibles)",
      "cp": "20",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 17
+     }
     },
     {
      "desc": "Size Change Larger 8' (5 CP)",
@@ -1239,10 +1242,7 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Speed +6 (5 CP — total Move 30)",
      "cp": "5",
-     "ip": "",
-     "mods": {
-      "move_mod": 6
-     }
+     "ip": ""
     },
     {
      "desc": "Gear: saddle/bridle (riding gear)",
@@ -1273,7 +1273,7 @@ var MP_GW_BESTIARY = {
     "strength_mod": 3,
     "endurance_mod": 3,
     "profile": 1.3,
-    "move_mod": 6
+    "move_mod": 17
    }
   }
  ],
@@ -2317,7 +2317,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "A/P Mammal Low (10 CP — Heightened Agility, Speed, Natural Weaponry kicks +d4 sharp)",
      "cp": "10",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 1
+     }
     },
     {
      "desc": "Size Change Larger 7' (2.5 CP)",
@@ -2332,10 +2335,7 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Speed +6 (5 CP — for MV 12 normal)",
      "cp": "5",
-     "ip": "",
-     "mods": {
-      "move_mod": 6
-     }
+     "ip": ""
     },
     {
      "desc": "Super Speed +1 turn with Restriction \"leaping only\" (10 CP — for MV 24 hop mode)",
@@ -2376,7 +2376,7 @@ var MP_GW_BESTIARY = {
     "strength_mod": 2,
     "endurance_mod": 1,
     "profile": 1.2,
-    "move_mod": 6
+    "move_mod": 1
    }
   }
  ],
@@ -3687,7 +3687,7 @@ var MP_GW_BESTIARY = {
      "cp": "15",
      "ip": "",
      "mods": {
-      "move_mod": 30
+      "move_mod": 32
      }
     },
     {
@@ -3737,9 +3737,9 @@ var MP_GW_BESTIARY = {
    "form": "Defense/Attack Borg",
    "aggmods": {
     "endurance_mod": 4,
-    "move_mod": 30,
     "hits_mod": 15,
-    "mental_def_bonus": 2
+    "mental_def_bonus": 2,
+    "move_mod": 32
    }
   },
   {
@@ -3850,7 +3850,7 @@ var MP_GW_BESTIARY = {
      "cp": "30",
      "ip": "",
      "mods": {
-      "move_mod": 60
+      "move_mod": 43
      }
     },
     {
@@ -3901,9 +3901,9 @@ var MP_GW_BESTIARY = {
    "aggmods": {
     "strength_mod": 6,
     "endurance_mod": 6,
-    "move_mod": 60,
     "hits_mod": 252,
-    "mental_def_bonus": 2
+    "mental_def_bonus": 2,
+    "move_mod": 43
    }
   },
   {
@@ -4221,7 +4221,7 @@ var MP_GW_BESTIARY = {
      "cp": "15",
      "ip": "",
      "mods": {
-      "move_mod": 30
+      "move_mod": 33
      }
     },
     {
@@ -4265,8 +4265,8 @@ var MP_GW_BESTIARY = {
    "protEntropy": "2",
    "form": "Security Robotoid",
    "aggmods": {
-    "move_mod": 30,
-    "mental_def_bonus": 2
+    "mental_def_bonus": 2,
+    "move_mod": 33
    }
   }
  ],
