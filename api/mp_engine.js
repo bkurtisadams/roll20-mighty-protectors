@@ -1,4 +1,16 @@
-/* Mighty Protectors Roll20 API Engine v2.63.6 - 2026-06-07
+/* Mighty Protectors Roll20 API Engine v2.64.2 - 2026-06-17
+ * v2.64.2: buildCharacterFromMPData also sets current/max Hits (hits_score) and
+ *          Power (power_score) from data.hitPts/hitPtsSrc/power/powerSrc. The sheet
+ *          copies current<-max only on sheet:opened, so API-built characters read
+ *          0 Hits in combat until set. gwspawn blocks now carry these + MP species.
+ * v2.64.1: buildCharacterFromMPData now sets initiative_score from data.initiative.
+ *          The sheet only computes the init die on sheet:opened, so API-built
+ *          characters (import + gwspawn) previously had a blank Initiative roll
+ *          that never reached the turn tracker. Bestiary blocks now carry the die.
+ * v2.64.0: !mp gwspawn --name NAME [--form FORM] builds a Gamma World creature
+ *          NPC from embedded MP_GW_BESTIARY (sibling script mp_gw_bestiary.js).
+ *          MP Builder import build-logic extracted to buildCharacterFromMPData(),
+ *          now shared by both !mp import and !mp gwspawn.
  * v2.63.6: Match duration-tick damage buttons to the standard set. The
  *          !mp round ongoing-damage prompt now offers Apply / Roll-With
  *          Max / Roll-With Custom (modes noroll / rollwithmax /
@@ -8040,10 +8052,13 @@ function cmdStance(msg, args) {
       case "import":
         if (gmOnly(msg)) return;
         return cmdMPImport(msg, args);
+      case "gwspawn":
+        if (gmOnly(msg)) return;
+        return cmdGWSpawn(msg, args);
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.63.6</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.64.2</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8269,7 +8284,15 @@ function cmdStance(msg, args) {
         try { data = JSON.parse(raw); } catch(e) {
           return ch("MP", `/w gm Failed to parse JSON: ${esc(e.message)}`);
         }
+        return buildCharacterFromMPData(data, `handout <b>${esc(handoutName)}</b>`);
+      });
+    });
+  }
 
+  // Build/refresh a character from an MP Builder data object. Shared by
+  // !mp import (handout JSON) and !mp gwspawn (embedded bestiary block).
+  // sourceLabel is shown in the confirmation whisper.
+  function buildCharacterFromMPData(data, sourceLabel) {
         const charName = data.name || 'Imported Character';
         let char = findObjs({ type: 'character', name: charName })[0];
         if (!char) char = createObj('character', { name: charName });
@@ -8307,6 +8330,19 @@ function cmdStance(msg, args) {
         setAttr('legal_status', data.legalStatus);
         setAttr('player_name', data.player);
         setAttr('base_ip', data.inventing);
+        // Initiative die (e.g. "d6+1"). The sheet only computes this on
+        // sheet:opened, so API-built characters need it set explicitly or the
+        // sheet's Initiative roll button has no die and never posts to the
+        // turn tracker. MP Builder exports carry it as `initiative`.
+        setAttr('initiative_score', data.initiative);
+        // Current/max Hits and Power. As with the init die, the sheet only copies
+        // current <- max on sheet:opened, so an API-built character reads 0 Hits in
+        // combat until its sheet is opened. setAttr skips empty values, so MP Builder
+        // imports that omit these are unaffected (the sheet still computes on open).
+        setAttr('hits_score', data.hitPts);
+        setAttr('hits_score_max', data.hitPtsSrc);
+        setAttr('power_score', data.power);
+        setAttr('power_score_max', data.powerSrc);
         // XP: starting_eps = base budget, ep_earned = earned during play
         // total_eps on Roll20 is auto-calculated by sheet workers (BC+Ability costs)
         // So we only set starting_eps and ep_earned; the sheet recalculates total_eps
@@ -8388,9 +8424,40 @@ function cmdStance(msg, args) {
           });
         }
 
-        ch("MP", `/w gm Imported <b>${esc(charName)}</b> from handout <b>${esc(handoutName)}</b>.`);
-      });
-    });
+        ch("MP", `/w gm Imported <b>${esc(charName)}</b> from ${sourceLabel}.`);
+  }
+
+  // -------------------------
+  // GW BESTIARY SPAWN — !mp gwspawn --name NAME [--form FORM]
+  // Builds an NPC from embedded MP_GW_BESTIARY (sibling API script
+  // mp_gw_bestiary.js), reusing the buildCharacterFromMPData pipeline.
+  // -------------------------
+  function cmdGWSpawn(msg, args) {
+    if (typeof MP_GW_BESTIARY === "undefined" || !MP_GW_BESTIARY) {
+      return ch("MP", "/w gm GW bestiary data not loaded. Add <b>mp_gw_bestiary.js</b> as an API script in this campaign.");
+    }
+    const name = (args.name || "").trim();
+    if (!name) return ch("MP", "/w gm Usage: <code>!mp gwspawn --name Blight</code> (multi-form creatures: add <code>--form Thinker</code>)");
+    const forms = MP_GW_BESTIARY[name.toLowerCase()];
+    if (!forms || !forms.length) {
+      const all = Object.keys(MP_GW_BESTIARY);
+      const near = all.filter(k => k.indexOf(name.toLowerCase()) >= 0).slice(0, 8)
+        .map(k => `[${esc(k)}](!mp gwspawn --name ${esc(k)})`).join(" ");
+      return ch("MP", `/w gm No GW creature named <b>${esc(name)}</b>.` + (near ? `<br/>Did you mean: ${near}` : ` (${all.length} creatures loaded)`));
+    }
+    let block = forms[0];
+    if (forms.length > 1) {
+      const want = (args.form || "").trim().toLowerCase();
+      block = want ? forms.find(f => String(f.form || "").toLowerCase().indexOf(want) >= 0) : null;
+      if (!block) {
+        const btns = forms.map(f => {
+          const lbl = String(f.form || "").replace(/^.*[—:]\s*/, "").trim() || f.name;
+          return `[${esc(lbl)}](!mp gwspawn --name ${esc(name)} --form ${esc(lbl)})`;
+        }).join(" ");
+        return ch("MP", `/w gm <b>${esc(name)}</b> has ${forms.length} forms — pick one: ${btns}`);
+      }
+    }
+    return buildCharacterFromMPData(JSON.parse(JSON.stringify(block)), `GW bestiary (<b>${esc(block.name)}</b>)`);
   }
 
   // -------------------------
@@ -8543,11 +8610,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.63.6:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.64.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.63.6 READY");
+  log("MP ENGINE v2.64.2 READY");
 });
