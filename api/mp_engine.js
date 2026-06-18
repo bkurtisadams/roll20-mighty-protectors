@@ -1,4 +1,13 @@
-/* Mighty Protectors Roll20 API Engine v2.64.2 - 2026-06-17
+/* Mighty Protectors Roll20 API Engine v2.65.0 - 2026-06-18
+ * v2.65.0: gwspawn now imports structured ability modifiers. Ability rows
+ *          carrying mod data (ab.mods: st_mod/en_mod/ag_mod/in_mod/cl_mod,
+ *          hits_mod, move_mod, power_mod, profile_mod, weight_mod, init_mod)
+ *          set the matching per-row ability_*_mod fields and are flagged
+ *          Active so recalcAbilityBonuses rolls them up. BCs are now imported
+ *          as BASE characteristics; data.aggmods pre-seeds the rolled-up
+ *          modifier fields so derived scores (BCs/Hits/Power/Move) are correct
+ *          before the sheet is first opened. Pairs with the sheet's new
+ *          per-row Move mod field (Speed).
  * v2.64.2: buildCharacterFromMPData also sets current/max Hits (hits_score) and
  *          Power (power_score) from data.hitPts/hitPtsSrc/power/powerSrc. The sheet
  *          copies current<-max only on sheet:opened, so API-built characters read
@@ -8058,7 +8067,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.64.2</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.65.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8349,13 +8358,20 @@ function cmdStance(msg, args) {
         setAttr('starting_eps', data.xpBase);
         setAttr('ep_earned', data.xpEarned);
 
-        // BCs
+        // BCs (cost = BASE characteristic; ability mods below raise it to effective)
         if (data.stats) {
           Object.keys(MP_BC_MAP).forEach(bk => {
             const p = MP_BC_MAP[bk];
             const s = data.stats[bk];
             if (s) setAttr(p + '_cost', s.cp);
           });
+        }
+
+        // Aggregate ability mods: pre-seed the rolled-up modifier fields so derived
+        // scores (BCs, Hits, Power, Move) are correct before the sheet is first opened.
+        // recalcAbilityBonuses recomputes these identically from the per-row mods.
+        if (data.aggmods) {
+          Object.keys(data.aggmods).forEach(ak => setAttr(ak, data.aggmods[ak]));
         }
 
         // Repeating: Abilities
@@ -8371,6 +8387,12 @@ function cmdStance(msg, args) {
             createObj('attribute', { characterid: charId, name: p + 'ability_cp', current: ab.cp || '' });
             createObj('attribute', { characterid: charId, name: p + 'ability_ip', current: ab.ip || '' });
             createObj('attribute', { characterid: charId, name: p + 'ability_num', current: String(idx + 1) });
+            if (ab.mods) {
+              Object.keys(ab.mods).forEach(mk => {
+                createObj('attribute', { characterid: charId, name: p + 'ability_' + mk, current: String(ab.mods[mk]) });
+              });
+              createObj('attribute', { characterid: charId, name: p + 'ability_state', current: 'Active' });
+            }
           });
         }
 
@@ -8610,11 +8632,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.64.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.65.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.64.2 READY");
+  log("MP ENGINE v2.65.0 READY");
 });

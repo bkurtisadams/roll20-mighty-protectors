@@ -1,12 +1,16 @@
 /* Gamma World 1e -> Mighty Protectors Bestiary data for Roll20
- * Companion data script for mp_engine.js (>= v2.64.2). Load BOTH as API scripts.
+ * Companion data script for mp_engine.js (>= v2.65.0). Load BOTH as API scripts.
  * Consumed by: !mp gwspawn --name NAME [--form FORM]
- * Generated from gw-mp-bestiary.md v0.9.2 (BC-corrected). 48 creatures.
- * Species/Origin use MP 2.1.3 / 2.1.14 labels. Each block carries init die + current/max
- * Hits & Power. Per-form abilities/weaknesses/equipment/armor are pulled per sub-type for
- * multi-form creatures (Android, Robotic Unit); equipment is included as Gear: ability rows.
- * NOTE: Monster-species CP package (-10 Weakness / +10 Ability) NOT applied. War-machine HP
- * is BC-capped (Option A); GW HP kept as bio flavor. Date: 2026-06-17
+ * Generated from gw-mp-bestiary.md v0.9.2. 48 creatures / 54 forms.
+ * v0.3.1: Heightened Defense wired -> physdef_mod/mentdef_mod (+1 per 5 CP
+ *   both, or +1 per 2.5 CP Only-Physical/Only-Mental); aggregates into
+ *   physical_def_bonus/mental_def_bonus. Orlen bundled case assumes 5 CP share.
+ * v0.3.0: BCs now imported as BASE characteristics. Modifier abilities carry
+ *   structured per-row mods (mods{}): Heightened Characteristic -> st/en/ag/in/cl_mod,
+ *   Size Change -> st/en_mod + profile_mod, Speed -> move_mod, Durability -> hits_mod.
+ *   aggmods{} pre-seeds the rolled-up modifier fields so derived scores resolve before
+ *   the sheet is opened. Requires the sheet's per-row Move mod field. Heightened Defense
+ *   not yet wired (awaiting CP->defense-value rule). Date: 2026-06-18
  */
 var MP_GW_BESTIARY = {
  "android": [
@@ -23,10 +27,10 @@ var MP_GW_BESTIARY = {
      "cp": "10"
     },
     "in": {
-     "cp": "18"
+     "cp": "10"
     },
     "cl": {
-     "cp": "18"
+     "cp": "10"
     }
    },
    "originType": "Science Project",
@@ -44,17 +48,26 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Intelligence ~+8 (8 CP)",
      "cp": "8",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "in_mod": 8
+     }
     },
     {
      "desc": "Heightened Cool ~+8 (8 CP)",
      "cp": "8",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "cl_mod": 8
+     }
     },
     {
      "desc": "Heightened Defense Mental (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "mentdef_mod": 2
+     }
     },
     {
      "desc": "Armor 6 = 4/1/0/1 K/E/B/Ent (10 CP)",
@@ -90,16 +103,21 @@ var MP_GW_BESTIARY = {
    "protEnergy": "1",
    "protBio": "0",
    "protEntropy": "1",
-   "form": "Android — Thinker"
+   "form": "Android — Thinker",
+   "aggmods": {
+    "intelligence_mod": 8,
+    "cool_mod": 8,
+    "mental_def_bonus": 2
+   }
   },
   {
    "name": "Android — Worker",
    "stats": {
     "st": {
-     "cp": "18"
+     "cp": "10"
     },
     "en": {
-     "cp": "18"
+     "cp": "10"
     },
     "ag": {
      "cp": "10"
@@ -126,7 +144,11 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Strength/Endurance ~+8 each (16 CP)",
      "cp": "16",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 8,
+      "en_mod": 8
+     }
     },
     {
      "desc": "Armor 8 = 6/1/0/1 (12.5 CP)",
@@ -162,22 +184,26 @@ var MP_GW_BESTIARY = {
    "protEnergy": "1",
    "protBio": "0",
    "protEntropy": "1",
-   "form": "Android — Worker"
+   "form": "Android — Worker",
+   "aggmods": {
+    "strength_mod": 8,
+    "endurance_mod": 8
+   }
   },
   {
    "name": "Android — Warrior",
    "stats": {
     "st": {
-     "cp": "18"
+     "cp": "10"
     },
     "en": {
-     "cp": "18"
+     "cp": "10"
     },
     "ag": {
-     "cp": "18"
+     "cp": "10"
     },
     "in": {
-     "cp": "18"
+     "cp": "10"
     },
     "cl": {
      "cp": "10"
@@ -198,7 +224,13 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Strength/Endurance/Agility/Intelligence ~+8 each (32 CP)",
      "cp": "32",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 8,
+      "en_mod": 8,
+      "ag_mod": 8,
+      "in_mod": 8
+     }
     },
     {
      "desc": "Armor 9 = 7/1/0/1 (15 CP)",
@@ -234,7 +266,13 @@ var MP_GW_BESTIARY = {
    "protEnergy": "1",
    "protBio": "0",
    "protEntropy": "1",
-   "form": "Android — Warrior"
+   "form": "Android — Warrior",
+   "aggmods": {
+    "strength_mod": 8,
+    "endurance_mod": 8,
+    "agility_mod": 8,
+    "intelligence_mod": 8
+   }
   }
  ],
  "ark": [
@@ -242,10 +280,10 @@ var MP_GW_BESTIARY = {
    "name": "Ark",
    "stats": {
     "st": {
-     "cp": "16"
+     "cp": "11"
     },
     "en": {
-     "cp": "12"
+     "cp": "8"
     },
     "ag": {
      "cp": "12"
@@ -272,7 +310,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Telekinesis A 7.5 CP (300 lbs/d6+1, range 12\")",
@@ -327,7 +370,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "1",
    "protEnergy": "3",
    "protBio": "1",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 4,
+    "profile": 1.5
+   }
   }
  ],
  "arn": [
@@ -335,7 +383,7 @@ var MP_GW_BESTIARY = {
    "name": "Arn",
    "stats": {
     "st": {
-     "cp": "7"
+     "cp": "8"
     },
     "en": {
      "cp": "8"
@@ -370,7 +418,11 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Smaller 4.5' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": -1,
+      "profile_mod": "/1.5"
+     }
     },
     {
      "desc": "Armor 2 = 1/0/0/1 (2.5 CP, chitin)",
@@ -400,7 +452,11 @@ var MP_GW_BESTIARY = {
    "protKinetic": "1",
    "protEnergy": "0",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": -1,
+    "profile": 0.6666666666666666
+   }
   }
  ],
  "badder": [
@@ -414,13 +470,13 @@ var MP_GW_BESTIARY = {
      "cp": "6"
     },
     "ag": {
-     "cp": "18"
+     "cp": "10"
     },
     "in": {
-     "cp": "13"
+     "cp": "10"
     },
     "cl": {
-     "cp": "16"
+     "cp": "10"
     }
    },
    "originType": "Mutated or Evolved",
@@ -438,17 +494,26 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Agility ~+8 (8 CP)",
      "cp": "8",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "ag_mod": 8
+     }
     },
     {
      "desc": "Heightened Cool ~+6 (6 CP)",
      "cp": "6",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "cl_mod": 6
+     }
     },
     {
      "desc": "Heightened Intelligence ~+3 (3 CP)",
      "cp": "3",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "in_mod": 3
+     }
     },
     {
      "desc": "Heightened Senses Odors Full+Acute (10 CP)",
@@ -498,7 +563,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "1",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "agility_mod": 8,
+    "intelligence_mod": 3,
+    "cool_mod": 6
+   }
   }
  ],
  "barl nep": [
@@ -506,10 +576,10 @@ var MP_GW_BESTIARY = {
    "name": "Barl Nep",
    "stats": {
     "st": {
-     "cp": "9"
+     "cp": "10"
     },
     "en": {
-     "cp": "20"
+     "cp": "14"
     },
     "ag": {
      "cp": "14"
@@ -541,17 +611,27 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Smaller 4.5' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": -1,
+      "profile_mod": "/1.5"
+     }
     },
     {
      "desc": "Heightened Endurance +6 (6 CP)",
      "cp": "6",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "en_mod": 6
+     }
     },
     {
      "desc": "Speed +6 swim (5 CP — for MV 20)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 6
+     }
     },
     {
      "desc": "Change Environment Damaging Hard Radiation 11\" diameter (12.5 CP — supplement, defensive trigger when attacked, 10m oil slick area, 5 Devit Entropy/round in calm water for 10 min)",
@@ -591,7 +671,13 @@ var MP_GW_BESTIARY = {
    "protKinetic": "6",
    "protEnergy": "3",
    "protBio": "1",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "strength_mod": -1,
+    "endurance_mod": 6,
+    "profile": 0.6666666666666666,
+    "move_mod": 6
+   }
   }
  ],
  "ber lep": [
@@ -682,7 +768,7 @@ var MP_GW_BESTIARY = {
    "name": "Blaash",
    "stats": {
     "st": {
-     "cp": "9"
+     "cp": "10"
     },
     "en": {
      "cp": "15"
@@ -717,7 +803,11 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Smaller 4.5' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": -1,
+      "profile_mod": "/1.5"
+     }
     },
     {
      "desc": "Change Environment Damaging Hard Radiation 11\" diameter (12.5 CP — 5 Devitalization Entropy/round, supplement)",
@@ -762,7 +852,11 @@ var MP_GW_BESTIARY = {
    "protKinetic": "1",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "0"
+   "protEntropy": "0",
+   "aggmods": {
+    "strength_mod": -1,
+    "profile": 0.6666666666666666
+   }
   }
  ],
  "blight": [
@@ -770,10 +864,10 @@ var MP_GW_BESTIARY = {
    "name": "Blight",
    "stats": {
     "st": {
-     "cp": "15"
+     "cp": "10"
     },
     "en": {
-     "cp": "12"
+     "cp": "8"
     },
     "ag": {
      "cp": "12"
@@ -805,7 +899,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Invisibility Visible Light (10 CP — at-will)",
@@ -856,7 +955,12 @@ var MP_GW_BESTIARY = {
      "dmgType": "Kinetic",
      "kb": ""
     }
-   ]
+   ],
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 4,
+    "profile": 1.5
+   }
   }
  ],
  "brutorz": [
@@ -864,10 +968,10 @@ var MP_GW_BESTIARY = {
    "name": "Brutorz",
    "stats": {
     "st": {
-     "cp": "17"
+     "cp": "8"
     },
     "en": {
-     "cp": "14"
+     "cp": "10"
     },
     "ag": {
      "cp": "14"
@@ -899,7 +1003,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Heightened Senses Time/Precognitive (15 CP — Precognition mutation)",
@@ -909,12 +1018,18 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Strength ~+4 (4 CP)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 4
+     }
     },
     {
      "desc": "Speed +3 (2.5 CP — for MV 18)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 3
+     }
     },
     {
      "desc": "Armor 5 = 3/1/0/1 K/E/B/Ent (7.5 CP — partial muscled hide)",
@@ -944,7 +1059,13 @@ var MP_GW_BESTIARY = {
    "protKinetic": "3",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 9,
+    "endurance_mod": 4,
+    "profile": 1.5,
+    "move_mod": 3
+   }
   }
  ],
  "cal then": [
@@ -952,10 +1073,10 @@ var MP_GW_BESTIARY = {
    "name": "Cal Then",
    "stats": {
     "st": {
-     "cp": "13"
+     "cp": "6"
     },
     "en": {
-     "cp": "6"
+     "cp": "3"
     },
     "ag": {
      "cp": "14"
@@ -964,7 +1085,7 @@ var MP_GW_BESTIARY = {
      "cp": "8"
     },
     "cl": {
-     "cp": "18"
+     "cp": "10"
     }
    },
    "originType": "Mutated or Evolved",
@@ -987,17 +1108,28 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 8' (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 3,
+      "en_mod": 3,
+      "profile_mod": "x1.3"
+     }
     },
     {
      "desc": "Heightened Cool ~+8 outside A/P (8 CP — for MS 18)",
      "cp": "8",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "cl_mod": 8
+     }
     },
     {
      "desc": "Heightened Strength ~+4 (4 CP — for crushing power)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 4
+     }
     },
     {
      "desc": "Heightened Attack +2d6 (10 CP — 10d6 GW = high-tier MP bite)",
@@ -1033,7 +1165,13 @@ var MP_GW_BESTIARY = {
      "dmgType": "Kinetic",
      "kb": ""
     }
-   ]
+   ],
+   "aggmods": {
+    "strength_mod": 7,
+    "endurance_mod": 3,
+    "cool_mod": 8,
+    "profile": 1.3
+   }
   }
  ],
  "centisteed": [
@@ -1041,10 +1179,10 @@ var MP_GW_BESTIARY = {
    "name": "Centisteed",
    "stats": {
     "st": {
-     "cp": "17"
+     "cp": "14"
     },
     "en": {
-     "cp": "7"
+     "cp": "4"
     },
     "ag": {
      "cp": "14"
@@ -1076,7 +1214,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 8' (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 3,
+      "en_mod": 3,
+      "profile_mod": "x1.3"
+     }
     },
     {
      "desc": "Force Field A Personal (~22 protection, 17.5 CP)",
@@ -1096,7 +1239,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Speed +6 (5 CP — total Move 30)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 6
+     }
     },
     {
      "desc": "Gear: saddle/bridle (riding gear)",
@@ -1122,7 +1268,13 @@ var MP_GW_BESTIARY = {
      "dmgType": "Kinetic",
      "kb": ""
     }
-   ]
+   ],
+   "aggmods": {
+    "strength_mod": 3,
+    "endurance_mod": 3,
+    "profile": 1.3,
+    "move_mod": 6
+   }
   }
  ],
  "cren tosh": [
@@ -1130,10 +1282,10 @@ var MP_GW_BESTIARY = {
    "name": "Cren Tosh",
    "stats": {
     "st": {
-     "cp": "14"
+     "cp": "12"
     },
     "en": {
-     "cp": "16"
+     "cp": "12"
     },
     "ag": {
      "cp": "12"
@@ -1165,12 +1317,20 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 7' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 2,
+      "en_mod": 1,
+      "profile_mod": "x1.2"
+     }
     },
     {
      "desc": "Heightened Endurance +3 (3 CP)",
      "cp": "3",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "en_mod": 3
+     }
     },
     {
      "desc": "Shape-Shifting Comprehensive (lizard category w/ Sleeth-tier mutations) ~25 CP — high-tier shift inheriting target abilities",
@@ -1205,7 +1365,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "7",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "3"
+   "protEntropy": "3",
+   "aggmods": {
+    "strength_mod": 2,
+    "endurance_mod": 4,
+    "profile": 1.2
+   }
   }
  ],
  "crep plant": [
@@ -1360,7 +1525,7 @@ var MP_GW_BESTIARY = {
    "name": "Ert Telden",
    "stats": {
     "st": {
-     "cp": "7"
+     "cp": "8"
     },
     "en": {
      "cp": "12"
@@ -1395,7 +1560,11 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Smaller 4.5' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": -1,
+      "profile_mod": "/1.5"
+     }
     },
     {
      "desc": "Power Blast Energy Heat Area Effect 30m radius / 60\" diameter — escalating 2-stage (turn 1 ~2d6, turn 2 ~3d6 + Death Touch finisher)",
@@ -1445,7 +1614,11 @@ var MP_GW_BESTIARY = {
    "protKinetic": "3",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": -1,
+    "profile": 0.6666666666666666
+   }
   }
  ],
  "fen": [
@@ -1556,10 +1729,10 @@ var MP_GW_BESTIARY = {
    "name": "Fleshin",
    "stats": {
     "st": {
-     "cp": "14"
+     "cp": "12"
     },
     "en": {
-     "cp": "8"
+     "cp": "7"
     },
     "ag": {
      "cp": "12"
@@ -1591,7 +1764,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 7' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 2,
+      "en_mod": 1,
+      "profile_mod": "x1.2"
+     }
     },
     {
      "desc": "Poison/Venom A intensity 15 contact passive on dorsal (12.5 CP)",
@@ -1631,7 +1809,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "1",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 2,
+    "endurance_mod": 1,
+    "profile": 1.2
+   }
   }
  ],
  "gren": [
@@ -1642,16 +1825,16 @@ var MP_GW_BESTIARY = {
      "cp": "12"
     },
     "en": {
-     "cp": "20"
+     "cp": "14"
     },
     "ag": {
      "cp": "12"
     },
     "in": {
-     "cp": "14"
+     "cp": "10"
     },
     "cl": {
-     "cp": "14"
+     "cp": "10"
     }
    },
    "originType": "Mutated or Evolved",
@@ -1669,7 +1852,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Endurance +6 (6 CP — for HD 20)",
      "cp": "6",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "en_mod": 6
+     }
     },
     {
      "desc": "Invisibility full-sensory (visible + IR + sonic + mental + olfactory)",
@@ -1689,12 +1875,18 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Cool ~+4 (4 CP)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "cl_mod": 4
+     }
     },
     {
      "desc": "Heightened Intelligence ~+4 (4 CP)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "in_mod": 4
+     }
     },
     {
      "desc": "Armor 9 = 5/2/0/2 K/E/B/Ent (15 CP — leather/hide armor)",
@@ -1729,7 +1921,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "5",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "endurance_mod": 6,
+    "intelligence_mod": 4,
+    "cool_mod": 4
+   }
   }
  ],
  "herkel": [
@@ -1737,10 +1934,10 @@ var MP_GW_BESTIARY = {
    "name": "Herkel",
    "stats": {
     "st": {
-     "cp": "5"
+     "cp": "6"
     },
     "en": {
-     "cp": "4"
+     "cp": "5"
     },
     "ag": {
      "cp": "14"
@@ -1772,7 +1969,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Smaller 3' (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": -1,
+      "en_mod": -1,
+      "profile_mod": "/2"
+     }
     },
     {
      "desc": "Heightened Attack +1d6 to damage (5 CP — frenzied bite)",
@@ -1808,7 +2010,12 @@ var MP_GW_BESTIARY = {
      "dmgType": "Kinetic",
      "kb": ""
     }
-   ]
+   ],
+   "aggmods": {
+    "strength_mod": -1,
+    "endurance_mod": -1,
+    "profile": 0.5
+   }
   }
  ],
  "herp": [
@@ -1816,10 +2023,10 @@ var MP_GW_BESTIARY = {
    "name": "Herp",
    "stats": {
     "st": {
-     "cp": "19"
+     "cp": "10"
     },
     "en": {
-     "cp": "19"
+     "cp": "10"
     },
     "ag": {
      "cp": "10"
@@ -1851,7 +2058,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 12' (15 CP)",
      "cp": "15",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 9,
+      "en_mod": 9,
+      "profile_mod": "x2"
+     }
     },
     {
      "desc": "Power Blast Bio acid stream 30m ~3d8 sharp/bio (25 CP)",
@@ -1891,7 +2103,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "8",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "strength_mod": 9,
+    "endurance_mod": 9,
+    "profile": 2
+   }
   }
  ],
  "hisser": [
@@ -1899,10 +2116,10 @@ var MP_GW_BESTIARY = {
    "name": "Hisser",
    "stats": {
     "st": {
-     "cp": "17"
+     "cp": "12"
     },
     "en": {
-     "cp": "18"
+     "cp": "14"
     },
     "ag": {
      "cp": "14"
@@ -1929,7 +2146,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Telepathy visual+verbal (10 CP)",
@@ -1969,7 +2191,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "6",
    "protEnergy": "3",
    "protBio": "1",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 4,
+    "profile": 1.5
+   }
   }
  ],
  "hoop": [
@@ -1977,13 +2204,13 @@ var MP_GW_BESTIARY = {
    "name": "Hoop",
    "stats": {
     "st": {
-     "cp": "12"
+     "cp": "10"
     },
     "en": {
-     "cp": "15"
+     "cp": "14"
     },
     "ag": {
-     "cp": "18"
+     "cp": "10"
     },
     "in": {
      "cp": "10"
@@ -2007,12 +2234,20 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 7' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 2,
+      "en_mod": 1,
+      "profile_mod": "x1.2"
+     }
     },
     {
      "desc": "Heightened Agility ~+8 (8 CP — covers leap-8m)",
      "cp": "8",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "ag_mod": 8
+     }
     },
     {
      "desc": "Telepathy (10 CP)",
@@ -2038,7 +2273,13 @@ var MP_GW_BESTIARY = {
      "dmgType": "Kinetic",
      "kb": ""
     }
-   ]
+   ],
+   "aggmods": {
+    "strength_mod": 2,
+    "endurance_mod": 1,
+    "agility_mod": 8,
+    "profile": 1.2
+   }
   }
  ],
  "hopper": [
@@ -2046,10 +2287,10 @@ var MP_GW_BESTIARY = {
    "name": "Hopper",
    "stats": {
     "st": {
-     "cp": "14"
+     "cp": "12"
     },
     "en": {
-     "cp": "4"
+     "cp": "3"
     },
     "ag": {
      "cp": "16"
@@ -2081,12 +2322,20 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 7' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 2,
+      "en_mod": 1,
+      "profile_mod": "x1.2"
+     }
     },
     {
      "desc": "Speed +6 (5 CP — for MV 12 normal)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 6
+     }
     },
     {
      "desc": "Super Speed +1 turn with Restriction \"leaping only\" (10 CP — for MV 24 hop mode)",
@@ -2122,7 +2371,13 @@ var MP_GW_BESTIARY = {
      "dmgType": "Kinetic",
      "kb": ""
     }
-   ]
+   ],
+   "aggmods": {
+    "strength_mod": 2,
+    "endurance_mod": 1,
+    "profile": 1.2,
+    "move_mod": 6
+   }
   }
  ],
  "horl choo": [
@@ -2208,10 +2463,10 @@ var MP_GW_BESTIARY = {
    "name": "Kai Lin",
    "stats": {
     "st": {
-     "cp": "15"
+     "cp": "10"
     },
     "en": {
-     "cp": "12"
+     "cp": "8"
     },
     "ag": {
      "cp": "10"
@@ -2243,7 +2498,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Lightning Control A Electrical Bolt contact 4d6 (12.5 CP — Electrical Generation)",
@@ -2298,7 +2558,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "3",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 4,
+    "profile": 1.5
+   }
   }
  ],
  "keeshin": [
@@ -2363,7 +2628,7 @@ var MP_GW_BESTIARY = {
      "cp": "16"
     },
     "en": {
-     "cp": "20"
+     "cp": "16"
     },
     "ag": {
      "cp": "4"
@@ -2410,7 +2675,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Endurance +4 (4 CP)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "en_mod": 4
+     }
     },
     {
      "desc": "Armor 16 = 10/2/0/4 K/E/B/Ent (30 CP — thick root mass)",
@@ -2445,7 +2713,10 @@ var MP_GW_BESTIARY = {
    "protKinetic": "10",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "4"
+   "protEntropy": "4",
+   "aggmods": {
+    "endurance_mod": 4
+   }
   }
  ],
  "menarl": [
@@ -2453,10 +2724,10 @@ var MP_GW_BESTIARY = {
    "name": "Menarl",
    "stats": {
     "st": {
-     "cp": "17"
+     "cp": "12"
     },
     "en": {
-     "cp": "7"
+     "cp": "3"
     },
     "ag": {
      "cp": "12"
@@ -2483,7 +2754,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Physical Ability B Extra Limbs (10 arms, 4 attack-pairs available per turn) ~17.5 CP",
@@ -2528,7 +2804,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "4",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 4,
+    "profile": 1.5
+   }
   }
  ],
  "narl ep": [
@@ -2536,10 +2817,10 @@ var MP_GW_BESTIARY = {
    "name": "Narl Ep",
    "stats": {
     "st": {
-     "cp": "24"
+     "cp": "12"
     },
     "en": {
-     "cp": "20"
+     "cp": "8"
     },
     "ag": {
      "cp": "4"
@@ -2571,7 +2852,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 15' (20 CP)",
      "cp": "20",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 12,
+      "en_mod": 12,
+      "profile_mod": "x2.5"
+     }
     },
     {
      "desc": "Grapnel (squeeze vines, crushing) (15 CP)",
@@ -2626,7 +2912,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "6",
    "protEnergy": "2",
    "protBio": "1",
-   "protEntropy": "3"
+   "protEntropy": "3",
+   "aggmods": {
+    "strength_mod": 12,
+    "endurance_mod": 12,
+    "profile": 2.5
+   }
   }
  ],
  "obb": [
@@ -2634,7 +2925,7 @@ var MP_GW_BESTIARY = {
    "name": "Obb",
    "stats": {
     "st": {
-     "cp": "7"
+     "cp": "8"
     },
     "en": {
      "cp": "12"
@@ -2669,7 +2960,11 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Smaller 4.5' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": -1,
+      "profile_mod": "/1.5"
+     }
     },
     {
      "desc": "Power Blast Energy radiation eye intensity 16 25-30m ~2d6 (17.5 CP)",
@@ -2700,7 +2995,11 @@ var MP_GW_BESTIARY = {
      "dmgType": "Kinetic",
      "kb": ""
     }
-   ]
+   ],
+   "aggmods": {
+    "strength_mod": -1,
+    "profile": 0.6666666666666666
+   }
   }
  ],
  "orlen": [
@@ -2708,10 +3007,10 @@ var MP_GW_BESTIARY = {
    "name": "Orlen",
    "stats": {
     "st": {
-     "cp": "15"
+     "cp": "12"
     },
     "en": {
-     "cp": "15"
+     "cp": "12"
     },
     "ag": {
      "cp": "14"
@@ -2738,7 +3037,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 8' (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 3,
+      "en_mod": 3,
+      "profile_mod": "x1.3"
+     }
     },
     {
      "desc": "Physical Ability B Extra Limbs 4 arms (10 CP — 2 manipulative pairs, +1 attack/turn)",
@@ -2748,7 +3052,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Dual Brain → Heightened Defense Mental + Heightened Intelligence (10 CP — two-brain mechanic, save vs. mental x2)",
      "cp": "10",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "mentdef_mod": 2
+     }
     },
     {
      "desc": "Telepathy (10 CP)",
@@ -2798,7 +3105,13 @@ var MP_GW_BESTIARY = {
    "protKinetic": "3",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 3,
+    "endurance_mod": 3,
+    "profile": 1.3,
+    "mental_def_bonus": 2
+   }
   }
  ],
  "parn": [
@@ -2806,10 +3119,10 @@ var MP_GW_BESTIARY = {
    "name": "Pam",
    "stats": {
     "st": {
-     "cp": "15"
+     "cp": "10"
     },
     "en": {
-     "cp": "14"
+     "cp": "10"
     },
     "ag": {
      "cp": "10"
@@ -2841,7 +3154,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Special Missile Weapon spines 50m range 2d6 sharp 2/turn ammo 4d6 quills (12.5 CP)",
@@ -2876,7 +3194,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "4",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 4,
+    "profile": 1.5
+   }
   }
  ],
  "perth": [
@@ -2957,13 +3280,13 @@ var MP_GW_BESTIARY = {
    "name": "Pineto",
    "stats": {
     "st": {
-     "cp": "14"
+     "cp": "10"
     },
     "en": {
      "cp": "4"
     },
     "ag": {
-     "cp": "18"
+     "cp": "14"
     },
     "in": {
      "cp": "2"
@@ -2992,17 +3315,26 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Strength ~+4 (4 CP — for 800kg cargo)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 4
+     }
     },
     {
      "desc": "Heightened Agility ~+4 (4 CP)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "ag_mod": 4
+     }
     },
     {
      "desc": "Speed +6 (5 CP — for MV 18)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 6
+     }
     },
     {
      "desc": "Natural Weaponry tail lash + needle contact (5 CP)",
@@ -3037,7 +3369,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "5",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "strength_mod": 4,
+    "agility_mod": 4,
+    "move_mod": 6
+   }
   }
  ],
  "podog": [
@@ -3045,10 +3382,10 @@ var MP_GW_BESTIARY = {
    "name": "Podog",
    "stats": {
     "st": {
-     "cp": "15"
+     "cp": "12"
     },
     "en": {
-     "cp": "4"
+     "cp": "1"
     },
     "ag": {
      "cp": "14"
@@ -3085,12 +3422,20 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 8' (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 3,
+      "en_mod": 3,
+      "profile_mod": "x1.3"
+     }
     },
     {
      "desc": "Speed +4 (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 4
+     }
     },
     {
      "desc": "Reflection Sonic Sound Imitation +1 init (5 CP — bay/mimic cry)",
@@ -3121,7 +3466,13 @@ var MP_GW_BESTIARY = {
      "dmgType": "Kinetic",
      "kb": ""
     }
-   ]
+   ],
+   "aggmods": {
+    "strength_mod": 3,
+    "endurance_mod": 3,
+    "profile": 1.3,
+    "move_mod": 4
+   }
   }
  ],
  "rakox": [
@@ -3129,10 +3480,10 @@ var MP_GW_BESTIARY = {
    "name": "Rakox",
    "stats": {
     "st": {
-     "cp": "19"
+     "cp": "14"
     },
     "en": {
-     "cp": "20"
+     "cp": "12"
     },
     "ag": {
      "cp": "6"
@@ -3164,12 +3515,20 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Heightened Endurance +4 (4 CP)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "en_mod": 4
+     }
     },
     {
      "desc": "Heightened Attack +1d6 with Restriction \"charging only\" (~5 CP — double damage on charge)",
@@ -3214,7 +3573,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "6",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 8,
+    "profile": 1.5
+   }
   }
  ],
  "robotic unit": [
@@ -3225,7 +3589,7 @@ var MP_GW_BESTIARY = {
      "cp": "14"
     },
     "en": {
-     "cp": "20"
+     "cp": "16"
     },
     "ag": {
      "cp": "14"
@@ -3243,8 +3607,8 @@ var MP_GW_BESTIARY = {
    "weight": "",
    "inventing": "7",
    "initiative": "d6",
-   "hitPts": "15",
-   "hitPtsSrc": "15",
+   "hitPts": "30",
+   "hitPtsSrc": "30",
    "power": "76",
    "powerSrc": "76",
    "story": "GW source: Power: nuclear plant. Sensors: standard, IR, UV, telescopic. Control: self-controlled, Stage V I.D., special electronic. Construction: 3m sphere with 1m turret. Anti-grav 96 KPH. 2 tentacles (5m, 10m paralysis fields). Twin t/p beams (500 kg @ 50m). Weaponry: 3 laser batteries × 5 guns each (500m/20d6, 1000m/15d6, 1500m/10d6), 2 energy grenade launchers (range 100/300/500m, 2d20 grenades each), 2 micro-missile launchers (2d20 missiles each), 1 photon grenade launcher (250m range, 1d20 grenades). Energy screen 100 pts. 200 HP, AC 1. Organic-brain quirk per §17.10.\nMP build: Vehicle (sphere + turret), High power level (boss-tier combat)\nAbilities: Adaptation Bio (5 CP), Adaptation Mental partial (5 CP — borg organic brain), Heightened Defense Mental (5 CP), Heightened Endurance +4 (4 CP), Durability x2 (5 CP), Stretching A tentacles (5m, paralysis 10m field, 2 tentacles) (10 CP), Power Blast Energy laser-battery suite — Multi-Blast x3 batteries × 5 guns (50 CP — 20d6 short / 15d6 mid / 10d6 long range), Power Blast Bio/Energy grenade launchers ×2 area effect (15 CP), Power Blast Kinetic micro-missile launchers ×2 (15 CP), Power Blast Energy photon grenade launcher (10 CP), Telekinesis A x2 t/p beams (10 CP — 500kg @ 50m), Force Field A Personal energy screen 100pt (17.5 CP), Speed +30 (15 CP — 96 kph), Armor 20 = 12/4/2/2 K/E/B/Ent (40 CP — duralloy fortress)\nWeaknesses: Special Requirement: Power source nuclear -5, Restriction: No organic functions -5, Distinctive: Obviously combat machine -5, Phobia/Compulsion: Borg quirk (roll d10 §17.10) -5, Vulnerability: Mental Attacks when FF down -5\nCP estimate: ~205\nEncounter: Defense/Attack Borg (No. appearing 1). HTH d6, Init d6.",
@@ -3262,17 +3626,26 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Defense Mental (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "mentdef_mod": 2
+     }
     },
     {
      "desc": "Heightened Endurance +4 (4 CP)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "en_mod": 4
+     }
     },
     {
      "desc": "Durability x2 (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "hits_mod": 15
+     }
     },
     {
      "desc": "Stretching A tentacles (5m, paralysis 10m field, 2 tentacles) (10 CP)",
@@ -3312,7 +3685,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Speed +30 (15 CP — 96 kph)",
      "cp": "15",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 30
+     }
     },
     {
      "desc": "Armor 20 = 12/4/2/2 K/E/B/Ent (40 CP — duralloy fortress)",
@@ -3358,16 +3734,22 @@ var MP_GW_BESTIARY = {
    "protEnergy": "4",
    "protBio": "2",
    "protEntropy": "2",
-   "form": "Defense/Attack Borg"
+   "form": "Defense/Attack Borg",
+   "aggmods": {
+    "endurance_mod": 4,
+    "move_mod": 30,
+    "hits_mod": 15,
+    "mental_def_bonus": 2
+   }
   },
   {
    "name": "Death Machine",
    "stats": {
     "st": {
-     "cp": "24"
+     "cp": "18"
     },
     "en": {
-     "cp": "24"
+     "cp": "18"
     },
     "ag": {
      "cp": "16"
@@ -3385,8 +3767,8 @@ var MP_GW_BESTIARY = {
    "weight": "",
    "inventing": "7",
    "initiative": "d6",
-   "hitPts": "28",
-   "hitPtsSrc": "28",
+   "hitPts": "280",
+   "hitPtsSrc": "280",
    "power": "92",
    "powerSrc": "92",
    "story": "GW source: Power: nuclear plant. Sensors: standard, IR, UV at 10km. Control: only by specific PCI (effectively uncontrollable by PCs). Construction: 20×9×4m, knobby projections. Anti-grav 150 KPH. Weaponry: 2 blaster cannons (750m/100hp, 1500m/75hp, 3000m/50hp), 6 black ray cannons (300m), 16 batteries × 4 Mark VII blaster rifles each, 4 trek guns (200m), 8 laser batteries × 5 guns each (750m/20d6, 1500m/15d6, 3000m/10d6), 6 mini-missile launchers (2d10 missiles each), 5d10 fusion bombs + launcher (3000m), special energy damping field 50m radius (kills robotics within range, 200 dmg to other energy screens). Energy screens 400 pts, AC 1, 750 HP.\nMP build: Vehicle (massive lozenge), Apex power level\nAbilities: Adaptation Bio (5 CP), Adaptation Mental partial (5 CP), Heightened Defense Mental (5 CP), Heightened Endurance +6 (6 CP), Heightened Strength +6 (6 CP), Durability x10 (50 CP — for 750 HP), Multi-blast suite Power Blast Energy: blaster cannons + laser batteries + Mark VII rifles (full battery array, ~80 CP), Power Blast Kinetic: black ray cannons (15 CP), Power Blast Kinetic: trek guns + fusion bombs (20 CP — apex-tier ordnance), Power Blast Kinetic: mini-missile launchers (10 CP), Change Environment Damaging EMP energy damping 50m radius (25 CP — supplement Change Environment, kills robotics, 200 dmg to other FFs), Force Field A High-Capacity 400pt (30 CP), Speed +60 (30 CP — 150 kph), Armor 20 = 12/4/2/2 K/E/B/Ent (40 CP — fortress duralloy)\nWeaknesses: Special Requirement: Power source nuclear -5, Restriction: No organic functions -5, Restriction: Cannot operate without PCI control link -10, Distinctive: Obviously apex weapon -5, Phobia/Compulsion: PCI-controlled (PCI quirks transfer) -5\nCP estimate: ~400+\nEncounter: Death Machine (No. appearing 1). HTH 2d6, Init d6.",
@@ -3404,22 +3786,34 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Defense Mental (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "mentdef_mod": 2
+     }
     },
     {
      "desc": "Heightened Endurance +6 (6 CP)",
      "cp": "6",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "en_mod": 6
+     }
     },
     {
      "desc": "Heightened Strength +6 (6 CP)",
      "cp": "6",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 6
+     }
     },
     {
      "desc": "Durability x10 (50 CP — for 750 HP)",
      "cp": "50",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "hits_mod": 252
+     }
     },
     {
      "desc": "Multi-blast suite Power Blast Energy: blaster cannons + laser batteries + Mark VII rifles (full battery array, ~80 CP)",
@@ -3454,7 +3848,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Speed +60 (30 CP — 150 kph)",
      "cp": "30",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 60
+     }
     },
     {
      "desc": "Armor 20 = 12/4/2/2 K/E/B/Ent (40 CP — fortress duralloy)",
@@ -3500,7 +3897,14 @@ var MP_GW_BESTIARY = {
    "protEnergy": "4",
    "protBio": "2",
    "protEntropy": "2",
-   "form": "Death Machine"
+   "form": "Death Machine",
+   "aggmods": {
+    "strength_mod": 6,
+    "endurance_mod": 6,
+    "move_mod": 60,
+    "hits_mod": 252,
+    "mental_def_bonus": 2
+   }
   },
   {
    "name": "Engineering Bot (Standard)",
@@ -3556,7 +3960,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Defense Mental (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "mentdef_mod": 2
+     }
     },
     {
      "desc": "Stretching B Crane Arms (5m extension, ×2) (10 CP)",
@@ -3617,7 +4024,10 @@ var MP_GW_BESTIARY = {
    "protEnergy": "3",
    "protBio": "0",
    "protEntropy": "2",
-   "form": "Engineering Bot (Standard)"
+   "form": "Engineering Bot (Standard)",
+   "aggmods": {
+    "mental_def_bonus": 2
+   }
   },
   {
    "name": "General Household Robotoid",
@@ -3663,7 +4073,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Defense Mental (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "mentdef_mod": 2
+     }
     },
     {
      "desc": "Stretching A short manipulator tentacles (1m, ×2) (5 CP)",
@@ -3724,7 +4137,10 @@ var MP_GW_BESTIARY = {
    "protEnergy": "2",
    "protBio": "0",
    "protEntropy": "2",
-   "form": "General Household Robotoid"
+   "form": "General Household Robotoid",
+   "aggmods": {
+    "mental_def_bonus": 2
+   }
   },
   {
    "name": "Security Robotoid",
@@ -3770,7 +4186,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Defense Mental (5 CP)",
      "cp": "5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "mentdef_mod": 2
+     }
     },
     {
      "desc": "Stretching A padded tentacles (3m, paralysis-equipped, ×2) (10 CP)",
@@ -3800,7 +4219,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Speed +30 (15 CP — anti-grav 96 kph supplement)",
      "cp": "15",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "move_mod": 30
+     }
     },
     {
      "desc": "Armor 16 = 10/3/1/2 K/E/B/Ent (30 CP — duralloy plating)",
@@ -3841,7 +4263,11 @@ var MP_GW_BESTIARY = {
    "protEnergy": "3",
    "protBio": "1",
    "protEntropy": "2",
-   "form": "Security Robotoid"
+   "form": "Security Robotoid",
+   "aggmods": {
+    "move_mod": 30,
+    "mental_def_bonus": 2
+   }
   }
  ],
  "sep": [
@@ -3849,10 +4275,10 @@ var MP_GW_BESTIARY = {
    "name": "Sep",
    "stats": {
     "st": {
-     "cp": "19"
+     "cp": "6"
     },
     "en": {
-     "cp": "17"
+     "cp": "8"
     },
     "ag": {
      "cp": "6"
@@ -3884,7 +4310,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 12' (15 CP)",
      "cp": "15",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 9,
+      "en_mod": 9,
+      "profile_mod": "x2"
+     }
     },
     {
      "desc": "Tunneling (sand burrow, Max SR 2, Max Speed 12, +2 dmg bonus on bite from CP overflow) (15 CP — supplement ability)",
@@ -3894,7 +4325,10 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Heightened Strength ~+4 (4 CP)",
      "cp": "4",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 4
+     }
     },
     {
      "desc": "Heightened Attack +2 hit (4 CP)",
@@ -3929,7 +4363,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "5",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "strength_mod": 13,
+    "endurance_mod": 9,
+    "profile": 2
+   }
   }
  ],
  "serf": [
@@ -4064,10 +4503,10 @@ var MP_GW_BESTIARY = {
    "name": "Sleeth",
    "stats": {
     "st": {
-     "cp": "17"
+     "cp": "12"
     },
     "en": {
-     "cp": "18"
+     "cp": "14"
     },
     "ag": {
      "cp": "14"
@@ -4094,7 +4533,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Telepathy (10 CP)",
@@ -4149,7 +4593,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "4",
    "protEnergy": "2",
    "protBio": "0",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 4,
+    "profile": 1.5
+   }
   }
  ],
  "soul besh": [
@@ -4157,7 +4606,7 @@ var MP_GW_BESTIARY = {
    "name": "Soul Besh",
    "stats": {
     "st": {
-     "cp": "7"
+     "cp": "8"
     },
     "en": {
      "cp": "10"
@@ -4192,7 +4641,11 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Smaller 4.5' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": -1,
+      "profile_mod": "/1.5"
+     }
     },
     {
      "desc": "Poison/Venom A intensity 18 paralytic carrier on bite (10 CP)",
@@ -4232,7 +4685,11 @@ var MP_GW_BESTIARY = {
    "protKinetic": "1",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": -1,
+    "profile": 0.6666666666666666
+   }
   }
  ],
  "terl": [
@@ -4240,10 +4697,10 @@ var MP_GW_BESTIARY = {
    "name": "Terl",
    "stats": {
     "st": {
-     "cp": "12"
+     "cp": "10"
     },
     "en": {
-     "cp": "9"
+     "cp": "8"
     },
     "ag": {
      "cp": "14"
@@ -4275,7 +4732,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 7' (2.5 CP)",
      "cp": "2.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 2,
+      "en_mod": 1,
+      "profile_mod": "x1.2"
+     }
     },
     {
      "desc": "Flight (Telekinetic, moderate speed) 10 CP",
@@ -4330,7 +4792,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "5",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "strength_mod": 2,
+    "endurance_mod": 1,
+    "profile": 1.2
+   }
   }
  ],
  "tribesmen": [
@@ -4452,10 +4919,10 @@ var MP_GW_BESTIARY = {
    "name": "Yexil",
    "stats": {
     "st": {
-     "cp": "16"
+     "cp": "11"
     },
     "en": {
-     "cp": "10"
+     "cp": "6"
     },
     "ag": {
      "cp": "12"
@@ -4482,7 +4949,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Larger 9' (7.5 CP)",
      "cp": "7.5",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": 5,
+      "en_mod": 4,
+      "profile_mod": "x1.5"
+     }
     },
     {
      "desc": "Flight 15m (7.5 CP)",
@@ -4547,7 +5019,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "4",
    "protEnergy": "1",
    "protBio": "0",
-   "protEntropy": "1"
+   "protEntropy": "1",
+   "aggmods": {
+    "strength_mod": 5,
+    "endurance_mod": 4,
+    "profile": 1.5
+   }
   }
  ],
  "zarn": [
@@ -4555,10 +5032,10 @@ var MP_GW_BESTIARY = {
    "name": "Zarn",
    "stats": {
     "st": {
-     "cp": "8"
+     "cp": "10"
     },
     "en": {
-     "cp": "2"
+     "cp": "4"
     },
     "ag": {
      "cp": "14"
@@ -4590,7 +5067,12 @@ var MP_GW_BESTIARY = {
     {
      "desc": "Size Change Smaller 1' (10 CP)",
      "cp": "10",
-     "ip": ""
+     "ip": "",
+     "mods": {
+      "st_mod": -2,
+      "en_mod": -2,
+      "profile_mod": "/6"
+     }
     },
     {
      "desc": "Teleportation 200m alt-turns (12.5 CP)",
@@ -4630,7 +5112,12 @@ var MP_GW_BESTIARY = {
    "protKinetic": "3",
    "protEnergy": "0",
    "protBio": "0",
-   "protEntropy": "2"
+   "protEntropy": "2",
+   "aggmods": {
+    "strength_mod": -2,
+    "endurance_mod": -2,
+    "profile": 0.16666666666666666
+   }
   }
  ],
  "zeethh": [
