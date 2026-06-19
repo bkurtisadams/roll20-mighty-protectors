@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.66.0 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.66.1 - 2026-06-19
+ * v2.66.1: gwspawn vehicle emit — fix modifier-index economy. vehDefaultAbility
+ *          wrote timereq=0 ("No Time", +5 CP) and left charges=0 ("Unlimited");
+ *          for a base-PR-16 Force Field that inflated the screen 50 -> 75 CP
+ *          (illegal). Now timereq=2 ("1 Phase", 0 CP), charges = the ability's
+ *          base PR index (0 CP), and data `pr` is converted from a PR VALUE to its
+ *          scale index (FF PR 16 -> index 8) instead of being copied raw. Confirmed
+ *          vs FLYER.json (FF pr=8/charges=8). System 9 EMP re-pointed to Negation.
  * v2.66.0: gwspawn now spawns VEHICLES. Death Machine and Defense/Attack Borg are
  *          modeled as MP Vehicles (not characters) in MP_GW_VEHICLES (sibling data
  *          script). gwspawn checks that list first and, on a match, emits a builder-
@@ -8075,7 +8082,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.66.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.66.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8499,14 +8506,29 @@ function cmdStance(msg, args) {
   // Vehicles (Death Machine, Borg) are modeled as MP Vehicles, not characters; this
   // path shadows the dormant character bestiary entries of the same name.
   // -------------------------
+  // NOTE on modifier fields: pr/charges/range/timereq are STEP INDICES the builder reads,
+  // not raw values, and their CP cost is relative to the ability's base step (see vehMkSystem).
+  // Neutral (0-CP) indices: timereq=2 ("1 Phase"); pr/charges = the ability's base PR index;
+  // range = base-range index. Writing 0 selects the most expensive end (No Time / Unlimited).
   function vehDefaultAbility() {
     return { abId: null, abilityCp: 0, spaces: 0, area: 0, ap: 0, autofire: 0, duration: 0,
       hardened: 0, gear: false, bulky: 0, delicate: 0, pr: 0, charges: 0, range: 6, conc: 0,
       kb: 0, breakdown: 0, partial: 0, poorpen: 0, obvious: 0, carrier: 0, dmgtype: 0, indirect: 0,
-      timereq: 0, activation: 0, loss: 0, canthold: 0, linked: false, multi: 0, usable: 0,
+      timereq: 2, activation: 0, loss: 0, canthold: 0, linked: false, multi: 0, usable: 0,
       reqsave: 0, other: 0, integral: false, open: false, indep: false, wontexplode: false,
       arc: 0, notes: "", abilityMods: {}, descMode: "compact" };
   }
+
+  // Base PR per ability (for computing the neutral PR/charges step index). PR/charges cost is
+  // (baseIdx - selectedIdx) * 2.5, so selecting baseIdx yields 0 CP. Confirmed vs FLYER.json:
+  // a base-PR-16 Force Field stores pr=8/charges=8; base-PR-1 Power Blast stores pr=1/charges=1.
+  const VEH_PR_VALUES = [0, 1, 2, 3, 4, 5, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192];
+  function vehPrScaleIndex(basePR) {
+    for (let i = 0; i < VEH_PR_VALUES.length; i++) if (VEH_PR_VALUES[i] >= basePR) return i;
+    return VEH_PR_VALUES.length - 1;
+  }
+  const VEH_BASE_PR = { "power-blast": 1, "force-field": 16, "disintegration": 2,
+    "negation": 1, "paralysis": 3, "change-environment": 1 };
 
   function vehMkSystem(e, id) {
     const sys = { id: id, spaces: e.sp || 0, extraCPs: e.extraCPs || 0, desc: e.desc || "",
@@ -8516,10 +8538,14 @@ function cmdStance(msg, args) {
     if (e.abId) {
       const a = vehDefaultAbility();
       a.abId = e.abId; a.abilityCp = e.cp || 0; a.spaces = e.sp || 0; a.integral = !!e.integral;
-      if (e.pr != null) a.pr = e.pr;
-      if (e.range != null) a.range = e.range;
-      if (e.autofire != null) a.autofire = e.autofire;
-      if (e.area != null) a.area = e.area;
+      // PR/charges as scale INDICES. basePR sets the 0-CP step; data `pr` is the chosen PR VALUE.
+      const basePR = (VEH_BASE_PR[e.abId] != null) ? VEH_BASE_PR[e.abId] : (e.pr != null ? e.pr : 0);
+      const baseIdx = vehPrScaleIndex(basePR);
+      a.pr = vehPrScaleIndex(e.pr != null ? e.pr : basePR); // PR value -> index (base => 0 CP)
+      a.charges = baseIdx;                                   // neutral charges (0 CP); matches FLYER
+      if (e.range != null) a.range = e.range;                // range-code index (0 LoS .. 10 Touch)
+      if (e.autofire != null) a.autofire = e.autofire;       // autofire step index
+      if (e.area != null) a.area = e.area;                   // area-effect step index
       sys.abilityData = a;
     }
     return sys;
