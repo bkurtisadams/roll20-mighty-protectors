@@ -1,4 +1,5 @@
-/* Mighty Protectors Roll20 API Engine v2.66.4 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.66.5 - 2026-06-19
+ * v2.66.5: layout suffix base shortened to 2 chars (PB1, PB2 …) for grid legibility.
  * v2.66.4: layout emit now suffixes duplicate-ability system labels (PBl1, PBl2 …)
  *          via per-cell `label`, so visually identical systems are distinguishable
  *          on the grid. Singletons keep the canvas auto-abbr.
@@ -8614,12 +8615,12 @@ function cmdStance(msg, args) {
     return { remainingCells: [], walls: vehTraceHull(systems) };
   }
 
-  const VEH_ABBR = { "power-blast": "PBl", "disintegration": "Dis", "force-field": "FFd",
-    "robot-brain": "RBr", "negation": "Neg", "paralysis": "Par", "telekinesis": "TKn",
-    "change-environment": "CEn" };
+  const VEH_ABBR = { "power-blast": "PB", "disintegration": "Di", "force-field": "FF",
+    "robot-brain": "RB", "negation": "Ne", "paralysis": "Pa", "telekinesis": "TK",
+    "change-environment": "CE" };
 
   // Disambiguate visually identical systems on the layout grid: when 2+ functional
-  // systems share an ability, stamp every cell with a numbered abbr (PBl1, PBl2, ...).
+  // systems share an ability, stamp every cell with a numbered abbr (PB1, PB2, ...).
   // Singletons are left unlabeled so the canvas draws its own MP.sysLabel abbr.
   function vehSuffixLabels(systems) {
     const groups = {};
@@ -8631,7 +8632,7 @@ function cmdStance(msg, args) {
     for (const ab in groups) {
       const grp = groups[ab];
       if (grp.length < 2) continue;
-      const base = VEH_ABBR[ab] || ab.slice(0, 3).toUpperCase();
+      const base = VEH_ABBR[ab] || ab.slice(0, 2).toUpperCase();
       grp.forEach((s, i) => { const lbl = base + (i + 1); s.cells.forEach(c => { c.label = lbl; }); });
     }
   }
