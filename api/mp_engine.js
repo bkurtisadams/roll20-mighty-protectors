@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.66.1 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.66.2 - 2026-06-19
+ * v2.66.2: gwspawn vehicle emit now auto-paints a grid LAYOUT. Each functional
+ *          system (abId, non-integral) is tiled into a cols-wide rectangle (1 cell
+ *          = 1 system space) and a hull wall border is traced; cell color is derived
+ *          by the builder from the system desc (MP.sysColor) so blocks match the
+ *          system-row swatches. cols per vehicle via vdef.layout.cols.
  * v2.66.1: gwspawn vehicle emit — fix modifier-index economy. vehDefaultAbility
  *          wrote timereq=0 ("No Time", +5 CP) and left charges=0 ("Unlimited");
  *          for a base-PR-16 Force Field that inflated the screen 50 -> 75 CP
@@ -8563,6 +8568,8 @@ function cmdStance(msg, args) {
     const sz = VEH_SIZE[vdef.sizeKey] || [0, 0, 0];
     const bc = vdef.bcs || {};
     const power = sz[0] + sz[1] + (bc.ag || 0) + (bc.in || 0);
+    const systems = (vdef.systems || []).map((e, i) => vehMkSystem(e, i + 1));
+    const layout = vehApplyLayout(systems, vdef.layout);
     return {
       version: 10, type: "mp-vehicle",
       name: vdef.name || "", model: vdef.model || "", operator: vdef.operator || "",
@@ -8571,11 +8578,53 @@ function cmdStance(msg, args) {
       armorKin: arm[0] || 0, armorEng: arm[1] || 0, armorBio: arm[2] || 0,
       armorEnt: arm[3] || 0, armorPsy: arm[4] || 0,
       currentHits: sz[2], currentPower: power,
-      systems: (vdef.systems || []).map((e, i) => vehMkSystem(e, i + 1)),
+      systems: systems,
       keyEntries: [], pictureData: "", pictureHeight: 125,
       silhouette: { data: "", gx: 0, gy: 0, gw: 9, gh: 9, rot: 0, color: "#000000", alpha: 0.5 },
-      remainingCells: [], walls: []
+      remainingCells: layout.remainingCells, walls: layout.walls
     };
+  }
+
+  // Auto-tile each FUNCTIONAL system (has abId, not integral, spaces>0) into a cols-wide
+  // rectangle so the emitted vehicle imports with a painted layout. 1 cell = 1 system space
+  // (MP 2.5' layout square). Cell color is derived by the builder from each system's desc
+  // (MP.sysColor), so blocks match the system-row swatches automatically. Structural rows
+  // (abId null, e.g. the hull) and integral systems are not painted. cols comes from
+  // vdef.layout.cols, else a near-square. A hull wall border is traced around the painted shape.
+  function vehApplyLayout(systems, layoutDef) {
+    let functional = 0;
+    for (const s of systems) if (s.abilityData && !s.integral && s.spaces > 0) functional += s.spaces;
+    if (!functional) return { remainingCells: [], walls: [] };
+    const cols = (layoutDef && layoutDef.cols) || Math.max(1, Math.ceil(Math.sqrt(functional)));
+    let pos = 0;
+    for (const s of systems) {
+      if (s.abilityData && !s.integral && s.spaces > 0) {
+        const cells = [];
+        for (let k = 0; k < s.spaces; k++) { cells.push({ gx: pos % cols, gy: Math.floor(pos / cols) }); pos++; }
+        s.cells = cells;
+      }
+    }
+    return { remainingCells: [], walls: vehTraceHull(systems) };
+  }
+
+  function vehTraceHull(systems) {
+    const occ = new Set();
+    systems.forEach(s => (s.cells || []).forEach(c => occ.add(c.gx + "," + c.gy)));
+    const has = (x, y) => occ.has(x + "," + y);
+    const norm = (gx, gy, e) => e === "b" ? { gx: gx, gy: gy + 1, edge: "t" }
+      : e === "r" ? { gx: gx + 1, gy: gy, edge: "l" } : { gx: gx, gy: gy, edge: e };
+    const seen = new Set(); const walls = [];
+    const edges = [["t", 0, -1], ["b", 0, 1], ["l", -1, 0], ["r", 1, 0]];
+    for (const key of occ) {
+      const p = key.split(","); const gx = +p[0], gy = +p[1];
+      for (const ed of edges) {
+        if (!has(gx + ed[1], gy + ed[2])) {
+          const n = norm(gx, gy, ed[0]); const k = n.gx + "," + n.gy + "," + n.edge;
+          if (!seen.has(k)) { seen.add(k); walls.push({ gx: n.gx, gy: n.gy, edge: n.edge, type: "wall" }); }
+        }
+      }
+    }
+    return walls;
   }
 
   function emitVehicleJSON(vdef) {

@@ -2,6 +2,9 @@
  * Companion data script for mp_engine.js (>= v2.66.0). Load BOTH as API scripts.
  * Consumed by: !mp gwspawn --name NAME [--form FORM]
  * Generated from gw-mp-bestiary.md v0.9.2. 48 creatures / 54 forms.
+ * v0.4.3: Death Machine + Borg get a `layout` field (cols) so the emitter auto-paints
+ *   a color-coded grid layout on export. Functional systems tile into a rectangle;
+ *   colors follow the system desc (force-field=yellow, robot-brain=purple, weapons=red).
  * v0.4.2: Death Machine + Borg weapon modifiers re-tuned to fit each system's space
  *   budget (sysCpTable[sp] + techMod). Capped autofire RoF (was reading RoF 5-6 at
  *   +30/+37.5, blowing budgets) to RoF 2-4; trimmed oversized area steps; dropped
@@ -5204,6 +5207,7 @@ var MP_GW_VEHICLES = {
  "death machine": {
   name: "Death Machine", model: "GW Apex", operator: "PCI-linked",
   sizeKey: 37.5, techMod: 25, maneuverMod: 0,
+  layout: { cols: 11 },
   bcs: { ag: 9, in: 14, cl: 9 },
   armor: [8, 5, 4, 3, 0],
   systems: [
@@ -5222,11 +5226,12 @@ var MP_GW_VEHICLES = {
  "defense/attack borg": {
   name: "Defense/Attack Borg", model: "GW Boss", operator: "self (organic-brain quirk §17.10)",
   sizeKey: 15, techMod: 20, maneuverMod: 0,
+  layout: { cols: 4 },
   bcs: { ag: 9, in: 5, cl: 9 },
   armor: [8, 5, 4, 3, 0],
   systems: [
    { sp: 4, abId: "force-field", cp: 25, pr: 16, desc: "Force Field: 28 pts (7/7/7/7) (25), PR 16 — per-hit wall; drops when deflected > vehicle Power" },
-   { sp: 1, abId: "robot-brain", cp: 5, adjIN: 5, desc: "Organic brain: +5 IN (self-controlled; §17.10 quirk)" },
+   { sp: 1, abId: "robot-brain", cp: 5, adjIN: 5, desc: "Robot Brain (organic): +5 IN (self-controlled; §17.10 quirk)" },
    { sp: 2, abId: "power-blast", cp: 20, dmg: "2d10", dmgtype: "Energy", autofire: 1, range: 5, pr: 1, desc: "Laser batteries x3 (5 guns ea) — Power Blast Energy, Autofire RoF 2, Rng BCx2" },
    { sp: 1, abId: "power-blast", cp: 20, dmg: "2d10", dmgtype: "Energy", area: 2, range: 6, pr: 1, desc: "Energy grenade launchers x2 — Power Blast Energy, Area 3\" (capped by 1-space budget)" },
    { sp: 1, abId: "power-blast", cp: 20, dmg: "2d10", dmgtype: "Kinetic", range: 6, pr: 1, desc: "Micro-missile launchers x2 — Power Blast Kinetic (1-space budget leaves no room for RoF; single-shot)" },
