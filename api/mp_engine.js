@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.66.3 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.66.4 - 2026-06-19
+ * v2.66.4: layout emit now suffixes duplicate-ability system labels (PBl1, PBl2 …)
+ *          via per-cell `label`, so visually identical systems are distinguishable
+ *          on the grid. Singletons keep the canvas auto-abbr.
  * v2.66.3: vehMkSystem no longer copies the bestiary's inflicted-damage value into
  *          the system `dmg` field — that field records damage TAKEN by the system and
  *          must start empty. Inflicted damage already lives in the system desc.
@@ -8607,7 +8610,30 @@ function cmdStance(msg, args) {
         s.cells = cells;
       }
     }
+    vehSuffixLabels(systems);
     return { remainingCells: [], walls: vehTraceHull(systems) };
+  }
+
+  const VEH_ABBR = { "power-blast": "PBl", "disintegration": "Dis", "force-field": "FFd",
+    "robot-brain": "RBr", "negation": "Neg", "paralysis": "Par", "telekinesis": "TKn",
+    "change-environment": "CEn" };
+
+  // Disambiguate visually identical systems on the layout grid: when 2+ functional
+  // systems share an ability, stamp every cell with a numbered abbr (PBl1, PBl2, ...).
+  // Singletons are left unlabeled so the canvas draws its own MP.sysLabel abbr.
+  function vehSuffixLabels(systems) {
+    const groups = {};
+    for (const s of systems) {
+      if (!s.abilityData || s.integral || !s.cells.length) continue;
+      const ab = s.abilityData.abId;
+      (groups[ab] = groups[ab] || []).push(s);
+    }
+    for (const ab in groups) {
+      const grp = groups[ab];
+      if (grp.length < 2) continue;
+      const base = VEH_ABBR[ab] || ab.slice(0, 3).toUpperCase();
+      grp.forEach((s, i) => { const lbl = base + (i + 1); s.cells.forEach(c => { c.label = lbl; }); });
+    }
   }
 
   function vehTraceHull(systems) {
