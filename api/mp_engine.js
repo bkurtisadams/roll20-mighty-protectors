@@ -1,4 +1,17 @@
-/* Mighty Protectors Roll20 API Engine v2.67.0 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.68.0 - 2026-06-19
+ * v2.68.0: vehicle import now populates the actual vehicle sheet model. Sets
+ *          vehicle_base_cp (vehicleSizeTable key) + vehicle_ag/in/cl + hilotech/
+ *          maneuver so calcVehicle derives spaces/st/en/hits/power/profile on
+ *          sheet:open; fills repeating_vehsystems (one row per system: spaces, dmg,
+ *          description) and repeating_vehprotection (force field, per-type). Still
+ *          writes repeating_attacks for the !mp atk pipeline. buildVehicleFromMPData
+ *          now emits bcAg/bcIn/bcCl. Replaces the v2.67.0 attempt that wrote engine-
+ *          only attrs the vehicle tab doesn't display.
+ * v2.67.2: !mp import now extracts the first balanced {...} object from handout
+ *          notes, so trailing markup or a duplicated paste no longer breaks
+ *          JSON.parse ("Unexpected non-whitespace character after JSON").
+ * v2.67.1: !mp import handout lookup is now forgiving — strips surrounding quotes,
+ *          matches case-insensitively, and suggests near matches on a miss.
  * v2.67.0: !mp import now handles vehicles. A type:"mp-vehicle" handout (builder/
  *          gwspawn JSON) builds a vehicle-mode character via
  *          buildVehicleCharacterFromMPData: sets vehicle_mode/hits/power/armor, a
@@ -8312,12 +8325,42 @@ function cmdStance(msg, args) {
     ch("MP", `/w gm Exported <b>${esc(charName)}</b> → handout <b>${esc(handoutName)}</b>. Copy the JSON to import into MP Builder.`);
   }
 
+  // Pull the first balanced {...} object out of handout notes, ignoring any
+  // leading/trailing markup or a duplicate paste (Roll20's rich-text editor
+  // commonly appends or duplicates content). String-aware so braces inside
+  // quoted values don't fool the depth count.
+  function extractFirstJSONObject(s) {
+    if (!s) return null;
+    const start = s.indexOf("{");
+    if (start < 0) return null;
+    let depth = 0, inStr = false, escNext = false;
+    for (let i = start; i < s.length; i++) {
+      const c = s[i];
+      if (inStr) {
+        if (escNext) escNext = false;
+        else if (c === "\\") escNext = true;
+        else if (c === '"') inStr = false;
+      } else if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}") { depth--; if (depth === 0) return s.slice(start, i + 1); }
+    }
+    return null;
+  }
+
   function cmdMPImport(msg, args) {
-    const handoutName = args.name || args.handout || '';
+    let handoutName = (args.name || args.handout || '').replace(/^["']+|["']+$/g, '').trim();
     if (!handoutName) return ch("MP", "/w gm Usage: <code>!mp import --name HandoutName</code>");
 
-    const handout = findObjs({ type: 'handout', name: handoutName })[0];
-    if (!handout) return ch("MP", `/w gm Handout "${esc(handoutName)}" not found.`);
+    let handout = findObjs({ type: 'handout', name: handoutName })[0];
+    if (!handout) {
+      const lc = handoutName.toLowerCase();
+      handout = findObjs({ type: 'handout' }).find(h => (h.get('name') || '').trim().toLowerCase() === lc);
+    }
+    if (!handout) {
+      const names = findObjs({ type: 'handout' }).map(h => h.get('name')).filter(Boolean);
+      const near = names.filter(n => n.toLowerCase().indexOf(handoutName.toLowerCase()) !== -1).slice(0, 5);
+      return ch("MP", `/w gm Handout "${esc(handoutName)}" not found.` + (near.length ? `<br/>Did you mean: ${near.map(esc).join(", ")}?` : ` (${names.length} handouts on the board)`));
+    }
 
     handout.get('gmnotes', function(gmnotes) {
       handout.get('notes', function(notes) {
@@ -8325,7 +8368,7 @@ function cmdStance(msg, args) {
         raw = raw.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;|\u00a0/g, ' ').replace(/[\u201c\u201d]/g, '"').replace(/[\u2018\u2019]/g, "'").trim();
 
         let data;
-        try { data = JSON.parse(raw); } catch(e) {
+        try { data = JSON.parse(extractFirstJSONObject(raw) || raw); } catch(e) {
           return ch("MP", `/w gm Failed to parse JSON: ${esc(e.message)}`);
         }
         if (data && (data.type === "mp-vehicle" || (data.version === 10 && Array.isArray(data.systems)))) {
@@ -8545,54 +8588,71 @@ function cmdStance(msg, args) {
 
     setAttr("vehicle_mode", "on");
     setAttr("vehicle_name", charName);
-    setRes("vehicle_hits", data.currentHits, data.currentHits);
-    setAttr("vehicle_hits_max", data.currentHits);
-    setRes("vehicle_power", data.currentPower, data.currentPower);
-    setAttr("vehicle_power_max", data.currentPower);
+    setAttr("vehicle_model", data.model);
+    setAttr("vehicle_owner", data.operator);
+    // Sheet inputs — calcVehicle() derives spaces/st/en/hits/power/profile/etc. from
+    // these on sheet:opened (base_cp must be a vehicleSizeTable key, e.g. "37.5").
+    setAttr("vehicle_base_cp", String(data.basicCost));
+    setAttr("vehicle_ag", data.bcAg);
+    setAttr("vehicle_in", data.bcIn);
+    setAttr("vehicle_cl", data.bcCl);
+    setAttr("vehicle_hilotech", data.techMod || 0);
+    setAttr("vehicle_maneuver", data.maneuverMod || 0);
+    setAttr("vehicle_wontexplode", data.wontExplode ? "1" : "0");
+    setAttr("vehicle_base_mode", data.isBase ? "1" : "0");
     setAttr("vehicle_armor_kinetic", data.armorKin);
     setAttr("vehicle_armor_energy", data.armorEng);
     setAttr("vehicle_armor_biochem", data.armorBio);
     setAttr("vehicle_armor_entropy", data.armorEnt);
     setAttr("vehicle_armor_psychic", data.armorPsy);
-    setAttr("defPhysical", data.maneuverMod || 0);
-    setAttr("defMental", data.maneuverMod || 0);
+    // Pre-set the derived hits/power so the token is combat-ready before the sheet is
+    // first opened; calcVehicle recomputes identically from base_cp on open.
+    setRes("vehicle_hits", data.currentHits, data.currentHits);
+    setAttr("vehicle_hits_max", data.currentHits);
+    setRes("vehicle_power", data.currentPower, data.currentPower);
+    setAttr("vehicle_power_max", data.currentPower);
 
-    ["repeating_attacks_", "repeating_protection_", "repeating_vehprotection_", "repeating_abilities_"].forEach(pre => {
+    ["repeating_vehsystems_", "repeating_vehprotection_", "repeating_attacks_", "repeating_protection_", "repeating_abilities_"].forEach(pre => {
       findObjs({ type: "attribute", characterid: charId }).filter(a => a.get("name").indexOf(pre) === 0).forEach(a => a.remove());
     });
 
     let atkNum = 0, ffRows = 0;
     (data.systems || []).forEach(sys => {
       const ab = sys.abilityData;
-      if (!ab || !ab.abId) return;
-      if (ab.abId === "force-field") {
+      const lbl = (sys.cells && sys.cells[0] && sys.cells[0].label) ? sys.cells[0].label + " " : "";
+
+      // Force field -> Additional Protection row (vehprotection); engine reads vprot_* too.
+      if (ab && ab.abId === "force-field") {
         const per = vehFFPerType(sys.desc);
-        const rowId = generateRowID(), p = "repeating_protection_" + rowId + "_";
-        createObj("attribute", { characterid: charId, name: p + "prot_name", current: vehWeaponName(sys.desc) || "Force Field" });
-        createObj("attribute", { characterid: charId, name: p + "prot_mode", current: "forcefield" });
-        createObj("attribute", { characterid: charId, name: p + "prot_state", current: "on" });
-        ["kinetic", "energy", "bio", "entropy", "psychic"].forEach(t => { if (per) createObj("attribute", { characterid: charId, name: p + "prot_" + t, current: String(per) }); });
+        const rid = generateRowID(), p = "repeating_vehprotection_" + rid + "_";
+        createObj("attribute", { characterid: charId, name: p + "vprot_name", current: "Force Field" });
+        ["kinetic", "energy", "bio", "entropy", "psychic"].forEach(t => { createObj("attribute", { characterid: charId, name: p + "vprot_" + t, current: String(per || 0) }); });
+        createObj("attribute", { characterid: charId, name: p + "vprot_other", current: "0" });
+        createObj("attribute", { characterid: charId, name: p + "vprot_notes", current: vehWeaponName(sys.desc) });
         ffRows++;
-        return;
       }
-      if (VEH_OFFENSIVE_AB[ab.abId]) {
+
+      // Every system -> a Vehicle Systems row (drives spaces/cost; sheet auto-fills cp/hits/profile).
+      const sid = generateRowID(), sp = "repeating_vehsystems_" + sid + "_";
+      createObj("attribute", { characterid: charId, name: sp + "vsys_cost", current: String(sys.extraCPs || 0) });
+      createObj("attribute", { characterid: charId, name: sp + "vsys_spaces", current: String(sys.spaces || 0) });
+      createObj("attribute", { characterid: charId, name: sp + "vsys_dmg", current: sys.atkDmg || "" });
+      createObj("attribute", { characterid: charId, name: sp + "vsys_notes", current: (lbl + (sys.desc || "")).trim() });
+
+      // Offensive systems also get a rollable attack row for !mp atk (engine pipeline).
+      if (ab && VEH_OFFENSIVE_AB[ab.abId]) {
         atkNum++;
-        const rowId = generateRowID(), p = "repeating_attacks_" + rowId + "_";
-        const lbl = (sys.cells && sys.cells[0] && sys.cells[0].label) ? sys.cells[0].label + " " : "";
-        createObj("attribute", { characterid: charId, name: p + "attack_name", current: lbl + vehWeaponName(sys.desc) });
-        createObj("attribute", { characterid: charId, name: p + "attack_tohit", current: "" });
-        createObj("attribute", { characterid: charId, name: p + "attack_damage", current: sys.atkDmg || vehParseDice(sys.desc) || "" });
-        createObj("attribute", { characterid: charId, name: p + "attack_dmgtype", current: vehDmgType(sys.atkType, sys.desc) });
-        createObj("attribute", { characterid: charId, name: p + "attack_kb", current: "" });
-        createObj("attribute", { characterid: charId, name: p + "attack_num", current: String(atkNum) });
-        return;
+        const aid = generateRowID(), ap = "repeating_attacks_" + aid + "_";
+        createObj("attribute", { characterid: charId, name: ap + "attack_name", current: lbl + vehWeaponName(sys.desc) });
+        createObj("attribute", { characterid: charId, name: ap + "attack_tohit", current: "" });
+        createObj("attribute", { characterid: charId, name: ap + "attack_damage", current: sys.atkDmg || vehParseDice(sys.desc) || "" });
+        createObj("attribute", { characterid: charId, name: ap + "attack_dmgtype", current: vehDmgType(sys.atkType, sys.desc) });
+        createObj("attribute", { characterid: charId, name: ap + "attack_kb", current: "" });
+        createObj("attribute", { characterid: charId, name: ap + "attack_num", current: String(atkNum) });
       }
-      const rowId = generateRowID(), p = "repeating_abilities_" + rowId + "_";
-      createObj("attribute", { characterid: charId, name: p + "ability_name", current: vehWeaponName(sys.desc) });
-      createObj("attribute", { characterid: charId, name: p + "ability_cp", current: ab.abilityCp || "" });
     });
 
-    ch("MP", `/w gm <b>🚗 Imported vehicle ${esc(charName)}</b> from ${sourceLabel}.<br/>Vehicle mode ON · Hits ${esc(String(data.currentHits))} · Power ${esc(String(data.currentPower))} · ${atkNum} weapon row(s)${ffRows ? " · force field" : ""}.<br/><span style="font-size:11px;color:#888;">Drag the character to the canvas, then set bar2→vehicle_hits, bar1→vehicle_power.</span>`);
+    ch("MP", `/w gm <b>🚗 Imported vehicle ${esc(charName)}</b> from ${sourceLabel}.<br/>Base CP ${esc(String(data.basicCost))} · ${(data.systems || []).length} system row(s) · ${atkNum} weapon attack(s)${ffRows ? " · force field" : ""}.<br/><span style="font-size:11px;color:#888;">Open the sheet once to let it compute hits/power/profile/stats, then on the token set bar2→vehicle_hits, bar1→vehicle_power.</span>`);
   }
 
   // -------------------------
@@ -8704,6 +8764,7 @@ function cmdStance(msg, args) {
       armorKin: arm[0] || 0, armorEng: arm[1] || 0, armorBio: arm[2] || 0,
       armorEnt: arm[3] || 0, armorPsy: arm[4] || 0,
       currentHits: sz[2], currentPower: power,
+      bcAg: bc.ag || 0, bcIn: bc.in || 0, bcCl: bc.cl || 0,
       systems: systems,
       keyEntries: [], pictureData: "", pictureHeight: 125,
       silhouette: { data: "", gx: 0, gy: 0, gw: 9, gh: 9, rot: 0, color: "#000000", alpha: 0.5 },
