@@ -1,4 +1,13 @@
-/* Mighty Protectors Roll20 API Engine v2.68.1 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.69.0 - 2026-06-19
+ * v2.69.0: vehicle force fields now run the per-hit deflection/collapse mechanic.
+ *          cmdApply no longer disables FF for vehicle defenders (getForceFieldData
+ *          already uses vehicle Power as the collapse threshold). Per-hit logic now
+ *          honors the MP rule that a completely-blocked hit (fully stopped within
+ *          remaining capacity) is ignored and not added to the deflection total.
+ *          Vehicle import now writes an active forcefield protection row (mode/
+ *          state/accum/pr + per-type stopping power) in addition to the Additional
+ *          Protection display row; getVehicleProtection skips "Force Field" display
+ *          rows so they aren't double-counted as passive armor.
  * v2.68.1: vehicle import defaults vsys_dmg to "0" for non-weapon systems so the
  *          new per-system damage roll button on the sheet always rolls cleanly.
  * v2.68.0: vehicle import now populates the actual vehicle sheet model. Sets
@@ -530,6 +539,9 @@ MP.Engine = (function () {
     const hardKey = hardKeyMap[protKey] || null;
 
     rowIds.forEach(rowId => {
+      // Force Field display rows are handled by the active FF mechanic, not as passive armor.
+      const nameAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_name`);
+      if (nameAttr && (nameAttr.get("current") || "").trim().toLowerCase() === "force field") return;
       const protAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_${protKey}`);
       if (!protAttr) return;
       const protValue = protAttr.get("current");
@@ -4521,7 +4533,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // ---- STEP 1: FORCE FIELD (applied first, before armor) ----
     // Vehicle mode: skip character's FF (vehicle protection is self-contained)
-    const ffData = defIsVehicle ? null : getForceFieldData(defChar.id, rec.defTokenId);
+    const ffData = getForceFieldData(defChar.id, rec.defTokenId);
     let ffActive = false;
     let ffProt = 0;
     let ffDeflected = 0;
@@ -4544,31 +4556,41 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       } else {
         ffActive = true;
         ffProt = ffData.protValues[protKey] || 0;
-        
+
         // FF protection subtracts from raw damage
         const ffBlocked = Math.min(raw, ffProt);  // How much FF would block
-        
-        // Check deflection pool capacity
-        const newAccum = ffData.accum + ffBlocked;
-        
-        if (newAccum > ffData.threshold) {
-          // Field collapses! Only deflect up to remaining capacity
-          ffCollapsed = true;
-          const canDeflect = Math.max(0, ffData.threshold - ffData.accum);
-          ffDeflected = canDeflect;
-          ffOverflow = ffBlocked - canDeflect;
-          // Damage after FF: raw minus what FF actually blocked
-          afterFF = raw - canDeflect;
-          
-          setFFAccum(defChar.id, ffData.rowId, ffData.threshold);
-          deactivateFF(defChar.id, ffData.rowId, defTok);
+        const capacity = Math.max(0, ffData.threshold - ffData.accum);
+        // MP rule: a hit the field completely stops (within remaining capacity) is
+        // ignored and does NOT count toward the deflection total.
+        const completelyBlocked = (ffBlocked >= raw) && (raw <= capacity);
+
+        if (completelyBlocked) {
+          ffDeflected = raw;
+          afterFF = 0;
+          updateFFAura(defTok, ffData.threshold > 0 ? capacity / ffData.threshold : 0);
         } else {
-          // Field holds
-          ffDeflected = ffBlocked;
-          afterFF = raw - ffBlocked;
-          setFFAccum(defChar.id, ffData.rowId, newAccum);
-          const remaining = Math.max(0, ffData.threshold - newAccum);
-          updateFFAura(defTok, ffData.threshold > 0 ? remaining / ffData.threshold : 0);
+          // Check deflection pool capacity
+          const newAccum = ffData.accum + ffBlocked;
+
+          if (newAccum > ffData.threshold) {
+            // Field collapses! Only deflect up to remaining capacity
+            ffCollapsed = true;
+            const canDeflect = Math.max(0, ffData.threshold - ffData.accum);
+            ffDeflected = canDeflect;
+            ffOverflow = ffBlocked - canDeflect;
+            // Damage after FF: raw minus what FF actually blocked
+            afterFF = raw - canDeflect;
+
+            setFFAccum(defChar.id, ffData.rowId, ffData.threshold);
+            deactivateFF(defChar.id, ffData.rowId, defTok);
+          } else {
+            // Field holds
+            ffDeflected = ffBlocked;
+            afterFF = raw - ffBlocked;
+            setFFAccum(defChar.id, ffData.rowId, newAccum);
+            const remaining = Math.max(0, ffData.threshold - newAccum);
+            updateFFAura(defTok, ffData.threshold > 0 ? remaining / ffData.threshold : 0);
+          }
         }
       }
     }
@@ -8623,14 +8645,24 @@ function cmdStance(msg, args) {
       const ab = sys.abilityData;
       const lbl = (sys.cells && sys.cells[0] && sys.cells[0].label) ? sys.cells[0].label + " " : "";
 
-      // Force field -> Additional Protection row (vehprotection); engine reads vprot_* too.
+      // Force field -> Additional Protection row (vehprotection) for DISPLAY only,
+      // plus an active forcefield protection row that drives the per-hit deflection/
+      // collapse mechanic (threshold = vehicle Power). getVehicleProtection skips the
+      // display row so it isn't double-counted as passive armor.
       if (ab && ab.abId === "force-field") {
         const per = vehFFPerType(sys.desc);
         const rid = generateRowID(), p = "repeating_vehprotection_" + rid + "_";
         createObj("attribute", { characterid: charId, name: p + "vprot_name", current: "Force Field" });
         ["kinetic", "energy", "bio", "entropy", "psychic"].forEach(t => { createObj("attribute", { characterid: charId, name: p + "vprot_" + t, current: String(per || 0) }); });
         createObj("attribute", { characterid: charId, name: p + "vprot_other", current: "0" });
-        createObj("attribute", { characterid: charId, name: p + "vprot_notes", current: vehWeaponName(sys.desc) });
+        createObj("attribute", { characterid: charId, name: p + "vprot_notes", current: "Active field — see !mp ff" });
+        const fid = generateRowID(), fp = "repeating_protection_" + fid + "_";
+        createObj("attribute", { characterid: charId, name: fp + "prot_name", current: "Force Field" });
+        createObj("attribute", { characterid: charId, name: fp + "prot_mode", current: "forcefield" });
+        createObj("attribute", { characterid: charId, name: fp + "prot_state", current: "On" });
+        createObj("attribute", { characterid: charId, name: fp + "prot_ff_accum", current: "0" });
+        createObj("attribute", { characterid: charId, name: fp + "prot_pr", current: "16" });
+        ["kinetic", "energy", "bio", "entropy", "psychic"].forEach(t => { createObj("attribute", { characterid: charId, name: fp + "prot_" + t, current: String(per || 0) }); });
         ffRows++;
       }
 
@@ -9001,11 +9033,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.66.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.69.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.66.0 READY");
+  log("MP ENGINE v2.69.0 READY");
 });
