@@ -1,4 +1,6 @@
-/* Mighty Protectors Roll20 API Engine v2.68.0 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.68.1 - 2026-06-19
+ * v2.68.1: vehicle import defaults vsys_dmg to "0" for non-weapon systems so the
+ *          new per-system damage roll button on the sheet always rolls cleanly.
  * v2.68.0: vehicle import now populates the actual vehicle sheet model. Sets
  *          vehicle_base_cp (vehicleSizeTable key) + vehicle_ag/in/cl + hilotech/
  *          maneuver so calcVehicle derives spaces/st/en/hits/power/profile on
@@ -8636,7 +8638,7 @@ function cmdStance(msg, args) {
       const sid = generateRowID(), sp = "repeating_vehsystems_" + sid + "_";
       createObj("attribute", { characterid: charId, name: sp + "vsys_cost", current: String(sys.extraCPs || 0) });
       createObj("attribute", { characterid: charId, name: sp + "vsys_spaces", current: String(sys.spaces || 0) });
-      createObj("attribute", { characterid: charId, name: sp + "vsys_dmg", current: sys.atkDmg || "" });
+      createObj("attribute", { characterid: charId, name: sp + "vsys_dmg", current: sys.atkDmg || "0" });
       createObj("attribute", { characterid: charId, name: sp + "vsys_notes", current: (lbl + (sys.desc || "")).trim() });
 
       // Offensive systems also get a rollable attack row for !mp atk (engine pipeline).
