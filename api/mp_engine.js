@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.65.0 - 2026-06-18
+/* Mighty Protectors Roll20 API Engine v2.66.0 - 2026-06-19
+ * v2.66.0: gwspawn now spawns VEHICLES. Death Machine and Defense/Attack Borg are
+ *          modeled as MP Vehicles (not characters) in MP_GW_VEHICLES (sibling data
+ *          script). gwspawn checks that list first and, on a match, emits a builder-
+ *          format JSON (FLYER.json schema, version 10) via buildVehicleFromMPData()
+ *          to the API console + a whispered preview, for import into the MP Vehicle
+ *          builder. Weapons are capped Power Blast / Disintegration; Force Field is
+ *          per-hit protection; armor 8/5/4/3. Shadows the dormant character entries
+ *          of the same names. (Also bumped stale runtime version banners 2.64.2.)
  * v2.65.0: gwspawn now imports structured ability modifiers. Ability rows
  *          carrying mod data (ab.mods: st_mod/en_mod/ag_mod/in_mod/cl_mod,
  *          hits_mod, move_mod, power_mod, profile_mod, weight_mod, init_mod)
@@ -8067,7 +8075,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.65.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.66.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -8460,6 +8468,9 @@ function cmdStance(msg, args) {
     }
     const name = (args.name || "").trim();
     if (!name) return ch("MP", "/w gm Usage: <code>!mp gwspawn --name Blight</code> (multi-form creatures: add <code>--form Thinker</code>)");
+    if (typeof MP_GW_VEHICLES !== "undefined" && MP_GW_VEHICLES && MP_GW_VEHICLES[name.toLowerCase()]) {
+      return emitVehicleJSON(MP_GW_VEHICLES[name.toLowerCase()]);
+    }
     const forms = MP_GW_BESTIARY[name.toLowerCase()];
     if (!forms || !forms.length) {
       const all = Object.keys(MP_GW_BESTIARY);
@@ -8480,6 +8491,77 @@ function cmdStance(msg, args) {
       }
     }
     return buildCharacterFromMPData(JSON.parse(JSON.stringify(block)), `GW bestiary (<b>${esc(block.name)}</b>)`);
+  }
+
+  // -------------------------
+  // GW VEHICLE SPAWN — emits builder-format JSON (FLYER.json schema, version 10)
+  // for the named MP_GW_VEHICLES entry, for import into the MP Vehicle builder.
+  // Vehicles (Death Machine, Borg) are modeled as MP Vehicles, not characters; this
+  // path shadows the dormant character bestiary entries of the same name.
+  // -------------------------
+  function vehDefaultAbility() {
+    return { abId: null, abilityCp: 0, spaces: 0, area: 0, ap: 0, autofire: 0, duration: 0,
+      hardened: 0, gear: false, bulky: 0, delicate: 0, pr: 0, charges: 0, range: 6, conc: 0,
+      kb: 0, breakdown: 0, partial: 0, poorpen: 0, obvious: 0, carrier: 0, dmgtype: 0, indirect: 0,
+      timereq: 0, activation: 0, loss: 0, canthold: 0, linked: false, multi: 0, usable: 0,
+      reqsave: 0, other: 0, integral: false, open: false, indep: false, wontexplode: false,
+      arc: 0, notes: "", abilityMods: {}, descMode: "compact" };
+  }
+
+  function vehMkSystem(e, id) {
+    const sys = { id: id, spaces: e.sp || 0, extraCPs: e.extraCPs || 0, desc: e.desc || "",
+      dmg: e.dmg || "", cells: [], integral: !!e.integral, bulky: e.bulky || 0, delicate: 0,
+      open: false, adjST: e.adjST || 0, adjEN: e.adjEN || 0, adjAG: e.adjAG || 0,
+      adjIN: e.adjIN || 0, adjCL: e.adjCL || 0, abilityData: null, hideLabels: false };
+    if (e.abId) {
+      const a = vehDefaultAbility();
+      a.abId = e.abId; a.abilityCp = e.cp || 0; a.spaces = e.sp || 0; a.integral = !!e.integral;
+      if (e.pr != null) a.pr = e.pr;
+      if (e.range != null) a.range = e.range;
+      if (e.autofire != null) a.autofire = e.autofire;
+      if (e.area != null) a.area = e.area;
+      sys.abilityData = a;
+    }
+    return sys;
+  }
+
+  // sizeKey -> [ST, EN, Hits] (MP vehicle size table) for currentHits/currentPower seeding
+  const VEH_SIZE = {
+    0:[15,15,13], 5:[18,18,16], 10:[21,21,20], 12.5:[22,23,23], 15:[24,24,25], 17.5:[25,26,27],
+    20:[27,27,29], 22.5:[28,29,31], 25:[30,30,33], 27.5:[31,32,36], 30:[33,33,38], 32.5:[34,35,40],
+    35:[36,36,41], 37.5:[37,38,44], 40:[39,39,46], 42.5:[40,41,48], 45:[42,42,50], 50:[45,45,54]
+  };
+
+  function buildVehicleFromMPData(vdef) {
+    const arm = vdef.armor || [0, 0, 0, 0, 0];
+    const sz = VEH_SIZE[vdef.sizeKey] || [0, 0, 0];
+    const bc = vdef.bcs || {};
+    const power = sz[0] + sz[1] + (bc.ag || 0) + (bc.in || 0);
+    return {
+      version: 10, type: "mp-vehicle",
+      name: vdef.name || "", model: vdef.model || "", operator: vdef.operator || "",
+      basicCost: vdef.sizeKey, techMod: vdef.techMod || 0, maneuverMod: vdef.maneuverMod || 0,
+      wontExplode: !!vdef.wontExplode, isBase: !!vdef.isBase,
+      armorKin: arm[0] || 0, armorEng: arm[1] || 0, armorBio: arm[2] || 0,
+      armorEnt: arm[3] || 0, armorPsy: arm[4] || 0,
+      currentHits: sz[2], currentPower: power,
+      systems: (vdef.systems || []).map((e, i) => vehMkSystem(e, i + 1)),
+      keyEntries: [], pictureData: "", pictureHeight: 125,
+      silhouette: { data: "", gx: 0, gy: 0, gw: 9, gh: 9, rot: 0, color: "#000000", alpha: 0.5 },
+      remainingCells: [], walls: []
+    };
+  }
+
+  function emitVehicleJSON(vdef) {
+    const obj = buildVehicleFromMPData(vdef);
+    const json = JSON.stringify(obj);
+    const spaces = (vdef.systems || []).reduce((a, s) => a + (s.sp || 0), 0);
+    log("=== MP GW VEHICLE EXPORT (" + obj.name + ") — copy the line below into the MP Vehicle builder import ===");
+    log(json);
+    return ch("MP", "/w gm <b>🚗 " + esc(obj.name) + "</b> — builder JSON emitted to the <b>API script console</b> (copy from there to import).<br/>" +
+      "<span style=\"font-size:11px;color:#888;\">size key " + obj.basicCost + " · techMod +" + obj.techMod + " · " + obj.systems.length + " systems · " + spaces + " spaces</span>" +
+      "<br/><pre style=\"white-space:pre-wrap;word-break:break-all;font-size:9px;background:#111;color:#9f9;padding:4px;border:1px solid #333;max-height:200px;overflow:auto;\">" + json + "</pre>" +
+      "<span style=\"font-size:10px;color:#888;\">If chat truncates the block, use the console copy.</span>");
   }
 
   // -------------------------
@@ -8632,11 +8714,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.65.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.66.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.65.0 READY");
+  log("MP ENGINE v2.66.0 READY");
 });

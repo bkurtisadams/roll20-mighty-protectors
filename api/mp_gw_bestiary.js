@@ -1,7 +1,13 @@
 /* Gamma World 1e -> Mighty Protectors Bestiary data for Roll20
- * Companion data script for mp_engine.js (>= v2.65.0). Load BOTH as API scripts.
+ * Companion data script for mp_engine.js (>= v2.66.0). Load BOTH as API scripts.
  * Consumed by: !mp gwspawn --name NAME [--form FORM]
  * Generated from gw-mp-bestiary.md v0.9.2. 48 creatures / 54 forms.
+ * v0.4.0: MP_GW_VEHICLES added (Death Machine, Defense/Attack Borg) — modeled as
+ *   MP Vehicles, not characters. gwspawn shadows the dormant character entries for
+ *   these two and emits builder-format JSON (FLYER.json schema) to import. Force Field
+ *   is per-hit protection (<=12/type) + Power capacity, NOT a point buffer; weapons are
+ *   capped Power Blast / Disintegration (<=4d10); armor 8/5/4/3; black-ray = Disintegration
+ *   (ignores FF/Armor/SR). Death Machine 384-space class (key 37.5), techMod 25.
  * v0.3.2: Speed reworked to honor GW intent. move_mod now = max(0, targetMove -
  *   calculated Move), where targetMove is the GW tabletop MV (or, for anti-grav
  *   robots given only kph, the MP Speed-table Acceleration matching that kph).
@@ -5174,4 +5180,53 @@ var MP_GW_BESTIARY = {
    ]
   }
  ]
+};
+
+/* ---------------------------------------------------------------------------
+ * MP_GW_VEHICLES — Gamma World apex robots modeled as MP Vehicles (not characters).
+ * Authored compact; mp_engine.js buildVehicleFromMPData() expands each into a full
+ * FLYER.json-schema (version 10) export for import into the MP Vehicle builder.
+ * System def fields: { sp(spaces), abId, cp(abilityCp), dmg, integral, area, autofire,
+ *   pr, range, dmgtype, adjST/EN/AG/IN/CL, desc }. abId null => descriptive-only row.
+ * abId slugs confirmed from a real export: power-blast, force-field, automation, flight,
+ *   cargo, passenger-seat, communicators. INFERRED (verify vs builder): armor, robot-brain,
+ *   disintegration, change-environment, paralysis, telekinesis.
+ * Range codes (abilityData.range): 0 LoS,1 Voice,2 BCx16,3 BCx8,4 BCx4,5 BCx2,6 BCx1,7 BC/2,8 BC/4,9 1",10 Touch.
+ * ------------------------------------------------------------------------- */
+var MP_GW_VEHICLES = {
+ "death machine": {
+  name: "Death Machine", model: "GW Apex", operator: "PCI-linked",
+  sizeKey: 37.5, techMod: 25, maneuverMod: 0,
+  bcs: { ag: 9, in: 14, cl: 9 },
+  armor: [8, 5, 4, 3, 0],
+  systems: [
+   { sp: 16, abId: "force-field", cp: 50, pr: 16, desc: "Force Field: 48 pts (12/12/12/12) (50), PR 16 — per-hit wall; drops when cumulative deflected > vehicle Power; fully-blocked hits don't count" },
+   { sp: 4,  abId: "robot-brain", cp: 14, adjIN: 14, desc: "Robot Brain: +14 IN (autonomous; operable only via its PCI link)" },
+   { sp: 16, abId: "power-blast", cp: 50, dmg: "4d10", dmgtype: "Energy", range: 5, pr: 1, desc: "Blaster cannons x2 — Power Blast Energy (heaviest; capped 4d10)" },
+   { sp: 24, abId: "power-blast", cp: 35, dmg: "3d10", dmgtype: "Energy", autofire: 5, range: 5, pr: 1, desc: "Laser batteries x8 (5 guns ea) — Power Blast Energy, Autofire" },
+   { sp: 16, abId: "power-blast", cp: 20, dmg: "2d10", dmgtype: "Energy", autofire: 4, range: 4, pr: 1, desc: "Mark VII blaster-rifle batteries x16 — Power Blast Energy, Autofire (rapid)" },
+   { sp: 12, abId: "disintegration", cp: 15, dmg: "2d8", dmgtype: "Disintegration", range: 6, pr: 2, desc: "Black-ray cannons x6 — Disintegration (Other; ignores Force Field, Armor, and SR)" },
+   { sp: 8,  abId: "power-blast", cp: 20, dmg: "2d10", dmgtype: "Kinetic", area: 5, range: 5, pr: 1, desc: "Trek guns + fusion bombs — Power Blast Kinetic, Area (fusion bombs)" },
+   { sp: 8,  abId: "power-blast", cp: 10, dmg: "2d6", dmgtype: "Kinetic", autofire: 5, range: 5, pr: 1, desc: "Mini-missile launchers x6 — Power Blast Kinetic, Autofire" },
+   { sp: 6,  abId: "change-environment", cp: 25, area: 9, desc: "EMP energy-damping field, 50m radius — disables robotics in range; 200 dmg to other Force Fields" },
+   { sp: 274, abId: null, desc: "Hull structure, nuclear plant, drive, crawlways (remaining spaces)" }
+  ]
+ },
+ "defense/attack borg": {
+  name: "Defense/Attack Borg", model: "GW Boss", operator: "self (organic-brain quirk §17.10)",
+  sizeKey: 15, techMod: 20, maneuverMod: 0,
+  bcs: { ag: 9, in: 5, cl: 9 },
+  armor: [8, 5, 4, 3, 0],
+  systems: [
+   { sp: 4, abId: "force-field", cp: 25, pr: 16, desc: "Force Field: 28 pts (7/7/7/7) (25), PR 16 — per-hit wall; drops when deflected > vehicle Power" },
+   { sp: 1, abId: "robot-brain", cp: 5, adjIN: 5, desc: "Organic brain: +5 IN (self-controlled; §17.10 quirk)" },
+   { sp: 2, abId: "power-blast", cp: 20, dmg: "2d10", dmgtype: "Energy", autofire: 5, range: 5, pr: 1, desc: "Laser batteries x3 (5 guns ea) — Power Blast Energy, Autofire" },
+   { sp: 1, abId: "power-blast", cp: 20, dmg: "2d10", dmgtype: "Energy", area: 5, range: 4, pr: 1, desc: "Energy grenade launchers x2 — Power Blast Energy, Area" },
+   { sp: 1, abId: "power-blast", cp: 20, dmg: "2d10", dmgtype: "Kinetic", autofire: 4, range: 4, pr: 1, desc: "Micro-missile launchers x2 — Power Blast Kinetic, Autofire" },
+   { sp: 1, abId: "power-blast", cp: 10, dmg: "2d6", dmgtype: "Energy", area: 4, range: 4, pr: 1, desc: "Photon grenade launcher — Power Blast Energy, Area" },
+   { sp: 2, abId: "paralysis", cp: 20, range: 9, desc: "Paralysis tentacles x2 — Paralysis Ray (5m/10m fields), no Hits damage" },
+   { sp: 1, abId: "telekinesis", cp: 10, range: 5, desc: "Twin t/p beams — Telekinesis (500 kg @ 50m)" },
+   { sp: 3, abId: null, desc: "Sphere structure, nuclear plant, turret (remaining spaces)" }
+  ]
+ }
 };
