@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.66.2 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.66.3 - 2026-06-19
+ * v2.66.3: vehMkSystem no longer copies the bestiary's inflicted-damage value into
+ *          the system `dmg` field — that field records damage TAKEN by the system and
+ *          must start empty. Inflicted damage already lives in the system desc.
  * v2.66.2: gwspawn vehicle emit now auto-paints a grid LAYOUT. Each functional
  *          system (abId, non-integral) is tiled into a cols-wide rectangle (1 cell
  *          = 1 system space) and a hull wall border is traced; cell color is derived
@@ -8537,7 +8540,7 @@ function cmdStance(msg, args) {
 
   function vehMkSystem(e, id) {
     const sys = { id: id, spaces: e.sp || 0, extraCPs: e.extraCPs || 0, desc: e.desc || "",
-      dmg: e.dmg || "", cells: [], integral: !!e.integral, bulky: e.bulky || 0, delicate: 0,
+      dmg: "", cells: [], integral: !!e.integral, bulky: e.bulky || 0, delicate: 0,
       open: false, adjST: e.adjST || 0, adjEN: e.adjEN || 0, adjAG: e.adjAG || 0,
       adjIN: e.adjIN || 0, adjCL: e.adjCL || 0, abilityData: null, hideLabels: false };
     if (e.abId) {
