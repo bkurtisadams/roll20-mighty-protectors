@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.66.5 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.67.0 - 2026-06-19
+ * v2.67.0: !mp import now handles vehicles. A type:"mp-vehicle" handout (builder/
+ *          gwspawn JSON) builds a vehicle-mode character via
+ *          buildVehicleCharacterFromMPData: sets vehicle_mode/hits/power/armor, a
+ *          forcefield protection row (all MP types — GW single damage type), and a
+ *          repeating_attacks row per weapon (attack_damage/dmgtype from the new
+ *          atkDmg/atkType emit fields, suffixed names from the layout labels).
+ *          vehMkSystem now also emits atkDmg/atkType (authored inflicted dice/type),
+ *          kept separate from the damage-taken `dmg` field.
  * v2.66.5: layout suffix base shortened to 2 chars (PB1, PB2 …) for grid legibility.
  * v2.66.4: layout emit now suffixes duplicate-ability system labels (PBl1, PBl2 …)
  *          via per-cell `label`, so visually identical systems are distinguishable
@@ -8320,6 +8328,9 @@ function cmdStance(msg, args) {
         try { data = JSON.parse(raw); } catch(e) {
           return ch("MP", `/w gm Failed to parse JSON: ${esc(e.message)}`);
         }
+        if (data && (data.type === "mp-vehicle" || (data.version === 10 && Array.isArray(data.systems)))) {
+          return buildVehicleCharacterFromMPData(data, `handout <b>${esc(handoutName)}</b>`);
+        }
         return buildCharacterFromMPData(data, `handout <b>${esc(handoutName)}</b>`);
       });
     });
@@ -8477,6 +8488,114 @@ function cmdStance(msg, args) {
   }
 
   // -------------------------
+  // MP BUILDER VEHICLE IMPORT  (type:"mp-vehicle" — FLYER schema, version 10)
+  // Builds a vehicle-mode character: vehicle_hits/power/armor, a forcefield
+  // protection row, and a repeating_attacks row per weapon system. Mirrors the
+  // attribute names read by isVehicleMode / getVehicleProtection / the !mp atk
+  // reader. GW uses a single damage type, so the FF covers all MP types.
+  // -------------------------
+  const VEH_OFFENSIVE_AB = { "power-blast": 1, "disintegration": 1, "paralysis": 1, "negation": 1, "telekinesis": 1, "change-environment": 1 };
+  const VEH_DMGTYPE_MAP = { energy: "energy", kinetic: "kinetic", biochem: "bio", bio: "bio", entropy: "entropy", psychic: "psychic", disintegration: "other", other: "other" };
+
+  function vehWeaponName(desc) {
+    if (!desc) return "Weapon";
+    return desc.split(/\s+[\u2014\u2013-]\s+/)[0].trim() || "Weapon";
+  }
+  function vehDmgType(atkType, desc) {
+    const t = (atkType || "").toLowerCase();
+    if (VEH_DMGTYPE_MAP[t]) return VEH_DMGTYPE_MAP[t];
+    const d = (desc || "").toLowerCase();
+    if (/disintegrat/.test(d)) return "other";
+    if (/kinetic/.test(d)) return "kinetic";
+    if (/energy/.test(d)) return "energy";
+    return "";
+  }
+  function vehParseDice(desc) {
+    const m = (desc || "").match(/\d+d\d+(?:[+-]\d+)?/);
+    return m ? m[0] : "";
+  }
+  function vehFFPerType(desc) {
+    // "Force Field: 48 pts (12/12/12/12) (50) ..." → per-type value 12
+    const grp = (desc || "").match(/\((\d+(?:\/\d+)+)\)/);
+    if (grp) { const n = parseInt(grp[1].split("/")[0], 10); if (n) return n; }
+    const pts = (desc || "").match(/(\d+)\s*pts?/i);
+    return pts ? parseInt(pts[1], 10) : 0;
+  }
+
+  function buildVehicleCharacterFromMPData(data, sourceLabel) {
+    const charName = data.name || "Imported Vehicle";
+    let char = findObjs({ type: "character", name: charName })[0];
+    if (!char) char = createObj("character", { name: charName });
+    char.set("name", charName);
+    const charId = char.id;
+    const bio = [data.model ? "Model: " + data.model : "", data.operator ? "Operator: " + data.operator : ""].filter(Boolean).join("<br/>");
+    if (bio) char.set("bio", bio);
+
+    function setAttr(name, val) {
+      if (val === undefined || val === null || val === "") return;
+      const existing = findObjs({ type: "attribute", characterid: charId, name: name })[0];
+      if (existing) existing.set("current", String(val));
+      else createObj("attribute", { characterid: charId, name: name, current: String(val) });
+    }
+    function setRes(name, cur, max) {
+      let a = findObjs({ type: "attribute", characterid: charId, name: name })[0];
+      if (!a) a = createObj("attribute", { characterid: charId, name: name, current: String(cur), max: String(max) });
+      else { a.set("current", String(cur)); a.set("max", String(max)); }
+    }
+
+    setAttr("vehicle_mode", "on");
+    setAttr("vehicle_name", charName);
+    setRes("vehicle_hits", data.currentHits, data.currentHits);
+    setAttr("vehicle_hits_max", data.currentHits);
+    setRes("vehicle_power", data.currentPower, data.currentPower);
+    setAttr("vehicle_power_max", data.currentPower);
+    setAttr("vehicle_armor_kinetic", data.armorKin);
+    setAttr("vehicle_armor_energy", data.armorEng);
+    setAttr("vehicle_armor_biochem", data.armorBio);
+    setAttr("vehicle_armor_entropy", data.armorEnt);
+    setAttr("vehicle_armor_psychic", data.armorPsy);
+    setAttr("defPhysical", data.maneuverMod || 0);
+    setAttr("defMental", data.maneuverMod || 0);
+
+    ["repeating_attacks_", "repeating_protection_", "repeating_vehprotection_", "repeating_abilities_"].forEach(pre => {
+      findObjs({ type: "attribute", characterid: charId }).filter(a => a.get("name").indexOf(pre) === 0).forEach(a => a.remove());
+    });
+
+    let atkNum = 0, ffRows = 0;
+    (data.systems || []).forEach(sys => {
+      const ab = sys.abilityData;
+      if (!ab || !ab.abId) return;
+      if (ab.abId === "force-field") {
+        const per = vehFFPerType(sys.desc);
+        const rowId = generateRowID(), p = "repeating_protection_" + rowId + "_";
+        createObj("attribute", { characterid: charId, name: p + "prot_name", current: vehWeaponName(sys.desc) || "Force Field" });
+        createObj("attribute", { characterid: charId, name: p + "prot_mode", current: "forcefield" });
+        createObj("attribute", { characterid: charId, name: p + "prot_state", current: "on" });
+        ["kinetic", "energy", "bio", "entropy", "psychic"].forEach(t => { if (per) createObj("attribute", { characterid: charId, name: p + "prot_" + t, current: String(per) }); });
+        ffRows++;
+        return;
+      }
+      if (VEH_OFFENSIVE_AB[ab.abId]) {
+        atkNum++;
+        const rowId = generateRowID(), p = "repeating_attacks_" + rowId + "_";
+        const lbl = (sys.cells && sys.cells[0] && sys.cells[0].label) ? sys.cells[0].label + " " : "";
+        createObj("attribute", { characterid: charId, name: p + "attack_name", current: lbl + vehWeaponName(sys.desc) });
+        createObj("attribute", { characterid: charId, name: p + "attack_tohit", current: "" });
+        createObj("attribute", { characterid: charId, name: p + "attack_damage", current: sys.atkDmg || vehParseDice(sys.desc) || "" });
+        createObj("attribute", { characterid: charId, name: p + "attack_dmgtype", current: vehDmgType(sys.atkType, sys.desc) });
+        createObj("attribute", { characterid: charId, name: p + "attack_kb", current: "" });
+        createObj("attribute", { characterid: charId, name: p + "attack_num", current: String(atkNum) });
+        return;
+      }
+      const rowId = generateRowID(), p = "repeating_abilities_" + rowId + "_";
+      createObj("attribute", { characterid: charId, name: p + "ability_name", current: vehWeaponName(sys.desc) });
+      createObj("attribute", { characterid: charId, name: p + "ability_cp", current: ab.abilityCp || "" });
+    });
+
+    ch("MP", `/w gm <b>🚗 Imported vehicle ${esc(charName)}</b> from ${sourceLabel}.<br/>Vehicle mode ON · Hits ${esc(String(data.currentHits))} · Power ${esc(String(data.currentPower))} · ${atkNum} weapon row(s)${ffRows ? " · force field" : ""}.<br/><span style="font-size:11px;color:#888;">Drag the character to the canvas, then set bar2→vehicle_hits, bar1→vehicle_power.</span>`);
+  }
+
+  // -------------------------
   // GW BESTIARY SPAWN — !mp gwspawn --name NAME [--form FORM]
   // Builds an NPC from embedded MP_GW_BESTIARY (sibling API script
   // mp_gw_bestiary.js), reusing the buildCharacterFromMPData pipeline.
@@ -8544,7 +8663,7 @@ function cmdStance(msg, args) {
 
   function vehMkSystem(e, id) {
     const sys = { id: id, spaces: e.sp || 0, extraCPs: e.extraCPs || 0, desc: e.desc || "",
-      dmg: "", cells: [], integral: !!e.integral, bulky: e.bulky || 0, delicate: 0,
+      dmg: "", atkDmg: e.dmg || "", atkType: e.dmgtype || "", cells: [], integral: !!e.integral, bulky: e.bulky || 0, delicate: 0,
       open: false, adjST: e.adjST || 0, adjEN: e.adjEN || 0, adjAG: e.adjAG || 0,
       adjIN: e.adjIN || 0, adjCL: e.adjCL || 0, abilityData: null, hideLabels: false };
     if (e.abId) {
