@@ -1,4 +1,11 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.26 - Preserve vehicle current Hits/Power on recalc
+<!-- Mighty Protectors Roll20 Character Sheet v44.28 - Grant-rate labels: Energy x2, Durability x1, Phys/Ment Def CP/2.5
+        - vsys_grant option labels + Amt tooltip now show correct CP->effect rates (Energy is 2:1, not 1:1)
+v44.27: - Vehsystem cog panel: build modifiers, stat grants, arc picker; d20 roll-button icon
+        - roll_vsys_dmg button glyph swapped from d6-face to inline d20 SVG
+        - cog panel adds vsys_modifier (Integral/Open/Bulky/Delicate), vsys_grant (Heightened ST/AG/EN/IN/CL, Energy->Power, Durability->Hits, Phys/Ment Def) + vsys_grant_amt
+        - radio-driven arc-width picker (0/120/240/360) with live hexagon-wedge SVG graphic
+        - NOTE: new fields are display/intent only this slice; CP/Hits/cost auto-math is the next engine slice (pending RAW sign-off)
+v44.26: - Preserve vehicle current Hits/Power on recalc
         - calcVehicle reads vehicle_hits/_power and prior _max values up front
         - On non-reset recalc: track to new max only if current was empty or equal to old max
         - Damaged/expended vehicles retain their damage/power loss when AG/IN/maneuver change
@@ -1715,7 +1722,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="number" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
           <input type="text" name="attr_vsys_dmg" value="0" style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage dice (e.g. 4d10)" />
-          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage">&#9860;&#xFE0E;</button>
+          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage"><svg viewBox="0 0 24 24" width="13" height="13" style="display:block;margin:0 auto;pointer-events:none;" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"><polygon points="12,2 21,7 21,17 12,22 3,17 3,7"/><polygon points="12,6 17,15 7,15"/><path d="M7,15 3,17 M17,15 21,17 M12,22 7,15 M12,22 17,15"/></svg></button>
           <input type="text" name="attr_vsys_cp" readonly style="width:32px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System CPs (auto from spaces + hi/lo tech + cost adj)" />
           <div style="display:flex; align-items:center; gap:2px; flex:1; min-width:0;">
             <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;" placeholder="Description, arc, facing..." />
@@ -1741,6 +1748,52 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <div class="sheet-panel-field">
               <label title="Damage type used for armor/force-field; set on import">Dmg Type:</label>
               <input type="text" name="attr_vsys_dmgtype" readonly value="" style="width:90px !important;" />
+            </div>
+          </div>
+          <div class="sheet-panel-row">
+            <div class="sheet-panel-field">
+              <label title="Build modifier: adjusts the system's CP and/or Hits per MP vehicle rules">Modifier:</label>
+              <select name="attr_vsys_modifier" style="width:170px !important;">
+                <option value="none" selected>&mdash; None</option>
+                <option value="integral">Integral (&frac12; CP, no deck plan)</option>
+                <option value="open">Open System (&frac14; CP)</option>
+                <option value="bulky">Bulky (+Hits per +2.5)</option>
+                <option value="delicate">Delicate (&minus;Hits per &minus;2.5)</option>
+              </select>
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Stat this system grants to the vehicle; amount = system CP unless noted">Grants:</label>
+              <select name="attr_vsys_grant" style="width:140px !important;">
+                <option value="none" selected>&mdash; None</option>
+                <option value="ST">Heightened ST</option>
+                <option value="AG">Heightened AG (Automation)</option>
+                <option value="EN">Heightened EN</option>
+                <option value="IN">Heightened IN (Robot Brain)</option>
+                <option value="CL">Heightened CL (Performance)</option>
+                <option value="power">Energy &rarr; Power (&times;2)</option>
+                <option value="hits">Durability &rarr; Hits (&times;1)</option>
+                <option value="pdef">Physical Defense (CP&divide;2.5)</option>
+                <option value="mdef">Mental Defense (CP&divide;2.5)</option>
+              </select>
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Amount granted: Heightened ST/AG/EN/IN/CL &amp; Durability = system CP; Energy = 2&times;CP; Phys/Ment Def = CP&divide;2.5">Amt:</label>
+              <input type="number" name="attr_vsys_grant_amt" value="0" style="width:50px !important;" />
+            </div>
+          </div>
+          <div class="sheet-panel-row">
+            <div class="sheet-panel-field">
+              <label title="Firing arc (MP default 120&deg;; Wide Arc +5 = 240&deg;, +10 = 360&deg;)">Arc:</label>
+              <div class="sheet-arc-picker">
+                <input type="radio" class="sheet-arc-radio" name="attr_vsys_arc" value="0" checked title="Non-directional" />
+                <input type="radio" class="sheet-arc-radio" name="attr_vsys_arc" value="120" title="120&deg; (default)" />
+                <input type="radio" class="sheet-arc-radio" name="attr_vsys_arc" value="240" title="240&deg; (Wide Arc +5)" />
+                <input type="radio" class="sheet-arc-radio" name="attr_vsys_arc" value="360" title="360&deg; (Wide Arc +10)" />
+                <span class="sheet-arc-graphic sheet-arc-0"><svg viewBox="0 0 32 32" width="26" height="26"><polygon points="30,16 23,3.88 9,3.88 2,16 9,28.12 23,28.12" fill="none" stroke="#555" stroke-width="1"/><circle cx="16" cy="16" r="1.6" fill="#777"/></svg></span>
+                <span class="sheet-arc-graphic sheet-arc-120"><svg viewBox="0 0 32 32" width="26" height="26"><polygon points="30,16 23,3.88 9,3.88 2,16 9,28.12 23,28.12" fill="none" stroke="#666" stroke-width="1"/><path d="M16,16 L25.53,10.5 A11,11 0 0 0 6.47,10.5 Z" fill="rgba(244,208,63,0.35)" stroke="#f4d03f" stroke-width="0.8"/><circle cx="16" cy="16" r="1.6" fill="#f4d03f"/></svg></span>
+                <span class="sheet-arc-graphic sheet-arc-240"><svg viewBox="0 0 32 32" width="26" height="26"><polygon points="30,16 23,3.88 9,3.88 2,16 9,28.12 23,28.12" fill="none" stroke="#666" stroke-width="1"/><path d="M16,16 L25.53,21.5 A11,11 0 1 0 6.47,21.5 Z" fill="rgba(244,208,63,0.35)" stroke="#f4d03f" stroke-width="0.8"/><circle cx="16" cy="16" r="1.6" fill="#f4d03f"/></svg></span>
+                <span class="sheet-arc-graphic sheet-arc-360"><svg viewBox="0 0 32 32" width="26" height="26"><polygon points="30,16 23,3.88 9,3.88 2,16 9,28.12 23,28.12" fill="none" stroke="#666" stroke-width="1"/><circle cx="16" cy="16" r="11" fill="rgba(244,208,63,0.30)" stroke="#f4d03f" stroke-width="0.8"/><circle cx="16" cy="16" r="1.6" fill="#f4d03f"/></svg></span>
+              </div>
             </div>
           </div>
         </div>

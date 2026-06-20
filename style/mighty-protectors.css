@@ -52,6 +52,16 @@
 .sheet-vehicle-content .sheet-veh-sys-row {
   margin-left: 5px;
 }
+/* Vehsystem arc-width picker: radios drive which hexagon-wedge SVG shows */
+.charsheet .sheet-arc-picker { display: inline-flex; align-items: center; gap: 4px; }
+.charsheet .sheet-arc-picker input.sheet-arc-radio {
+  width: 11px !important; height: 11px !important; margin: 0 1px 0 0 !important; cursor: pointer;
+}
+.charsheet .sheet-arc-graphic { display: none; line-height: 0; }
+.charsheet .sheet-arc-radio[value="0"]:checked   ~ .sheet-arc-0,
+.charsheet .sheet-arc-radio[value="120"]:checked ~ .sheet-arc-120,
+.charsheet .sheet-arc-radio[value="240"]:checked ~ .sheet-arc-240,
+.charsheet .sheet-arc-radio[value="360"]:checked ~ .sheet-arc-360 { display: inline-block; }
 /* Hide number input spinners in vehicle sheet */
 .sheet-vehicle-content input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 .sheet-vehicle-content input[type="number"]::-webkit-inner-spin-button,
