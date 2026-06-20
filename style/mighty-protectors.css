@@ -52,16 +52,40 @@
 .sheet-vehicle-content .sheet-veh-sys-row {
   margin-left: 5px;
 }
-/* Vehsystem arc-width picker: radios drive which hexagon-wedge SVG shows */
-.charsheet .sheet-arc-picker { display: inline-flex; align-items: center; gap: 4px; }
-.charsheet .sheet-arc-picker input.sheet-arc-radio {
-  width: 11px !important; height: 11px !important; margin: 0 1px 0 0 !important; cursor: pointer;
-}
-.charsheet .sheet-arc-graphic { display: none; line-height: 0; }
-.charsheet .sheet-arc-radio[value="0"]:checked   ~ .sheet-arc-0,
-.charsheet .sheet-arc-radio[value="120"]:checked ~ .sheet-arc-120,
-.charsheet .sheet-arc-radio[value="240"]:checked ~ .sheet-arc-240,
-.charsheet .sheet-arc-radio[value="360"]:checked ~ .sheet-arc-360 { display: inline-block; }
+/* Vehsystem build-modifier checkboxes (stackable, char-ability style) */
+.charsheet .sheet-vsys-mod { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: bold; color: #e8e8f2; margin-right: 6px; }
+.charsheet .sheet-vsys-mod input[type="checkbox"] { margin: 0 !important; }
+
+/* Vehsystem grant fields (BC-strip style) */
+.charsheet .sheet-vsys-grant { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: bold; color: #e8e8f2; }
+.charsheet .sheet-vsys-grant input[type="number"] { width: 38px !important; text-align: center; color: #8be9fd; }
+.charsheet .sheet-vsys-gbar { width: 1px; align-self: stretch; background: #2a2040; margin: 0 3px; }
+
+/* Vehsystem arc picker: pure-CSS hex floor-plan + conic-gradient wedge, rotated by facing.
+   (Roll20 strips inline <svg>, so the graphic is drawn with clip-path + conic-gradient.) */
+.charsheet .sheet-arc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; }
+.charsheet .sheet-arc-txt { font-size: 10px; color: #cdd; margin-right: 5px; }
+.charsheet .sheet-aw, .charsheet .sheet-af { margin: 0 1px 0 0 !important; cursor: pointer; }
+.charsheet .sheet-arc-break { flex-basis: 100%; height: 0; }
+.charsheet .sheet-arc-stage { order: -1; position: relative; width: 46px; height: 46px; margin-right: 8px; flex: none; }
+.charsheet .sheet-arc-hex { position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: #23203a; }
+.charsheet .sheet-arc-clip { position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); overflow: hidden; }
+.charsheet .sheet-arc-wedge { position: absolute; inset: 0; transform-origin: 50% 50%; transition: transform .12s; background: transparent; }
+.charsheet .sheet-arc-front { position: absolute; top: -2px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid #8be9fd; }
+.charsheet .sheet-arc-dot { position: absolute; top: 50%; left: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: #f4c430; }
+.charsheet .sheet-aw[value="0"]:checked   ~ .sheet-arc-stage .sheet-arc-wedge { background: transparent; }
+.charsheet .sheet-aw[value="120"]:checked ~ .sheet-arc-stage .sheet-arc-wedge { background: conic-gradient(from -60deg, rgba(244,196,48,0.45) 0 120deg, transparent 120deg 360deg); }
+.charsheet .sheet-aw[value="240"]:checked ~ .sheet-arc-stage .sheet-arc-wedge { background: conic-gradient(from -120deg, rgba(244,196,48,0.45) 0 240deg, transparent 240deg 360deg); }
+.charsheet .sheet-aw[value="360"]:checked ~ .sheet-arc-stage .sheet-arc-wedge { background: rgba(244,196,48,0.30); }
+.charsheet .sheet-af[value="F"]:checked  ~ .sheet-arc-stage .sheet-arc-wedge { transform: rotate(0deg); }
+.charsheet .sheet-af[value="FR"]:checked ~ .sheet-arc-stage .sheet-arc-wedge { transform: rotate(60deg); }
+.charsheet .sheet-af[value="BR"]:checked ~ .sheet-arc-stage .sheet-arc-wedge { transform: rotate(120deg); }
+.charsheet .sheet-af[value="B"]:checked  ~ .sheet-arc-stage .sheet-arc-wedge { transform: rotate(180deg); }
+.charsheet .sheet-af[value="BL"]:checked ~ .sheet-arc-stage .sheet-arc-wedge { transform: rotate(240deg); }
+.charsheet .sheet-af[value="FL"]:checked ~ .sheet-arc-stage .sheet-arc-wedge { transform: rotate(300deg); }
+
+/* Pure-CSS d20 glyph for the per-system roll button */
+.charsheet .sheet-d20 { display: block; width: 14px; height: 14px; margin: 1px auto; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: #fff; color: #e63946; font-size: 7px; font-weight: bold; line-height: 14px; text-align: center; pointer-events: none; }
 /* Hide number input spinners in vehicle sheet */
 .sheet-vehicle-content input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 .sheet-vehicle-content input[type="number"]::-webkit-inner-spin-button,
