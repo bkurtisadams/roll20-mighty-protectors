@@ -1,4 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.30 - Wire vehsystem modifiers + grants into vehicle stats; fix duplicate d20; left-justify arc
+<!-- Mighty Protectors Roll20 Character Sheet v44.31 - Fix modifier math, grant-to-BC display, arc left-justify
+        - Integral now halves the WHOLE system CP total (base+hitech+cost), Open quarters it (was halving base-only)
+        - Bulky/Delicate Hits scale with the cost adjustment: +/-ceil(4.3 x cost/2.5) Hits (was a flat single dose)
+        - AG/IN/CL are now readonly computed = 9/0/9 + summed grants, written to their fields so the score (not just the save) reflects grants
+        - arc graphic absolutely positioned at the row's left so the picker is left-justified (was drifting center)
+        - NOTE: AG/IN/CL no longer manual inputs; importer must seed them via g_ag/g_in/g_cl grants (importer slice still pending)
+v44.30: - Wire vehsystem modifiers + grants into vehicle stats; fix duplicate d20; left-justify arc
         - populateVehSystemRow now applies vsys_mod_integral (1/2 CP), open (1/4-spaces CP), bulky (+ceil4.3 Hits, +2.5 CP), delicate (-ceil4.3 Hits min 1, -2.5 CP)
         - calcVehicle aggregates per-system vsys_g_st/en/ag/in/cl/power/hits across rows into ST/EN (display), effective AG/IN/CL (saves/power/handling/init), Power max, Hits max
         - added change handlers for vsys_mod_* and vsys_g_* so edits recalc live
@@ -1855,17 +1861,17 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       </div>
       <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px;">
         <span style="color:#888;">AG:</span>
-        <input type="number" name="attr_vehicle_ag" value="9" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <input type="text" name="attr_vehicle_ag" readonly title="9 + Automation/Heightened AG grants" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <button type="roll" name="roll_vehicle_ag_save" title="Roll Vehicle AG Save" value="&{template:default} {{name=@{vehicle_name} AG Save}} {{Roll=[[1d20cs<[[@{vehicle_ag_save} + ?{Modifier|0}]]cf>[[@{vehicle_ag_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_ag_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">AG Save:</button>
         <input type="text" name="attr_vehicle_ag_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <span style="color:#888; margin-left:6px;">Handling:</span>
         <input type="text" name="attr_vehicle_handling" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <span style="color:#888; margin-left:6px;">IN:</span>
-        <input type="number" name="attr_vehicle_in" value="0" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <input type="text" name="attr_vehicle_in" readonly title="0 + Robot Brain/Heightened IN grants" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <button type="roll" name="roll_vehicle_in_save" title="Roll Vehicle IN Save" value="&{template:default} {{name=@{vehicle_name} IN Save}} {{Roll=[[1d20cs<[[@{vehicle_in_save} + ?{Modifier|0}]]cf>[[@{vehicle_in_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_in_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">IN Save:</button>
         <input type="text" name="attr_vehicle_in_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <span style="color:#888; margin-left:6px;">CL:</span>
-        <input type="number" name="attr_vehicle_cl" value="9" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <input type="text" name="attr_vehicle_cl" readonly title="9 + Performance/Heightened CL grants" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <button type="roll" name="roll_vehicle_cl_save" title="Roll Vehicle CL Save" value="&{template:default} {{name=@{vehicle_name} CL Save}} {{Roll=[[1d20cs<[[@{vehicle_cl_save} + ?{Modifier|0}]]cf>[[@{vehicle_cl_save} + ?{Modifier|0}]]]]}} {{Target=[[@{vehicle_cl_save} + ?{Modifier|0}]]-}}" style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;">CL Save:</button>
         <input type="text" name="attr_vehicle_cl_save" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
       </div>
@@ -4480,9 +4486,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
       var spaces = row[0], weightLbs = row[1], massStr = row[2], profile = row[3];
       var st = row[4] + g.st, en = row[5] + g.en, hits = row[6] + g.hits;
-      var ag = (parseInt(v.vehicle_ag) || 9) + g.ag;
-      var inScore = (parseInt(v.vehicle_in) || 0) + g.in;
-      var cl = (parseInt(v.vehicle_cl) || 9) + g.cl;
+      // Vehicle AG/IN/CL default to 9/0/9 and rise only via system grants (Automation/Robot Brain/Performance/Heightened)
+      var ag = 9 + g.ag;
+      var inScore = 0 + g.in;
+      var cl = 9 + g.cl;
       var maneuver = parseFloat(v.vehicle_maneuver) || 0;
 
       var power = st + en + ag + inScore + g.power;
@@ -4524,6 +4531,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_profile: "x" + profile,
         vehicle_st: st,
         vehicle_en: en,
+        vehicle_ag: ag,
+        vehicle_in: inScore,
+        vehicle_cl: cl,
         vehicle_hits_max: hits,
         vehicle_en_save: enSave,
         vehicle_ag_save: agSave,
@@ -4611,15 +4621,13 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var baseCp = systemCPTable[bestKey];
         var sysHits = systemHitsTable[bestKey] || 8;
         var sysProfile = systemProfileTable[bestKey] || 1;
-        // Open System: generated CP from 1/4 of the system spaces (rulebook garden example)
-        if (open) { baseCp = systemCPTable[findBestKey(Math.max(1, Math.floor(spaces / 4)))]; }
-        // Integral: halve the generated CP
-        if (integral) { baseCp = baseCp / 2; }
-        // Bulky/Delicate: +/- ceil(4.3) Hits and +/- 2.5 CP (one dose per checkbox)
-        var modCost = 0;
-        if (bulky) { sysHits += Math.ceil(4.3); modCost += 2.5; }
-        if (delicate) { sysHits = Math.max(1, sysHits - Math.ceil(4.3)); modCost -= 2.5; }
-        var totalCp = baseCp + hilotech + costAdj + modCost;
+        // Bulky/Delicate: Hits scale with the cost adjustment (+/-4.3 Hits per +/-2.5 CP, round up)
+        if (bulky && costAdj > 0) sysHits += Math.ceil(4.3 * (costAdj / 2.5));
+        if (delicate && costAdj < 0) sysHits = Math.max(1, sysHits - Math.ceil(4.3 * (-costAdj / 2.5)));
+        // Total generated CP (spaces + hi/lo tech + cost adj), then Integral halves / Open quarters the whole total
+        var totalCp = baseCp + hilotech + costAdj;
+        if (integral) totalCp = totalCp / 2;
+        if (open) totalCp = totalCp / 4;
         updates[prefix + "vsys_cp"] = totalCp;
         updates[prefix + "vsys_hits"] = sysHits;
         updates[prefix + "vsys_hits_max"] = sysHits;
