@@ -1,4 +1,13 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.31 - Fix modifier math, grant-to-BC display, arc left-justify
+<!-- Mighty Protectors Roll20 Character Sheet v44.33 - Bulky/Delicate CP-level fields, robust (order-based) arc layout
+        - Bulky/Delicate are now CP input fields (vsys_bulky_cp / vsys_delicate_cp): levels = CP/2.5, Hits delta = ceil(levels*4.3)
+          (5 CP Bulky = 2 levels = +9 Hits; 7.5 CP Delicate = 3 levels = -13 Hits). These CP do NOT change the system CP shown.
+        - Arc graphic moved to order:-1 in-flow flex (no position:absolute / width:100% / padding-left) so it left-justifies reliably in Roll20
+v44.32: - Integral hits dash, Bulky/Delicate per-checkbox, vehicle Mental Def + PDef/MDef grants
+        - Integral systems now show — for current/max Hits (off deck plan, can't be attacked); vsys_hits field is text
+        - Bulky/Delicate revert to one dose per checkbox: +/-ceil(4.3) Hits and +/-2.5 CP (no longer require a cost entry)
+        - vehicle_defense = AG save - 10 + Heightened Defense (PDef grant); new vehicle_mental_def = IN save - 10 + (MDef grant)
+        - added Mental Def display field beside Defense; pdef/mdef added to grant aggregation + change handler
+v44.31: - Fix modifier math, grant-to-BC display, arc left-justify
         - Integral now halves the WHOLE system CP total (base+hitech+cost), Open quarters it (was halving base-only)
         - Bulky/Delicate Hits scale with the cost adjustment: +/-ceil(4.3 x cost/2.5) Hits (was a flat single dose)
         - AG/IN/CL are now readonly computed = 9/0/9 + summed grants, written to their fields so the score (not just the save) reflects grants
@@ -1737,7 +1746,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="number" name="attr_vsys_cost" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System cost adjustment (modifiers)" />
           <input type="number" name="attr_vsys_spaces" value="1" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
           <input type="text" name="attr_vsys_profile" readonly style="width:38px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
-          <input type="number" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits" />
+          <input type="text" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits (— = integral, can't be attacked)" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
           <input type="text" name="attr_vsys_dmg" value="0" style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage dice (e.g. 4d10)" />
           <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage"></button>
@@ -1781,8 +1790,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
               <label title="Build modifiers — stackable; adjust the system's CP and/or Hits (MP vehicle rules)">Modifiers:</label>
               <span class="sheet-vsys-mod"><input type="checkbox" name="attr_vsys_mod_integral" value="1" title="Halve generated CP; off the deck plan, can't be targeted" /> Integral &frac12;CP</span>
               <span class="sheet-vsys-mod"><input type="checkbox" name="attr_vsys_mod_open" value="1" title="Yields 1/4 of system spaces' CP; passable" /> Open &frac14;CP</span>
-              <span class="sheet-vsys-mod"><input type="checkbox" name="attr_vsys_mod_bulky" value="1" title="+4.3 Hits per +2.5 cost" /> Bulky</span>
-              <span class="sheet-vsys-mod"><input type="checkbox" name="attr_vsys_mod_delicate" value="1" title="-4.3 Hits per -2.5 cost (min 1)" /> Delicate</span>
+              <span class="sheet-vsys-mod">Bulky <input type="number" name="attr_vsys_bulky_cp" value="0" title="CPs put toward Bulky. Each 2.5 CP = 1 level = +4.3 Hits (total rounds up). Does NOT change the system CP shown — account for the cost separately like an ability." /> CP</span>
+              <span class="sheet-vsys-mod">Delicate <input type="number" name="attr_vsys_delicate_cp" value="0" title="CPs of Delicate (enter as a positive number). Each 2.5 CP = 1 level = -4.3 Hits (total rounds up, min 1). Does NOT change the system CP shown." /> CP</span>
             </div>
           </div>
           <div class="sheet-panel-row">
@@ -1881,7 +1890,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
       <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; font-size:11px;">
         <span style="color:#888;">Defense:</span>
-        <input type="text" name="attr_vehicle_defense" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <input type="text" name="attr_vehicle_defense" readonly title="Physical Defense = AG save - 10 + Heightened Defense (PDef)" style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <span style="color:#888; margin-left:6px;">Mental Def:</span>
+        <input type="text" name="attr_vehicle_mental_def" readonly title="Mental Defense = IN save - 10 + Heightened Defense (MDef)" style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <span style="color:#888; margin-left:6px;">Carry:</span>
         <input type="text" name="attr_vehicle_carry" readonly style="width:140px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:10px;" />
       </div>
@@ -4473,7 +4484,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   function calcVehicle(resetCurrent) {
     getSectionIDs("repeating_vehsystems", function(ids) {
       var base = ["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver","vehicle_hits","vehicle_hits_max","vehicle_power","vehicle_power_max"];
-      var gfields = ["st","en","ag","in","cl","power","hits"];
+      var gfields = ["st","en","ag","in","cl","power","hits","pdef","mdef"];
       ids.forEach(function(id){ gfields.forEach(function(f){ base.push("repeating_vehsystems_" + id + "_vsys_g_" + f); }); });
       getAttrs(base, function(v) {
       var bcp = v.vehicle_base_cp || "15";
@@ -4481,7 +4492,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       if (!row) return;
 
       // Sum per-system stat grants across all rows
-      var g = {st:0,en:0,ag:0,in:0,cl:0,power:0,hits:0};
+      var g = {st:0,en:0,ag:0,in:0,cl:0,power:0,hits:0,pdef:0,mdef:0};
       ids.forEach(function(id){ gfields.forEach(function(f){ g[f] += parseInt(v["repeating_vehsystems_" + id + "_vsys_g_" + f]) || 0; }); });
 
       var spaces = row[0], weightLbs = row[1], massStr = row[2], profile = row[3];
@@ -4499,6 +4510,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var inSave = vehicleBCSave(inScore);
       var clSave = vehicleBCSave(cl);
       var handling = agSave - 10;
+      // Robotic Vehicle Defense = AG save - 10 (ignores handling); Mental = IN save - 10; + Heightened Defense grants
+      var physDef = (agSave - 10) + g.pdef;
+      var mentDef = (inSave - 10) + g.mdef;
 
       // Turn rate adjustment from maneuver: +1 per +5, -1 per -5
       var baseTurnRate = 3;
@@ -4540,7 +4554,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_in_save: inSave,
         vehicle_cl_save: clSave,
         vehicle_handling: handling,
-        vehicle_defense: agSave - 10,
+        vehicle_defense: physDef,
+        vehicle_mental_def: mentDef,
         vehicle_power_max: power,
         vehicle_turn_rate: turnRate,
         vehicle_explosion: explosion,
@@ -4602,14 +4617,14 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // PTs = base CPs from spaces + hi/lo tech + row cost adjustment
   function populateVehSystemRow(rowId) {
     var prefix = "repeating_vehsystems_" + rowId + "_";
-    getAttrs([prefix + "vsys_spaces", prefix + "vsys_cost", prefix + "vsys_mod_integral", prefix + "vsys_mod_open", prefix + "vsys_mod_bulky", prefix + "vsys_mod_delicate", "vehicle_hilotech"], function(v) {
+    getAttrs([prefix + "vsys_spaces", prefix + "vsys_cost", prefix + "vsys_mod_integral", prefix + "vsys_mod_open", prefix + "vsys_bulky_cp", prefix + "vsys_delicate_cp", "vehicle_hilotech"], function(v) {
       var spaces = parseInt(v[prefix + "vsys_spaces"]) || 0;
       var costAdj = parseFloat(v[prefix + "vsys_cost"]) || 0;
       var hilotech = parseFloat(v.vehicle_hilotech) || 0;
       var integral = v[prefix + "vsys_mod_integral"] === "1";
       var open = v[prefix + "vsys_mod_open"] === "1";
-      var bulky = v[prefix + "vsys_mod_bulky"] === "1";
-      var delicate = v[prefix + "vsys_mod_delicate"] === "1";
+      var bulkyCp = Math.abs(parseFloat(v[prefix + "vsys_bulky_cp"]) || 0);
+      var delicateCp = Math.abs(parseFloat(v[prefix + "vsys_delicate_cp"]) || 0);
       var updates = {};
       if (spaces <= 0) {
         updates[prefix + "vsys_cp"] = 0;
@@ -4621,16 +4636,22 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var baseCp = systemCPTable[bestKey];
         var sysHits = systemHitsTable[bestKey] || 8;
         var sysProfile = systemProfileTable[bestKey] || 1;
-        // Bulky/Delicate: Hits scale with the cost adjustment (+/-4.3 Hits per +/-2.5 CP, round up)
-        if (bulky && costAdj > 0) sysHits += Math.ceil(4.3 * (costAdj / 2.5));
-        if (delicate && costAdj < 0) sysHits = Math.max(1, sysHits - Math.ceil(4.3 * (-costAdj / 2.5)));
-        // Total generated CP (spaces + hi/lo tech + cost adj), then Integral halves / Open quarters the whole total
+        // Bulky/Delicate CP -> levels (CP / 2.5); Hits delta = ceil(levels * 4.3). These CP do NOT change the system's CP.
+        if (bulkyCp > 0)   sysHits += Math.ceil((bulkyCp / 2.5) * 4.3);
+        if (delicateCp > 0) sysHits = Math.max(1, sysHits - Math.ceil((delicateCp / 2.5) * 4.3));
+        // System CP excludes Bulky/Delicate cost; Integral halves / Open quarters the total
         var totalCp = baseCp + hilotech + costAdj;
         if (integral) totalCp = totalCp / 2;
         if (open) totalCp = totalCp / 4;
         updates[prefix + "vsys_cp"] = totalCp;
-        updates[prefix + "vsys_hits"] = sysHits;
-        updates[prefix + "vsys_hits_max"] = sysHits;
+        // Integral systems are off the deck plan and can't be attacked -> no Hits to track
+        if (integral) {
+          updates[prefix + "vsys_hits"] = "\u2014";
+          updates[prefix + "vsys_hits_max"] = "\u2014";
+        } else {
+          updates[prefix + "vsys_hits"] = sysHits;
+          updates[prefix + "vsys_hits_max"] = sysHits;
+        }
         updates[prefix + "vsys_profile"] = "x" + sysProfile;
       }
       setAttrs(updates, {silent: true});
@@ -4659,14 +4680,14 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   });
 
   // When a build modifier toggles, recalc that row's CP/Hits
-  on("change:repeating_vehsystems:vsys_mod_integral change:repeating_vehsystems:vsys_mod_open change:repeating_vehsystems:vsys_mod_bulky change:repeating_vehsystems:vsys_mod_delicate", function(eventInfo) {
-    var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace(/_vsys_mod_.*$/, "");
+  on("change:repeating_vehsystems:vsys_mod_integral change:repeating_vehsystems:vsys_mod_open change:repeating_vehsystems:vsys_bulky_cp change:repeating_vehsystems:vsys_delicate_cp", function(eventInfo) {
+    var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace(/_vsys_(mod_integral|mod_open|bulky_cp|delicate_cp)$/, "");
     populateVehSystemRow(rowId);
     calcVehicleTotals();
   });
 
   // When any per-system stat grant changes, recompute the vehicle's BCs/Power/Hits
-  on("change:repeating_vehsystems:vsys_g_st change:repeating_vehsystems:vsys_g_en change:repeating_vehsystems:vsys_g_ag change:repeating_vehsystems:vsys_g_in change:repeating_vehsystems:vsys_g_cl change:repeating_vehsystems:vsys_g_power change:repeating_vehsystems:vsys_g_hits", function() {
+  on("change:repeating_vehsystems:vsys_g_st change:repeating_vehsystems:vsys_g_en change:repeating_vehsystems:vsys_g_ag change:repeating_vehsystems:vsys_g_in change:repeating_vehsystems:vsys_g_cl change:repeating_vehsystems:vsys_g_power change:repeating_vehsystems:vsys_g_hits change:repeating_vehsystems:vsys_g_pdef change:repeating_vehsystems:vsys_g_mdef", function() {
     calcVehicle(false);
   });
 
