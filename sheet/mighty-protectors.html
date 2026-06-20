@@ -1821,10 +1821,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 <input type="hidden" name="attr_vehicle_init_roll" value="1d4" />
 <input type="hidden" name="attr_vehicle_mass_roll" value="2d6" />
 <input type="hidden" name="attr_vehicle_hth_roll" value="1d6" />
-<input type="hidden" name="attr_vehicle_explosion_area" value="5" />
-<input type="hidden" name="attr_vehicle_init_die" value="d4" />
-<input type="hidden" name="attr_vehicle_in_save" value="0" />
-<input type="hidden" name="attr_vehicle_model" value="" />
 <input type="hidden" name="attr_range_query" value="0" />
 <input type="hidden" name="attr_called_type_query" value="None" />
 <input type="hidden" name="attr_called_mod_query" value="0" />
@@ -4335,9 +4331,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   };
 
   function vehicleBCSave(score) {
-    if (score < 0) return 0;
-    if (score >= saveTable.length) return saveTable[saveTable.length - 1];
-    return saveTable[score];
+    var i = Math.max(0, Math.min(score, saveTable.length - 1));
+    return saveTable[i];
   }
 
   function fmtWeight(lbs) {
@@ -4356,20 +4351,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     if (st <= 0) return 0;
     if (st >= carryValues.length) return carryValues[carryValues.length - 1];
     return carryValues[st];
-  }
-
-  function vehicleInitDie(clSave) {
-    if (clSave <= 0) return "0";
-    if (clSave <= 2) return "d4";
-    if (clSave <= 4) return "d6";
-    if (clSave <= 6) return "d8";
-    if (clSave <= 8) return "d10";
-    if (clSave <= 10) return "d12";
-    if (clSave <= 12) return "d12+d4";
-    if (clSave <= 14) return "d12+d6";
-    if (clSave <= 16) return "d12+d8";
-    if (clSave <= 18) return "d12+d10";
-    return "2d12";
   }
 
   // Convert display dice to rollable: "d6+d8" -> "1d6+1d8", "2d6" stays "2d6"
@@ -4418,7 +4399,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var explArea = Math.ceil(profile);
       if (explArea % 2 === 0) explArea += 1;
 
-      var initDie = vehicleInitDie(clSave);
+      var initIdx = Math.max(0, Math.min(cl, hthTable.length - 1));
+      var initDie = hthTable[initIdx];
       var initRoll = makeRollable(initDie);
 
       var carryVal = vehicleCarry(st);
