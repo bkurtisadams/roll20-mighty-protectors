@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.71.0 - 2026-06-20
+/* Mighty Protectors Roll20 API Engine v2.71.1 - 2026-06-20
+ * v2.71.1: vehicle attack card now itemizes the weapon +To-Hit and Targeting
+ *   bonus in the to-hit hover breakdown (was in the Final calc but not shown);
+ *   subtotal includes macroMod for vehicle attackers so it reconciles with Final.
  * v2.71.0: vehicle attacks now support the full single-shot automation set.
  *   handleMpAttack defines a vehicle-aware getAtk that maps attack_* reads to
  *   the mpattack template fields (pr, ch, range, ap, kb, area, is_save, save mods,
@@ -2712,8 +2715,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (aimVal !== 0) hoverBreakdown += `&#10;Aim: ${aimVal > 0 ? '+' : ''}${aimVal}`;
     if (multiVal !== 0) hoverBreakdown += `&#10;Multi-Action: ${multiVal}`;
     if (otherVal !== 0) hoverBreakdown += `&#10;Other: ${otherVal > 0 ? '+' : ''}${otherVal}`;
-    
-    const subtotal = baseChance + atkMod + abilityTohitBonus + aimVal + multiVal + otherVal;
+
+    // Vehicle weapons carry their to-hit bonus in macroMod (hitmod); itemize it for the card.
+    if (atkIsVehicle) {
+      const vWpnMod = num(fields.wpnmod, 0);
+      const vTargBonus = num(fields.targbonus, 0);
+      if (vWpnMod !== 0) hoverBreakdown += `&#10;Wpn +To-Hit: ${vWpnMod >= 0 ? '+' : ''}${vWpnMod}`;
+      if (vTargBonus !== 0) hoverBreakdown += `&#10;Targeting: ${vTargBonus >= 0 ? '+' : ''}${vTargBonus}`;
+    }
+
+    const subtotal = baseChance + atkMod + abilityTohitBonus + aimVal + multiVal + otherVal + (atkIsVehicle ? macroMod : 0);
     hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Subtotal: ${subtotal}-`;
     
@@ -9106,11 +9117,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.71.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.71.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.71.0 READY");
+  log("MP ENGINE v2.71.1 READY");
 });
