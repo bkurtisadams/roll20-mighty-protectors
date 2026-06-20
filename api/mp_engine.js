@@ -1,4 +1,6 @@
-/* Mighty Protectors Roll20 API Engine v2.69.0 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.69.1 - 2026-06-19
+ * v2.69.1: !mp import refuses to overwrite a pre-existing non-vehicle character
+ *          (name collision would otherwise wipe its attacks/abilities/protection).
  * v2.69.0: vehicle force fields now run the per-hit deflection/collapse mechanic.
  *          cmdApply no longer disables FF for vehicle defenders (getForceFieldData
  *          already uses vehicle Power as the collapse threshold). Per-hit logic now
@@ -8592,6 +8594,16 @@ function cmdStance(msg, args) {
   function buildVehicleCharacterFromMPData(data, sourceLabel) {
     const charName = data.name || "Imported Vehicle";
     let char = findObjs({ type: "character", name: charName })[0];
+    if (char) {
+      // Guard: never overwrite a pre-existing non-vehicle character. The import
+      // clears repeating_attacks/abilities/protection, which would destroy a real
+      // character's data if its name happened to collide with the vehicle's.
+      const vm = findObjs({ type: "attribute", characterid: char.id, name: "vehicle_mode" })[0];
+      const isVehicle = vm && (vm.get("current") || "").toLowerCase() === "on";
+      if (!isVehicle) {
+        return ch("MP", `/w gm <b>MP import aborted.</b> A character named "${esc(charName)}" already exists and is not a vehicle — importing would overwrite its attacks, abilities, and protection. Rename the existing character (or the vehicle) and re-run, or delete it first.`);
+      }
+    }
     if (!char) char = createObj("character", { name: charName });
     char.set("name", charName);
     const charId = char.id;
@@ -9033,11 +9045,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.69.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.69.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.69.0 READY");
+  log("MP ENGINE v2.69.1 READY");
 });
