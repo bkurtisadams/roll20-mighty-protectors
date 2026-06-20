@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.69.1 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.69.2 - 2026-06-19
+ * v2.69.2: vehicle import now seeds per-system vsys_type (P/M/E weapon basis or
+ *          none, derived from damage type), vsys_dmgtype, and vsys_tohit on each
+ *          repeating_vehsystems row, feeding the new sheet dropdown and the
+ *          upcoming !mp vatk to-hit. repeating_attacks writes unchanged for now.
  * v2.69.1: !mp import refuses to overwrite a pre-existing non-vehicle character
  *          (name collision would otherwise wipe its attacks/abilities/protection).
  * v2.69.0: vehicle force fields now run the per-hit deflection/collapse mechanic.
@@ -8684,6 +8688,11 @@ function cmdStance(msg, args) {
       createObj("attribute", { characterid: charId, name: sp + "vsys_spaces", current: String(sys.spaces || 0) });
       createObj("attribute", { characterid: charId, name: sp + "vsys_dmg", current: sys.atkDmg || "0" });
       createObj("attribute", { characterid: charId, name: sp + "vsys_notes", current: (lbl + (sys.desc || "")).trim() });
+      const _vdt = vehDmgType(sys.atkType, sys.desc);
+      const _vtype = (ab && VEH_OFFENSIVE_AB[ab.abId]) ? (_vdt === "psychic" ? "M" : "P") : "none";
+      createObj("attribute", { characterid: charId, name: sp + "vsys_dmgtype", current: _vdt });
+      createObj("attribute", { characterid: charId, name: sp + "vsys_type", current: _vtype });
+      createObj("attribute", { characterid: charId, name: sp + "vsys_tohit", current: "0" });
 
       // Offensive systems also get a rollable attack row for !mp atk (engine pipeline).
       if (ab && VEH_OFFENSIVE_AB[ab.abId]) {
@@ -9045,11 +9054,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.69.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.66.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.69.1 READY");
+  log("MP ENGINE v2.66.0 READY");
 });

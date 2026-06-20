@@ -1702,6 +1702,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <span style="width:56px; text-align:center;">Hits</span>
         <span style="width:56px; text-align:center;">DMG</span>
         <span style="width:32px; text-align:center;">PTs</span>
+        <span style="width:72px; text-align:center;">Type</span>
+        <span style="width:28px; text-align:center;">+Hit</span>
         <span style="flex:1; padding-left:4px;">System Description, Arc &amp; Facing</span>
       </div>
     </div>
@@ -1716,6 +1718,15 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="text" name="attr_vsys_dmg" value="0" style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage dice (e.g. 4d10)" />
           <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage">⚄</button>
           <input type="text" name="attr_vsys_cp" readonly style="width:32px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System CPs (auto from spaces + hi/lo tech + cost adj)" />
+          <select name="attr_vsys_type" title="System type — sets the to-hit basis (Targeting adds its +Hit to other weapons)" style="width:72px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; box-sizing:border-box; font-size:10px;">
+            <option value="none" selected>&mdash;</option>
+            <option value="P">Phys&middot;AG</option>
+            <option value="M">Ment&middot;IN</option>
+            <option value="E">Emo&middot;CL</option>
+            <option value="T">Target</option>
+          </select>
+          <input type="number" name="attr_vsys_tohit" value="0" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="To-hit bonus (Targeting/Expertise systems; or a per-weapon mod)" />
+          <input type="hidden" name="attr_vsys_dmgtype" value="" />
           <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px; margin-right:8px;" placeholder="Description, arc, facing..." />
         </div>
       </fieldset>
