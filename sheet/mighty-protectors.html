@@ -1,4 +1,9 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.35 - Visible computed to-hit per weapon (cog panel "To-Hit =")
+<!-- Mighty Protectors Roll20 Character Sheet v44.36 - Vehicle combat-automation fields on cog panel (PR, charges, range, AP, KB, area, save-attack)
+        - cog panel: Range, PR, AP, KB, Area, Charges, Autofire fields + Save Attack row (BC/Init/Rec/Rec Time/No Dmg)
+        - attack button now passes pr/ch/range/ap/kb/area/is_save/savebc/savemod/recovery/rectime/no_damage/autofire/dmgexpr + row id
+        - vsys_rowid stamped per row (for engine charge writeback); requires mp_engine.js v2.71.0+
+        - autofire FIELD added; the burst-fire command is the next slice
+v44.35: - Visible computed to-hit per weapon (cog panel "To-Hit =")
         - recalcVehAttacks now also writes vsys_tohit_disp (roll-under "N-"); shown read-only beside +To-Hit in the cog panel
         - confirms per-weapon +To-Hit AND Targeting/Expertise (Type=Target) propagation fold into each weapon's to-hit
 v44.34: - Hits round to nearest; vehicle attack roll button (to-hit + damage)
@@ -1759,12 +1764,13 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="text" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits (— = integral, can't be attacked)" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
           <input type="text" name="attr_vsys_dmg" value="0" style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage dice (e.g. 4d10)" />
-          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{atype=@{vsys_atype}}} {{name=@{vehicle_name} - @{vsys_notes}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{hitmod=[[0+@{vsys_tohit}+@{vehicle_targeting_bonus}]]}} {{target=[[0+@{vsys_tohit_num}-((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))-@{target|Target|bar3|0}]]}} {{damage=[[@{vsys_dmg}]]}} {{type=@{vsys_dmgtype}}} {{deftype=@{vsys_atk_full}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3|0}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's attack (to-hit + damage)"></button>
+          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{vsys_rowid}}} {{atype=@{vsys_atype}}} {{name=@{vehicle_name} - @{vsys_notes}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{hitmod=[[0+@{vsys_tohit}+@{vehicle_targeting_bonus}]]}} {{target=[[0+@{vsys_tohit_num}-((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))-@{target|Target|bar3|0}]]}} {{damage=[[@{vsys_dmg}]]}} {{dmgexpr=@{vsys_dmg}}} {{type=@{vsys_dmgtype}}} {{deftype=@{vsys_atk_full}}} {{pr=@{vsys_pr}}} {{ch=@{vsys_charges}}} {{range=@{vsys_range}}} {{ap=@{vsys_ap}}} {{kb=@{vsys_kb}}} {{area=@{vsys_area}}} {{is_save=@{vsys_is_save}}} {{savebc=@{vsys_save_bc}}} {{savemod=@{vsys_save_mod}}} {{recovery=@{vsys_save_rec}}} {{rectime=@{vsys_save_rec_time}}} {{no_damage=@{vsys_no_damage}}} {{autofire=@{vsys_autofire}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3|0}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's attack (to-hit + damage)"></button>
           <input type="hidden" name="attr_vsys_atype" value="P" />
           <input type="hidden" name="attr_vsys_is_physical" value="1" />
           <input type="hidden" name="attr_vsys_is_mental" value="0" />
           <input type="hidden" name="attr_vsys_tohit_num" value="0" />
           <input type="hidden" name="attr_vsys_atk_full" value="Physical" />
+          <input type="hidden" name="attr_vsys_rowid" value="" />
           <input type="text" name="attr_vsys_cp" readonly style="width:32px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System CPs (auto from spaces + hi/lo tech + cost adj)" />
           <div style="display:flex; align-items:center; gap:2px; flex:1; min-width:0;">
             <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;" placeholder="Description, arc, facing..." />
@@ -1806,7 +1812,73 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <div class="sheet-panel-row">
             <div class="sheet-panel-field">
-              <label title="Build modifiers — stackable; adjust the system's CP and/or Hits (MP vehicle rules)">Modifiers:</label>
+              <label title="Range in inches; the engine applies range-to-hit penalties when API is on">Range:</label>
+              <input type="text" name="attr_vsys_range" value="" style="width:44px !important;" title="Range in inches" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Power Requirement: deducted from the vehicle's Power on each attack">PR:</label>
+              <input type="number" name="attr_vsys_pr" value="0" style="width:40px !important;" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Armor Piercing: points of protection / force field ignored (number or ALL)">AP:</label>
+              <input type="text" name="attr_vsys_ap" value="" style="width:40px !important;" />
+            </div>
+            <div class="sheet-panel-field">
+              <input type="checkbox" name="attr_vsys_kb" value="1" /> <label title="Attack causes Knockback">KB</label>
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Area Effect: diameter in inches (0 = single target)">Area:</label>
+              <input type="text" name="attr_vsys_area" value="" style="width:40px !important;" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Charges remaining (-1 = unlimited; blank = not tracked). Decremented on each attack.">Charges:</label>
+              <input type="text" name="attr_vsys_charges" value="" maxlength="3" style="width:40px !important;" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Autofire rate of fire (2-7). Fired with the burst button.">Autofire:</label>
+              <input type="text" name="attr_vsys_autofire" value="" maxlength="1" style="width:28px !important;" />
+            </div>
+          </div>
+          <div class="sheet-panel-row">
+            <div class="sheet-panel-field">
+              <input type="checkbox" name="attr_vsys_is_save" value="1" /> <label title="Save Attack: target rolls to resist" style="color:#f4d03f;">Save Attack</label>
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Basic Characteristic the target saves against">BC:</label>
+              <select name="attr_vsys_save_bc" style="width:45px !important;">
+                <option value="">--</option><option value="EN">EN</option><option value="AG">AG</option><option value="IN">IN</option><option value="CL">CL</option>
+              </select>
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Modifier to the initial save TN (from the CP table)">Init:</label>
+              <input type="text" name="attr_vsys_save_mod" value="" style="width:32px !important;" placeholder="-8" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Modifier to the recovery save TN">Rec:</label>
+              <input type="text" name="attr_vsys_save_rec" value="" style="width:32px !important;" placeholder="-12" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Time between recovery save attempts">Rec Time:</label>
+              <select name="attr_vsys_save_rec_time" style="width:80px !important;">
+                <option value="1 phase">1 Phase</option>
+                <option value="1 round" selected>1 Round</option>
+                <option value="2 rounds">2 Rounds</option>
+                <option value="3 rounds">3 Rounds</option>
+                <option value="1 minute">1 Minute</option>
+                <option value="5 minutes">5 Minutes</option>
+                <option value="20 minutes">20 Minutes</option>
+                <option value="1 hour">1 Hour</option>
+                <option value="3 hours">3 Hours</option>
+                <option value="10 hours">10 Hours</option>
+                <option value="1.5 days">1.5 Days</option>
+                <option value="1.5 weeks">1.5 Weeks</option>
+                <option value="1 month">1 Month</option>
+              </select>
+            </div>
+            <div class="sheet-panel-field">
+              <input type="checkbox" name="attr_vsys_no_damage" value="1" /> <label title="No damage - save effect only (e.g. Paralysis, Fear)">No Dmg</label>
+            </div>
+          </div>
               <span class="sheet-vsys-mod"><input type="checkbox" name="attr_vsys_mod_integral" value="1" title="Halve generated CP; off the deck plan, can't be targeted" /> Integral &frac12;CP</span>
               <span class="sheet-vsys-mod"><input type="checkbox" name="attr_vsys_mod_open" value="1" title="Yields 1/4 of system spaces' CP; passable" /> Open &frac14;CP</span>
               <span class="sheet-vsys-mod">Bulky <input type="number" name="attr_vsys_bulky_cp" value="0" title="CPs put toward Bulky. Each 2.5 CP = 1 level = +4.3 Hits (total rounds up). Does NOT change the system CP shown — account for the cost separately like an ability." /> CP</span>
@@ -4647,6 +4719,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var bulkyCp = Math.abs(parseFloat(v[prefix + "vsys_bulky_cp"]) || 0);
       var delicateCp = Math.abs(parseFloat(v[prefix + "vsys_delicate_cp"]) || 0);
       var updates = {};
+      updates[prefix + "vsys_rowid"] = rowId;
       if (spaces <= 0) {
         updates[prefix + "vsys_cp"] = 0;
         updates[prefix + "vsys_hits"] = 0;

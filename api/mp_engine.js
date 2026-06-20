@@ -1,5 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.70.0 - 2026-06-20
- * v2.70.0: handleMpAttack now supports VEHICLE attackers (repeating_vehsystems
+/* Mighty Protectors Roll20 API Engine v2.71.0 - 2026-06-20
+ * v2.71.0: vehicle attacks now support the full single-shot automation set.
+ *   handleMpAttack defines a vehicle-aware getAtk that maps attack_* reads to
+ *   the mpattack template fields (pr, ch, range, ap, kb, area, is_save, save mods,
+ *   no_damage, dmgexpr), so save attacks, charges, range, PR, AP, KB and area all resolve for
+ *   vehicle weapons. Charge writeback uses new setVehSystemAttr (repeating_vehsystems).
+ * v2.70.0: handleMpAttack supports VEHICLE attackers (repeating_vehsystems
  *   weapons via the mpattack template): attack type taken from the template
  *   {{atype}} field and to-hit base read from vehicle_ag/in/cl_save instead of
  *   the character save attrs. Damage/type/name come from template fields; the
@@ -2000,6 +2005,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return false;
   }
 
+  function setVehSystemAttr(charId, rowId, shortName, value) {
+    const searchName = `repeating_vehsystems_${rowId}_${shortName}`.toLowerCase();
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    const found = attrs.find(a => a.get("name").toLowerCase() === searchName);
+    if (found) { found.set("current", value); return true; }
+    return false;
+  }
+
   function rollExpr(s) {
     let str = String(s || "").replace(/\s+/g, "");
     if (!str) return 0;
@@ -2362,7 +2375,37 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isAvoidArmor = calledShotType === "Avoid Light Armor" || calledShotType === "Avoid Heavy Armor";
     const isGearShot = calledShotType === "Gear";
 
-    const getAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+    const atkIsVehicle = isVehicleMode(atkCharId);
+    // Vehicle weapons live in repeating_vehsystems, not repeating_attacks. Map the
+    // engine's attack_* reads to the mpattack template fields the vehicle button supplies,
+    // so save attacks / charges / range / PR / AP / KB / area all flow through unchanged.
+    const vehAtkMap = {
+      attack_atk: fields.atype || "P",
+      attack_name: fields.name || "Attack",
+      attack_damage: fields.dmgexpr || "",
+      attack_dmgtype: fields.type || "Kin",
+      attack_subtype: fields.subtype || "",
+      attack_type: "std",
+      attack_num: "1",
+      attack_mod: "0",
+      attack_cost: fields.pr || "",
+      attack_charges: fields.ch || "",
+      attack_range: fields.range || "",
+      attack_ap: fields.ap || "",
+      attack_kb: fields.kb || "",
+      attack_area: fields.area || "",
+      attack_is_save: fields.is_save || "",
+      attack_save_bc: fields.savebc || "",
+      attack_save_mod: fields.savemod || "",
+      attack_save_rec: fields.recovery || "",
+      attack_recovery: fields.recovery || "",
+      attack_save_rec_time: fields.rectime || "",
+      attack_no_damage: fields.no_damage || "",
+      attack_autofire: fields.autofire || ""
+    };
+    const getAtk = atkIsVehicle
+      ? (name) => (vehAtkMap[name] !== undefined ? String(vehAtkMap[name]) : "")
+      : (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
 
     const rawAtkType = getAtk("attack_atk");
     const weaponName = getAtk("attack_name") || fields.name || "Attack";
@@ -2372,8 +2415,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       ? ("Vehicle: " + (getAttr(defChar.id, "vehicle_name") || defChar.get("name")))
       : defChar.get("name");
 
-    const atkIsVehicle = isVehicleMode(atkCharId);
-    const atkTypeCode = (atkIsVehicle && fields.atype) ? String(fields.atype).trim().toUpperCase() : (rawAtkType || "P");
+    const atkTypeCode = rawAtkType || "P";
     
     // --- FIX: DEFINE LABELS EARLY FOR USE IN BREAKDOWN ---
     const atkTypeLabel = atkTypeCode === "M" ? "Mental" : (atkTypeCode === "E" ? "Emot" : "Phys");
@@ -2553,7 +2595,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       chgDeducted = 1;
       const chg1 = chg0 - 1;
       chgRemaining = chg1;
-      setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
+      if (atkIsVehicle) setVehSystemAttr(atkCharId, rowId, "vsys_charges", chg1);
+      else setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
       if (chg1 === 0) {
         sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Last charge used!`);
       }
