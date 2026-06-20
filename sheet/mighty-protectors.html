@@ -1,4 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.29 - Vehsystem cog panel redesign to match character ability panel
+<!-- Mighty Protectors Roll20 Character Sheet v44.30 - Wire vehsystem modifiers + grants into vehicle stats; fix duplicate d20; left-justify arc
+        - populateVehSystemRow now applies vsys_mod_integral (1/2 CP), open (1/4-spaces CP), bulky (+ceil4.3 Hits, +2.5 CP), delicate (-ceil4.3 Hits min 1, -2.5 CP)
+        - calcVehicle aggregates per-system vsys_g_st/en/ag/in/cl/power/hits across rows into ST/EN (display), effective AG/IN/CL (saves/power/handling/init), Power max, Hits max
+        - added change handlers for vsys_mod_* and vsys_g_* so edits recalc live
+        - removed duplicate CSS d20 glyph (Roll20's native roll-button d20 stands alone); arc row left-justified
+        - NOTE: vsys_g_pdef/mdef summed but not yet written (vehicle Phys/Ment Def model + character-clobber guard pending); AG/IN/CL inputs stay as the base, grants stack on top
+v44.29: - Vehsystem cog panel redesign to match character ability panel
         - Type dropdown shortened (Phys/Ment/Emo/Target); Dmg Type now a 4.8.1 damage-type dropdown (Kinetic/Energy/Biochemical/Entropy/Psychic/Other)
         - Modifier dropdown -> stackable checkboxes (vsys_mod_integral/open/bulky/delicate)
         - Grant dropdown+Amt -> per-stat fields (vsys_g_st/en/ag/in/cl/power/hits/pdef/mdef), BC-strip layout
@@ -1728,7 +1734,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="number" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
           <input type="text" name="attr_vsys_dmg" value="0" style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage dice (e.g. 4d10)" />
-          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage"><span class="sheet-d20">20</span></button>
+          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage"></button>
           <input type="text" name="attr_vsys_cp" readonly style="width:32px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System CPs (auto from spaces + hi/lo tech + cost adj)" />
           <div style="display:flex; align-items:center; gap:2px; flex:1; min-width:0;">
             <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;" placeholder="Description, arc, facing..." />
@@ -4459,19 +4465,27 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   }
 
   function calcVehicle(resetCurrent) {
-    getAttrs(["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver","vehicle_hits","vehicle_hits_max","vehicle_power","vehicle_power_max"], function(v) {
+    getSectionIDs("repeating_vehsystems", function(ids) {
+      var base = ["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver","vehicle_hits","vehicle_hits_max","vehicle_power","vehicle_power_max"];
+      var gfields = ["st","en","ag","in","cl","power","hits"];
+      ids.forEach(function(id){ gfields.forEach(function(f){ base.push("repeating_vehsystems_" + id + "_vsys_g_" + f); }); });
+      getAttrs(base, function(v) {
       var bcp = v.vehicle_base_cp || "15";
       var row = vehicleSizeTable[bcp];
       if (!row) return;
 
+      // Sum per-system stat grants across all rows
+      var g = {st:0,en:0,ag:0,in:0,cl:0,power:0,hits:0};
+      ids.forEach(function(id){ gfields.forEach(function(f){ g[f] += parseInt(v["repeating_vehsystems_" + id + "_vsys_g_" + f]) || 0; }); });
+
       var spaces = row[0], weightLbs = row[1], massStr = row[2], profile = row[3];
-      var st = row[4], en = row[5], hits = row[6];
-      var ag = parseInt(v.vehicle_ag) || 9;
-      var inScore = parseInt(v.vehicle_in) || 0;
-      var cl = parseInt(v.vehicle_cl) || 9;
+      var st = row[4] + g.st, en = row[5] + g.en, hits = row[6] + g.hits;
+      var ag = (parseInt(v.vehicle_ag) || 9) + g.ag;
+      var inScore = (parseInt(v.vehicle_in) || 0) + g.in;
+      var cl = (parseInt(v.vehicle_cl) || 9) + g.cl;
       var maneuver = parseFloat(v.vehicle_maneuver) || 0;
 
-      var power = st + en + ag + inScore;
+      var power = st + en + ag + inScore + g.power;
 
       var enSave = vehicleBCSave(en);
       var agSave = vehicleBCSave(ag);
@@ -4542,6 +4556,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         if (curP === undefined || curP === "" || curP === null || parseInt(curP) === oldPowerMax) updates.vehicle_power = power;
         if (Object.keys(updates).length > 0) setAttrs(updates, {silent: true});
       }
+      });
     });
   }
 
@@ -4577,10 +4592,14 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // PTs = base CPs from spaces + hi/lo tech + row cost adjustment
   function populateVehSystemRow(rowId) {
     var prefix = "repeating_vehsystems_" + rowId + "_";
-    getAttrs([prefix + "vsys_spaces", prefix + "vsys_cost", "vehicle_hilotech"], function(v) {
+    getAttrs([prefix + "vsys_spaces", prefix + "vsys_cost", prefix + "vsys_mod_integral", prefix + "vsys_mod_open", prefix + "vsys_mod_bulky", prefix + "vsys_mod_delicate", "vehicle_hilotech"], function(v) {
       var spaces = parseInt(v[prefix + "vsys_spaces"]) || 0;
       var costAdj = parseFloat(v[prefix + "vsys_cost"]) || 0;
       var hilotech = parseFloat(v.vehicle_hilotech) || 0;
+      var integral = v[prefix + "vsys_mod_integral"] === "1";
+      var open = v[prefix + "vsys_mod_open"] === "1";
+      var bulky = v[prefix + "vsys_mod_bulky"] === "1";
+      var delicate = v[prefix + "vsys_mod_delicate"] === "1";
       var updates = {};
       if (spaces <= 0) {
         updates[prefix + "vsys_cp"] = 0;
@@ -4592,7 +4611,15 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var baseCp = systemCPTable[bestKey];
         var sysHits = systemHitsTable[bestKey] || 8;
         var sysProfile = systemProfileTable[bestKey] || 1;
-        var totalCp = baseCp + hilotech + costAdj;
+        // Open System: generated CP from 1/4 of the system spaces (rulebook garden example)
+        if (open) { baseCp = systemCPTable[findBestKey(Math.max(1, Math.floor(spaces / 4)))]; }
+        // Integral: halve the generated CP
+        if (integral) { baseCp = baseCp / 2; }
+        // Bulky/Delicate: +/- ceil(4.3) Hits and +/- 2.5 CP (one dose per checkbox)
+        var modCost = 0;
+        if (bulky) { sysHits += Math.ceil(4.3); modCost += 2.5; }
+        if (delicate) { sysHits = Math.max(1, sysHits - Math.ceil(4.3)); modCost -= 2.5; }
+        var totalCp = baseCp + hilotech + costAdj + modCost;
         updates[prefix + "vsys_cp"] = totalCp;
         updates[prefix + "vsys_hits"] = sysHits;
         updates[prefix + "vsys_hits_max"] = sysHits;
@@ -4621,6 +4648,18 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_vsys_cost", "");
     populateVehSystemRow(rowId);
     calcVehicleTotals();
+  });
+
+  // When a build modifier toggles, recalc that row's CP/Hits
+  on("change:repeating_vehsystems:vsys_mod_integral change:repeating_vehsystems:vsys_mod_open change:repeating_vehsystems:vsys_mod_bulky change:repeating_vehsystems:vsys_mod_delicate", function(eventInfo) {
+    var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace(/_vsys_mod_.*$/, "");
+    populateVehSystemRow(rowId);
+    calcVehicleTotals();
+  });
+
+  // When any per-system stat grant changes, recompute the vehicle's BCs/Power/Hits
+  on("change:repeating_vehsystems:vsys_g_st change:repeating_vehsystems:vsys_g_en change:repeating_vehsystems:vsys_g_ag change:repeating_vehsystems:vsys_g_in change:repeating_vehsystems:vsys_g_cl change:repeating_vehsystems:vsys_g_power change:repeating_vehsystems:vsys_g_hits", function() {
+    calcVehicle(false);
   });
 
   // Recalc totals on row remove
