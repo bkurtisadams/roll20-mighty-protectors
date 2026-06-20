@@ -1,4 +1,14 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.33 - Bulky/Delicate CP-level fields, robust (order-based) arc layout
+<!-- Mighty Protectors Roll20 Character Sheet v44.35 - Visible computed to-hit per weapon (cog panel "To-Hit =")
+        - recalcVehAttacks now also writes vsys_tohit_disp (roll-under "N-"); shown read-only beside +To-Hit in the cog panel
+        - confirms per-weapon +To-Hit AND Targeting/Expertise (Type=Target) propagation fold into each weapon's to-hit
+v44.34: - Hits round to nearest; vehicle attack roll button (to-hit + damage)
+        - Bulky/Delicate Hits now round to NEAREST after applying the fractional delta (25 + 4.3 = 29.3 -> 29), not ceil
+        - roll_vsys_dmg now emits an mpattack template (roll-under to-hit + damage), mirroring the character attack button
+        - new recalcVehAttacks(): per-system vsys_tohit_num = relevant vehicle save + 3 + per-weapon +To-Hit + sum of Targeting rows;
+          sets vsys_atype / vsys_is_physical / vsys_is_mental / vsys_atk_full and vehicle_targeting_bonus
+        - to-hit type: P->AG save, M->IN save, E->CL save (E targets Mental Def, mirroring the character sheet)
+        - requires mp_engine.js v2.70.0+ for API auto-resolution against vehicle saves
+v44.33: - Bulky/Delicate CP-level fields, robust (order-based) arc layout
         - Bulky/Delicate are now CP input fields (vsys_bulky_cp / vsys_delicate_cp): levels = CP/2.5, Hits delta = ceil(levels*4.3)
           (5 CP Bulky = 2 levels = +9 Hits; 7.5 CP Delicate = 3 levels = -13 Hits). These CP do NOT change the system CP shown.
         - Arc graphic moved to order:-1 in-flow flex (no position:absolute / width:100% / padding-left) so it left-justifies reliably in Roll20
@@ -1749,7 +1759,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="text" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits (— = integral, can't be attacked)" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
           <input type="text" name="attr_vsys_dmg" value="0" style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage dice (e.g. 4d10)" />
-          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage"></button>
+          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{atype=@{vsys_atype}}} {{name=@{vehicle_name} - @{vsys_notes}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{hitmod=[[0+@{vsys_tohit}+@{vehicle_targeting_bonus}]]}} {{target=[[0+@{vsys_tohit_num}-((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))-@{target|Target|bar3|0}]]}} {{damage=[[@{vsys_dmg}]]}} {{type=@{vsys_dmgtype}}} {{deftype=@{vsys_atk_full}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3|0}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's attack (to-hit + damage)"></button>
+          <input type="hidden" name="attr_vsys_atype" value="P" />
+          <input type="hidden" name="attr_vsys_is_physical" value="1" />
+          <input type="hidden" name="attr_vsys_is_mental" value="0" />
+          <input type="hidden" name="attr_vsys_tohit_num" value="0" />
+          <input type="hidden" name="attr_vsys_atk_full" value="Physical" />
           <input type="text" name="attr_vsys_cp" readonly style="width:32px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System CPs (auto from spaces + hi/lo tech + cost adj)" />
           <div style="display:flex; align-items:center; gap:2px; flex:1; min-width:0;">
             <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;" placeholder="Description, arc, facing..." />
@@ -1771,6 +1786,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <div class="sheet-panel-field">
               <label title="To-hit bonus: Targeting/Expertise systems add this to every weapon; on a weapon it's a per-weapon mod">+To-Hit:</label>
               <input type="number" name="attr_vsys_tohit" value="0" style="width:50px !important;" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Resulting roll-under to-hit = vehicle save (by Type) + 3 + this weapon's +To-Hit + all Targeting systems. Target's Defense is subtracted at roll time.">To-Hit =</label>
+              <input type="text" name="attr_vsys_tohit_disp" readonly value="—" style="width:46px !important; color:#50fa7b !important;" title="Base roll-under before target Defense" />
             </div>
             <div class="sheet-panel-field">
               <label title="MP damage type (4.8.1) — sets which protection / force-field applies on a hit">Dmg Type:</label>
@@ -1893,6 +1912,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <input type="text" name="attr_vehicle_defense" readonly title="Physical Defense = AG save - 10 + Heightened Defense (PDef)" style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
         <span style="color:#888; margin-left:6px;">Mental Def:</span>
         <input type="text" name="attr_vehicle_mental_def" readonly title="Mental Defense = IN save - 10 + Heightened Defense (MDef)" style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" />
+        <input type="hidden" name="attr_vehicle_targeting_bonus" value="0" />
         <span style="color:#888; margin-left:6px;">Carry:</span>
         <input type="text" name="attr_vehicle_carry" readonly style="width:140px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; font-size:10px;" />
       </div>
@@ -4567,6 +4587,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_hth: hthVal,
         vehicle_hth_roll: makeRollable(hthVal)
       }, {silent: true});
+      recalcVehAttacks();
 
       // Only set current hits/power if they haven't been set yet or vehicle size changed
       if (resetCurrent) {
@@ -4636,9 +4657,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var baseCp = systemCPTable[bestKey];
         var sysHits = systemHitsTable[bestKey] || 8;
         var sysProfile = systemProfileTable[bestKey] || 1;
-        // Bulky/Delicate CP -> levels (CP / 2.5); Hits delta = ceil(levels * 4.3). These CP do NOT change the system's CP.
-        if (bulkyCp > 0)   sysHits += Math.ceil((bulkyCp / 2.5) * 4.3);
-        if (delicateCp > 0) sysHits = Math.max(1, sysHits - Math.ceil((delicateCp / 2.5) * 4.3));
+        // Bulky/Delicate CP -> levels (CP / 2.5); Hits delta = levels * 4.3, applied to the base then rounded to nearest.
+        // These CP do NOT change the system's CP.
+        var rawHits = sysHits;
+        if (bulkyCp > 0)    rawHits += (bulkyCp / 2.5) * 4.3;
+        if (delicateCp > 0) rawHits -= (delicateCp / 2.5) * 4.3;
+        sysHits = Math.max(1, Math.round(rawHits));
         // System CP excludes Bulky/Delicate cost; Integral halves / Open quarters the total
         var totalCp = baseCp + hilotech + costAdj;
         if (integral) totalCp = totalCp / 2;
@@ -4663,7 +4687,55 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     getSectionIDs("repeating_vehsystems", function(ids) {
       ids.forEach(function(id) { populateVehSystemRow(id); });
     });
+    recalcVehAttacks();
   }
+
+  // Per-system attack to-hit: relevant vehicle save + 3 + per-weapon mod + sum of Targeting rows.
+  // Mirrors the character to-hit (save + 3 + mod + ability bonus). P->AG, M->IN, E->CL.
+  // Targeting/Expertise rows (type T) contribute their +To-Hit to every weapon.
+  function recalcVehAttacks() {
+    getAttrs(["vehicle_ag_save", "vehicle_in_save", "vehicle_cl_save"], function(vv) {
+      var agS = parseInt(vv.vehicle_ag_save) || 0;
+      var inS = parseInt(vv.vehicle_in_save) || 0;
+      var clS = parseInt(vv.vehicle_cl_save) || 0;
+      getSectionIDs("repeating_vehsystems", function(ids) {
+        if (!ids.length) { setAttrs({ vehicle_targeting_bonus: 0 }, {silent: true}); return; }
+        var fields = [];
+        ids.forEach(function(id) {
+          var p = "repeating_vehsystems_" + id + "_";
+          fields.push(p + "vsys_type", p + "vsys_tohit");
+        });
+        getAttrs(fields, function(rv) {
+          var targBonus = 0;
+          ids.forEach(function(id) {
+            var p = "repeating_vehsystems_" + id + "_";
+            if (rv[p + "vsys_type"] === "T") targBonus += parseInt(rv[p + "vsys_tohit"]) || 0;
+          });
+          var upd = { vehicle_targeting_bonus: targBonus };
+          ids.forEach(function(id) {
+            var p = "repeating_vehsystems_" + id + "_";
+            var t = rv[p + "vsys_type"] || "P";
+            var mod = parseInt(rv[p + "vsys_tohit"]) || 0;
+            var isMental = (t === "M" || t === "E");
+            var save = isMental ? (t === "E" ? clS : inS) : agS;
+            var thn = save + 3 + mod + (t === "T" ? 0 : targBonus);
+            upd[p + "vsys_tohit_num"]   = thn;
+            upd[p + "vsys_tohit_disp"]  = (t === "T") ? "—" : (thn + "-");
+            upd[p + "vsys_is_physical"] = isMental ? "0" : "1";
+            upd[p + "vsys_is_mental"]   = isMental ? "1" : "0";
+            upd[p + "vsys_atype"]       = isMental ? (t === "E" ? "E" : "M") : "P";
+            upd[p + "vsys_atk_full"]    = (t === "M") ? "Mental" : (t === "E" ? "Emotion" : "Physical");
+          });
+          setAttrs(upd, {silent: true});
+        });
+      });
+    });
+  }
+
+  // To-hit type or per-weapon mod changed (Targeting rows affect every weapon) -> recompute all rows
+  on("change:repeating_vehsystems:vsys_type change:repeating_vehsystems:vsys_tohit", function() {
+    recalcVehAttacks();
+  });
 
   // When spaces changes on any row, populate that row + recalc totals
   on("change:repeating_vehsystems:vsys_spaces", function(eventInfo) {

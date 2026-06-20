@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.69.2 - 2026-06-19
+/* Mighty Protectors Roll20 API Engine v2.70.0 - 2026-06-20
+ * v2.70.0: handleMpAttack now supports VEHICLE attackers (repeating_vehsystems
+ *   weapons via the mpattack template): attack type taken from the template
+ *   {{atype}} field and to-hit base read from vehicle_ag/in/cl_save instead of
+ *   the character save attrs. Damage/type/name come from template fields; the
+ *   hit is roll-under vs the sheet-computed target. Routes through the normal
+ *   FF/armor/KB damage pipeline.
  * v2.69.2: vehicle import now seeds per-system vsys_type (P/M/E weapon basis or
  *          none, derived from damage type), vsys_dmgtype, and vsys_tohit on each
  *          repeating_vehsystems row, feeding the new sheet dropdown and the
@@ -2366,7 +2372,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       ? ("Vehicle: " + (getAttr(defChar.id, "vehicle_name") || defChar.get("name")))
       : defChar.get("name");
 
-    const atkTypeCode = rawAtkType || "P";
+    const atkIsVehicle = isVehicleMode(atkCharId);
+    const atkTypeCode = (atkIsVehicle && fields.atype) ? String(fields.atype).trim().toUpperCase() : (rawAtkType || "P");
     
     // --- FIX: DEFINE LABELS EARLY FOR USE IN BREAKDOWN ---
     const atkTypeLabel = atkTypeCode === "M" ? "Mental" : (atkTypeCode === "E" ? "Emot" : "Phys");
@@ -2452,7 +2459,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     else if (atkTypeCode === "E") atkSaveAttr = "cool_save";
     else atkSaveAttr = "agility_save";
 
-    const atkSave = getAttrNum(atkCharId, atkSaveAttr, 10);
+    const atkSave = atkIsVehicle
+      ? getAttrNum(atkCharId, atkTypeCode === "M" ? "vehicle_in_save" : (atkTypeCode === "E" ? "vehicle_cl_save" : "vehicle_ag_save"), 10)
+      : getAttrNum(atkCharId, atkSaveAttr, 10);
     
     const defPageId = defTok.get("_pageid");
     const atkTokCandidates = findObjs({ _type: "graphic", represents: atkCharId, _pageid: defPageId });
