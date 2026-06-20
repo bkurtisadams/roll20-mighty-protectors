@@ -1700,34 +1700,49 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <span style="width:36px; text-align:center;">Spaces</span>
         <span style="width:38px; text-align:center;">Profile</span>
         <span style="width:56px; text-align:center;">Hits</span>
-        <span style="width:56px; text-align:center;">DMG</span>
+        <span style="width:56px; text-align:center;">Damage</span>
         <span style="width:32px; text-align:center;">PTs</span>
-        <span style="width:72px; text-align:center;">Type</span>
-        <span style="width:28px; text-align:center;">+Hit</span>
         <span style="flex:1; padding-left:4px;">System Description, Arc &amp; Facing</span>
       </div>
     </div>
     <div style="background:#1e1e38; padding:2px 6px 6px 6px; margin-bottom:0; border-radius:0;">
       <fieldset class="repeating_vehsystems" style="border:none; padding:0; margin:0;">
-        <div class="sheet-veh-sys-row" style="display:flex; gap:2px; align-items:center; padding:2px 0; border-bottom:1px solid #1a1428;">
+        <input type="checkbox" name="attr_options_flag" class="sheet-options-flag" title="Toggle settings panel" />
+        <div class="sheet-veh-sys-row" style="display:flex; gap:2px; align-items:center; padding:2px 50px 2px 0; border-bottom:1px solid #1a1428;">
           <input type="number" name="attr_vsys_cost" value="0" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System cost adjustment (modifiers)" />
           <input type="number" name="attr_vsys_spaces" value="1" style="width:36px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
           <input type="text" name="attr_vsys_profile" readonly style="width:38px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
           <input type="number" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
           <input type="text" name="attr_vsys_dmg" value="0" style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage dice (e.g. 4d10)" />
-          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage">⚄</button>
+          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:default} {{name=@{vehicle_name}}} {{System=@{vsys_notes}}} {{Damage=[[@{vsys_dmg}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's damage">&#9860;&#xFE0E;</button>
           <input type="text" name="attr_vsys_cp" readonly style="width:32px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="System CPs (auto from spaces + hi/lo tech + cost adj)" />
-          <select name="attr_vsys_type" title="System type — sets the to-hit basis (Targeting adds its +Hit to other weapons)" style="width:72px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; box-sizing:border-box; font-size:10px;">
-            <option value="none" selected>&mdash;</option>
-            <option value="P">Phys&middot;AG</option>
-            <option value="M">Ment&middot;IN</option>
-            <option value="E">Emo&middot;CL</option>
-            <option value="T">Target</option>
-          </select>
-          <input type="number" name="attr_vsys_tohit" value="0" style="width:28px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="To-hit bonus (Targeting/Expertise systems; or a per-weapon mod)" />
-          <input type="hidden" name="attr_vsys_dmgtype" value="" />
-          <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px; margin-right:8px;" placeholder="Description, arc, facing..." />
+          <div style="display:flex; align-items:center; gap:2px; flex:1; min-width:0;">
+            <input type="text" name="attr_vsys_notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;" placeholder="Description, arc, facing..." />
+            <span class="sheet-cog-icon" title="Settings (type, to-hit basis)">y</span>
+          </div>
+        </div>
+        <div class="sheet-options-panel">
+          <div class="sheet-panel-row" style="margin-top:6px;">
+            <div class="sheet-panel-field">
+              <label>Type:</label>
+              <select name="attr_vsys_type" title="System type — sets the to-hit basis; Targeting adds its +Hit to other weapons" style="width:170px !important;">
+                <option value="none" selected>&mdash; Non-combat</option>
+                <option value="P">Weapon &mdash; Physical (AG)</option>
+                <option value="M">Weapon &mdash; Mental (IN)</option>
+                <option value="E">Weapon &mdash; Emotion (CL)</option>
+                <option value="T">Targeting / Expertise</option>
+              </select>
+            </div>
+            <div class="sheet-panel-field">
+              <label title="To-hit bonus: Targeting/Expertise systems add this to every weapon; on a weapon it's a per-weapon mod">+To-Hit:</label>
+              <input type="number" name="attr_vsys_tohit" value="0" style="width:50px !important;" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Damage type used for armor/force-field; set on import">Dmg Type:</label>
+              <input type="text" name="attr_vsys_dmgtype" readonly value="" style="width:90px !important;" />
+            </div>
+          </div>
         </div>
       </fieldset>
     </div>
