@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.43 - Vehicle Layout: collapsible, two-column Key, 12-col grid */
+/* Mighty Protectors Character Sheet CSS v44.44 - Vehicle systems row: single ATK column (fixed-width button cell) */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -63,7 +63,8 @@
 
 /* Vehsystem arc picker: pure-CSS hex floor-plan + conic-gradient wedge, rotated by facing.
    (Roll20 strips inline <svg>, so the graphic is drawn with clip-path + conic-gradient.) */
-.charsheet .sheet-veh-sys-row .sheet-atk-flag:not(:checked) ~ .sheet-vatk-btn { display: none; }
+.charsheet .sheet-veh-sys-row .sheet-vatk-cell { flex: 0 0 28px; display: inline-flex; align-items: center; justify-content: center; }
+.charsheet .sheet-veh-sys-row .sheet-atk-flag:not(:checked) ~ .sheet-vatk-cell .sheet-vatk-btn { display: none; }
 .charsheet .sheet-arc-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-start; gap: 4px 6px; }
 .charsheet .sheet-arc-txt { font-size: 10px; color: #cdd; margin-right: 5px; }
 .charsheet .sheet-aw, .charsheet .sheet-af { margin: 0 1px 0 0 !important; cursor: pointer; }
