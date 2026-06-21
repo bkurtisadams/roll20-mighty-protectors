@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.72.0 - 2026-06-20
+/* Mighty Protectors Roll20 API Engine v2.73.0 - 2026-06-20
+ * v2.73.0: vehicle Force Fields now honor the Mode selector and read Hardened
+ *   values (vprot_hard_*); getVehicleProtection skips FF/Absorption/Reflection rows
+ *   by mode. (Absorption/Reflection resolution is the next slice.)
  * v2.72.0: VEHICLE FORCE FIELDS now work. A repeating_vehprotection row named
  *   "Force Field" is read as an active FF (getVehicleForceFieldData) and routed
  *   through the same damage FF step as characters: per-hit deflection wall, pool
@@ -478,7 +481,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.60 FILE STARTING");
+log("MP ENGINE v2.73.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -571,9 +574,12 @@ MP.Engine = (function () {
     const hardKey = hardKeyMap[protKey] || null;
 
     rowIds.forEach(rowId => {
-      // Force Field display rows are handled by the active FF mechanic, not as passive armor.
+      // Skip non-passive rows: Force Field / Absorption / Reflection (by mode or legacy name).
       const nameAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_name`);
-      if (nameAttr && (nameAttr.get("current") || "").trim().toLowerCase() === "force field") return;
+      const nm = nameAttr ? (nameAttr.get("current") || "").trim().toLowerCase() : "";
+      const modeAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_mode`);
+      const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
+      if (mode === "forcefield" || mode === "absorption" || mode === "reflection" || nm === "force field") return;
       const protAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_${protKey}`);
       if (!protAttr) return;
       const protValue = protAttr.get("current");
@@ -1829,7 +1835,10 @@ function generateRowID() {
     for (const rowId of rowIds) {
       const nameAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_name`);
       const nm = nameAttr ? (nameAttr.get("current") || "").trim().toLowerCase() : "";
-      if (nm !== "force field") continue;
+      const modeAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_mode`);
+      const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
+      // Treat as a force field if mode says so, or (legacy) the row is named "Force Field"
+      if (mode !== "forcefield" && nm !== "force field") continue;
 
       const brokenAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_broken`);
       if (brokenAttr && brokenAttr.get("current") === "1") continue;
@@ -1837,12 +1846,16 @@ function generateRowID() {
       const accumAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_ff_accum`);
       const accum = num(accumAttr ? accumAttr.get("current") : "0", 0);
 
+      const hardKeyMap = { kinetic: "hard_kinetic", energy: "hard_energy", bio: "hard_bio",
+        entropy: "hard_entropy", psychic: "hard_psychic", other: "hard_other" };
       const protValues = {};
       const hardValues = {};
       CFG.PROT_KEYS.forEach(k => {
         const pa = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_${k}`);
         protValues[k] = parseProtValue(pa ? pa.get("current") : "0").prot;
-        hardValues[k] = 0;
+        const hk = hardKeyMap[k];
+        const ha = hk ? attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_${hk}`) : null;
+        hardValues[k] = ha ? (parseInt(ha.get("current"), 10) || 0) : 0;
       });
 
       const tok = tokenId ? getObj("graphic", tokenId) : null;
@@ -8294,7 +8307,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.66.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.73.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9203,11 +9216,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.72.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.73.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.72.0 READY");
+  log("MP ENGINE v2.73.0 READY");
 });

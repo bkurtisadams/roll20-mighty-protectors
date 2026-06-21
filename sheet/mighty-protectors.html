@@ -1,4 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.39 - Damage moved to cog panel (wide), attack button gated to attack systems, fix doubled name
+<!-- Mighty Protectors Roll20 Character Sheet v44.40 - Vehicle protection settings panel (parity w/ character): mode, FF deflected/left, hardened, absorb fields
+        - vehicle protection rows get a gear panel: Mode (Normal/Force Field/Absorption/Reflection), FF Deflected + Left, Limit, Absorbs To, Hardened per type
+        - recalcVehProtRemaining computes Left = vehicle Power - Deflected; requires engine v2.73.0+
+        - Absorption/Reflection FIELDS present but engine wiring is the next slice; FF deflected/left + hardened are live now
+        v44.39: Damage moved to cog panel (wide), attack button gated to attack systems, fix doubled name
         - editable Damage field moved to cog panel (180px, fits 3d10+2d12); row Damage is now a read-only display of the same attr
         - attack roll button hidden on non-attack systems via vsys_is_attack flag + CSS (attack type P/M/E, has damage dice, or save attack)
         - attack button name passes @{vsys_notes} only (was @{vehicle_name} - @{vsys_notes}); fixes the vehicle name appearing twice on the chat card
@@ -1712,18 +1716,75 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         </tr>
       </table>
       <fieldset class="repeating_vehprotection" style="border:none; padding:0; margin:0;">
-        <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed;">
+        <input type="checkbox" name="attr_options_flag" class="sheet-options-flag" title="Toggle settings panel" />
+        <table style="width:100%; border-collapse:collapse; margin-bottom:0; table-layout:fixed; position:relative;">
           <tr>
-            <td style="width:125px; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_name" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; box-sizing:border-box;" /></td>
-            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_kinetic" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
-            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_energy" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
-            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_bio" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
-            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_entropy" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
-            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_psychic" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
-            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_other" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 5h=hardened, 1/4=invulnerability" /></td>
-            <td style="padding:1px; vertical-align:middle; overflow:hidden;"><input type="text" name="attr_vprot_notes" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; box-sizing:border-box;" /></td>
+            <td style="width:125px; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_name" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; box-sizing:border-box;" title="Name a row 'Force Field' or set Mode in the gear panel" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_kinetic" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 1/4=invulnerability, 1/2=adaptation" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_energy" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 1/4=invulnerability, 1/2=adaptation" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_bio" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 1/4=invulnerability, 1/2=adaptation" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_entropy" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 1/4=invulnerability, 1/2=adaptation" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_psychic" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 1/4=invulnerability, 1/2=adaptation" /></td>
+            <td style="width:32px; text-align:center; padding:1px; vertical-align:middle;"><input type="text" name="attr_vprot_other" value="0" style="width:100%; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; text-align:center; box-sizing:border-box;" title="5=prot, 1/4=invulnerability, 1/2=adaptation" /></td>
+            <td style="padding:1px 50px 1px 1px; vertical-align:middle; overflow:hidden;">
+              <div style="display:flex; align-items:center; gap:2px;">
+                <input type="text" name="attr_vprot_notes" style="flex:1; min-width:0; background:#152035; color:#eaeaea; border:1px solid #3a5070; padding:2px; box-sizing:border-box;" placeholder="Notes..." />
+                <span class="sheet-cog-icon" title="Settings (mode, force field, hardened, absorption)">y</span>
+              </div>
+            </td>
           </tr>
         </table>
+        <div class="sheet-options-panel">
+          <div class="sheet-panel-row" style="margin-top:4px;">
+            <div class="sheet-panel-field">
+              <label title="Normal=passive armor, Force Field=per-hit deflection pool, Absorption/Reflection=saved action">Mode:</label>
+              <select name="attr_vprot_mode" style="width:96px !important;">
+                <option value="normal" selected>Normal</option>
+                <option value="forcefield">Force Field</option>
+                <option value="absorption">Absorption</option>
+                <option value="reflection">Reflection</option>
+              </select>
+            </div>
+            <div class="sheet-panel-field">
+              <label style="color:#3498db;" title="Damage deflected so far this fight (resets on renewal)">Deflected:</label>
+              <input type="text" name="attr_vprot_ff_accum" value="0" maxlength="5" style="width:40px !important; color:#3498db;" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Remaining deflection capacity = vehicle Power - Deflected (auto)">Left:</label>
+              <input type="text" name="attr_vprot_ff_remaining" value="" readonly style="width:44px !important; color:#27ae60;" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Max points from the Absorption/Reflection Effect table">Limit:</label>
+              <input type="text" name="attr_vprot_limit" maxlength="3" style="width:30px !important;" />
+            </div>
+          </div>
+          <div class="sheet-panel-row">
+            <div class="sheet-panel-field">
+              <label title="Where absorbed points go (Absorption)">Absorbs To:</label>
+              <select name="attr_vprot_absorbs_to" style="width:80px !important;">
+                <option value="hits" selected>Hits</option>
+                <option value="power">Power</option>
+                <option value="split">Split 50/50</option>
+                <option value="st">ST</option>
+                <option value="en">EN</option>
+                <option value="ag">AG</option>
+                <option value="in">IN</option>
+                <option value="cl">CL</option>
+              </select>
+            </div>
+          </div>
+          <div class="sheet-panel-row">
+            <div class="sheet-panel-field">
+              <label style="color:#f39c12;" title="Hardened points negate Armor Piercing (1 negates 1 AP)">Hardened:</label>
+            </div>
+            <div class="sheet-panel-field"><label title="vs Kinetic">Kin</label><input type="text" name="attr_vprot_hard_kinetic" value="0" maxlength="2" style="width:26px !important;" /></div>
+            <div class="sheet-panel-field"><label title="vs Energy">Eng</label><input type="text" name="attr_vprot_hard_energy" value="0" maxlength="2" style="width:26px !important;" /></div>
+            <div class="sheet-panel-field"><label title="vs Biochemical">Bio</label><input type="text" name="attr_vprot_hard_bio" value="0" maxlength="2" style="width:26px !important;" /></div>
+            <div class="sheet-panel-field"><label title="vs Entropy">Ent</label><input type="text" name="attr_vprot_hard_entropy" value="0" maxlength="2" style="width:26px !important;" /></div>
+            <div class="sheet-panel-field"><label title="vs Psychic">Psy</label><input type="text" name="attr_vprot_hard_psychic" value="0" maxlength="2" style="width:26px !important;" /></div>
+            <div class="sheet-panel-field"><label title="vs Other">Oth</label><input type="text" name="attr_vprot_hard_other" value="0" maxlength="2" style="width:26px !important;" /></div>
+          </div>
+        </div>
       </fieldset>
     </div>
       <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
@@ -4834,6 +4895,28 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   on("change:repeating_vehsystems:vsys_type change:repeating_vehsystems:vsys_tohit change:repeating_vehsystems:vsys_dmg change:repeating_vehsystems:vsys_is_save", function() {
     recalcVehAttacks();
   });
+
+  // Force Field "Left" = vehicle Power - Deflected, per vehprotection row
+  function recalcVehProtRemaining() {
+    getAttrs(["vehicle_power"], function(vv) {
+      var pw = parseInt(vv.vehicle_power) || 0;
+      getSectionIDs("repeating_vehprotection", function(ids) {
+        if (!ids.length) return;
+        var f = [];
+        ids.forEach(function(id) { f.push("repeating_vehprotection_" + id + "_vprot_ff_accum"); });
+        getAttrs(f, function(rv) {
+          var upd = {};
+          ids.forEach(function(id) {
+            var p = "repeating_vehprotection_" + id + "_";
+            var acc = parseInt(rv[p + "vprot_ff_accum"]) || 0;
+            upd[p + "vprot_ff_remaining"] = Math.max(0, pw - acc);
+          });
+          setAttrs(upd, {silent: true});
+        });
+      });
+    });
+  }
+  on("change:vehicle_power change:repeating_vehprotection:vprot_ff_accum sheet:opened", recalcVehProtRemaining);
 
   // When spaces changes on any row, populate that row + recalc totals
   on("change:repeating_vehsystems:vsys_spaces", function(eventInfo) {
