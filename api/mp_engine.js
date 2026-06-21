@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.73.0 - 2026-06-20
+/* Mighty Protectors Roll20 API Engine v2.74.0 - 2026-06-20
+ * v2.74.0: vehicle ABSORPTION and REFLECTION now resolve. getAbsorptionReflection
+ *   reads the vehprotection section for vehicle defenders; the absorb/reflect action
+ *   buttons are now offered to vehicles (were excluded); cmdAbsorb/cmdReflect already
+ *   apply to vehicle Hits/Power, and the BC-stat absorb target maps to vehicle_* attrs.
  * v2.73.0: vehicle Force Fields now honor the Mode selector and read Hardened
  *   values (vprot_hard_*); getVehicleProtection skips FF/Absorption/Reflection rows
  *   by mode. (Absorption/Reflection resolution is the next slice.)
@@ -481,7 +485,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.73.0 FILE STARTING");
+log("MP ENGINE v2.74.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1394,37 +1398,40 @@ function generateRowID() {
     
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
     const atkSub = (atkSubtype || "").trim().toLowerCase();
+    const veh = isVehicleMode(charId);
+    const sec = veh ? "repeating_vehprotection" : "repeating_protection";
+    const pre = veh ? "vprot" : "prot";
     
     // Get all protection row IDs
     const rowIds = new Set();
+    const rowRe = new RegExp("^" + sec + "_([^_]+)_");
     attrs.forEach(a => {
-      const n = a.get("name");
-      const match = n.match(/^repeating_protection_([^_]+)_/);
+      const match = a.get("name").match(rowRe);
       if (match) rowIds.add(match[1]);
     });
     
     for (const rowId of rowIds) {
       // Check if this row is broken
-      const brokenAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_broken`);
+      const brokenAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_broken`);
       if (brokenAttr && brokenAttr.get("current") === "1") continue;
       
       // Check if this row is active
-      const stateAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_state`);
+      const stateAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_state`);
       if (stateAttr && stateAttr.get("current") === "Off") continue;
       
       // Check mode - only interested in Absorption or Reflection
-      const modeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_mode`);
+      const modeAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_mode`);
       const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
       if (mode !== "absorption" && mode !== "reflection") continue;
       
       // Check if this row has protection for this damage type
-      const protAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_${protKey}`);
+      const protAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_${protKey}`);
       if (!protAttr) continue;
       const protValue = protAttr.get("current");
       if (!protValue || protValue === "0" || protValue === "") continue;
       
       // Check subtype matching
-      const subtypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_subtype`);
+      const subtypeAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_subtype`);
       const protSubtype = subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "";
       
       let subtypeMatches = false;
@@ -1440,10 +1447,10 @@ function generateRowID() {
       if (!subtypeMatches) continue;
       
       // Found a matching Absorption/Reflection row
-      const limitAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_limit`);
-      const absorbsToAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_absorbs_to`);
-      const absorbsPowerAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_absorbs_power`);
-      const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+      const limitAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_limit`);
+      const absorbsToAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_absorbs_to`);
+      const absorbsPowerAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_absorbs_power`);
+      const nameAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_name`);
       
       return {
         mode: mode,
@@ -3528,7 +3535,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Determine absorption target
     const absorbsTo = absRef.absorbsTo;
-    const bcStats = { st: "strength", en: "endurance", ag: "agility", "in": "intelligence", cl: "cool" };
+    const bcStats = absDefIsVeh
+      ? { st: "vehicle_st", en: "vehicle_en", ag: "vehicle_ag", "in": "vehicle_in", cl: "vehicle_cl" }
+      : { st: "strength", en: "endurance", ag: "agility", "in": "intelligence", cl: "cool" };
     
     let absorptionDesc = "";
     let hits1 = hitsAfterDmg;
@@ -4438,8 +4447,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       buttons += ` [KB](!mp kb --id ${rollId})`;
     }
     
-    // Check for Absorption or Reflection (not for vehicles)
-    if (!defIsVeh && rec && rec.defCharId && rec.protKey) {
+    // Check for Absorption or Reflection
+    if (rec && rec.defCharId && rec.protKey) {
       const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
       if (absRef) {
         if (absRef.mode === "absorption") {
@@ -4558,8 +4567,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       buttons += ` [KB](!mp kb --id ${rollId})`;
     }
     
-    // Check for Absorption or Reflection (requires saved action, not for vehicles)
-    if (!defIsVeh && rec && rec.defCharId && rec.protKey) {
+    // Check for Absorption or Reflection (requires saved action)
+    if (rec && rec.defCharId && rec.protKey) {
       const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
       if (absRef) {
         if (absRef.mode === "absorption") {
@@ -8307,7 +8316,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.73.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.74.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9216,11 +9225,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.73.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.74.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.73.0 READY");
+  log("MP ENGINE v2.74.0 READY");
 });
