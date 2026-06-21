@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.00 - Vehicle tab refinements */
+/* Mighty Protectors Character Sheet CSS v44.43 - Vehicle Layout: collapsible, two-column Key, 12-col grid */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -1040,4 +1040,54 @@
 .charsheet {
   scrollbar-width: thin;
   scrollbar-color: #2a2040 #0d0d1a;
+}
+/* ========================================
+   VEHICLE LAYOUT (deck plan) grid + Key
+   ======================================== */
+.sheet-vehicle-content .sheet-vlay-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 24px);
+  gap: 0;
+  width: max-content;
+  border: 1px solid #3a5070;
+  background: #0d0d1a;
+}
+.sheet-vehicle-content input.sheet-vlay-cell {
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 0 !important;
+  background: transparent !important;
+  color: #8be9fd !important;
+  border: 1px solid #2a3a5a !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  text-align: center;
+  text-transform: uppercase;
+  font-family: monospace !important;
+  font-size: 9px !important;
+  font-weight: bold;
+  box-sizing: border-box;
+}
+.sheet-vehicle-content input.sheet-vlay-cell:focus {
+  background: #152035 !important;
+  outline: 1px solid #f4d03f !important;
+  outline-offset: -1px;
+}
+.sheet-vehicle-content input.sheet-vlay-c5 {
+  border-right: 2px solid #5b7aa5 !important;
+}
+.sheet-vehicle-content input.sheet-vlay-r5 {
+  border-bottom: 2px solid #5b7aa5 !important;
+}
+.sheet-vehicle-content input.sheet-vlay-key-abbr {
+  text-transform: uppercase;
+}
+.sheet-vehicle-content .sheet-vlay-key-wrap .repcontainer {
+  column-count: 2;
+  column-gap: 6px;
+}
+.sheet-vehicle-content .sheet-vlay-key-wrap .repcontainer > .repitem {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
 }

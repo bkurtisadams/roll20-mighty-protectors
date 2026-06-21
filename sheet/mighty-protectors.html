@@ -1,4 +1,16 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.40 - Vehicle protection settings panel (parity w/ character): mode, FF deflected/left, hardened, absorb fields
+<!-- Mighty Protectors Roll20 Character Sheet v44.43 - Vehicle Layout: collapsible toggle, two-column Key, +1 5' square
+        - Vehicle Layout & Key wrapped in a <details open> dropdown toggle (collapse/expand the whole section)
+        - VEHICLE KEY now flows in two columns (column-count:2) to match the printed record sheet's key block
+        - layout grid widened by one 5' square (10 -> 12 columns; 1 square = 2.5', so +2 cells); cells 28px -> 24px
+        v44.42: Vehicle Layout: two-column (Key left / grid right), 2.5' scale
+        - Vehicle Layout + Key are now one two-column panel: VEHICLE KEY (left, fills width) beside the grid (right)
+        - corrected scale: 1 square = 1 system space (2.5'), with heavy gridlines every 2 cells marking 5' (matches GCC builder)
+        - grid cells tagged sheet-vlay-c5 / sheet-vlay-r5 for the 5' heavy-line borders
+        v44.41: Vehicle Layout (deck plan) + Vehicle Key
+        - new VEHICLE LAYOUT section on the vehicle tab: a 10x12 graph-paper grid of short label cells
+        - new VEHICLE KEY repeating section (abbr + description) to legend the grid labels, mirroring the printed record sheet
+        - layout/key are reference-only (no engine interaction); abbreviations are free text typed to match the Key
+        v44.40: Vehicle protection settings panel (parity w/ character): mode, FF deflected/left, hardened, absorb fields
         - vehicle protection rows get a gear panel: Mode (Normal/Force Field/Absorption/Reflection), FF Deflected + Left, Limit, Absorbs To, Hardened per type
         - recalcVehProtRemaining computes Left = vehicle Power - Deflected; requires engine v2.73.0+
         - Absorption/Reflection FIELDS present but engine wiring is the next slice; FF deflected/left + hardened are live now
@@ -2073,6 +2085,182 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
       <span style="color:#f4d03f; font-weight:bold; font-size:11px;">NOTES</span>
       <textarea name="attr_vehicle_notes" style="width:100%; height:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px; margin-top:3px; box-sizing:border-box; font-size:11px; font-family:Arial,sans-serif; resize:vertical;" placeholder="Vehicle modifiers, special features, travel abilities, appearance, etc."></textarea>
+    </div>
+
+
+    <!-- VEHICLE LAYOUT (deck plan) + KEY -->
+    <div style="background:#1e1e38; padding:6px; margin-bottom:3px; border-radius:4px;">
+      <details open>
+        <summary style="color:#f4d03f; font-weight:bold; font-size:11px; cursor:pointer;">VEHICLE LAYOUT &amp; KEY</summary>
+        <div style="display:flex; gap:8px; align-items:flex-start; margin-top:5px;">
+
+          <!-- LEFT: VEHICLE KEY (two columns) -->
+          <div style="flex:1 1 auto; min-width:0;">
+            <div style="font-size:11px; color:#f4d03f; font-weight:bold; border-bottom:1px solid #2a3a5a; padding-bottom:1px; margin-bottom:2px;">VEHICLE KEY</div>
+            <div class="sheet-vlay-key-wrap">
+              <fieldset class="repeating_vehkey" style="border:none; padding:0; margin:0;">
+                <div class="sheet-vlay-key-row" style="display:flex; gap:3px; align-items:center; padding:1px 0; border-bottom:1px solid #1a1428;">
+                  <input type="text" name="attr_vkey_abbr" maxlength="4" class="sheet-vlay-key-abbr" style="width:40px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px; font-weight:bold; text-transform:uppercase;" placeholder="SW" />
+                  <input type="text" name="attr_vkey_desc" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;" placeholder="S. Weapon (buzz saw)" />
+                </div>
+              </fieldset>
+            </div>
+          </div>
+
+          <!-- RIGHT: VEHICLE LAYOUT GRID -->
+          <div style="flex:0 0 auto;">
+            <div style="font-size:11px; color:#f4d03f; font-weight:bold; margin-bottom:3px;">VEHICLE LAYOUT</div>
+            <div class="sheet-vlay-grid">
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_11" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_0" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_1" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_2" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_3" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_4" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_5" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_6" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_7" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_8" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_9" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_10" maxlength="4" />
+              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_11" maxlength="4" />
+            </div>
+            <div style="color:#888; font-size:9px; margin-top:3px; line-height:1.3;">1 square = 1 system space (2.5&prime;) &bull; heavy lines = 5&prime;<br />type a Key abbreviation into each square</div>
+          </div>
+
+        </div>
+      </details>
     </div>
 
     <!-- MODIFIERS REFERENCE -->
