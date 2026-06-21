@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.71.3 - 2026-06-20
+/* Mighty Protectors Roll20 API Engine v2.72.0 - 2026-06-20
+ * v2.72.0: VEHICLE FORCE FIELDS now work. A repeating_vehprotection row named
+ *   "Force Field" is read as an active FF (getVehicleForceFieldData) and routed
+ *   through the same damage FF step as characters: per-hit deflection wall, pool
+ *   capacity = vehicle Power, accum in vprot_ff_accum, collapse sets vprot_broken,
+ *   AP reduces it. setFFAccum/deactivateFF are now section-aware.
  * v2.71.3: Armor Piercing now reduces Force Field protection too (RAW: AP ignores
  *   points of protection vs its damage type; a force field IS protection). AP is
  *   spent FF -> Armor -> Invulnerability (outermost first; preserves the rule's
@@ -1811,16 +1816,65 @@ function generateRowID() {
     
     return null;
   }
-  
-  // Update Force Field accumulated deflection on the sheet
+
+  // Vehicle Force Field: a repeating_vehprotection row named "Force Field".
+  // Mirrors the character FF mechanic (per-hit deflection wall + Power-based pool).
+  function getVehicleForceFieldData(charId, tokenId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const rowIds = new Set();
+    attrs.forEach(a => {
+      const m = a.get("name").match(/^repeating_vehprotection_([^_]+)_/);
+      if (m) rowIds.add(m[1]);
+    });
+    for (const rowId of rowIds) {
+      const nameAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_name`);
+      const nm = nameAttr ? (nameAttr.get("current") || "").trim().toLowerCase() : "";
+      if (nm !== "force field") continue;
+
+      const brokenAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_broken`);
+      if (brokenAttr && brokenAttr.get("current") === "1") continue;
+
+      const accumAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_ff_accum`);
+      const accum = num(accumAttr ? accumAttr.get("current") : "0", 0);
+
+      const protValues = {};
+      const hardValues = {};
+      CFG.PROT_KEYS.forEach(k => {
+        const pa = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_${k}`);
+        protValues[k] = parseProtValue(pa ? pa.get("current") : "0").prot;
+        hardValues[k] = 0;
+      });
+
+      const tok = tokenId ? getObj("graphic", tokenId) : null;
+      const threshold = getVehiclePower(tok, charId);
+
+      return {
+        hasFF: true,
+        isVehicle: true,
+        rowId: rowId,
+        name: nameAttr ? nameAttr.get("current") : "Force Field",
+        isGear: false,
+        accum: accum,
+        threshold: threshold,
+        remaining: Math.max(0, threshold - accum),
+        protValues: protValues,
+        hardValues: hardValues,
+        subtype: "",
+        pr: 0
+      };
+    }
+    return null;
+  }
+
+  // Update Force Field accumulated deflection on the sheet (character or vehicle section)
   function setFFAccum(charId, rowId, newAccum) {
-    const attr = findObjs({ _type: "attribute", _characterid: charId,
-      name: `repeating_protection_${rowId}_prot_ff_accum` })[0];
+    const veh = isVehicleMode(charId);
+    const nm = veh ? `repeating_vehprotection_${rowId}_vprot_ff_accum` : `repeating_protection_${rowId}_prot_ff_accum`;
+    const attr = findObjs({ _type: "attribute", _characterid: charId, name: nm })[0];
     if (attr) {
       attr.set("current", String(newAccum));
     } else {
-      createObj("attribute", { characterid: charId,
-        name: `repeating_protection_${rowId}_prot_ff_accum`, current: String(newAccum) });
+      createObj("attribute", { characterid: charId, name: nm, current: String(newAccum) });
     }
   }
   
@@ -1849,6 +1903,15 @@ function generateRowID() {
   
   // Deactivate a Force Field (set state to Off) and clear aura
   function deactivateFF(charId, rowId, tok) {
+    if (isVehicleMode(charId)) {
+      const ba = findObjs({ _type: "attribute", _characterid: charId,
+        name: `repeating_vehprotection_${rowId}_vprot_broken` })[0];
+      if (ba) ba.set("current", "1");
+      else createObj("attribute", { characterid: charId,
+        name: `repeating_vehprotection_${rowId}_vprot_broken`, current: "1" });
+      updateFFAura(tok, null);
+      return;
+    }
     const attr = findObjs({ _type: "attribute", _characterid: charId,
       name: `repeating_protection_${rowId}_prot_state` })[0];
     if (attr) attr.set("current", "Off");
@@ -4610,8 +4673,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const bypassProt = mode.includes("noprot");
     
     // ---- STEP 1: FORCE FIELD (applied first, before armor) ----
-    // Vehicle mode: skip character's FF (vehicle protection is self-contained)
-    const ffData = getForceFieldData(defChar.id, rec.defTokenId);
+    // Vehicle defenders store their FF as a repeating_vehprotection row named "Force Field".
+    const ffData = defIsVehicle
+      ? getVehicleForceFieldData(defChar.id, rec.defTokenId)
+      : getForceFieldData(defChar.id, rec.defTokenId);
     let ffActive = false;
     let ffProt = 0;
     let ffDeflected = 0;
@@ -9138,11 +9203,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.71.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.72.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.71.3 READY");
+  log("MP ENGINE v2.72.0 READY");
 });
