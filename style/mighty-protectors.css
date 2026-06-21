@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.46 - Per-system Label field + Add-to-Key button */
+/* Mighty Protectors Character Sheet CSS v44.47 - Add-to-Key button (checkbox-backed) + label-input */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -83,11 +83,13 @@
 }
 .charsheet .sheet-vsys-label-inp { text-transform: uppercase; }
 .charsheet .sheet-add-key-btn {
+  display: inline-block; user-select: none;
   background: #2e7d52; color: #eaeaea; border: 1px solid #2a2040; border-radius: 4px;
   padding: 2px 8px; font-size: 10px; font-weight: bold; line-height: 14px; height: auto;
   cursor: pointer; background-image: none; box-shadow: none;
 }
 .charsheet .sheet-add-key-btn:hover { filter: brightness(1.15); }
+.charsheet .sheet-add-key-btn .sheet-addkey-trigger { display: none !important; }
 .charsheet .sheet-arc-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-start; gap: 4px 6px; }
 .charsheet .sheet-arc-txt { font-size: 10px; color: #cdd; margin-right: 5px; }
 .charsheet .sheet-aw, .charsheet .sheet-af { margin: 0 1px 0 0 !important; cursor: pointer; }

@@ -1,4 +1,7 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.46 - Per-system Label field + one-way "Add to Key" action
+<!-- Mighty Protectors Roll20 Character Sheet v44.47 - Fix: "Add to Key" now fires (change-event trigger instead of action button)
+        - the v44.46 clicked:repeating action button did not fire; replaced with a checkbox-backed button (attr_vsys_addkey)
+        - worker on("change:repeating_vehsystems:vsys_addkey") creates the repeating_vehkey row, then resets the trigger to 0
+        v44.46: Per-system Label field + one-way "Add to Key" action
         - cog panel: new Label field (attr_vsys_label, short code like SW/L/T1) used for the Vehicle Layout grid + Vehicle Key
         - cog panel: "+ Add to Key" action button appends a Vehicle Key row from this system's Label + description (non-destructive)
         - worker on("clicked:repeating_vehsystems:add_to_key"): generateRowID -> new repeating_vehkey row (vkey_abbr=label, vkey_desc=notes)
@@ -1877,7 +1880,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
               <input type="text" name="attr_vsys_label" maxlength="4" class="sheet-vsys-label-inp" style="width:58px !important;" placeholder="SW" />
             </div>
             <div class="sheet-panel-field">
-              <button type="action" name="act_add_to_key" class="sheet-add-key-btn" title="Append a Vehicle Key row from this system's Label + description. Does not overwrite existing Key rows.">+ Add to Key</button>
+              <label class="sheet-add-key-btn" title="Append a Vehicle Key row from this system's Label + description. Does not overwrite existing Key rows."><input type="checkbox" name="attr_vsys_addkey" value="1" class="sheet-addkey-trigger" />+ Add to Key</label>
             </div>
           </div>
           <div class="sheet-panel-row">
@@ -4977,16 +4980,19 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   on("sheet:opened", function() { calcVehicle(false); calcVehicleTotals(); recalcAllVehSystems(); updateBaseLabel(); });
 
   // One-way "Add to Key": append a Vehicle Key row from this system's Label + description (non-destructive).
-  on("clicked:repeating_vehsystems:add_to_key", function(eventInfo) {
-    var rid = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_add_to_key", "");
+  // Triggered by a checkbox styled as a button (change: events fire reliably in repeating sections); resets itself after.
+  on("change:repeating_vehsystems:vsys_addkey", function(eventInfo) {
+    var rid = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_vsys_addkey", "");
     var pfx = "repeating_vehsystems_" + rid + "_";
-    getAttrs([pfx + "vsys_label", pfx + "vsys_notes"], function(v) {
+    getAttrs([pfx + "vsys_addkey", pfx + "vsys_label", pfx + "vsys_notes"], function(v) {
+      if (String(v[pfx + "vsys_addkey"]) !== "1") return;   // only act when toggled on
       var abbr = String(v[pfx + "vsys_label"] || "").trim();
       var desc = String(v[pfx + "vsys_notes"] || "").trim();
       var newRow = generateRowID();
       var o = {};
       o["repeating_vehkey_" + newRow + "_vkey_abbr"] = abbr;
       o["repeating_vehkey_" + newRow + "_vkey_desc"] = desc;
+      o[pfx + "vsys_addkey"] = "0";    // reset trigger so it can fire again
       setAttrs(o);
     });
   });
