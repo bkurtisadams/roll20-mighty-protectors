@@ -1,4 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.38 - Vehicle attack card: show +To-Hit / Targeting in the to-hit hover breakdown
+<!-- Mighty Protectors Roll20 Character Sheet v44.39 - Damage moved to cog panel (wide), attack button gated to attack systems, fix doubled name
+        - editable Damage field moved to cog panel (180px, fits 3d10+2d12); row Damage is now a read-only display of the same attr
+        - attack roll button hidden on non-attack systems via vsys_is_attack flag + CSS (attack type P/M/E, has damage dice, or save attack)
+        - attack button name passes @{vsys_notes} only (was @{vehicle_name} - @{vsys_notes}); fixes the vehicle name appearing twice on the chat card
+        v44.38: Vehicle attack card: show +To-Hit / Targeting in the to-hit hover breakdown
         - attack button now also passes wpnmod (vsys_tohit) and targbonus (vehicle_targeting_bonus) for the card breakdown; requires engine v2.71.1+
         v44.37: Fix: restore Modifiers/Grants/Arc rows dropped from cog panel in v44.36
         - v44.36 insertion accidentally removed the Modifiers row wrapper, closing the options-panel early and ejecting Grants + Arc; wrapper restored
@@ -1767,8 +1771,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="text" name="attr_vsys_profile" readonly style="width:38px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" />
           <input type="text" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits (— = integral, can't be attacked)" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
-          <input type="text" name="attr_vsys_dmg" value="0" style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage dice (e.g. 4d10)" />
-          <button type="roll" class="sheet-mp-rollbtn" name="roll_vsys_dmg" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{vsys_rowid}}} {{atype=@{vsys_atype}}} {{name=@{vehicle_name} - @{vsys_notes}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{hitmod=[[0+@{vsys_tohit}+@{vehicle_targeting_bonus}]]}} {{wpnmod=@{vsys_tohit}}} {{targbonus=@{vehicle_targeting_bonus}}} {{target=[[0+@{vsys_tohit_num}-((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))-@{target|Target|bar3|0}]]}} {{damage=[[@{vsys_dmg}]]}} {{dmgexpr=@{vsys_dmg}}} {{type=@{vsys_dmgtype}}} {{deftype=@{vsys_atk_full}}} {{pr=@{vsys_pr}}} {{ch=@{vsys_charges}}} {{range=@{vsys_range}}} {{ap=@{vsys_ap}}} {{kb=@{vsys_kb}}} {{area=@{vsys_area}}} {{is_save=@{vsys_is_save}}} {{savebc=@{vsys_save_bc}}} {{savemod=@{vsys_save_mod}}} {{recovery=@{vsys_save_rec}}} {{rectime=@{vsys_save_rec_time}}} {{no_damage=@{vsys_no_damage}}} {{autofire=@{vsys_autofire}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3|0}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's attack (to-hit + damage)"></button>
+          <input type="text" name="attr_vsys_dmg" value="0" readonly style="width:30px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:10px;" title="Damage (edit in the gear/settings panel)" />
+          <input type="checkbox" class="sheet-atk-flag" name="attr_vsys_is_attack" value="1" style="display:none;" />
+          <button type="roll" class="sheet-mp-rollbtn sheet-vatk-btn" name="roll_vsys_dmg" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{vsys_rowid}}} {{atype=@{vsys_atype}}} {{name=@{vsys_notes}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{hitmod=[[0+@{vsys_tohit}+@{vehicle_targeting_bonus}]]}} {{wpnmod=@{vsys_tohit}}} {{targbonus=@{vehicle_targeting_bonus}}} {{target=[[0+@{vsys_tohit_num}-((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))-@{target|Target|bar3|0}]]}} {{damage=[[@{vsys_dmg}]]}} {{dmgexpr=@{vsys_dmg}}} {{type=@{vsys_dmgtype}}} {{deftype=@{vsys_atk_full}}} {{pr=@{vsys_pr}}} {{ch=@{vsys_charges}}} {{range=@{vsys_range}}} {{ap=@{vsys_ap}}} {{kb=@{vsys_kb}}} {{area=@{vsys_area}}} {{is_save=@{vsys_is_save}}} {{savebc=@{vsys_save_bc}}} {{savemod=@{vsys_save_mod}}} {{recovery=@{vsys_save_rec}}} {{rectime=@{vsys_save_rec_time}}} {{no_damage=@{vsys_no_damage}}} {{autofire=@{vsys_autofire}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3|0}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's attack (to-hit + damage)"></button>
           <input type="hidden" name="attr_vsys_atype" value="P" />
           <input type="hidden" name="attr_vsys_is_physical" value="1" />
           <input type="hidden" name="attr_vsys_is_mental" value="0" />
@@ -1783,6 +1788,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         </div>
         <div class="sheet-options-panel">
           <div class="sheet-panel-row" style="margin-top:6px;">
+            <div class="sheet-panel-field">
+              <label title="Damage dice expression, e.g. 3d10+2d12. Long strings are fine here.">Damage:</label>
+              <input type="text" name="attr_vsys_dmg" value="0" style="width:180px !important;" placeholder="e.g. 3d10+2d12" />
+            </div>
+          </div>
+          <div class="sheet-panel-row">
             <div class="sheet-panel-field">
               <label>Type:</label>
               <select name="attr_vsys_type" title="To-hit basis — Phys=AG, Ment=IN, Emo=CL; Targeting adds its +To-Hit to every weapon" style="width:96px !important;">
@@ -4783,7 +4794,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var fields = [];
         ids.forEach(function(id) {
           var p = "repeating_vehsystems_" + id + "_";
-          fields.push(p + "vsys_type", p + "vsys_tohit");
+          fields.push(p + "vsys_type", p + "vsys_tohit", p + "vsys_dmg", p + "vsys_is_save");
         });
         getAttrs(fields, function(rv) {
           var targBonus = 0;
@@ -4805,6 +4816,13 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             upd[p + "vsys_is_mental"]   = isMental ? "1" : "0";
             upd[p + "vsys_atype"]       = isMental ? (t === "E" ? "E" : "M") : "P";
             upd[p + "vsys_atk_full"]    = (t === "M") ? "Mental" : (t === "E" ? "Emotion" : "Physical");
+            // Show the attack button only for systems that actually attack:
+            // an attack type (P/M/E), a damage dice expression, or a save attack.
+            var dmgStr = String(rv[p + "vsys_dmg"] || "").trim();
+            var hasDmg = /d\s*\d/i.test(dmgStr) || (parseFloat(dmgStr) > 0);
+            var isSave = rv[p + "vsys_is_save"] === "1";
+            var isAtk = (t === "P" || t === "M" || t === "E") || hasDmg || isSave;
+            upd[p + "vsys_is_attack"] = isAtk ? "1" : "0";
           });
           setAttrs(upd, {silent: true});
         });
@@ -4813,7 +4831,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   }
 
   // To-hit type or per-weapon mod changed (Targeting rows affect every weapon) -> recompute all rows
-  on("change:repeating_vehsystems:vsys_type change:repeating_vehsystems:vsys_tohit", function() {
+  on("change:repeating_vehsystems:vsys_type change:repeating_vehsystems:vsys_tohit change:repeating_vehsystems:vsys_dmg change:repeating_vehsystems:vsys_is_save", function() {
     recalcVehAttacks();
   });
 
