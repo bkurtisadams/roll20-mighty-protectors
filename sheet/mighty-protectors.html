@@ -1,4 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.45 - ATK button hover tooltip shows damage (cog-panel value)
+<!-- Mighty Protectors Roll20 Character Sheet v44.46 - Per-system Label field + one-way "Add to Key" action
+        - cog panel: new Label field (attr_vsys_label, short code like SW/L/T1) used for the Vehicle Layout grid + Vehicle Key
+        - cog panel: "+ Add to Key" action button appends a Vehicle Key row from this system's Label + description (non-destructive)
+        - worker on("clicked:repeating_vehsystems:add_to_key"): generateRowID -> new repeating_vehkey row (vkey_abbr=label, vkey_desc=notes)
+        v44.45: ATK button hover tooltip shows damage (cog-panel value)
         - hovering the ATK button now pops a small tooltip reading "Dmg <value>" (read-only mirror of the cog vsys_dmg field)
         - tooltip gated to attack systems via the existing is_attack flag; styled like the character to-hit/DOT tooltips
         v44.44: Vehicle systems row: "Damage" column -> single "ATK" column
@@ -1868,6 +1872,15 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         </div>
         <div class="sheet-options-panel">
           <div class="sheet-panel-row" style="margin-top:6px;">
+            <div class="sheet-panel-field">
+              <label title="Short code for this system, used on the Vehicle Layout grid and Vehicle Key (e.g. SW, L, T1)">Label:</label>
+              <input type="text" name="attr_vsys_label" maxlength="4" class="sheet-vsys-label-inp" style="width:58px !important;" placeholder="SW" />
+            </div>
+            <div class="sheet-panel-field">
+              <button type="action" name="act_add_to_key" class="sheet-add-key-btn" title="Append a Vehicle Key row from this system's Label + description. Does not overwrite existing Key rows.">+ Add to Key</button>
+            </div>
+          </div>
+          <div class="sheet-panel-row">
             <div class="sheet-panel-field">
               <label title="Damage dice expression, e.g. 3d10+2d12. Long strings are fine here.">Damage:</label>
               <input type="text" name="attr_vsys_dmg" value="0" style="width:180px !important;" placeholder="e.g. 3d10+2d12" />
@@ -4962,6 +4975,21 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     recalcAllVehSystems(); calcVehicleTotals(); updateBaseLabel();
   });
   on("sheet:opened", function() { calcVehicle(false); calcVehicleTotals(); recalcAllVehSystems(); updateBaseLabel(); });
+
+  // One-way "Add to Key": append a Vehicle Key row from this system's Label + description (non-destructive).
+  on("clicked:repeating_vehsystems:add_to_key", function(eventInfo) {
+    var rid = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_add_to_key", "");
+    var pfx = "repeating_vehsystems_" + rid + "_";
+    getAttrs([pfx + "vsys_label", pfx + "vsys_notes"], function(v) {
+      var abbr = String(v[pfx + "vsys_label"] || "").trim();
+      var desc = String(v[pfx + "vsys_notes"] || "").trim();
+      var newRow = generateRowID();
+      var o = {};
+      o["repeating_vehkey_" + newRow + "_vkey_abbr"] = abbr;
+      o["repeating_vehkey_" + newRow + "_vkey_desc"] = desc;
+      setAttrs(o);
+    });
+  });
 
   // Helper: find best matching key from sorted table keys
   function updateBaseLabel() {

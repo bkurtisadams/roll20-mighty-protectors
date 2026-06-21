@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.45 - ATK button hover tooltip (damage) */
+/* Mighty Protectors Character Sheet CSS v44.46 - Per-system Label field + Add-to-Key button */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -81,6 +81,13 @@
   content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
   border-width: 5px; border-style: solid; border-color: #e63946 transparent transparent transparent;
 }
+.charsheet .sheet-vsys-label-inp { text-transform: uppercase; }
+.charsheet .sheet-add-key-btn {
+  background: #2e7d52; color: #eaeaea; border: 1px solid #2a2040; border-radius: 4px;
+  padding: 2px 8px; font-size: 10px; font-weight: bold; line-height: 14px; height: auto;
+  cursor: pointer; background-image: none; box-shadow: none;
+}
+.charsheet .sheet-add-key-btn:hover { filter: brightness(1.15); }
 .charsheet .sheet-arc-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-start; gap: 4px 6px; }
 .charsheet .sheet-arc-txt { font-size: 10px; color: #cdd; margin-right: 5px; }
 .charsheet .sheet-aw, .charsheet .sheet-af { margin: 0 1px 0 0 !important; cursor: pointer; }
