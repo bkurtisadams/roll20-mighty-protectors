@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.44 - Vehicle systems row: single ATK column (fixed-width button cell) */
+/* Mighty Protectors Character Sheet CSS v44.45 - ATK button hover tooltip (damage) */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -63,8 +63,24 @@
 
 /* Vehsystem arc picker: pure-CSS hex floor-plan + conic-gradient wedge, rotated by facing.
    (Roll20 strips inline <svg>, so the graphic is drawn with clip-path + conic-gradient.) */
-.charsheet .sheet-veh-sys-row .sheet-vatk-cell { flex: 0 0 28px; display: inline-flex; align-items: center; justify-content: center; }
+.charsheet .sheet-veh-sys-row .sheet-vatk-cell { flex: 0 0 28px; display: inline-flex; align-items: center; justify-content: center; position: relative; }
 .charsheet .sheet-veh-sys-row .sheet-atk-flag:not(:checked) ~ .sheet-vatk-cell .sheet-vatk-btn { display: none; }
+.charsheet .sheet-vatk-tip {
+  display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  background: #2b2b3d; color: #eaeaea; border: 1px solid #e63946; border-radius: 4px;
+  padding: 3px 7px; font-size: 9px; white-space: nowrap; z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4); align-items: center; gap: 4px;
+}
+.charsheet .sheet-veh-sys-row .sheet-atk-flag:checked ~ .sheet-vatk-cell:hover .sheet-vatk-tip { display: inline-flex; }
+.charsheet .sheet-vatk-tip-val {
+  background: transparent !important; border: none !important; color: #ff8a8a !important;
+  padding: 0 !important; margin: 0 !important; width: 92px; font-size: 9px !important;
+  font-weight: bold; text-align: left; box-shadow: none !important; height: auto !important;
+}
+.charsheet .sheet-vatk-tip::after {
+  content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border-width: 5px; border-style: solid; border-color: #e63946 transparent transparent transparent;
+}
 .charsheet .sheet-arc-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-start; gap: 4px 6px; }
 .charsheet .sheet-arc-txt { font-size: 10px; color: #cdd; margin-right: 5px; }
 .charsheet .sheet-aw, .charsheet .sheet-af { margin: 0 1px 0 0 !important; cursor: pointer; }
