@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.71.1 - 2026-06-20
+/* Mighty Protectors Roll20 API Engine v2.71.3 - 2026-06-20
+ * v2.71.3: Armor Piercing now reduces Force Field protection too (RAW: AP ignores
+ *   points of protection vs its damage type; a force field IS protection). AP is
+ *   spent FF -> Armor -> Invulnerability (outermost first; preserves the rule's
+ *   explicit Armor-then-Invuln order). Applies to all attackers, not just vehicles.
+ * v2.71.2: attack card properties footer now shows declared AP (Armor Piercing:
+ *   "AP: N" or "AP: ALL") alongside KB/Rng for all attackers. AP was read and
+ *   applied (vs armor, not force fields) but never displayed on the card.
  * v2.71.1: vehicle attack card now itemizes the weapon +To-Hit and Targeting
  *   bonus in the to-hit hover breakdown (was in the Final calc but not shown);
  *   subtotal includes macroMod for vehicle attackers so it reconciles with Final.
@@ -2830,6 +2837,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const dmgTypeHover = dmgSubtype ? ` title="Subtype: ${esc(dmgSubtype)}"` : "";
     html += `Type: <span style="color:#ddd; font-weight:bold;"${dmgTypeHover}>${esc(dmgTypeStr)}</span>`;
     html += ` · KB: <span style="color:#ddd; font-weight:bold;">${causesKB ? "Yes" : "No"}</span>`;
+    if (atkAP === Infinity) html += ` · AP: <span style="color:#bd93f9; font-weight:bold;" title="Armor Piercing: ignores all armor (not force fields)">ALL</span>`;
+    else if (atkAP > 0) html += ` · AP: <span style="color:#bd93f9; font-weight:bold;" title="Armor Piercing: ignores this many points of armor (not force fields)">${atkAP}</span>`;
     html += ` · Rng: <span style="color:#ddd; font-weight:bold;">${rangeFooter}</span>`;
     html += costStr;
     html += `</div>`;
@@ -4611,6 +4620,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let ffGasBlocked = false;
     let ffGravityBypassed = false;
     let afterFF = raw;  // Damage after FF, before armor
+    // Armor Piercing: original declared value, amount spent on FF, and leftover for armor.
+    // RAW: AP ignores N points of protection vs its damage type -- a Force Field IS protection.
+    const origAP = rec.atkAP;
+    let apVsFF = 0;
+    let apAfterFF = origAP;
     
     if (ffData && !bypassProt) {
       const atkSub = (rec.dmgSubtype || "").trim().toLowerCase();
@@ -4626,8 +4640,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         ffActive = true;
         ffProt = ffData.protValues[protKey] || 0;
 
-        // FF protection subtracts from raw damage
-        const ffBlocked = Math.min(raw, ffProt);  // How much FF would block
+        // Armor Piercing reduces the Force Field's protection too, leftover carries to armor.
+        let effFFProt = ffProt;
+        if (origAP === Infinity) { apVsFF = ffProt; effFFProt = 0; apAfterFF = Infinity; }
+        else if (origAP > 0) { apVsFF = Math.min(origAP, ffProt); effFFProt = Math.max(0, ffProt - origAP); apAfterFF = origAP - apVsFF; }
+
+        // FF protection (after AP) subtracts from raw damage
+        const ffBlocked = Math.min(raw, effFFProt);  // How much FF would block
         const capacity = Math.max(0, ffData.threshold - ffData.accum);
         // MP rule: a hit the field completely stops (within remaining capacity) is
         // ignored and does NOT count toward the deflection total.
@@ -4679,17 +4698,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // ---- STEP 2: ARMOR (applied to damage that got through FF) ----
     const isOtherType = (damageType === "Other");
     
-    // Get attack's Armor Piercing (AP applies to armor, not FF)
+    // Attack's Armor Piercing: original declared value (display) and amount remaining after FF (armor calc)
     const rawAP = rec.atkAP;
+    const apForArmor = apAfterFF;
     
     // Calculate effective AP after Hardened reduces it
     let effectiveAP = 0;
     let apUsedVsHardened = 0;
-    if (rawAP === Infinity) {
+    if (apForArmor === Infinity) {
       effectiveAP = Infinity;
-    } else if (rawAP > 0) {
-      apUsedVsHardened = Math.min(rawAP, armorHardened);
-      effectiveAP = Math.max(0, rawAP - armorHardened);
+    } else if (apForArmor > 0) {
+      apUsedVsHardened = Math.min(apForArmor, armorHardened);
+      effectiveAP = Math.max(0, apForArmor - armorHardened);
     }
     
     // Calculate effective armor protection after AP
@@ -4860,8 +4880,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Build hover tooltip for protection breakdown
     let protHover = `Protection vs ${protKey}`;
-    if (ffActive && ffDeflected > 0) {
+    if (ffActive && (ffDeflected > 0 || apVsFF > 0)) {
       protHover += `&#10;Force Field: ${ffProt} (deflected ${ffDeflected})`;
+      if (apVsFF > 0) protHover += `&#10;AP vs FF: -${apVsFF === Infinity ? 'ALL' : apVsFF}`;
       if (ffCollapsed) protHover += ` [COLLAPSED, overflow ${ffOverflow}]`;
     }
     protHover += `&#10;Armor: ${Math.floor(armorProt)}`;
@@ -9117,11 +9138,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.71.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.71.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.71.1 READY");
+  log("MP ENGINE v2.71.3 READY");
 });
