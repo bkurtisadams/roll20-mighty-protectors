@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.47 - Add-to-Key button (checkbox-backed) + label-input */
+/* Mighty Protectors Character Sheet CSS v44.50 - Fix vehicle Arc picker overflow: left-anchored hex with wrapping controls */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -81,21 +81,99 @@
   content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
   border-width: 5px; border-style: solid; border-color: #e63946 transparent transparent transparent;
 }
-.charsheet .sheet-vsys-label-inp { text-transform: uppercase; }
+.charsheet .sheet-vsys-id-row { align-items: center !important; gap: 6px 14px !important; }
+.charsheet .sheet-vsys-id-row .sheet-panel-field { gap: 3px !important; }
+.charsheet .sheet-vsys-label-inp { text-transform: uppercase; text-align: center !important; }
+.charsheet .sheet-vsys-damage-inp { width: 180px !important; text-align: left !important; }
+.charsheet .sheet-vsys-id-spacer { flex: 1 1 auto; min-width: 12px; }
 .charsheet .sheet-add-key-btn {
-  display: inline-block; user-select: none;
-  background: #2e7d52; color: #eaeaea; border: 1px solid #2a2040; border-radius: 4px;
-  padding: 2px 8px; font-size: 10px; font-weight: bold; line-height: 14px; height: auto;
-  cursor: pointer; background-image: none; box-shadow: none;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  user-select: none !important;
+  background: #2e7d52 !important;
+  color: #eaeaea !important;
+  border: 1px solid #1f5f3f !important;
+  border-radius: 4px !important;
+  padding: 2px 8px !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  line-height: 15px !important;
+  min-height: 21px !important;
+  height: auto !important;
+  cursor: pointer !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
 }
-.charsheet .sheet-add-key-btn:hover { filter: brightness(1.15); }
+.charsheet .sheet-add-key-btn:hover { filter: brightness(1.15) !important; }
 .charsheet .sheet-add-key-btn .sheet-addkey-trigger { display: none !important; }
-.charsheet .sheet-arc-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-start; gap: 4px 6px; }
-.charsheet .sheet-arc-txt { font-size: 10px; color: #cdd; margin-right: 5px; }
-.charsheet .sheet-aw, .charsheet .sheet-af { margin: 0 1px 0 0 !important; cursor: pointer; }
-.charsheet .sheet-arc-break { flex-basis: 100%; height: 0; }
-.charsheet .sheet-arc-stage { order: -1; position: relative; flex: 0 0 46px; width: 46px; height: 46px; margin-right: 4px; }
-.charsheet .sheet-arc-hex { position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: #23203a; }
+.charsheet .sheet-arc-field {
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  width: auto !important;
+  max-width: 100% !important;
+  align-self: flex-start !important;
+  gap: 8px !important;
+}
+.charsheet .sheet-arc-field > label {
+  flex: 0 0 auto !important;
+  padding-top: 3px !important;
+  margin-right: 0 !important;
+}
+.charsheet .sheet-arc-row {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  width: auto !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.charsheet .sheet-arc-controls {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  width: 620px !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.charsheet .sheet-arc-txt {
+  font-size: 10px;
+  color: #cdd;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.charsheet .sheet-aw,
+.charsheet .sheet-af {
+  width: 12px !important;
+  height: 12px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  cursor: pointer;
+}
+.charsheet .sheet-aw,
+.charsheet .sheet-aw-txt { order: 10; }
+.charsheet .sheet-af,
+.charsheet .sheet-af-txt { order: 30; }
+.charsheet .sheet-arc-break {
+  display: block !important;
+  flex: 0 0 100% !important;
+  height: 0 !important;
+  order: 20;
+}
+.charsheet .sheet-arc-stage {
+  order: 0;
+  position: relative;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  margin: 0 8px 0 0;
+}
+.charsheet .sheet-arc-hex { position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: #23203a; box-shadow: inset 0 0 0 1px rgba(139,233,253,0.45); }
 .charsheet .sheet-arc-clip { position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); overflow: hidden; }
 .charsheet .sheet-arc-wedge { position: absolute; inset: 0; transform-origin: 50% 50%; transition: transform .12s; background: transparent; }
 .charsheet .sheet-arc-front { position: absolute; top: -2px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid #8be9fd; }
@@ -1116,4 +1194,114 @@
 .sheet-vehicle-content .sheet-vlay-key-wrap .repcontainer > .repitem {
   break-inside: avoid;
   -webkit-column-break-inside: avoid;
+}
+
+
+/* Vehicle cog panels use the lighter mockup blue without changing character ability panels. */
+.charsheet .sheet-vehicle-content .sheet-options-panel {
+  background: #152035 !important;
+  border-color: #3a5070 !important;
+}
+
+/* v44.49 final vehicle-cog overrides: placed after generic panel label rules so Roll20 does not dim the fake button. */
+.charsheet .sheet-options-panel .sheet-panel-field label.sheet-add-key-btn,
+.charsheet .sheet-panel-field label.sheet-add-key-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #2e7d52 !important;
+  color: #eaeaea !important;
+  border: 1px solid #1f5f3f !important;
+  border-radius: 4px !important;
+  padding: 2px 8px !important;
+  font-size: 10px !important;
+  font-weight: bold !important;
+  line-height: 15px !important;
+  min-height: 21px !important;
+  height: auto !important;
+  cursor: pointer !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
+}
+
+
+/* v44.50: keep the vehicle Arc picker inside the cog panel while preserving left alignment.
+   The hex remains after the radios in the DOM so the checked~stage selectors still work,
+   but it is anchored at the left of this small control console. */
+.charsheet .sheet-panel-field.sheet-arc-field {
+  flex: 1 1 100% !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  gap: 8px !important;
+  overflow: visible !important;
+}
+.charsheet .sheet-panel-field.sheet-arc-field > label {
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  padding-top: 3px !important;
+  text-align: left !important;
+}
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-arc-row {
+  flex: 1 1 auto !important;
+  display: block !important;
+  width: auto !important;
+  max-width: calc(100% - 42px) !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-arc-controls {
+  position: relative !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  align-content: flex-start !important;
+  gap: 4px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  min-height: 50px !important;
+  margin: 0 !important;
+  padding: 1px 0 0 58px !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-arc-stage {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  order: 0 !important;
+  flex: 0 0 48px !important;
+  width: 48px !important;
+  height: 48px !important;
+  margin: 0 !important;
+}
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-aw,
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-aw-txt,
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-af,
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-af-txt {
+  order: 1 !important;
+}
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-arc-break {
+  display: block !important;
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  height: 0 !important;
+  order: 1 !important;
+}
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-arc-txt {
+  margin-right: 5px !important;
+  white-space: nowrap !important;
+}
+.charsheet .sheet-panel-field.sheet-arc-field .sheet-arc-controls > .sheet-af[value="F"] {
+  margin-left: 0 !important;
 }

@@ -1,4 +1,7 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.47 - Fix: "Add to Key" now fires (change-event trigger instead of action button)
+<!-- Mighty Protectors Roll20 Character Sheet v44.50 - Fix vehicle Arc picker overflow; preserve Label/Damage/Add-to-Key row and lighter cog panel
+        v44.49: Vehicle cog polish: lighter panel, brighter Add-to-Key, stronger left-packed Arc controls
+        v44.48: Vehicle cog polish: Label/Damage/Add-to-Key share one row; Arc picker left-packed with graphic + controls
+        v44.47 - Fix: "Add to Key" now fires (change-event trigger instead of action button)
         - the v44.46 clicked:repeating action button did not fire; replaced with a checkbox-backed button (attr_vsys_addkey)
         - worker on("change:repeating_vehsystems:vsys_addkey") creates the repeating_vehkey row, then resets the trigger to 0
         v44.46: Per-system Label field + one-way "Add to Key" action
@@ -1874,20 +1877,19 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
         </div>
         <div class="sheet-options-panel">
-          <div class="sheet-panel-row" style="margin-top:6px;">
+          <div class="sheet-panel-row sheet-vsys-id-row" style="margin-top:6px;">
             <div class="sheet-panel-field">
               <label title="Short code for this system, used on the Vehicle Layout grid and Vehicle Key (e.g. SW, L, T1)">Label:</label>
               <input type="text" name="attr_vsys_label" maxlength="4" class="sheet-vsys-label-inp" style="width:58px !important;" placeholder="SW" />
             </div>
-            <div class="sheet-panel-field">
+            <div class="sheet-panel-field sheet-vsys-damage-field">
+              <label title="Damage dice expression, e.g. 3d10+2d12. Long strings are fine here.">Damage:</label>
+              <input type="text" name="attr_vsys_dmg" value="0" class="sheet-vsys-damage-inp" style="width:180px !important;" placeholder="e.g. 3d10+2d12" />
+            </div>
+            <div class="sheet-panel-field sheet-vsys-key-field">
               <label class="sheet-add-key-btn" title="Append a Vehicle Key row from this system's Label + description. Does not overwrite existing Key rows."><input type="checkbox" name="attr_vsys_addkey" value="1" class="sheet-addkey-trigger" />+ Add to Key</label>
             </div>
-          </div>
-          <div class="sheet-panel-row">
-            <div class="sheet-panel-field">
-              <label title="Damage dice expression, e.g. 3d10+2d12. Long strings are fine here.">Damage:</label>
-              <input type="text" name="attr_vsys_dmg" value="0" style="width:180px !important;" placeholder="e.g. 3d10+2d12" />
-            </div>
+            <span class="sheet-vsys-id-spacer"></span>
           </div>
           <div class="sheet-panel-row">
             <div class="sheet-panel-field">
@@ -2015,26 +2017,28 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             </div>
           </div>
           <div class="sheet-panel-row">
-            <div class="sheet-panel-field" style="align-items:flex-start;">
+            <div class="sheet-panel-field sheet-arc-field" style="align-items:flex-start;">
               <label title="Firing arc width (Wide Arc 240=+5, 360=+10) and facing on the hex floor-plan">Arc:</label>
               <div class="sheet-arc-row">
-                <input type="radio" class="sheet-aw" name="attr_vsys_arc" value="0" checked /><span class="sheet-arc-txt">Non-dir</span>
-                <input type="radio" class="sheet-aw" name="attr_vsys_arc" value="120" /><span class="sheet-arc-txt">120&deg;</span>
-                <input type="radio" class="sheet-aw" name="attr_vsys_arc" value="240" /><span class="sheet-arc-txt">240&deg;</span>
-                <input type="radio" class="sheet-aw" name="attr_vsys_arc" value="360" /><span class="sheet-arc-txt">360&deg;</span>
-                <span class="sheet-arc-break"></span>
-                <input type="radio" class="sheet-af" name="attr_vsys_facing" value="F" checked /><span class="sheet-arc-txt">Fwd</span>
-                <input type="radio" class="sheet-af" name="attr_vsys_facing" value="FR" /><span class="sheet-arc-txt">Fwd/R</span>
-                <input type="radio" class="sheet-af" name="attr_vsys_facing" value="BR" /><span class="sheet-arc-txt">Back/R</span>
-                <input type="radio" class="sheet-af" name="attr_vsys_facing" value="B" /><span class="sheet-arc-txt">Back</span>
-                <input type="radio" class="sheet-af" name="attr_vsys_facing" value="BL" /><span class="sheet-arc-txt">Back/L</span>
-                <input type="radio" class="sheet-af" name="attr_vsys_facing" value="FL" /><span class="sheet-arc-txt">Fwd/L</span>
-                <span class="sheet-arc-stage">
-                  <span class="sheet-arc-hex"></span>
-                  <span class="sheet-arc-clip"><span class="sheet-arc-wedge"></span></span>
-                  <span class="sheet-arc-front"></span>
-                  <span class="sheet-arc-dot"></span>
-                </span>
+                <div class="sheet-arc-controls">
+                  <input type="radio" class="sheet-aw" name="attr_vsys_arc" value="0" checked /><span class="sheet-arc-txt sheet-aw-txt sheet-arc-w0">Non-dir</span>
+                  <input type="radio" class="sheet-aw" name="attr_vsys_arc" value="120" /><span class="sheet-arc-txt sheet-aw-txt sheet-arc-w120">120&deg;</span>
+                  <input type="radio" class="sheet-aw" name="attr_vsys_arc" value="240" /><span class="sheet-arc-txt sheet-aw-txt sheet-arc-w240">240&deg;</span>
+                  <input type="radio" class="sheet-aw" name="attr_vsys_arc" value="360" /><span class="sheet-arc-txt sheet-aw-txt sheet-arc-w360">360&deg;</span>
+                  <span class="sheet-arc-break"></span>
+                  <input type="radio" class="sheet-af" name="attr_vsys_facing" value="F" checked /><span class="sheet-arc-txt sheet-af-txt sheet-arc-f">Fwd</span>
+                  <input type="radio" class="sheet-af" name="attr_vsys_facing" value="FR" /><span class="sheet-arc-txt sheet-af-txt sheet-arc-fr">Fwd/R</span>
+                  <input type="radio" class="sheet-af" name="attr_vsys_facing" value="BR" /><span class="sheet-arc-txt sheet-af-txt sheet-arc-br">Back/R</span>
+                  <input type="radio" class="sheet-af" name="attr_vsys_facing" value="B" /><span class="sheet-arc-txt sheet-af-txt sheet-arc-b">Back</span>
+                  <input type="radio" class="sheet-af" name="attr_vsys_facing" value="BL" /><span class="sheet-arc-txt sheet-af-txt sheet-arc-bl">Back/L</span>
+                  <input type="radio" class="sheet-af" name="attr_vsys_facing" value="FL" /><span class="sheet-arc-txt sheet-af-txt sheet-arc-fl">Fwd/L</span>
+                  <span class="sheet-arc-stage" title="Arc graphic stays flush left with the controls">
+                    <span class="sheet-arc-hex"></span>
+                    <span class="sheet-arc-clip"><span class="sheet-arc-wedge"></span></span>
+                    <span class="sheet-arc-front"></span>
+                    <span class="sheet-arc-dot"></span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
