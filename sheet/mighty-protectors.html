@@ -1,4 +1,12 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.50 - Fix vehicle Arc picker overflow; preserve Label/Damage/Add-to-Key row and lighter cog panel
+<!-- Mighty Protectors Roll20 Character Sheet v44.52 - Make vehicle system color the layout source of truth
+        - remove the visible Vehicle Key color dropdown so the Key stays a compact legend
+        - Vehicle Key rows keep a hidden color/swatch display synced from matching system Label + Color
+        - layout grid colors now derive from repeating vehicle systems, not editable Key colors
+        v44.51: Add Vehicle Layout color palette keyed by Vehicle Key abbreviations
+        - cog panel: new Color dropdown beside Label; Add to Key copies Label, description, and color
+        - Vehicle Key rows gained a Color dropdown; layout cells auto-colored when their typed abbreviation matched a Key row
+        - 18-color fixed palette keeps Roll20 CSS reliable while giving MP systems stronger visual distinction
+        v44.50: Fix vehicle Arc picker overflow; preserve Label/Damage/Add-to-Key row and lighter cog panel
         v44.49: Vehicle cog polish: lighter panel, brighter Add-to-Key, stronger left-packed Arc controls
         v44.48: Vehicle cog polish: Label/Damage/Add-to-Key share one row; Arc picker left-packed with graphic + controls
         v44.47 - Fix: "Add to Key" now fires (change-event trigger instead of action button)
@@ -1882,6 +1890,30 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
               <label title="Short code for this system, used on the Vehicle Layout grid and Vehicle Key (e.g. SW, L, T1)">Label:</label>
               <input type="text" name="attr_vsys_label" maxlength="4" class="sheet-vsys-label-inp" style="width:58px !important;" placeholder="SW" />
             </div>
+            <div class="sheet-panel-field sheet-vsys-color-field">
+              <label title="Source color for this system label. Matching Vehicle Layout cells and Key swatches use this color.">Color:</label>
+              <select name="attr_vsys_color" class="sheet-vsys-color-select" title="Vehicle Layout color for this system label" style="width:78px !important;">
+                <option value="none" selected>None</option>
+                <option value="red">Red</option>
+                <option value="crimson">Crimson</option>
+                <option value="orange">Orange</option>
+                <option value="amber">Amber</option>
+                <option value="yellow">Yellow</option>
+                <option value="lime">Lime</option>
+                <option value="green">Green</option>
+                <option value="teal">Teal</option>
+                <option value="cyan">Cyan</option>
+                <option value="sky">Sky</option>
+                <option value="blue">Blue</option>
+                <option value="navy">Navy</option>
+                <option value="violet">Violet</option>
+                <option value="magenta">Magenta</option>
+                <option value="pink">Pink</option>
+                <option value="brown">Brown</option>
+                <option value="gray">Gray</option>
+                <option value="white">White</option>
+              </select>
+            </div>
             <div class="sheet-panel-field sheet-vsys-damage-field">
               <label title="Damage dice expression, e.g. 3d10+2d12. Long strings are fine here.">Damage:</label>
               <input type="text" name="attr_vsys_dmg" value="0" class="sheet-vsys-damage-inp" style="width:180px !important;" placeholder="e.g. 3d10+2d12" />
@@ -2128,6 +2160,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
               <fieldset class="repeating_vehkey" style="border:none; padding:0; margin:0;">
                 <div class="sheet-vlay-key-row" style="display:flex; gap:3px; align-items:center; padding:1px 0; border-bottom:1px solid #1a1428;">
                   <input type="text" name="attr_vkey_abbr" maxlength="4" class="sheet-vlay-key-abbr" style="width:40px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px; font-weight:bold; text-transform:uppercase;" placeholder="SW" />
+                  <input type="hidden" name="attr_vkey_color" class="sheet-vlay-key-color-flag" value="none" />
+                  <span class="sheet-vlay-key-swatch" title="Color is synced from the matching vehicle system label"></span>
                   <input type="text" name="attr_vkey_desc" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:10px;" placeholder="S. Weapon (buzz saw)" />
                 </div>
               </fieldset>
@@ -2138,150 +2172,582 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <div style="flex:0 0 auto;">
             <div style="font-size:11px; color:#f4d03f; font-weight:bold; margin-bottom:3px;">VEHICLE LAYOUT</div>
             <div class="sheet-vlay-grid">
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_11" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_0" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_1" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_2" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_3" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_4" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_5" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_6" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_7" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_8" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_9" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_10" maxlength="4" />
-              <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_11" maxlength="4" />
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_0_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_0_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_0_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_1_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_1_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_1_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_2_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_2_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_2_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_3_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_3_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_3_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_4_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_4_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_4_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_5_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_5_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_5_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_6_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_6_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_6_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_7_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_7_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_7_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_8_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_8_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_8_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5 sheet-vlay-r5" name="attr_vlay_9_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_9_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-r5" name="attr_vlay_9_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_10_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_10_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_10_11" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_0_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_0" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_1_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_1" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_2_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_2" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_3_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_3" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_4_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_4" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_5_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_5" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_6_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_6" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_7_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_7" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_8_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_8" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_9_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell sheet-vlay-c5" name="attr_vlay_11_9" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_10_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_10" maxlength="4" />
+              </span>
+              <span class="sheet-vlay-cell-wrap">
+                <input type="hidden" name="attr_vlay_11_11_color" class="sheet-vlay-color-flag" value="none" />
+                <input type="text" class="sheet-vlay-cell" name="attr_vlay_11_11" maxlength="4" />
+              </span>
             </div>
             <div style="color:#888; font-size:9px; margin-top:3px; line-height:1.3;">1 square = 1 system space (2.5&prime;) &bull; heavy lines = 5&prime;<br />type a Key abbreviation into each square</div>
           </div>
@@ -4981,25 +5447,236 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     }
     recalcAllVehSystems(); calcVehicleTotals(); updateBaseLabel();
   });
-  on("sheet:opened", function() { calcVehicle(false); calcVehicleTotals(); recalcAllVehSystems(); updateBaseLabel(); });
+  on("sheet:opened", function() { calcVehicle(false); calcVehicleTotals(); recalcAllVehSystems(); updateBaseLabel(); updateVehicleLayoutColors(); });
 
   // One-way "Add to Key": append a Vehicle Key row from this system's Label + description (non-destructive).
   // Triggered by a checkbox styled as a button (change: events fire reliably in repeating sections); resets itself after.
   on("change:repeating_vehsystems:vsys_addkey", function(eventInfo) {
     var rid = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_vsys_addkey", "");
     var pfx = "repeating_vehsystems_" + rid + "_";
-    getAttrs([pfx + "vsys_addkey", pfx + "vsys_label", pfx + "vsys_notes"], function(v) {
+    getAttrs([pfx + "vsys_addkey", pfx + "vsys_label", pfx + "vsys_notes", pfx + "vsys_color"], function(v) {
       if (String(v[pfx + "vsys_addkey"]) !== "1") return;   // only act when toggled on
       var abbr = String(v[pfx + "vsys_label"] || "").trim();
       var desc = String(v[pfx + "vsys_notes"] || "").trim();
+      var color = String(v[pfx + "vsys_color"] || "none").trim() || "none";
       var newRow = generateRowID();
       var o = {};
       o["repeating_vehkey_" + newRow + "_vkey_abbr"] = abbr;
       o["repeating_vehkey_" + newRow + "_vkey_desc"] = desc;
+      o["repeating_vehkey_" + newRow + "_vkey_color"] = cleanVehicleColor(color); // hidden swatch only; system color remains authoritative
       o[pfx + "vsys_addkey"] = "0";    // reset trigger so it can fire again
-      setAttrs(o);
+      setAttrs(o, {}, function(){ updateVehicleLayoutColors(); });
     });
   });
+
+  // Vehicle Layout colorizer: each grid cell is still typed as a short abbreviation,
+  // while matching vehicle system Label + Color fields decide the visual color.
+  // Vehicle Key rows only display the synced swatch; they no longer override system color.
+  var VEHICLE_LAYOUT_COLORS = {
+    none: 1, red: 1, crimson: 1, orange: 1, amber: 1, yellow: 1,
+    lime: 1, green: 1, teal: 1, cyan: 1, sky: 1, blue: 1,
+    navy: 1, violet: 1, magenta: 1, pink: 1, brown: 1, gray: 1, white: 1
+  };
+  var VEHICLE_LAYOUT_ATTRS = [
+    "vlay_0_0",
+    "vlay_0_1",
+    "vlay_0_2",
+    "vlay_0_3",
+    "vlay_0_4",
+    "vlay_0_5",
+    "vlay_0_6",
+    "vlay_0_7",
+    "vlay_0_8",
+    "vlay_0_9",
+    "vlay_0_10",
+    "vlay_0_11",
+    "vlay_1_0",
+    "vlay_1_1",
+    "vlay_1_2",
+    "vlay_1_3",
+    "vlay_1_4",
+    "vlay_1_5",
+    "vlay_1_6",
+    "vlay_1_7",
+    "vlay_1_8",
+    "vlay_1_9",
+    "vlay_1_10",
+    "vlay_1_11",
+    "vlay_2_0",
+    "vlay_2_1",
+    "vlay_2_2",
+    "vlay_2_3",
+    "vlay_2_4",
+    "vlay_2_5",
+    "vlay_2_6",
+    "vlay_2_7",
+    "vlay_2_8",
+    "vlay_2_9",
+    "vlay_2_10",
+    "vlay_2_11",
+    "vlay_3_0",
+    "vlay_3_1",
+    "vlay_3_2",
+    "vlay_3_3",
+    "vlay_3_4",
+    "vlay_3_5",
+    "vlay_3_6",
+    "vlay_3_7",
+    "vlay_3_8",
+    "vlay_3_9",
+    "vlay_3_10",
+    "vlay_3_11",
+    "vlay_4_0",
+    "vlay_4_1",
+    "vlay_4_2",
+    "vlay_4_3",
+    "vlay_4_4",
+    "vlay_4_5",
+    "vlay_4_6",
+    "vlay_4_7",
+    "vlay_4_8",
+    "vlay_4_9",
+    "vlay_4_10",
+    "vlay_4_11",
+    "vlay_5_0",
+    "vlay_5_1",
+    "vlay_5_2",
+    "vlay_5_3",
+    "vlay_5_4",
+    "vlay_5_5",
+    "vlay_5_6",
+    "vlay_5_7",
+    "vlay_5_8",
+    "vlay_5_9",
+    "vlay_5_10",
+    "vlay_5_11",
+    "vlay_6_0",
+    "vlay_6_1",
+    "vlay_6_2",
+    "vlay_6_3",
+    "vlay_6_4",
+    "vlay_6_5",
+    "vlay_6_6",
+    "vlay_6_7",
+    "vlay_6_8",
+    "vlay_6_9",
+    "vlay_6_10",
+    "vlay_6_11",
+    "vlay_7_0",
+    "vlay_7_1",
+    "vlay_7_2",
+    "vlay_7_3",
+    "vlay_7_4",
+    "vlay_7_5",
+    "vlay_7_6",
+    "vlay_7_7",
+    "vlay_7_8",
+    "vlay_7_9",
+    "vlay_7_10",
+    "vlay_7_11",
+    "vlay_8_0",
+    "vlay_8_1",
+    "vlay_8_2",
+    "vlay_8_3",
+    "vlay_8_4",
+    "vlay_8_5",
+    "vlay_8_6",
+    "vlay_8_7",
+    "vlay_8_8",
+    "vlay_8_9",
+    "vlay_8_10",
+    "vlay_8_11",
+    "vlay_9_0",
+    "vlay_9_1",
+    "vlay_9_2",
+    "vlay_9_3",
+    "vlay_9_4",
+    "vlay_9_5",
+    "vlay_9_6",
+    "vlay_9_7",
+    "vlay_9_8",
+    "vlay_9_9",
+    "vlay_9_10",
+    "vlay_9_11",
+    "vlay_10_0",
+    "vlay_10_1",
+    "vlay_10_2",
+    "vlay_10_3",
+    "vlay_10_4",
+    "vlay_10_5",
+    "vlay_10_6",
+    "vlay_10_7",
+    "vlay_10_8",
+    "vlay_10_9",
+    "vlay_10_10",
+    "vlay_10_11",
+    "vlay_11_0",
+    "vlay_11_1",
+    "vlay_11_2",
+    "vlay_11_3",
+    "vlay_11_4",
+    "vlay_11_5",
+    "vlay_11_6",
+    "vlay_11_7",
+    "vlay_11_8",
+    "vlay_11_9",
+    "vlay_11_10",
+    "vlay_11_11"
+  ];
+
+  function cleanVehicleColor(color) {
+    color = String(color || "none").toLowerCase().trim();
+    return VEHICLE_LAYOUT_COLORS[color] ? color : "none";
+  }
+
+  function updateVehicleLayoutColors() {
+    getSectionIDs("repeating_vehsystems", function(sysIds) {
+      getSectionIDs("repeating_vehkey", function(keyIds) {
+        var sysAttrs = [];
+        sysIds.forEach(function(id) {
+          sysAttrs.push("repeating_vehsystems_" + id + "_vsys_label");
+          sysAttrs.push("repeating_vehsystems_" + id + "_vsys_color");
+        });
+        var keyAttrs = [];
+        keyIds.forEach(function(id) {
+          keyAttrs.push("repeating_vehkey_" + id + "_vkey_abbr");
+        });
+        var readAttrs = sysAttrs.concat(keyAttrs, VEHICLE_LAYOUT_ATTRS);
+        getAttrs(readAttrs, function(v) {
+          var colorByAbbr = {};
+          sysIds.forEach(function(id) {
+            var p = "repeating_vehsystems_" + id + "_";
+            var abbr = String(v[p + "vsys_label"] || "").trim().toUpperCase();
+            if (!abbr) return;
+            colorByAbbr[abbr] = cleanVehicleColor(v[p + "vsys_color"]);
+          });
+
+          var out = {};
+          keyIds.forEach(function(id) {
+            var p = "repeating_vehkey_" + id + "_";
+            var abbr = String(v[p + "vkey_abbr"] || "").trim().toUpperCase();
+            out[p + "vkey_color"] = abbr && colorByAbbr[abbr] ? colorByAbbr[abbr] : "none";
+          });
+          VEHICLE_LAYOUT_ATTRS.forEach(function(attr) {
+            var abbr = String(v[attr] || "").trim().toUpperCase();
+            out[attr + "_color"] = abbr && colorByAbbr[abbr] ? colorByAbbr[abbr] : "none";
+          });
+          setAttrs(out, {silent: true});
+        });
+      });
+    });
+  }
+
+  on("change:repeating_vehsystems:vsys_label change:repeating_vehsystems:vsys_color remove:repeating_vehsystems", function() {
+    updateVehicleLayoutColors();
+  });
+  on("change:repeating_vehkey:vkey_abbr remove:repeating_vehkey", function() {
+    updateVehicleLayoutColors();
+  });
+  on("change:" + VEHICLE_LAYOUT_ATTRS.join(" change:"), function() {
+    updateVehicleLayoutColors();
+  });
+
 
   // Helper: find best matching key from sorted table keys
   function updateBaseLabel() {

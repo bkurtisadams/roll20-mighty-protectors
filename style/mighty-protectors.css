@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.50 - Fix vehicle Arc picker overflow: left-anchored hex with wrapping controls */
+/* Mighty Protectors Character Sheet CSS v44.51 - Add Vehicle Layout color palette and keyed cell color flags */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -1156,6 +1156,78 @@
   border: 1px solid #3a5070;
   background: #0d0d1a;
 }
+
+.sheet-vehicle-content .sheet-vlay-cell-wrap {
+  display: block;
+  width: 24px;
+  height: 24px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.sheet-vehicle-content input.sheet-vlay-color-flag,
+.sheet-vehicle-content input.sheet-vlay-key-color-flag {
+  display: none !important;
+}
+.sheet-vehicle-content .sheet-vlay-key-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border: 1px solid #3a5070;
+  border-radius: 3px;
+  background: #152035;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.charsheet .sheet-vsys-color-select {
+  background: #0d0d1a !important;
+  color: #eaeaea !important;
+  border: 1px solid #2a2040 !important;
+  box-sizing: border-box !important;
+  font-size: 10px !important;
+}
+.sheet-vehicle-content .sheet-vlay-color-flag[value="red"] + input.sheet-vlay-cell { background: #6f1d1b !important; color: #fff2f0 !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="crimson"] + input.sheet-vlay-cell { background: #8a1538 !important; color: #fff0f6 !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="orange"] + input.sheet-vlay-cell { background: #8a3b12 !important; color: #fff3e8 !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="amber"] + input.sheet-vlay-cell { background: #7a5200 !important; color: #fff6dc !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="yellow"] + input.sheet-vlay-cell { background: #6b6400 !important; color: #fffbd8 !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="lime"] + input.sheet-vlay-cell { background: #3f6f1d !important; color: #f3ffe8 !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="green"] + input.sheet-vlay-cell { background: #1f6f3f !important; color: #eafff1 !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="teal"] + input.sheet-vlay-cell { background: #126a68 !important; color: #e8fffd !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="cyan"] + input.sheet-vlay-cell { background: #0e677a !important; color: #e7fbff !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="sky"] + input.sheet-vlay-cell { background: #1d5f8f !important; color: #eaf6ff !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="blue"] + input.sheet-vlay-cell { background: #214b7a !important; color: #eaf2ff !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="navy"] + input.sheet-vlay-cell { background: #182a67 !important; color: #edf0ff !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="violet"] + input.sheet-vlay-cell { background: #4b2a7a !important; color: #f2ebff !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="magenta"] + input.sheet-vlay-cell { background: #762170 !important; color: #fff0fd !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="pink"] + input.sheet-vlay-cell { background: #8a365f !important; color: #fff2f8 !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="brown"] + input.sheet-vlay-cell { background: #5f4025 !important; color: #fff3e7 !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="gray"] + input.sheet-vlay-cell { background: #4c5664 !important; color: #f4f7fb !important; }
+.sheet-vehicle-content .sheet-vlay-color-flag[value="white"] + input.sheet-vlay-cell { background: #e8edf5 !important; color: #102033 !important; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="red"] + .sheet-vlay-key-swatch { background: #6f1d1b; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="crimson"] + .sheet-vlay-key-swatch { background: #8a1538; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="orange"] + .sheet-vlay-key-swatch { background: #8a3b12; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="amber"] + .sheet-vlay-key-swatch { background: #7a5200; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="yellow"] + .sheet-vlay-key-swatch { background: #6b6400; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="lime"] + .sheet-vlay-key-swatch { background: #3f6f1d; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="green"] + .sheet-vlay-key-swatch { background: #1f6f3f; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="teal"] + .sheet-vlay-key-swatch { background: #126a68; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="cyan"] + .sheet-vlay-key-swatch { background: #0e677a; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="sky"] + .sheet-vlay-key-swatch { background: #1d5f8f; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="blue"] + .sheet-vlay-key-swatch { background: #214b7a; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="navy"] + .sheet-vlay-key-swatch { background: #182a67; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="violet"] + .sheet-vlay-key-swatch { background: #4b2a7a; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="magenta"] + .sheet-vlay-key-swatch { background: #762170; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="pink"] + .sheet-vlay-key-swatch { background: #8a365f; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="brown"] + .sheet-vlay-key-swatch { background: #5f4025; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="gray"] + .sheet-vlay-key-swatch { background: #4c5664; }
+.sheet-vehicle-content .sheet-vlay-key-color-flag[value="white"] + .sheet-vlay-key-swatch { background: #e8edf5; }
+.sheet-vehicle-content .sheet-vlay-color-flag:not([value="none"]) + input.sheet-vlay-cell {
+  text-shadow: 0 1px 1px rgba(0,0,0,0.55);
+}
+.sheet-vehicle-content .sheet-vlay-color-flag[value="white"] + input.sheet-vlay-cell {
+  text-shadow: none !important;
+}
+
 .sheet-vehicle-content input.sheet-vlay-cell {
   width: 24px !important;
   height: 24px !important;
@@ -1174,7 +1246,6 @@
   box-sizing: border-box;
 }
 .sheet-vehicle-content input.sheet-vlay-cell:focus {
-  background: #152035 !important;
   outline: 1px solid #f4d03f !important;
   outline-offset: -1px;
 }
