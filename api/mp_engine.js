@@ -7380,9 +7380,11 @@ function cmdStance(msg, args) {
     let mode = "noroll";
     if (isHeadshot) mode = "headshot";
 
+    const dmgIsVeh = isVehicleMode(char.id);
     const buttons = `[Apply](!mp apply --id ${rollId} --mode ${mode}) ` +
-      `[RW Max](!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithmax"}) ` +
-      `[RW Custom](!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithcustom"} --amt ?{Divert to Power|0}) ` +
+      (dmgIsVeh ? "" :
+        `[RW Max](!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithmax"}) ` +
+        `[RW Custom](!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithcustom"} --amt ?{Divert to Power|0}) `) +
       `[KB](!mp kb --id ${rollId})`;
 
     ch("MP", "/w gm " + html + buttons);
@@ -7452,7 +7454,8 @@ function cmdStance(msg, args) {
     html += `</div>`;
 
     const buttons = `[Make Save](!mp save --id ${rollId} --critmod 0) ` +
-      `[Save + Roll-With](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod 0)`;
+      (isVehicleMode(char.id) ? "" :
+        `[Save + Roll-With](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod 0)`);
 
     ch("MP", "/w gm " + html + buttons);
   }
@@ -7685,14 +7688,18 @@ function cmdStance(msg, args) {
     msg_out += `<b>Protection:</b> Kin ${fmtProt(kinData)} | Eng ${fmtProt(engData)} | Ent ${fmtProt(entData)} | Psy ${fmtProt(psyData)} | Bio ${fmtProt(bioData)} | Oth ${fmtProt(othData)}<br/>`;
     msg_out += `<b>HTH:</b> ${hth} | <b>Mass:</b> ${mass}<br/>`;
     
-    // Roll-With Cap with Fortitude bonus
-    const hasFortitude = (num(getAttr(char.id, "willpower_fortitude"), 0) === 1);
-    const hasPainResistance = (num(getAttr(char.id, "willpower_pain_resistance"), 0) === 1);
-    const baseRollWith = Math.floor(pow / 10);
-    const rollWithCap = hasFortitude ? baseRollWith * 2 : baseRollWith;
-    msg_out += `<b>Roll-With Cap:</b> ${rollWithCap}`;
-    if (hasFortitude) msg_out += ` <span style="color:#8be9fd;">(Fortitude x2)</span>`;
-    if (hasPainResistance) msg_out += ` <span style="color:#27ae60;">(Pain Res.)</span>`;
+    // Roll-With Cap with Fortitude bonus (vehicles can't roll-with)
+    if (isVehicleMode(char.id)) {
+      msg_out += `<b>Roll-With Cap:</b> &mdash; <span style="color:#888;">(vehicle)</span>`;
+    } else {
+      const hasFortitude = (num(getAttr(char.id, "willpower_fortitude"), 0) === 1);
+      const hasPainResistance = (num(getAttr(char.id, "willpower_pain_resistance"), 0) === 1);
+      const baseRollWith = Math.floor(pow / 10);
+      const rollWithCap = hasFortitude ? baseRollWith * 2 : baseRollWith;
+      msg_out += `<b>Roll-With Cap:</b> ${rollWithCap}`;
+      if (hasFortitude) msg_out += ` <span style="color:#8be9fd;">(Fortitude x2)</span>`;
+      if (hasPainResistance) msg_out += ` <span style="color:#27ae60;">(Pain Res.)</span>`;
+    }
     
     if (snare) {
       msg_out += `<br/><span style="color:#e94560;"><b>Snared:</b> ${snare.type} (BP ${snare.bp || "N/A"}) by ${snare.source}</span>`;
@@ -9111,8 +9118,10 @@ function cmdStance(msg, args) {
               };
               frag += `<br/><span style="color:#f4d03f;">⏱ ${esc(name)}: ${esc(cond.sourceAtk)} — <b>${rolled}</b> ${esc(cond.dmgType || "")} this round</span>`;
               frag += `<br/>[Apply](!mp apply --id ${rid} --mode noroll) `;
-              frag += `[Roll-With Max](!mp apply --id ${rid} --mode rollwithmax) `;
-              frag += `[Roll-With Custom](!mp apply --id ${rid} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+              if (!isVehicleMode(char.id)) {
+                frag += `[Roll-With Max](!mp apply --id ${rid} --mode rollwithmax) `;
+                frag += `[Roll-With Custom](!mp apply --id ${rid} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+              }
             }
           }
         }
