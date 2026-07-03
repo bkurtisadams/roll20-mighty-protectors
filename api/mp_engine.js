@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.74.0 - 2026-06-20
+/* Mighty Protectors Roll20 API Engine v2.74.1 - 2026-07-02
+ * v2.74.1: range calculation now converts Roll20 page scale units correctly.
+ *   Supports MP-inch pages (1 in/sq) and feet pages (5 ft/sq), and fixes
+ *   fractional Cell Width/snapping_increment by applying it to scale distance
+ *   instead of double-counting it in pixel conversion.
  * v2.74.0: vehicle ABSORPTION and REFLECTION now resolve. getAbsorptionReflection
  *   reads the vehprotection section for vehicle defenders; the absorb/reflect action
  *   buttons are now offered to vehicles (were excluded); cmdAbsorb/cmdReflect already
@@ -485,7 +489,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.74.0 FILE STARTING");
+log("MP ENGINE v2.74.1 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -2184,14 +2188,37 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return penalty;
   }
 
+  function getPageScaleInMpInches(page) {
+    if (!page) return 1;
+
+    const scaleNumber = parseFloat(page.get("scale_number"));
+    const n = Number.isFinite(scaleNumber) && scaleNumber > 0 ? scaleNumber : 5;
+    const units = String(page.get("scale_units") || "ft").trim().toLowerCase();
+
+    // Roll20 stores page scale as: one Roll20 unit = N units of scale_units.
+    // MP attack ranges are in inches where 1 MP inch = 5 feet.
+    if (/^(ft|foot|feet)$/.test(units)) return n / 5;
+    if (/^(in|inch|inches|")$/.test(units)) return n;
+    if (/^(yd|yard|yards)$/.test(units)) return (n * 3) / 5;
+    if (/^(mi|mile|miles)$/.test(units)) return (n * 5280) / 5;
+    if (/^(m|meter|meters|metre|metres)$/.test(units)) return (n * 3.28084) / 5;
+    if (/^(km|kilometer|kilometers|kilometre|kilometres)$/.test(units)) return (n * 3280.84) / 5;
+
+    // Preserve the legacy assumption for custom/blank labels: N feet per unit.
+    return n / 5;
+  }
+
   function calculateRange(atkTok, defTok) {
     if (!atkTok || !defTok) return { inches: 0, penalty: 0 };
 
     const pageId = atkTok.get("_pageid");
     const page = getObj("page", pageId);
 
-    // Roll20 base grid is 70px, scaled by snapping_increment
-    const snapping = page ? (parseFloat(page.get("snapping_increment")) || 1) : 1;
+    // Roll20 coordinates are in pixels; 70px is one full Roll20 page unit.
+    // snapping_increment / Cell Width changes the drawn grid cell size, so apply
+    // it to the scale distance rather than treating it as a second pixel scale.
+    const snappingRaw = page ? parseFloat(page.get("snapping_increment")) : 1;
+    const snapping = Number.isFinite(snappingRaw) && snappingRaw > 0 ? snappingRaw : 1;
     const gridPx = 70 * snapping;
 
     // Get center positions and token sizes
@@ -2213,40 +2240,40 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const dxPx = Math.max(0, gapX);
     const dyPx = Math.max(0, gapY);
     
-    // Convert to grid squares
+    // Convert to drawn grid cells. One cell may be fractional Roll20 units
+    // when page Cell Width/snapping_increment is not 1.
     const dx = dxPx / gridPx;
     const dy = dyPx / gridPx;
 
     // Match Roll20 ruler diagonal setting
     const diag = page ? (page.get("diagonaltype") || "foure") : "foure";
 
-    let distSquares;
+    let distCells;
     switch (diag) {
       case "foure": // 5E/4E: diagonals count as 1
-        distSquares = Math.max(dx, dy);
+        distCells = Math.max(dx, dy);
         break;
       case "threefive": { // 3.5E: every 2nd diagonal counts extra
         const min = Math.min(dx, dy);
         const max = Math.max(dx, dy);
-        distSquares = max + Math.floor(min / 2);
+        distCells = max + Math.floor(min / 2);
         break;
       }
       case "manhattan":
-        distSquares = dx + dy;
+        distCells = dx + dy;
         break;
       case "pythagorean":
-        distSquares = Math.sqrt(dx * dx + dy * dy);
+        distCells = Math.sqrt(dx * dx + dy * dy);
         break;
       default:
-        distSquares = Math.max(dx, dy);
+        distCells = Math.max(dx, dy);
         break;
     }
 
-    // MP scale: 1" = 5 ft. If page scale is 5 ft/square, then 1 square = 1"
-    const scaleNumber = page ? (parseFloat(page.get("scale_number")) || 5) : 5;
-    const inchesPerSquare = scaleNumber / 5;
+    const inchesPerRoll20Unit = getPageScaleInMpInches(page);
+    const inchesPerGridCell = inchesPerRoll20Unit * snapping;
 
-    const distInches = distSquares * inchesPerSquare;
+    const distInches = distCells * inchesPerGridCell;
     
     // MP minimum range is 1" (adjacent tokens are at 1" range, not 0")
     const finalInches = Math.max(1, distInches);
@@ -8323,7 +8350,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.74.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.74.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9234,11 +9261,11 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.74.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.74.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.74.0 READY");
+  log("MP ENGINE v2.74.1 READY");
 });
