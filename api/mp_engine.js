@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.79.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.80.0 - 2026-07-05
+ * v2.80.0: Siphon test harness + forced dissipation. !mp test siphon [PTS]
+ *   (select attacker then target) drains PTS points through the real drain/
+ *   mode routing using the attacker's actual Siphon row config, applies the
+ *   transfer/cap/overload path via applySiphonGain, and reports a purple
+ *   test card. !mp siphon expire --target TOKID zeroes registry timers and
+ *   runs the dissipation sweep immediately (tests the 1-hour path without
+ *   waiting). Added to !mp help and !mp test help.
  * v2.79.0: chat button recolor. All 124 [label](!cmd) markdown API buttons
  *   converted to styled anchors via new btn()/btnDanger() helpers: neutral
  *   steel blue (#3d5a80) for ordinary actions, card red (#c0392b) for
@@ -528,7 +535,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.79.0 FILE STARTING");
+log("MP ENGINE v2.80.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -3854,6 +3861,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       });
       return ch("MP", `/w gm <b>MP:</b> Cleared ${total} siphoned points.`);
     }
+    if (action === "expire") {
+      let found = 0;
+      Object.keys(state.MP_Engine.siphonPools).forEach(k => {
+        const rec = state.MP_Engine.siphonPools[k];
+        if (rec.charId !== charId) return;
+        rec.expiry = 0;
+        found++;
+      });
+      if (!found) return ch("MP", `/w gm <b>MP:</b> No active pools for that character.`);
+      checkSiphonExpiry();
+      return ch("MP", `/w gm <b>MP:</b> Forced dissipation on ${found} pool(s).`);
+    }
     if (action === "adjust") {
       const amt = num(args.amt, 0);
       if (amt >= 0) return ch("MP", `/w gm <b>MP:</b> --amt must be negative (points spent outside the engine).`);
@@ -3861,7 +3880,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       consumeSiphonPool(charId, "power", -amt);
       return ch("MP", `/w gm <b>MP:</b> Consumed ${-amt} points from active pools.`);
     }
-    return ch("MP", `/w gm <b>MP:</b> Usage: !mp siphon list | clear --target &lt;tokenId&gt; | adjust --target &lt;tokenId&gt; --amt -N`);
+    return ch("MP", `/w gm <b>MP:</b> Usage: !mp siphon list | clear --target &lt;tokenId&gt; | expire --target &lt;tokenId&gt; | adjust --target &lt;tokenId&gt; --amt -N`);
   }
 
   // -------------------------
@@ -7481,6 +7500,8 @@ function cmdStance(msg, args) {
         return testForceFumble(msg, args);
       case "grapple":
         return testGrapple(msg, args);
+      case "siphon":
+        return testSiphon(msg, args);
       case "damage":
         return testDamage(msg, args);
       case "save":
@@ -7498,6 +7519,7 @@ function cmdStance(msg, args) {
           <code>!mp test crit [type]</code> - Force crit (types: headshot, solid, precise, armor, leg, arm, gear, free, muscle, offbal, other)<br/>
           <code>!mp test fumble [type]</code> - Force fumble<br/>
           <code>!mp test grapple [TOHIT] [lock] [remote] [gripdice]</code> - Grapple test harness (select 2 tokens: grappler, target)<br/>
+          <code>!mp test siphon [PTS]</code> - Siphon PTS points using attacker's Siphon row config (select 2 tokens: attacker, target)<br/>
           <code>!mp test damage N [type] [--ap:N] [--headshot]</code> - Apply N damage (AP tests vs target's Hardened)<br/>
           <code>!mp test save BC MOD REC [dtype]</code> - Test save attack (dtype tests target's Invuln +8)<br/>
           <code>!mp test snare BP [MAX]</code> - Apply snare to selected token<br/>
@@ -7505,6 +7527,79 @@ function cmdStance(msg, args) {
           <code>!mp test reset</code> - Reset selected token to full Hits/Power<br/>
           <code>!mp test status</code> - Show selected token's full status (shows Hardened/Invuln)`);
     }
+  }
+
+    function testSiphon(msg, args) {
+    if (!playerIsGM(msg.playerid)) {
+      return ch("MP", "/w " + msg.who + " Only GM can use test commands.");
+    }
+    if (!msg.selected || msg.selected.length < 2) {
+      return ch("MP", `/w gm <b>MP:</b> Select <b>2</b> tokens (attacker first, target second), then run <code>!mp test siphon [PTS]</code>.`);
+    }
+    const atkTok = getObj("graphic", msg.selected[1]._id);
+    const defTok = getObj("graphic", msg.selected[0]._id);
+    const atkChar = getCharFromToken(atkTok);
+    const defChar = getCharFromToken(defTok);
+    if (!atkTok || !defTok || !atkChar || !defChar) {
+      return ch("MP", `/w gm <b>MP:</b> Both selected tokens must be linked to characters.`);
+    }
+    // Reads the attacker's real Siphon row config (drain/mode/cap/replenish/overload)
+    const sipAttr = findObjs({ _type: "attribute", _characterid: atkChar.id })
+      .find(a => /^repeating_attacks_.+_attack_is_siphon$/.test(a.get("name")) && a.get("current") === "1");
+    if (!sipAttr) {
+      return ch("MP", `/w gm <b>MP:</b> ${esc(atkChar.get("name"))} has no attack row with Siphon Attack checked.`);
+    }
+    const rowId = sipAttr.get("name").replace(/^repeating_attacks_/, "").replace(/_attack_is_siphon$/, "");
+    const pfx = `repeating_attacks_${rowId}_`;
+    const drain = getAttr(atkChar.id, pfx + "attack_siphon_drain") || "hits";
+    const sMode = getAttr(atkChar.id, pfx + "attack_siphon_mode") || "normal";
+    const sBC = getAttr(atkChar.id, pfx + "attack_siphon_bc") || "";
+    const sCat = getAttr(atkChar.id, pfx + "attack_siphon_cat") || "";
+    const pts = Math.max(1, num(args.pts, 5));
+
+    const hits0 = getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = getResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+    let drained = 0, gain = 0, powerDrain = 0, toHits = 0;
+    if (drain === "power") {
+      drained = (sMode === "mimicry") ? 0 : Math.min(pts * 2, pow0);
+      gain = (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? pts * 2 : drained);
+      powerDrain = drained;
+    } else if (drain === "hits") {
+      drained = (sMode === "mimicry") ? 0 : Math.min(pts, hits0);
+      gain = (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? pts : drained);
+      toHits = drained;
+    } else {
+      drained = (sMode === "mimicry") ? 0 : pts;
+      gain = (sMode === "suppress") ? 0 : pts;
+    }
+    const hits1 = Math.max(0, hits0 - toHits);
+    const pow1 = Math.max(0, pow0 - powerDrain);
+    setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+    setResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    if (hits0 - hits1 > 0) consumeSiphonPool(defChar.id, "hits", hits0 - hits1);
+    if (pow0 - pow1 > 0) consumeSiphonPool(defChar.id, "power", pow0 - pow1);
+
+    let statusNote = "";
+    const hasPainResistance = (num(getAttr(defChar.id, "willpower_pain_resistance"), 0) === 1);
+    if (hits1 === 0 && toHits > 0) {
+      statusNote = ` <b style="color:#ff6b6b;">INCAPACITATED!</b>`;
+      defTok.set("status_dead", true);
+    } else if (drain === "hits" && !hasPainResistance && toHits > Math.floor(hits0 / 2) && hits0 > 0) {
+      statusNote = ` <b style="color:#e67e22;">UNCONSCIOUS!</b>`;
+      defTok.set("status_sleepy", true);
+    }
+
+    const unit = drain === "power" ? "Power" : (drain === "hits" ? "Hits" : (drain === "bc" ? `${sBC || "BC"} pts` : `${sCat || "Ability"} CPs`));
+    let out = `<div style="background:#16213e; border:2px solid #8040c0; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    out += `<b style="color:#c88fff;">TEST SIPHON</b> — ${pts} pts, ${esc(drain)} (${esc(sMode)})`;
+    out += `<br/><b>${esc(defChar.get("name"))}</b> drained <b>${drained}</b> ${esc(unit)}`;
+    if (drain === "hits") out += ` (Hits ${hits0}→${hits1})${statusNote}`;
+    else if (drain === "power") out += ` (Pow ${pow0}→${pow1})`;
+    else out += ` — mark on victim's sheet`;
+    const gainHtml = gain > 0 ? applySiphonGain(atkChar.id, rowId, drain, sBC, sCat, gain, defTok.get("_pageid")) : "";
+    out += gainHtml || `<br/><span style="color:#aab;">No transfer.</span>`;
+    out += `</div>`;
+    ch("MP", `/w gm ${out}`);
   }
 
     function testGrapple(msg, args) {
@@ -8515,6 +8610,8 @@ function cmdStance(msg, args) {
         } else if (testArgs.subcmd === "heal") {
           testArgs.amount = testParts[3] || "10";
           testArgs.power = testParts[4] || "0";
+        } else if (testArgs.subcmd === "siphon") {
+          testArgs.pts = testParts[3] || "5";
         } else if (testArgs.subcmd === "grapple") {
           // Usage: !mp test grapple [TOHIT] [lock] [remote] [gripdice]
           // Select 2 tokens: grappler first, target second
@@ -8754,12 +8851,12 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.79.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.80.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
           <code>!mp sv BC [mod]</code> - Save (EN/AG/IN/CL)<br/>
-          <code>!mp siphon list | clear --target TOKID | adjust --target TOKID --amt -N</code> - Siphon pools<br/>
+          <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt -N]</code> - Siphon pools<br/>
           <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
@@ -9673,11 +9770,11 @@ function cmdStance(msg, args) {
     setInterval(checkSiphonExpiry, 60000);
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.79.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.80.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.79.0 READY");
+  log("MP ENGINE v2.80.0 READY");
 });
