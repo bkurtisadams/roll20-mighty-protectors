@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.75.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.76.0 - 2026-07-05
+ * v2.76.0: area effect map marker. handleAreaAttack now draws a dashed circle
+ *   path at the blast center (scatter-adjusted on a miss) sized to areaRadius,
+ *   on the map layer so players can't move it. Single path object built from
+ *   M/L tick segments (16-48 ticks by radius). Marker id stored in pendingArea
+ *   and removed on Apply All Damage and in cleanupPendingArea. New CFG:
+ *   AREA_MARKER (on/off), AREA_MARKER_COLOR, AREA_MARKER_WIDTH.
  * v2.75.0: area effect chat cards restyled to the dark attack-card theme for
  *   readability. AREA HIT/MISS card, escape/shield-block results, AREA DAMAGE
  *   RESULTS, and the all-escapes-resolved message now use dark backgrounds
@@ -531,7 +537,12 @@ MP.Engine = (function () {
     PENDING_EXPIRE_MS: 3600000, // 1 hour
 
     // Snare stacking bonus per additional hit
-    SNARE_STACK_BONUS: 2
+    SNARE_STACK_BONUS: 2,
+
+    // Area effect map marker (dashed circle drawn at blast center)
+    AREA_MARKER: true,
+    AREA_MARKER_COLOR: "#e74c3c",
+    AREA_MARKER_WIDTH: 3
   };
 
   // Vehicle mode detection
@@ -1528,6 +1539,43 @@ function generateRowID() {
     return Math.max(1, Math.ceil(distToEdge));  // Minimum 1"
   }
   
+  // Draw a dashed circle path marking the area effect (map layer, unmovable by players)
+  function drawAreaMarker(pageId, centerX, centerY, radiusInches, pixelsPerInch) {
+    if (!CFG.AREA_MARKER) return null;
+    const r = radiusInches * pixelsPerInch;
+    if (!(r > 0)) return null;
+    const ticks = Math.max(16, Math.min(48, Math.round(r / 8)));
+    const duty = 0.55;
+    const step = (2 * Math.PI) / ticks;
+    const pts = [];
+    for (let i = 0; i < ticks; i++) {
+      const a1 = i * step;
+      const a2 = a1 + step * duty;
+      pts.push(["M", r + r * Math.cos(a1), r + r * Math.sin(a1)]);
+      pts.push(["L", r + r * Math.cos(a2), r + r * Math.sin(a2)]);
+    }
+    const path = createObj("path", {
+      _pageid: pageId,
+      layer: "map",
+      stroke: CFG.AREA_MARKER_COLOR,
+      stroke_width: CFG.AREA_MARKER_WIDTH,
+      fill: "transparent",
+      left: centerX,
+      top: centerY,
+      width: r * 2,
+      height: r * 2,
+      path: JSON.stringify(pts)
+    });
+    return path ? path.id : null;
+  }
+  
+  function removeAreaMarker(rec) {
+    if (!rec || !rec.markerId) return;
+    const p = getObj("path", rec.markerId);
+    if (p) p.remove();
+    rec.markerId = null;
+  }
+  
   // Sum protection with coverage reduction for area effects
   // coverage: "full" (100%), "heavy" (50%), "light" (25%)
   // Returns { prot, hardened, invuln, adapt } with coverage-adjusted values
@@ -1956,6 +2004,7 @@ function generateRowID() {
     const maxAge = 5 * 60 * 1000;  // 5 minutes
     Object.keys(state.MP_Engine.pendingArea).forEach(k => {
       if (now - state.MP_Engine.pendingArea[k].timestamp > maxAge) {
+        removeAreaMarker(state.MP_Engine.pendingArea[k]);
         delete state.MP_Engine.pendingArea[k];
       }
     });
@@ -3124,6 +3173,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Store area effect data
     cleanupPendingArea();
+    const markerId = drawAreaMarker(pageId, centerX, centerY, rec.areaRadius, pixelsPerInch);
     const areaTokens = {};
     tokensInArea.forEach(t => {
       const distToEdge = calculateDistanceToEdge(t.distance, rec.areaRadius);
@@ -3154,6 +3204,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       centerX: centerX,
       centerY: centerY,
       pageId: pageId,
+      markerId: markerId,
       tokens: areaTokens,
       timestamp: Date.now(),
       timeout: 60000,  // 60 second timeout
@@ -3506,6 +3557,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     // Clean up
+    removeAreaMarker(areaRec);
     delete state.MP_Engine.pendingArea[rollId];
   }
 
