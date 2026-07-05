@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.74.1 - 2026-07-02
+/* Mighty Protectors Roll20 API Engine v2.75.0 - 2026-07-05
+ * v2.75.0: area effect chat cards restyled to the dark attack-card theme for
+ *   readability. AREA HIT/MISS card, escape/shield-block results, AREA DAMAGE
+ *   RESULTS, and the all-escapes-resolved message now use dark backgrounds
+ *   (#1a1a2e/#16213e) with light text and colored header strips/borders,
+ *   replacing black-on-red/orange flat cards.
  * v2.74.1: range calculation now converts Roll20 page scale units correctly.
  *   Supports MP-inch pages (1 in/sq) and feet pages (5 ft/sq), and fixes
  *   fractional Cell Width/snapping_increment by applying it to scale distance
@@ -3157,22 +3162,20 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     };
     
     // Build output
-    let html;
-    if (outcome === "HIT" || outcome === "CRIT") {
-      html = `<div style="background:#f39c12; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
-      html += `<span style="color:#000; font-weight:bold; font-size:14px;">💥 AREA ${outcome}!</span>`;
-    } else {
-      html = `<div style="background:#e74c3c; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
-      html += `<span style="color:#000; font-weight:bold; font-size:14px;">💥 AREA ${outcome}!</span>`;
-    }
-    
-    html += `<br/><span style="color:#000;">Radius: <b>${rec.areaRadius}"</b> | Damage: <b>${rec.damageTotal}</b> ${rec.dmgTypeStr}</span>`;
-    html += `<br/><span style="color:#000;">To-Hit: <b>${rec.targetTotal}-</b> (+6 immobile, no def) | Roll: <b>${rec.roll}</b>${scatterNote}</span>`;
+    const hdrBg = (outcome === "HIT" || outcome === "CRIT") ? "#e67e22" : "#c0392b";
+    let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden; margin-top:4px;">`;
+    html += `<div style="background:${hdrBg}; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">💥 AREA ${outcome}</div>`;
+    html += `<div style="padding:6px 10px; background:#16213e; border-bottom:1px solid #2a2a4a;">`;
+    html += `Radius: <b style="color:#fff;">${rec.areaRadius}"</b> &middot; Damage: <b style="color:#fff;">${rec.damageTotal}</b> ${esc(rec.dmgTypeStr)}`;
+    html += `<br/>To-Hit: <b style="color:#fff;">${rec.targetTotal}-</b> <span style="color:#aab; font-size:11px;">(+6 immobile, no def)</span> &middot; Roll: <b style="color:#fff;">${rec.roll}</b>`;
+    if (scatterNote) html += `<br/><span style="color:#f1c40f; font-weight:bold;">${scatterNote.trim()}</span>`;
+    html += `</div>`;
     
     if (tokensInArea.length === 0) {
-      html += `<br/><span style="color:#333;">No tokens in area.</span>`;
+      html += `<div style="padding:6px 10px; color:#aab;">No tokens in area.</div>`;
     } else {
-      html += `<br/><span style="color:#000; font-weight:bold;">Tokens in area: ${tokensInArea.length}</span>`;
+      html += `<div style="padding:6px 10px;">`;
+      html += `<span style="color:#f1c40f; font-weight:bold;">Tokens in area: ${tokensInArea.length}</span>`;
       
       // List tokens with escape buttons
       tokensInArea.forEach(t => {
@@ -3185,8 +3188,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const shield = getShieldData(t.charId);
         const shieldTN = shield ? (9 + baseDef + shield.defense) : 0;
         
-        html += `<br/><span style="color:#333;">• <b>${esc(t.name)}</b> (${distToEdge}" to edge)</span>`;
-        html += `<br/>  <span style="font-size:11px;">Escape TN: ${escapeTN}- | Prone: ${escapeTNProne}-</span>`;
+        html += `<br/><b style="color:#fff;">${esc(t.name)}</b> <span style="color:#aab;">(${distToEdge}" to edge)</span>`;
+        html += `<br/><span style="color:#aab; font-size:11px;">Escape TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Prone: <b style="color:#eee;">${escapeTNProne}-</b></span>`;
         
         // Player/GM buttons
         if (t.controller !== "gm" && t.controller !== "all") {
@@ -3201,9 +3204,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       });
       
       // GM buttons
-      html += `<br/><br/>[Auto-Roll NPCs](!mp arearollnpcs --id ${rollId})`;
+      html += `<div style="margin-top:6px;">[Auto-Roll NPCs](!mp arearollnpcs --id ${rollId})`;
       html += ` [Force All Escapes](!mp areaforceall --id ${rollId})`;
-      html += ` [Apply All Damage](!mp areadamageall --id ${rollId})`;
+      html += ` [Apply All Damage](!mp areadamageall --id ${rollId})</div>`;
+      html += `</div>`;
     }
     
     html += `</div>`;
@@ -3248,17 +3252,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     let resultHtml;
     if (success) {
-      resultHtml = `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">`;
-      resultHtml += `<b>${esc(tokData.name)}</b> ESCAPES area effect!`;
-      resultHtml += `<br/>TN: ${escapeTN}- | Roll: ${roll}${isProne ? " (dove prone)" : ""}`;
+      resultHtml = `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+      resultHtml += `<b style="color:#2ecc71;">${esc(tokData.name)}</b> ESCAPES area effect!`;
+      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${isProne ? " (dove prone)" : ""}</span>`;
       resultHtml += `</div>`;
     } else {
       // Failed - character ends up halfway to edge
       const halfwayDist = Math.ceil(distToEdge / 2);
-      resultHtml = `<div style="background:#e74c3c; border:2px solid #000; padding:4px 8px;">`;
-      resultHtml += `<b>${esc(tokData.name)}</b> FAILS to escape!`;
-      resultHtml += `<br/>TN: ${escapeTN}- | Roll: ${roll}${roll === 20 ? " (fumble)" : ""}`;
-      resultHtml += `<br/>Ends ${halfwayDist}" from edge (still in area)`;
+      resultHtml = `<div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+      resultHtml += `<b style="color:#ff6b6b;">${esc(tokData.name)}</b> FAILS to escape!`;
+      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${roll === 20 ? " (fumble)" : ""}</span>`;
+      resultHtml += `<br/><span style="color:#aab;">Ends ${halfwayDist}" from edge (still in area)</span>`;
       resultHtml += `</div>`;
     }
     
@@ -3305,26 +3309,26 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const damage = areaRec.damage;
       const shieldBroken = damage >= shield.bp;
       
-      resultHtml = `<div style="background:#3498db; border:2px solid #000; padding:4px 8px;">`;
-      resultHtml += `<b>${esc(tokData.name)}</b> BLOCKS with ${esc(shield.name)}!`;
-      resultHtml += `<br/>TN: ${blockTN}- | Roll: ${roll}`;
-      resultHtml += `<br/>Damage: ${damage} vs Shield BP: ${shield.bp}`;
+      resultHtml = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+      resultHtml += `<b style="color:#5dade2;">${esc(tokData.name)}</b> BLOCKS with ${esc(shield.name)}!`;
+      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${blockTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b></span>`;
+      resultHtml += `<br/><span style="color:#aab;">Damage: <b style="color:#eee;">${damage}</b> vs Shield BP: <b style="color:#eee;">${shield.bp}</b></span>`;
       
       if (shieldBroken) {
         breakShield(tokData.charId, shield.rowId);
-        resultHtml += `<br/><span style="color:#c0392b; font-weight:bold;">SHIELD BROKEN!</span>`;
+        resultHtml += `<br/><span style="color:#ff6b6b; font-weight:bold;">SHIELD BROKEN!</span>`;
       } else {
-        resultHtml += `<br/><span style="color:#27ae60;">Shield holds!</span>`;
+        resultHtml += `<br/><span style="color:#2ecc71;">Shield holds!</span>`;
       }
       resultHtml += `</div>`;
     } else {
       // Failed block - takes normal area damage
       tokData.escaped = false;
       
-      resultHtml = `<div style="background:#e74c3c; border:2px solid #000; padding:4px 8px;">`;
-      resultHtml += `<b>${esc(tokData.name)}</b> FAILS to block!`;
-      resultHtml += `<br/>TN: ${blockTN}- | Roll: ${roll}${roll === 20 ? " (fumble)" : ""}`;
-      resultHtml += `<br/>Takes full area damage.`;
+      resultHtml = `<div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+      resultHtml += `<b style="color:#ff6b6b;">${esc(tokData.name)}</b> FAILS to block!`;
+      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${blockTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${roll === 20 ? " (fumble)" : ""}</span>`;
+      resultHtml += `<br/><span style="color:#aab;">Takes full area damage.</span>`;
       resultHtml += `</div>`;
     }
     
@@ -3373,9 +3377,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const areaRec = state.MP_Engine.pendingArea[rollId];
     if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
     
-    let html = `<div style="background:#f39c12; border:3px solid #000; padding:4px 8px;">`;
-    html += `<span style="color:#000; font-weight:bold;">AREA DAMAGE RESULTS</span>`;
-    html += `<br/>${areaRec.damage} ${areaRec.damageType}`;
+    let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden;">`;
+    html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">AREA DAMAGE RESULTS</div>`;
+    html += `<div style="padding:6px 10px;"><b style="color:#fff;">${areaRec.damage}</b> ${esc(areaRec.damageType)}`;
     
     Object.keys(areaRec.tokens).forEach(tokId => {
       const tokData = areaRec.tokens[tokId];
@@ -3488,13 +3492,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         tok.set("status_sleepy", true);
       }
       
-      html += `<br/><span style="color:#c0392b;">✗ <b>${esc(tokData.name)}</b>: ${raw}-${effectiveProt} prot`;
+      html += `<br/><span style="color:#ff6b6b;">✗ <b>${esc(tokData.name)}</b>: ${raw}-${effectiveProt} prot`;
       if (hasInvuln) html += ` [×¼]`;
       if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
       html += ` = ${penetrating} pen → Hits: ${hits0}→${hits1}${statusNote}</span>`;
     });
     
-    html += `</div>`;
+    html += `</div></div>`;
     if (CFG.GM_ONLY_BUTTONS) {
       chToChar("MP", html, areaRec.atkCharId);
     } else {
@@ -3512,7 +3516,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const allResolved = Object.values(areaRec.tokens).every(t => t.escaped !== null);
     if (allResolved) {
-      const resolvedHtml = `<div style="background:#3498db; padding:4px;">All escapes resolved. [Apply All Damage](!mp areadamageall --id ${rollId})</div>`;
+      const resolvedHtml = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. [Apply All Damage](!mp areadamageall --id ${rollId})</div>`;
       if (CFG.GM_ONLY_BUTTONS) {
         chToChar("MP", resolvedHtml, areaRec.atkCharId);
       } else {
