@@ -1,4 +1,20 @@
-/* Mighty Protectors Roll20 API Engine v2.76.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.77.0 - 2026-07-05
+ * v2.77.0: SIPHON automation (MP Voluntary Ability, p.66-67). New attack row
+ *   fields (attack_is_siphon, siphon_drain/mode/bc/cat/replenish/split/
+ *   overload/cap/pool) read at attack time; siphon attacks never cause KB.
+ *   cmdApply routes drain by type: Hits 1/pt capped at pool (no 4.8.4
+ *   overflow, unconscious check still applies per Kurt ruling), Power 2/pt
+ *   from Power only, Ability CPs / BC pts reported for manual Siphoned-row
+ *   ledger. Head shot doubling exempted. Modes: Normal, Suppress (no gain),
+ *   Mimicry (no drain). Transfer: attacker bar += gain (over max allowed),
+ *   row pool tracks total, Ability Cap enforced with Overload effects
+ *   (excess lost / all lost / 1 dmg per pt / explode d=pool/5 odd);
+ *   Replenish writes real healing capped at max, no pool. Damage consumes
+ *   siphoned points first (consumeSiphonPool in cmdApply + area). 1-hour
+ *   dissipation via state registry + 60s sweep (restart-safe); GM whispered.
+ *   Area siphon supported (Ark: Siphon Hits Area Effect) with pooled gain.
+ *   New GM command: !mp siphon list | clear | adjust. Split spec is
+ *   informational this slice.
  * v2.76.0: area effect map marker. handleAreaAttack now draws a dashed circle
  *   path at the blast center (scatter-adjusted on a miss) sized to areaRadius,
  *   on the map layer so players can't move it. Single path object built from
@@ -500,7 +516,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.74.1 FILE STARTING");
+log("MP ENGINE v2.77.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -665,6 +681,9 @@ MP.Engine = (function () {
   
   // Ensure conditions exists for existing state
   if (!state.MP_Engine.conditions) state.MP_Engine.conditions = {};
+  // Ensure siphon pool registry exists for existing state
+  // { key: { charId, rowId, resource, expiry } } — points authoritative in row attr
+  if (!state.MP_Engine.siphonPools) state.MP_Engine.siphonPools = {};
   // Ensure pendingArea exists for existing state
   if (!state.MP_Engine.pendingArea) state.MP_Engine.pendingArea = {};
   // Ensure currentRound exists for existing state
@@ -2629,7 +2648,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
     const range = getAtk("attack_range") || fields.range || "-";
     const kbChecked = getAtk("attack_kb");
-    const causesKB = (kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes");
+    const causesKB = (getAtk("attack_is_siphon") !== "1") && ((kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes"));
 
     // Duration modifier (MP Modifiers, "Duration"): a durational attack repeats its
     // effect on each subsequent Phase 0 until it expires. 1 Round = Instant (no badge).
@@ -2656,6 +2675,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const snMaxBP = num(getAtk("attack_max_bp"), 0);
     const snType = getAtk("attack_snare_type") || "";
     const isSnareAttack = (getAtk("attack_is_snare") === "1") || (atkType === "snr");
+    
+    const isSiphonAttack = (getAtk("attack_is_siphon") === "1");
+    const siphonDrain = getAtk("attack_siphon_drain") || "hits";
+    const siphonMode = getAtk("attack_siphon_mode") || "normal";
+    const siphonBC = getAtk("attack_siphon_bc") || "";
+    const siphonCat = getAtk("attack_siphon_cat") || "";
     
     const areaRaw = getAtk("attack_area") || fields.area || "";
     const areaDiameter = num(areaRaw, 0);
@@ -2832,6 +2857,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType,
       atkAP, isSaveAttack, saveBC, saveMod, recMod, recTime, noDamage, saveDamage,
       snBP, snMaxBP, snType, causesKB,
+      isSiphon: isSiphonAttack, siphonDrain, siphonMode, siphonBC, siphonCat,
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType,
       isAreaAttack, areaRadius, areaDiameter,
@@ -3001,6 +3027,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const dmgTypeHover = dmgSubtype ? ` title="Subtype: ${esc(dmgSubtype)}"` : "";
     html += `Type: <span style="color:#ddd; font-weight:bold;"${dmgTypeHover}>${esc(dmgTypeStr)}</span>`;
     html += ` · KB: <span style="color:#ddd; font-weight:bold;">${causesKB ? "Yes" : "No"}</span>`;
+    if (isSiphonAttack) {
+      const sipLabel = siphonDrain === "power" ? "Power" : (siphonDrain === "ability" ? `${esc(siphonCat || "Ability")} CPs` : (siphonDrain === "bc" ? `${esc(siphonBC || "BC")}` : "Hits"));
+      html += ` · <span style="color:#c88fff; font-weight:bold;" title="Siphon Attack: drains ${sipLabel}${siphonMode !== "normal" ? " (" + siphonMode + ")" : ""}">SIPHON: ${sipLabel}</span>`;
+    }
     if (atkAP === Infinity) html += ` · AP: <span style="color:#bd93f9; font-weight:bold;" title="Armor Piercing: ignores all armor (not force fields)">ALL</span>`;
     else if (atkAP > 0) html += ` · AP: <span style="color:#bd93f9; font-weight:bold;" title="Armor Piercing: ignores this many points of armor (not force fields)">${atkAP}</span>`;
     html += ` · Rng: <span style="color:#ddd; font-weight:bold;">${rangeFooter}</span>`;
@@ -3209,7 +3239,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       timestamp: Date.now(),
       timeout: 60000,  // 60 second timeout
       atkName: rec.atkName,
-      causesKB: rec.causesKB
+      causesKB: rec.causesKB,
+      rowId: rec.rowId,
+      isSiphon: !!rec.isSiphon,
+      siphonDrain: rec.siphonDrain,
+      siphonMode: rec.siphonMode,
+      siphonBC: rec.siphonBC,
+      siphonCat: rec.siphonCat
     };
     
     // Build output
@@ -3432,6 +3468,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">AREA DAMAGE RESULTS</div>`;
     html += `<div style="padding:6px 10px;"><b style="color:#fff;">${areaRec.damage}</b> ${esc(areaRec.damageType)}`;
     
+    let areaSiphonGain = 0;
+    
     Object.keys(areaRec.tokens).forEach(tokId => {
       const tokData = areaRec.tokens[tokId];
       
@@ -3515,17 +3553,42 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const hits0 = tokIsVehicle ? getVehicleHits(tok, tokData.charId) : getResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR);
       const pow0 = tokIsVehicle ? getVehiclePower(tok, tokData.charId) : getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
       
-      const toHits = penetrating;
+      // Siphon area: drain capped at what the pool holds, no 4.8.4 overflow
+      let toHits = penetrating;
+      let sipDrained = 0;
+      let sipPowerDrain = 0;
+      if (areaRec.isSiphon && penetrating > 0) {
+        const sMode = areaRec.siphonMode || "normal";
+        if (areaRec.siphonDrain === "power") {
+          sipDrained = (sMode === "mimicry") ? 0 : Math.min(penetrating * 2, pow0);
+          sipPowerDrain = sipDrained;
+          areaSiphonGain += (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? penetrating * 2 : sipDrained);
+          toHits = 0;
+        } else if (areaRec.siphonDrain === "hits") {
+          sipDrained = (sMode === "mimicry") ? 0 : Math.min(penetrating, hits0);
+          areaSiphonGain += (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? penetrating : sipDrained);
+          toHits = sipDrained;
+        } else {
+          sipDrained = (sMode === "mimicry") ? 0 : penetrating;
+          areaSiphonGain += (sMode === "suppress") ? 0 : penetrating;
+          toHits = 0;
+        }
+      }
       const hitsAfterDmg = Math.max(0, hits0 - toHits);
-      const overflow = tokIsVehicle ? 0 : Math.max(0, toHits - hits0);
-      const pow1 = tokIsVehicle ? pow0 : Math.max(0, pow0 - overflow);
+      const overflow = (tokIsVehicle || areaRec.isSiphon) ? 0 : Math.max(0, toHits - hits0);
+      const pow1 = tokIsVehicle
+        ? Math.max(0, pow0 - sipPowerDrain)
+        : Math.max(0, pow0 - overflow - sipPowerDrain);
       const hits1 = hitsAfterDmg;
       
       if (tokIsVehicle) {
         setVehicleHits(tok, tokData.charId, hits1);
+        if (sipPowerDrain > 0) setVehiclePower(tok, tokData.charId, pow1);
       } else {
         setResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
         setResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+        if (hits0 - hits1 > 0) consumeSiphonPool(tokData.charId, "hits", hits0 - hits1);
+        if (pow0 - pow1 > 0) consumeSiphonPool(tokData.charId, "power", pow0 - pow1);
       }
       
       // Status effects
@@ -3546,8 +3609,24 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `<br/><span style="color:#ff6b6b;">✗ <b>${esc(tokData.name)}</b>: ${raw}-${effectiveProt} prot`;
       if (hasInvuln) html += ` [×¼]`;
       if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
-      html += ` = ${penetrating} pen → Hits: ${hits0}→${hits1}${statusNote}</span>`;
+      if (areaRec.isSiphon) {
+        const sU = areaRec.siphonDrain === "power" ? "Power" : (areaRec.siphonDrain === "hits" ? "Hits" : "CPs");
+        html += ` = <span style="color:#c88fff;">siphons ${sipDrained} ${sU}</span>`;
+        if (areaRec.siphonDrain === "hits") html += ` → Hits: ${hits0}→${hits1}${statusNote}`;
+        else if (areaRec.siphonDrain === "power") html += ` → Pow: ${pow0}→${pow1}`;
+        html += `</span>`;
+      } else {
+        html += ` = ${penetrating} pen → Hits: ${hits0}→${hits1}${statusNote}</span>`;
+      }
     });
+    
+    if (areaRec.isSiphon && areaSiphonGain > 0 && areaRec.rowId) {
+      const gainHtml = applySiphonGain(areaRec.atkCharId, areaRec.rowId, areaRec.siphonDrain, areaRec.siphonBC, areaRec.siphonCat, areaSiphonGain, areaRec.pageId);
+      if (gainHtml) {
+        const atkChar = getObj("character", areaRec.atkCharId);
+        chToChar("MP", `<div style="background:#16213e; border:2px solid #8040c0; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#c88fff;">${esc(atkChar ? atkChar.get("name") : "Attacker")}</b> — ${esc(areaRec.atkName || "Siphon")}${gainHtml}</div>`, areaRec.atkCharId);
+      }
+    }
     
     html += `</div></div>`;
     if (CFG.GM_ONLY_BUTTONS) {
@@ -3575,6 +3654,187 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         ch("MP", resolvedHtml);
       }
     }
+  }
+
+  // -------------------------
+  // SIPHON (drain / transfer / dissipation)
+  // -------------------------
+
+  // Apply siphoned points to the attacker. Returns HTML for the attacker whisper.
+  // gain is in drained-pool units (Hits, Power, or CPs/BC pts for ledger types).
+  function applySiphonGain(atkCharId, rowId, siphonDrain, siphonBC, siphonCat, gain, pageId) {
+    if (gain <= 0) return "";
+    const pfx = `repeating_attacks_${rowId}_`;
+    const pool0 = getAttrNum(atkCharId, pfx + "attack_siphon_pool", 0);
+    const cap = getAttrNum(atkCharId, pfx + "attack_siphon_cap", 0);
+    const replenish = (getAttr(atkCharId, pfx + "attack_siphon_replenish") === "1");
+    const overload = getAttr(atkCharId, pfx + "attack_siphon_overload") || "";
+    const unitLabel = siphonDrain === "power" ? "Power" : (siphonDrain === "hits" ? "Hits" : (siphonDrain === "bc" ? `${siphonBC || "BC"} pts` : `${siphonCat || "Ability"} CPs`));
+
+    const allowed = cap > 0 ? Math.max(0, cap - pool0) : gain;
+    const kept = Math.min(gain, allowed);
+    const excess = gain - kept;
+
+    let html = "";
+    const isLedger = (siphonDrain === "ability" || siphonDrain === "bc");
+    const atkIsVeh = isVehicleMode(atkCharId);
+    const atkTok = findObjs({ _type: "graphic", represents: atkCharId, _pageid: pageId })[0]
+      || findObjs({ _type: "graphic", represents: atkCharId })[0];
+
+    if (isLedger || atkIsVeh) {
+      const pool1 = pool0 + kept;
+      setAttr(atkCharId, pfx + "attack_siphon_pool", pool1);
+      registerSiphonPool(atkCharId, rowId, siphonDrain, Date.now() + 3600000);
+      html += `<br/><span style="color:#c88fff;">Siphons <b>${kept}</b> ${esc(unitLabel)} (pool ${pool1}${cap > 0 ? `/${cap}` : ""}) — apply to a Siphoned (S) row. Dissipates in 1 hour.</span>`;
+    } else {
+      const barProp = siphonDrain === "power" ? CFG.POWER_BAR : CFG.HITS_BAR;
+      const attrName = siphonDrain === "power" ? CFG.POWER_ATTR : CFG.HITS_ATTR;
+      const maxAttr = siphonDrain === "power" ? CFG.POWER_MAX_ATTR : CFG.HITS_MAX_ATTR;
+      const cur = getResource(atkTok, atkCharId, barProp, attrName);
+      if (replenish) {
+        const maxVal = getAttrNum(atkCharId, maxAttr, 0);
+        const newVal = maxVal > 0 ? Math.min(maxVal, cur + kept) : cur + kept;
+        setResource(atkTok, atkCharId, barProp, attrName, newVal);
+        html += `<br/><span style="color:#2ecc71;">Replenishes <b>${newVal - cur}</b> ${esc(unitLabel)} (${cur}→${newVal}). No dissipation.</span>`;
+        return html;
+      }
+      setResource(atkTok, atkCharId, barProp, attrName, cur + kept);
+      const pool1 = pool0 + kept;
+      setAttr(atkCharId, pfx + "attack_siphon_pool", pool1);
+      registerSiphonPool(atkCharId, rowId, siphonDrain, Date.now() + 3600000);
+      html += `<br/><span style="color:#c88fff;">Gains <b>${kept}</b> ${esc(unitLabel)} (${cur}→${cur + kept}, pool ${pool1}${cap > 0 ? `/${cap}` : ""}). Dissipates in 1 hour.</span>`;
+    }
+
+    if (excess > 0) {
+      if (!overload) {
+        html += `<br/><span style="color:#e67e22;">+${excess} over cap — lost.</span>`;
+      } else {
+        const wiped = wipeSiphonPool(atkCharId, rowId, siphonDrain);
+        if (overload === "lose") {
+          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! All ${wiped} siphoned points lost.</span>`;
+        } else if (overload === "damage") {
+          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! Takes ${wiped} damage (may roll with); all siphoned points lost.</span>`;
+        } else if (overload === "explode") {
+          let dia = Math.ceil(wiped / 5);
+          if (dia % 2 === 0) dia += 1;
+          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! EXPLODES — ${wiped} damage to all within ${dia}" diameter (attacker may NOT roll with; others may). All siphoned points lost.</span>`;
+        }
+      }
+    }
+    return html;
+  }
+
+  function siphonKey(charId, rowId, resource) {
+    return `${charId}_${rowId}_${resource}`;
+  }
+
+  function registerSiphonPool(charId, rowId, resource, expiry) {
+    state.MP_Engine.siphonPools[siphonKey(charId, rowId, resource)] = {
+      charId: charId, rowId: rowId, resource: resource, expiry: expiry
+    };
+  }
+
+  // Remove all points of one pool from the bar (hits/power) and zero the ledger.
+  // Returns the number of points wiped.
+  function wipeSiphonPool(charId, rowId, resource) {
+    const pfx = `repeating_attacks_${rowId}_`;
+    const pool = getAttrNum(charId, pfx + "attack_siphon_pool", 0);
+    if (pool > 0 && (resource === "hits" || resource === "power") && !isVehicleMode(charId)) {
+      const barProp = resource === "power" ? CFG.POWER_BAR : CFG.HITS_BAR;
+      const attrName = resource === "power" ? CFG.POWER_ATTR : CFG.HITS_ATTR;
+      const tok = findObjs({ _type: "graphic", represents: charId })[0];
+      const cur = getResource(tok, charId, barProp, attrName);
+      setResource(tok, charId, barProp, attrName, Math.max(0, cur - pool));
+    }
+    setAttr(charId, pfx + "attack_siphon_pool", 0);
+    delete state.MP_Engine.siphonPools[siphonKey(charId, rowId, resource)];
+    return pool;
+  }
+
+  // Damage consumes siphoned points first: decrement this character's active
+  // pools of the given resource by amount (bookkeeping only — the bar already
+  // took the loss). Dissipation then removes only what remains.
+  function consumeSiphonPool(charId, resource, amount) {
+    if (amount <= 0) return;
+    let remaining = amount;
+    Object.keys(state.MP_Engine.siphonPools).forEach(k => {
+      if (remaining <= 0) return;
+      const rec = state.MP_Engine.siphonPools[k];
+      if (rec.charId !== charId || rec.resource !== resource) return;
+      const pfx = `repeating_attacks_${rec.rowId}_`;
+      const pool = getAttrNum(charId, pfx + "attack_siphon_pool", 0);
+      if (pool <= 0) { delete state.MP_Engine.siphonPools[k]; return; }
+      const eat = Math.min(pool, remaining);
+      remaining -= eat;
+      const pool1 = pool - eat;
+      setAttr(charId, pfx + "attack_siphon_pool", pool1);
+      if (pool1 <= 0) delete state.MP_Engine.siphonPools[k];
+    });
+  }
+
+  // Dissipation sweep (1 hour after taken) — runs on an interval from on("ready")
+  function checkSiphonExpiry() {
+    const now = Date.now();
+    Object.keys(state.MP_Engine.siphonPools).forEach(k => {
+      const rec = state.MP_Engine.siphonPools[k];
+      if (rec.expiry > now) return;
+      const char = getObj("character", rec.charId);
+      const pfx = `repeating_attacks_${rec.rowId}_`;
+      const pool = getAttrNum(rec.charId, pfx + "attack_siphon_pool", 0);
+      const name = char ? char.get("name") : "Unknown";
+      if (pool > 0 && (rec.resource === "hits" || rec.resource === "power") && !isVehicleMode(rec.charId)) {
+        const barProp = rec.resource === "power" ? CFG.POWER_BAR : CFG.HITS_BAR;
+        const attrName = rec.resource === "power" ? CFG.POWER_ATTR : CFG.HITS_ATTR;
+        const tok = findObjs({ _type: "graphic", represents: rec.charId })[0];
+        const cur = getResource(tok, rec.charId, barProp, attrName);
+        const newVal = Math.max(0, cur - pool);
+        setResource(tok, rec.charId, barProp, attrName, newVal);
+        ch("MP", `/w gm <div style="background:#16213e; border:2px solid #8040c0; border-radius:6px; padding:6px 10px; font-size:13px; color:#eee; max-width:280px;"><b style="color:#c88fff;">${esc(name)}</b>: ${pool} siphoned ${rec.resource === "power" ? "Power" : "Hits"} dissipate (${cur}→${newVal}).</div>`);
+      } else if (pool > 0) {
+        ch("MP", `/w gm <div style="background:#16213e; border:2px solid #8040c0; border-radius:6px; padding:6px 10px; font-size:13px; color:#eee; max-width:280px;"><b style="color:#c88fff;">${esc(name)}</b>: ${pool} siphoned points dissipate — remove the Siphoned (S) row.</div>`);
+      }
+      setAttr(rec.charId, pfx + "attack_siphon_pool", 0);
+      delete state.MP_Engine.siphonPools[k];
+    });
+  }
+
+  // GM command: !mp siphon list | clear --target <tokenId> | adjust --target <tokenId> --amt -N
+  function cmdSiphon(msg, args) {
+    const parts = msg.content.split(/\s+/);
+    const action = (parts[2] || "list").toLowerCase();
+    if (action === "list") {
+      const keys = Object.keys(state.MP_Engine.siphonPools);
+      if (keys.length === 0) return ch("MP", `/w gm <b>MP:</b> No active siphon pools.`);
+      let out = `<b>Active siphon pools:</b>`;
+      keys.forEach(k => {
+        const rec = state.MP_Engine.siphonPools[k];
+        const char = getObj("character", rec.charId);
+        const pool = getAttrNum(rec.charId, `repeating_attacks_${rec.rowId}_attack_siphon_pool`, 0);
+        const mins = Math.max(0, Math.ceil((rec.expiry - Date.now()) / 60000));
+        out += `<br/>• <b>${esc(char ? char.get("name") : rec.charId)}</b>: ${pool} ${esc(rec.resource)} (${mins} min left)`;
+      });
+      return ch("MP", `/w gm ${out}`);
+    }
+    const tok = args.target ? getObj("graphic", args.target) : null;
+    const charId = tok ? tok.get("represents") : (args.char || "");
+    if (!charId) return ch("MP", `/w gm <b>MP:</b> !mp siphon ${action} needs --target <tokenId>.`);
+    if (action === "clear") {
+      let total = 0;
+      Object.keys(state.MP_Engine.siphonPools).forEach(k => {
+        const rec = state.MP_Engine.siphonPools[k];
+        if (rec.charId !== charId) return;
+        total += wipeSiphonPool(rec.charId, rec.rowId, rec.resource);
+      });
+      return ch("MP", `/w gm <b>MP:</b> Cleared ${total} siphoned points.`);
+    }
+    if (action === "adjust") {
+      const amt = num(args.amt, 0);
+      if (amt >= 0) return ch("MP", `/w gm <b>MP:</b> --amt must be negative (points spent outside the engine).`);
+      consumeSiphonPool(charId, "hits", -amt);
+      consumeSiphonPool(charId, "power", -amt);
+      return ch("MP", `/w gm <b>MP:</b> Consumed ${-amt} points from active pools.`);
+    }
+    return ch("MP", `/w gm <b>MP:</b> Usage: !mp siphon list | clear --target &lt;tokenId&gt; | adjust --target &lt;tokenId&gt; --amt -N`);
   }
 
   // -------------------------
@@ -4980,31 +5240,66 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Damage to Hits after roll-with
     let toHits = Math.max(0, penetrating - divert);
     
+    // --- SIPHON ROUTING (4.7: drain capped at what the pool holds, no 4.8.4 overflow) ---
+    let siphonDrained = 0;      // points removed from the drained pool (in that pool's units)
+    let siphonGain = 0;         // points the attacker stands to gain (same units)
+    let siphonPowerDrain = 0;   // Power drained by a power-type siphon
+    const isSiphon = !!rec.isSiphon;
+    if (isSiphon && toHits > 0) {
+      const pts = toHits;
+      const sMode = rec.siphonMode || "normal";
+      if (rec.siphonDrain === "power") {
+        const powAvail = defIsVehicle ? pow0 : Math.max(0, pow0 - divert);
+        siphonDrained = (sMode === "mimicry") ? 0 : Math.min(pts * 2, powAvail);
+        siphonGain = (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? pts * 2 : siphonDrained);
+        siphonPowerDrain = siphonDrained;
+        toHits = 0;
+      } else if (rec.siphonDrain === "hits") {
+        siphonDrained = (sMode === "mimicry") ? 0 : Math.min(pts, hits0);
+        siphonGain = (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? pts : siphonDrained);
+        toHits = siphonDrained;
+      } else {
+        siphonDrained = (sMode === "mimicry") ? 0 : pts;
+        siphonGain = (sMode === "suppress") ? 0 : pts;
+        toHits = 0;
+      }
+    }
+    
     // Store pre-doubled value for knockback (MP 4.14.2.1: KB is NOT doubled on head shots)
     const hitsForKB = toHits;
     
-    // Head Shot: DOUBLE Hits after protection and roll-with (not applicable to vehicles)
+    // Head Shot: DOUBLE Hits after protection and roll-with (not applicable to vehicles or siphon drain)
     const isHeadShot = mode.includes("headshot");
     const hasProtectedBrain = defIsVehicle ? false : (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
-    if (isHeadShot && !hasProtectedBrain && !defIsVehicle) {
+    if (isHeadShot && !hasProtectedBrain && !defIsVehicle && !isSiphon) {
       toHits = toHits * 2;
     }
 
     // Apply to Hits; overflow spills to Power for characters (4.8.4)
     // Vehicles: damage to Hits only, no overflow to Power
+    // Siphon: no overflow (hits drain is pre-capped at hits0; power drain routed directly)
     const hitsAfterDmg = Math.max(0, hits0 - toHits);
-    const overflow = defIsVehicle ? 0 : Math.max(0, toHits - hits0);
+    const overflow = (defIsVehicle || isSiphon) ? 0 : Math.max(0, toHits - hits0);
 
-    // Power reduction: diverted amount + overflow (vehicles: no change)
-    const pow1 = defIsVehicle ? pow0 : Math.max(0, pow0 - divert - overflow);
+    // Power reduction: diverted amount + overflow + power siphon drain (vehicles: divert/overflow do not apply)
+    const pow1 = defIsVehicle
+      ? Math.max(0, pow0 - siphonPowerDrain)
+      : Math.max(0, pow0 - divert - overflow - siphonPowerDrain);
     const hits1 = hitsAfterDmg;
 
     if (defIsVehicle) {
       setVehicleHits(defTok, defChar.id, hits1);
-      // Vehicle Power not affected by incoming damage
+      if (siphonPowerDrain > 0) setVehiclePower(defTok, defChar.id, pow1);
     } else {
       setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
       setResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+    }
+
+    // Damage consumes siphoned points first (Kurt ruling 2026-07-05): decrement the
+    // defender's own active siphon pools so dissipation removes only what remains.
+    if (!defIsVehicle) {
+      if (hits0 - hits1 > 0) consumeSiphonPool(defChar.id, "hits", hits0 - hits1);
+      if (pow0 - pow1 > 0) consumeSiphonPool(defChar.id, "power", pow0 - pow1);
     }
 
     // Status checks
@@ -5173,12 +5468,33 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       statusLine += applyDurationEffect(rec, defTok);
     }
 
+    // --- Siphon result line + attacker transfer ---
+    let siphonLine = "";
+    if (isSiphon) {
+      const sUnit = rec.siphonDrain === "power" ? "Power" : (rec.siphonDrain === "hits" ? "Hits" : (rec.siphonDrain === "bc" ? `${rec.siphonBC || "BC"} pts` : `${rec.siphonCat || "Ability"} CPs`));
+      if (rec.siphonMode === "mimicry") {
+        siphonLine = `<div style="color:#c88fff; font-size:12px; margin-top:2px;">SIPHON (Mimicry): no drain — attacker copies ${siphonGain} ${esc(sUnit)}</div>`;
+      } else if (rec.siphonDrain === "ability" || rec.siphonDrain === "bc") {
+        siphonLine = `<div style="color:#c88fff; font-size:12px; margin-top:2px;">SIPHON: drains <b>${siphonDrained}</b> ${esc(sUnit)} — mark on victim's sheet${rec.siphonMode === "suppress" ? " (Suppress: no gain)" : ""}</div>`;
+      } else {
+        siphonLine = `<div style="color:#c88fff; font-size:12px; margin-top:2px;">SIPHON: drains <b>${siphonDrained}</b> ${esc(sUnit)}${rec.siphonMode === "suppress" ? " (Suppress: no gain)" : ""}</div>`;
+      }
+      if (siphonGain > 0) {
+        const gainHtml = applySiphonGain(rec.atkCharId, rec.rowId, rec.siphonDrain, rec.siphonBC, rec.siphonCat, siphonGain, defTok.get("_pageid"));
+        if (gainHtml) {
+          const atkChar = getObj("character", rec.atkCharId);
+          chToChar("MP", `<div style="background:#16213e; border:2px solid #8040c0; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#c88fff;">${esc(atkChar ? atkChar.get("name") : "Attacker")}</b> — ${esc(rec.atkName || "Siphon")}${gainHtml}</div>`, rec.atkCharId);
+        }
+      }
+    }
+
     // --- Full result card (GM + defender): includes Hits/Power stats ---
     const msgLine =
       `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
       `<div style="font-weight:bold; font-size:15px; color:#fff; margin-bottom:6px;">${esc(rec.defName)}${effectNotes}</div>` +
       `<div style="color:#ccc; margin-bottom:4px; font-size:13px;">${dmgLine}</div>` +
       ffLine +
+      siphonLine +
       (divert > 0 ? `<div style="color:#ccc; margin-bottom:6px; font-size:13px;">RW <span title="Roll-with (max ${maxDivert})">${divert}</span>` +
         (isHeadShot ? ` → ${penetrating - divert} x2` : "") +
         ` → <b style="color:#ff6b6b;">${toHits}</b> to Hits` +
@@ -8244,6 +8560,11 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdAreaDamageAll(msg, args);
 
+      // Siphon pool management
+      case "siphon":
+        if (gmOnly(msg)) return;
+        return cmdSiphon(msg, args);
+
       // Absorption/Reflection commands
       case "absorb": return cmdAbsorb(msg, args);
       case "reflect": return cmdReflect(msg, args);
@@ -8406,11 +8727,12 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.74.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.77.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
           <code>!mp sv BC [mod]</code> - Save (EN/AG/IN/CL)<br/>
+          <code>!mp siphon list | clear --target TOKID | adjust --target TOKID --amt -N</code> - Siphon pools<br/>
           <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
@@ -9317,11 +9639,18 @@ function cmdStance(msg, args) {
   // -------------------------
   on("chat:message", onChat);
 
-  ch("MP", `/w gm <b>MP Engine v2.74.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  // Siphon dissipation: sweep once on ready (catches pools that expired during
+  // a sandbox restart), then every 60s.
+  on("ready", function() {
+    checkSiphonExpiry();
+    setInterval(checkSiphonExpiry, 60000);
+  });
+
+  ch("MP", `/w gm <b>MP Engine v2.77.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.74.1 READY");
+  log("MP ENGINE v2.77.0 READY");
 });

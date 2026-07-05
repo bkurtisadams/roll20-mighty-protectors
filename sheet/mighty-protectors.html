@@ -1,4 +1,9 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.52 - Make vehicle system color the layout source of truth
+<!-- Mighty Protectors Roll20 Character Sheet v44.53 - Siphon Attack rows on the attack cog panel
+        - Row 6: Siphon Attack flag + Drains (Hits/Power/Ability CPs/Attribute), BC and Cat selectors
+        - Row 6.5: Mode (Normal/Suppress/Mimicry), Replenish flag, Split spec (informational)
+        - Row 6.75: Overload effect, Cap (Ability Cap 2.1.16.5), read-only engine-tracked Pool
+        - engine (mp_engine.js v2.77.0) reads these at attack time and writes attack_siphon_pool
+        v44.52: Make vehicle system color the layout source of truth
         - remove the visible Vehicle Key color dropdown so the Key stays a compact legend
         - Vehicle Key rows keep a hidden color/swatch display synced from matching system Label + Color
         - layout grid colors now derive from repeating vehicle systems, not editable Key colors
@@ -958,6 +963,85 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <input type="radio" name="attr_attack_grip_type" value="power" title="Use power's damage dice" style="margin-left:6px;" />
             <label title="Use power's damage dice">Power:</label>
             <input type="text" name="attr_attack_grip_dice" style="width:45px !important; margin-left:2px;" title="Power grip dice (e.g., 2d8)" placeholder="2d8" />
+          </div>
+        </div>
+
+        <!-- Row 6: Siphon Attack -->
+        <div class="sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_is_siphon" value="1" class="sheet-atk-siphon-flag" title="Siphon Attack: drains points from the target (Touch range, Entropy, no KB)" />
+            <label title="Siphon Attack: drains points from the target (Touch range, Entropy, no KB)" style="color:#f4d03f;">Siphon Attack</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="What the siphon drains from the victim (capped at what the pool holds)">Drains:</label>
+            <select name="attr_attack_siphon_drain" title="What the siphon drains from the victim (capped at what the pool holds)" style="width:110px !important;">
+              <option value="hits" selected>Hits (1/pt)</option>
+              <option value="power">Power (2/pt)</option>
+              <option value="ability">Ability CPs (1/pt)</option>
+              <option value="bc">Attribute (1 BC/pt)</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Which BC (Attribute siphon only)">BC:</label>
+            <select name="attr_attack_siphon_bc" title="Which BC (Attribute siphon only)" style="width:45px !important;">
+              <option value="" selected>--</option>
+              <option value="ST">ST</option>
+              <option value="EN">EN</option>
+              <option value="AG">AG</option>
+              <option value="IN">IN</option>
+              <option value="CL">CL</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Ability category (Ability CP siphon only)">Cat:</label>
+            <select name="attr_attack_siphon_cat" title="Ability category (Ability CP siphon only)" style="width:85px !important;">
+              <option value="" selected>--</option>
+              <option value="Super">Super</option>
+              <option value="Tech">Tech</option>
+              <option value="Mystical">Mystical</option>
+              <option value="Info">Info/Memory</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Row 6.5: Siphon mode + modifiers -->
+        <div class="sheet-panel-row" style="margin-top:4px;">
+          <div class="sheet-panel-field">
+            <label title="Normal: drain and gain. Suppress (-10): victim loses points, attacker gains nothing. Mimicry (-10): attacker gains, victim loses nothing">Mode:</label>
+            <select name="attr_attack_siphon_mode" title="Normal: drain and gain. Suppress (-10): victim loses points, attacker gains nothing. Mimicry (-10): attacker gains, victim loses nothing" style="width:150px !important;">
+              <option value="normal" selected>Normal (drain → gain)</option>
+              <option value="suppress">Suppress (drain only)</option>
+              <option value="mimicry">Mimicry (gain only)</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_siphon_replenish" value="1" title="Replenishment (+5): gained Hits/Power restore up to original max and don't dissipate" />
+            <label title="Replenishment (+5): gained Hits/Power restore up to original max and don't dissipate">Replenish</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Split Points: how siphoned points divide between Abilities (informational — GM applies)">Split:</label>
+            <input type="text" name="attr_attack_siphon_split" style="width:110px !important;" title="Split Points: how siphoned points divide between Abilities (informational — GM applies)" placeholder="e.g. even Hits/Power" />
+          </div>
+        </div>
+
+        <!-- Row 6.75: Overload, Cap, Pool -->
+        <div class="sheet-panel-row" style="margin-top:4px;">
+          <div class="sheet-panel-field">
+            <label title="Overload: what happens when siphoning past the Cap">Overload:</label>
+            <select name="attr_attack_siphon_overload" title="Overload: what happens when siphoning past the Cap" style="width:150px !important;">
+              <option value="" selected>None (excess lost)</option>
+              <option value="lose">All points lost (-5)</option>
+              <option value="damage">1 dmg/pt, then lost (-10)</option>
+              <option value="explode">Explode (1 dmg/pt, area)</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Ability Cap (2.1.16.5): maximum siphoned points held at once">Cap:</label>
+            <input type="text" name="attr_attack_siphon_cap" style="width:32px !important;" title="Ability Cap (2.1.16.5): maximum siphoned points held at once" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Currently held siphoned points (engine-tracked; dissipate 1 hour after taken; damage consumes these first)">Pool:</label>
+            <input type="text" name="attr_attack_siphon_pool" value="0" readonly="readonly" style="width:36px !important; color:#c88fff !important;" title="Currently held siphoned points (engine-tracked; dissipate 1 hour after taken; damage consumes these first)" />
           </div>
         </div>
 
