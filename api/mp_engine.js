@@ -1,4 +1,17 @@
-/* Mighty Protectors Roll20 API Engine v2.80.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.81.0 - 2026-07-05
+ * v2.81.0: ROLL-WITH vs AREA EFFECTS (4.8.3 audit vs rules text). Area
+ *   targets who fail to escape may now roll with the damage: cmdAreaDamageAll
+ *   computes per-target coverage-adjusted penetration (computeAreaPen), and
+ *   conscious characters with capacity (floor(current Power/10), Fortitude
+ *   x2; vehicles and sleepy/dead-marked tokens excluded) are deferred with
+ *   Take Full / Roll-With Max / RW Custom buttons (players whispered via
+ *   chToChar; NPC buttons on the GM card) plus a GM Apply Rest (No RW)
+ *   fallback (!mp arearwrest). New !mp arearw resolves one target through
+ *   resolveAreaTarget: divert to Power first, then siphon/standard routing,
+ *   pool consumption, incremental siphon gain per resolution, status
+ *   markers. Ring + record now persist until every target resolves
+ *   (finalizeAreaIfDone); pendingArea expiry raised 5->10 min. Rolled-with
+ *   points are never siphoned, matching the single-target path.
  * v2.80.0: Siphon test harness + forced dissipation. !mp test siphon [PTS]
  *   (select attacker then target) drains PTS points through the real drain/
  *   mode routing using the attacker's actual Siphon row config, applies the
@@ -535,7 +548,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.80.0 FILE STARTING");
+log("MP ENGINE v2.81.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -2049,7 +2062,7 @@ function generateRowID() {
   // Cleanup old pending area effects (older than 5 minutes)
   function cleanupPendingArea() {
     const now = Date.now();
-    const maxAge = 5 * 60 * 1000;  // 5 minutes
+    const maxAge = 10 * 60 * 1000;  // 10 minutes (roll-with decisions can pend)
     Object.keys(state.MP_Engine.pendingArea).forEach(k => {
       if (now - state.MP_Engine.pendingArea[k].timestamp > maxAge) {
         removeAreaMarker(state.MP_Engine.pendingArea[k]);
@@ -3491,7 +3504,164 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     });
   }
 
-  // Apply damage to all tokens that failed to escape
+  // Coverage-adjusted penetrating damage for one area target (4.7.5.3)
+  function computeAreaPen(areaRec, tokData) {
+    const raw = areaRec.damage;
+    const tokIsVehicle = isVehicleMode(tokData.charId);
+    const protData = tokIsVehicle
+      ? getVehicleProtection(tokData.charId, areaRec.protKey)
+      : sumProtectionWithCoverage(tokData.charId, areaRec.protKey, true, areaRec.dmgSubtype);
+    const baseProt = protData.prot;
+    const hardened = protData.hardened;
+    const hasInvuln = protData.invuln;
+    const hasAdapt = protData.adapt;
+    const isOtherType = (areaRec.damageType === "Other");
+    let effectiveProt = baseProt;
+    const rawAP = areaRec.atkAP || 0;
+    let effectiveAP = 0;
+    if (rawAP === Infinity) {
+      effectiveAP = Infinity;
+      effectiveProt = 0;
+    } else if (rawAP > 0) {
+      effectiveAP = Math.max(0, rawAP - hardened);
+      effectiveProt = Math.max(0, baseProt - effectiveAP);
+    }
+    let leftoverAP = 0;
+    if (effectiveAP === Infinity) {
+      leftoverAP = Infinity;
+    } else if (effectiveAP > baseProt) {
+      leftoverAP = effectiveAP - baseProt;
+    }
+    const afterProt = Math.max(0, raw - effectiveProt);
+    let penetrating = afterProt;
+    if (hasInvuln && afterProt > 0 && leftoverAP !== Infinity) {
+      if (leftoverAP >= afterProt) {
+        penetrating = afterProt;
+      } else {
+        penetrating = leftoverAP + Math.floor((afterProt - leftoverAP) / 4);
+      }
+    }
+    if (hasAdapt && penetrating > 0) {
+      if (isOtherType) penetrating = 0;
+      else if (leftoverAP !== Infinity) penetrating = Math.floor(penetrating / 2);
+    }
+    return { raw, penetrating, effectiveProt, hasInvuln, hasAdapt, isOtherType, tokIsVehicle };
+  }
+
+  // Roll-with capacity for an area target (4.8.3: floor(current Power / 10), Fortitude x2)
+  function areaMaxDivert(tokData, tok) {
+    if (isVehicleMode(tokData.charId)) return 0;
+    const pow0 = getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    let maxDivert = Math.floor(pow0 / 10);
+    if (num(getAttr(tokData.charId, "willpower_fortitude"), 0) === 1) maxDivert *= 2;
+    return maxDivert;
+  }
+
+  // Resolve one area target with a chosen roll-with divert. Returns an html result line.
+  function resolveAreaTarget(areaRec, tokId, divertWanted) {
+    const tokData = areaRec.tokens[tokId];
+    const tok = getObj("graphic", tokId);
+    const char = getObj("character", tokData.charId);
+    tokData.applied = true;
+    if (!tok || !char) {
+      return `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b> - token missing</span>`;
+    }
+    const c = computeAreaPen(areaRec, tokData);
+    const tokIsVehicle = c.tokIsVehicle;
+    const hits0 = tokIsVehicle ? getVehicleHits(tok, tokData.charId) : getResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const pow0 = tokIsVehicle ? getVehiclePower(tok, tokData.charId) : getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+
+    let divert = 0;
+    if (!tokIsVehicle && divertWanted > 0 && c.penetrating > 0) {
+      divert = Math.min(areaMaxDivert(tokData, tok), c.penetrating, divertWanted);
+    }
+    let toHits = Math.max(0, c.penetrating - divert);
+    let sipDrained = 0, sipPowerDrain = 0, sipGain = 0;
+    if (areaRec.isSiphon && toHits > 0) {
+      const sMode = areaRec.siphonMode || "normal";
+      const powAvail = tokIsVehicle ? pow0 : Math.max(0, pow0 - divert);
+      if (areaRec.siphonDrain === "power") {
+        sipDrained = (sMode === "mimicry") ? 0 : Math.min(toHits * 2, powAvail);
+        sipGain = (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? toHits * 2 : sipDrained);
+        sipPowerDrain = sipDrained;
+        toHits = 0;
+      } else if (areaRec.siphonDrain === "hits") {
+        sipDrained = (sMode === "mimicry") ? 0 : Math.min(toHits, hits0);
+        sipGain = (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? toHits : sipDrained);
+        toHits = sipDrained;
+      } else {
+        sipDrained = (sMode === "mimicry") ? 0 : toHits;
+        sipGain = (sMode === "suppress") ? 0 : toHits;
+        toHits = 0;
+      }
+    }
+    const hits1 = Math.max(0, hits0 - toHits);
+    const overflow = (tokIsVehicle || areaRec.isSiphon) ? 0 : Math.max(0, toHits - hits0);
+    const pow1 = tokIsVehicle
+      ? Math.max(0, pow0 - sipPowerDrain)
+      : Math.max(0, pow0 - divert - overflow - sipPowerDrain);
+
+    if (tokIsVehicle) {
+      setVehicleHits(tok, tokData.charId, hits1);
+      if (sipPowerDrain > 0) setVehiclePower(tok, tokData.charId, pow1);
+    } else {
+      setResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      setResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+      if (hits0 - hits1 > 0) consumeSiphonPool(tokData.charId, "hits", hits0 - hits1);
+      if (pow0 - pow1 > 0) consumeSiphonPool(tokData.charId, "power", pow0 - pow1);
+    }
+
+    const hasPainResistance = tokIsVehicle ? true : (num(getAttr(tokData.charId, "willpower_pain_resistance"), 0) === 1);
+    const unconscious = !tokIsVehicle && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
+    const incapacitated = (hits1 === 0);
+    let statusNote = "";
+    if (incapacitated) {
+      statusNote = " <b>INCAPACITATED!</b>";
+      tok.set("status_dead", true);
+    } else if (unconscious) {
+      statusNote = " <b>UNCONSCIOUS!</b>";
+      tok.set("status_sleepy", true);
+    }
+
+    if (sipGain > 0 && areaRec.rowId) {
+      const gainHtml = applySiphonGain(areaRec.atkCharId, areaRec.rowId, areaRec.siphonDrain, areaRec.siphonBC, areaRec.siphonCat, sipGain, areaRec.pageId);
+      if (gainHtml) {
+        const atkChar = getObj("character", areaRec.atkCharId);
+        chToChar("MP", `<div style="background:#16213e; border:2px solid #8040c0; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#c88fff;">${esc(atkChar ? atkChar.get("name") : "Attacker")}</b> \u2014 ${esc(areaRec.atkName || "Siphon")}${gainHtml}</div>`, areaRec.atkCharId);
+      }
+    }
+
+    let line = `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b>: ${c.raw}-${c.effectiveProt} prot`;
+    if (c.hasInvuln) line += ` [\u00d7\u00bc]`;
+    if (c.hasAdapt) line += c.isOtherType ? ` [IMMUNE]` : ` [\u00d7\u00bd]`;
+    if (divert > 0) line += ` [RW ${divert}]`;
+    if (areaRec.isSiphon) {
+      const sU = areaRec.siphonDrain === "power" ? "Power" : (areaRec.siphonDrain === "hits" ? "Hits" : "CPs");
+      line += ` = <span style="color:#c88fff;">siphons ${sipDrained} ${sU}</span>`;
+      if (areaRec.siphonDrain === "hits") line += ` \u2192 Hits: ${hits0}\u2192${hits1}${statusNote}`;
+      else if (areaRec.siphonDrain === "power") line += ` \u2192 Pow: ${pow0}\u2192${pow1}`;
+      line += `</span>`;
+    } else {
+      line += ` = ${c.penetrating} pen${divert > 0 ? ` (RW\u2192${toHits})` : ""} \u2192 Hits: ${hits0}\u2192${hits1}${statusNote}</span>`;
+    }
+    return line;
+  }
+
+  // Remove marker and record when every target is resolved
+  function finalizeAreaIfDone(rollId) {
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return;
+    const done = Object.values(areaRec.tokens).every(t => t.applied || t.escaped === true);
+    if (done) {
+      removeAreaMarker(areaRec);
+      delete state.MP_Engine.pendingArea[rollId];
+      ch("MP", `/w gm <b>MP:</b> Area effect fully resolved.`);
+    }
+  }
+
+  // Apply damage to all tokens that failed to escape.
+  // Conscious characters with roll-with capacity (4.8.3) get a per-target
+  // choice first; everyone else resolves immediately.
   function cmdAreaDamageAll(msg, args) {
     const rollId = args.id;
     
@@ -3502,164 +3672,62 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">AREA DAMAGE RESULTS</div>`;
     html += `<div style="padding:6px 10px;"><b style="color:#fff;">${areaRec.damage}</b> ${esc(areaRec.damageType)}`;
     
-    let areaSiphonGain = 0;
-    
+    let deferred = 0;
     Object.keys(areaRec.tokens).forEach(tokId => {
       const tokData = areaRec.tokens[tokId];
+      if (tokData.applied) return;
       
       if (tokData.escaped === true) {
-        html += `<br/><span style="color:#27ae60;">✓ <b>${esc(tokData.name)}</b> escaped${tokData.shieldBlocked ? " (shield)" : ""}${tokData.prone ? " (prone)" : ""}</span>`;
+        tokData.applied = true;
+        html += `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> escaped${tokData.shieldBlocked ? " (shield)" : ""}${tokData.prone ? " (prone)" : ""}</span>`;
         return;
       }
       
       if (tokData.escaped === null) {
-        // Didn't respond - auto-fail
         tokData.escaped = false;
-        html += `<br/><span style="color:#e67e22;">⚠ <b>${esc(tokData.name)}</b> no response - auto-fail</span>`;
+        html += `<br/><span style="color:#e67e22;">\u26a0 <b>${esc(tokData.name)}</b> no response - auto-fail</span>`;
       }
       
-      // Apply damage with coverage-adjusted protection
       const tok = getObj("graphic", tokId);
       const char = getObj("character", tokData.charId);
       if (!tok || !char) {
-        html += `<br/><span style="color:#e74c3c;">✗ <b>${esc(tokData.name)}</b> - token missing</span>`;
+        tokData.applied = true;
+        html += `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b> - token missing</span>`;
         return;
       }
       
-      const raw = areaRec.damage;
-      const tokIsVehicle = isVehicleMode(tokData.charId);
-      const protData = tokIsVehicle
-        ? getVehicleProtection(tokData.charId, areaRec.protKey)
-        : sumProtectionWithCoverage(tokData.charId, areaRec.protKey, true, areaRec.dmgSubtype);
-      const baseProt = protData.prot;
-      const hardened = protData.hardened;
-      const hasInvuln = protData.invuln;
-      const hasAdapt = protData.adapt;
-      const isOtherType = (areaRec.damageType === "Other");
-      
-      // Apply AP vs protection
-      let effectiveProt = baseProt;
-      const rawAP = areaRec.atkAP || 0;
-      let effectiveAP = 0;
-      if (rawAP === Infinity) {
-        effectiveAP = Infinity;
-        effectiveProt = 0;
-      } else if (rawAP > 0) {
-        const apUsedVsHardened = Math.min(rawAP, hardened);
-        effectiveAP = Math.max(0, rawAP - hardened);
-        effectiveProt = Math.max(0, baseProt - effectiveAP);
-      }
-      
-      // Leftover AP for invuln/adapt bypass
-      let leftoverAP = 0;
-      if (effectiveAP === Infinity) {
-        leftoverAP = Infinity;
-      } else if (effectiveAP > baseProt) {
-        leftoverAP = effectiveAP - baseProt;
-      }
-      
-      // Damage after protection
-      let afterProt = Math.max(0, raw - effectiveProt);
-      
-      // Apply Invulnerability (1/4 damage)
-      let penetrating = afterProt;
-      if (hasInvuln && afterProt > 0 && leftoverAP !== Infinity) {
-        if (leftoverAP >= afterProt) {
-          penetrating = afterProt;
+      // 4.8.3: conscious, aware characters may roll with area damage
+      const c = computeAreaPen(areaRec, tokData);
+      const maxDivert = areaMaxDivert(tokData, tok);
+      const koFlag = tok.get("status_sleepy") === true || tok.get("status_dead") === true;
+      if (c.penetrating > 0 && maxDivert > 0 && !koFlag) {
+        tokData.rwPending = true;
+        deferred++;
+        const rwBtns = `${btn(`Take Full (${c.penetrating})`, `!mp arearw --id ${rollId} --target ${tokId} --amt 0`)} ` +
+          `${btn(`Roll-With Max (${Math.min(maxDivert, c.penetrating)})`, `!mp arearw --id ${rollId} --target ${tokId} --amt ${maxDivert}`)} ` +
+          `${btn(`RW Custom`, `!mp arearw --id ${rollId} --target ${tokId} --amt ?{Divert to Power|0}`)}`;
+        if (tokData.controller !== "gm" && tokData.controller !== "all") {
+          chToChar("MP", `<b>AREA DAMAGE vs ${esc(tokData.name)}</b> \u2014 ${c.penetrating} penetrating (roll-with up to ${maxDivert})<br/>${rwBtns}`, tokData.charId);
+          html += `<br/><span style="color:#f1c40f;">\u23f3 <b>${esc(tokData.name)}</b>: ${c.penetrating} pen \u2014 roll-with offered to player</span>`;
         } else {
-          const bypassedDmg = leftoverAP;
-          const reducedDmg = afterProt - leftoverAP;
-          const afterInvuln = Math.floor(reducedDmg / 4);
-          penetrating = bypassedDmg + afterInvuln;
+          html += `<br/><span style="color:#f1c40f;">\u23f3 <b>${esc(tokData.name)}</b> (NPC): ${c.penetrating} pen</span><br/>${rwBtns}`;
         }
+        return;
       }
       
-      // Apply Adaptation (1/2 damage, or 100% immunity for Other)
-      if (hasAdapt && penetrating > 0) {
-        if (isOtherType) {
-          penetrating = 0;
-        } else if (leftoverAP !== Infinity) {
-          penetrating = Math.floor(penetrating / 2);
-        }
-      }
-      
-      // Apply damage to Hits
-      const hits0 = tokIsVehicle ? getVehicleHits(tok, tokData.charId) : getResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR);
-      const pow0 = tokIsVehicle ? getVehiclePower(tok, tokData.charId) : getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
-      
-      // Siphon area: drain capped at what the pool holds, no 4.8.4 overflow
-      let toHits = penetrating;
-      let sipDrained = 0;
-      let sipPowerDrain = 0;
-      if (areaRec.isSiphon && penetrating > 0) {
-        const sMode = areaRec.siphonMode || "normal";
-        if (areaRec.siphonDrain === "power") {
-          sipDrained = (sMode === "mimicry") ? 0 : Math.min(penetrating * 2, pow0);
-          sipPowerDrain = sipDrained;
-          areaSiphonGain += (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? penetrating * 2 : sipDrained);
-          toHits = 0;
-        } else if (areaRec.siphonDrain === "hits") {
-          sipDrained = (sMode === "mimicry") ? 0 : Math.min(penetrating, hits0);
-          areaSiphonGain += (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? penetrating : sipDrained);
-          toHits = sipDrained;
-        } else {
-          sipDrained = (sMode === "mimicry") ? 0 : penetrating;
-          areaSiphonGain += (sMode === "suppress") ? 0 : penetrating;
-          toHits = 0;
-        }
-      }
-      const hitsAfterDmg = Math.max(0, hits0 - toHits);
-      const overflow = (tokIsVehicle || areaRec.isSiphon) ? 0 : Math.max(0, toHits - hits0);
-      const pow1 = tokIsVehicle
-        ? Math.max(0, pow0 - sipPowerDrain)
-        : Math.max(0, pow0 - overflow - sipPowerDrain);
-      const hits1 = hitsAfterDmg;
-      
-      if (tokIsVehicle) {
-        setVehicleHits(tok, tokData.charId, hits1);
-        if (sipPowerDrain > 0) setVehiclePower(tok, tokData.charId, pow1);
-      } else {
-        setResource(tok, tokData.charId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-        setResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
-        if (hits0 - hits1 > 0) consumeSiphonPool(tokData.charId, "hits", hits0 - hits1);
-        if (pow0 - pow1 > 0) consumeSiphonPool(tokData.charId, "power", pow0 - pow1);
-      }
-      
-      // Status effects
-      // Vehicles: incapacitated at 0, no unconsciousness
-      const hasPainResistance = tokIsVehicle ? true : (num(getAttr(tokData.charId, "willpower_pain_resistance"), 0) === 1);
-      const unconscious = !tokIsVehicle && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
-      const incapacitated = (hits1 === 0);
-      
-      let statusNote = "";
-      if (incapacitated) {
-        statusNote = " <b>INCAPACITATED!</b>";
-        tok.set("status_dead", true);
-      } else if (unconscious) {
-        statusNote = " <b>UNCONSCIOUS!</b>";
-        tok.set("status_sleepy", true);
-      }
-      
-      html += `<br/><span style="color:#ff6b6b;">✗ <b>${esc(tokData.name)}</b>: ${raw}-${effectiveProt} prot`;
-      if (hasInvuln) html += ` [×¼]`;
-      if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
-      if (areaRec.isSiphon) {
-        const sU = areaRec.siphonDrain === "power" ? "Power" : (areaRec.siphonDrain === "hits" ? "Hits" : "CPs");
-        html += ` = <span style="color:#c88fff;">siphons ${sipDrained} ${sU}</span>`;
-        if (areaRec.siphonDrain === "hits") html += ` → Hits: ${hits0}→${hits1}${statusNote}`;
-        else if (areaRec.siphonDrain === "power") html += ` → Pow: ${pow0}→${pow1}`;
-        html += `</span>`;
-      } else {
-        html += ` = ${penetrating} pen → Hits: ${hits0}→${hits1}${statusNote}</span>`;
-      }
+      html += resolveAreaTarget(areaRec, tokId, 0);
     });
     
-    if (areaRec.isSiphon && areaSiphonGain > 0 && areaRec.rowId) {
-      const gainHtml = applySiphonGain(areaRec.atkCharId, areaRec.rowId, areaRec.siphonDrain, areaRec.siphonBC, areaRec.siphonCat, areaSiphonGain, areaRec.pageId);
-      if (gainHtml) {
-        const atkChar = getObj("character", areaRec.atkCharId);
-        chToChar("MP", `<div style="background:#16213e; border:2px solid #8040c0; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#c88fff;">${esc(atkChar ? atkChar.get("name") : "Attacker")}</b> — ${esc(areaRec.atkName || "Siphon")}${gainHtml}</div>`, areaRec.atkCharId);
+    if (deferred > 0) {
+      html += `<br/><br/>${btnDanger(`Apply Rest (No RW)`, `!mp arearwrest --id ${rollId}`)}`;
+      html += `</div></div>`;
+      areaRec.timestamp = Date.now();
+      if (CFG.GM_ONLY_BUTTONS) {
+        chToChar("MP", html, areaRec.atkCharId);
+      } else {
+        ch("MP", html);
       }
+      return;
     }
     
     html += `</div></div>`;
@@ -3672,6 +3740,46 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Clean up
     removeAreaMarker(areaRec);
     delete state.MP_Engine.pendingArea[rollId];
+  }
+
+  // Resolve one deferred area target with the chosen roll-with amount
+  function cmdAreaRW(msg, args) {
+    const rollId = args.id;
+    const tokId = args.target;
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return ch("MP", `${wt(msg)}<b>MP:</b> Area effect expired or not found.`);
+    const tokData = areaRec.tokens[tokId];
+    if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
+    if (tokData.applied) return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} already resolved.`);
+    
+    const line = resolveAreaTarget(areaRec, tokId, Math.max(0, num(args.amt, 0)));
+    const resultHtml = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>AREA DAMAGE</b>${line}</div>`;
+    chCombat("MP", resultHtml, tokData.charId);
+    finalizeAreaIfDone(rollId);
+  }
+
+  // GM: resolve all remaining deferred targets with no roll-with
+  function cmdAreaRWRest(msg, args) {
+    const rollId = args.id;
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    
+    let html = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>AREA DAMAGE</b> (no roll-with)`;
+    let any = 0;
+    Object.keys(areaRec.tokens).forEach(tokId => {
+      const tokData = areaRec.tokens[tokId];
+      if (tokData.applied || tokData.escaped === true) { tokData.applied = true; return; }
+      html += resolveAreaTarget(areaRec, tokId, 0);
+      any++;
+    });
+    html += `</div>`;
+    if (!any) return ch("MP", `/w gm <b>MP:</b> Nothing left to resolve.`);
+    if (CFG.GM_ONLY_BUTTONS) {
+      chToChar("MP", html, areaRec.atkCharId);
+    } else {
+      ch("MP", html);
+    }
+    finalizeAreaIfDone(rollId);
   }
 
   // Check if all tokens in area have resolved their escapes
@@ -8683,6 +8791,10 @@ function cmdStance(msg, args) {
       case "areadamageall":
         if (gmOnly(msg)) return;
         return cmdAreaDamageAll(msg, args);
+      case "arearw": return cmdAreaRW(msg, args);
+      case "arearwrest":
+        if (gmOnly(msg)) return;
+        return cmdAreaRWRest(msg, args);
 
       // Siphon pool management
       case "siphon":
@@ -8851,7 +8963,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.80.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.81.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9770,11 +9882,11 @@ function cmdStance(msg, args) {
     setInterval(checkSiphonExpiry, 60000);
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.80.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.81.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.80.0 READY");
+  log("MP ENGINE v2.81.0 READY");
 });
