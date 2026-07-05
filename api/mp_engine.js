@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.78.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.79.0 - 2026-07-05
+ * v2.79.0: chat button recolor. All 124 [label](!cmd) markdown API buttons
+ *   converted to styled anchors via new btn()/btnDanger() helpers: neutral
+ *   steel blue (#3d5a80) for ordinary actions, card red (#c0392b) for
+ *   consequential ones (29: labels starting with "Apply", "Apply Damage",
+ *   "Take Full Damage"). Replaces Roll20's default pink button chrome to
+ *   match the dark card theme. White text, #2a2a4a border, 3px radius.
  * v2.78.0: Immunity modifier (+2.5) for Area Effects: new attack_immunity
  *   flag read at attack time; handleAreaAttack excludes the attacker's own
  *   character from tokensInArea (RAW: ignore negative effects of own
@@ -522,7 +528,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.78.0 FILE STARTING");
+log("MP ENGINE v2.79.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -877,8 +883,18 @@ MP.Engine = (function () {
     pruneUndo();
   }
 
+  // Styled API command buttons (replaces Roll20's default pink [label](!cmd) chrome)
+  // Neutral steel blue for ordinary actions; card red for consequential ones (Apply Damage)
+  const BTN_STYLE = "color:#fff; border:1px solid #2a2a4a; border-radius:3px; padding:1px 8px; font-size:12px; font-weight:bold; text-decoration:none; display:inline-block; margin:2px 2px 0 0;";
+  function btn(label, cmd) {
+    return `<a href="${cmd}" style="background:#3d5a80; ${BTN_STYLE}">${label}</a>`;
+  }
+  function btnDanger(label, cmd) {
+    return `<a href="${cmd}" style="background:#c0392b; ${BTN_STYLE}">${label}</a>`;
+  }
+
   function undoButton(undoId) {
-    return `<br/><span style="font-size:11px;">[↩ Undo](!mp undo --id ${undoId})</span>`;
+    return `<br/><span style="font-size:11px;">${btn(`↩ Undo`, `!mp undo --id ${undoId}`)}</span>`;
   }
 
   function cmdUndo(msg, args) {
@@ -3292,9 +3308,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         // Player/GM buttons
         if (t.controller !== "gm" && t.controller !== "all") {
           // Whisper buttons to player
-          const playerButtons = `[Leap Clear (${escapeTN}-)](!mp areaescape --id ${rollId} --target ${t.tokenId}) ` +
-            `[Dive Prone (${escapeTNProne}-)](!mp areaescape --id ${rollId} --target ${t.tokenId} --prone)` +
-            (shield ? ` [Shield Block (${shieldTN}-)](!mp areashield --id ${rollId} --target ${t.tokenId})` : "");
+          const playerButtons = `${btn(`Leap Clear (${escapeTN}-)`, `!mp areaescape --id ${rollId} --target ${t.tokenId}`)} ` +
+            `${btn(`Dive Prone (${escapeTNProne}-)`, `!mp areaescape --id ${rollId} --target ${t.tokenId} --prone`)}` +
+            (shield ? ` ${btn(`Shield Block (${shieldTN}-)`, `!mp areashield --id ${rollId} --target ${t.tokenId}`)}` : "");
           // chToChar resolves the character's controllers to display names;
           // t.controller is a player ID (not a display name) so /w "${t.controller}" silently fails.
           chToChar("MP", `<b>AREA EFFECT vs ${esc(t.name)}</b><br/>${playerButtons}`, t.charId);
@@ -3302,9 +3318,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       });
       
       // GM buttons
-      html += `<div style="margin-top:6px;">[Auto-Roll NPCs](!mp arearollnpcs --id ${rollId})`;
-      html += ` [Force All Escapes](!mp areaforceall --id ${rollId})`;
-      html += ` [Apply All Damage](!mp areadamageall --id ${rollId})</div>`;
+      html += `<div style="margin-top:6px;">${btn(`Auto-Roll NPCs`, `!mp arearollnpcs --id ${rollId}`)}`;
+      html += ` ${btn(`Force All Escapes`, `!mp areaforceall --id ${rollId}`)}`;
+      html += ` ${btnDanger(`Apply All Damage`, `!mp areadamageall --id ${rollId}`)}</div>`;
       html += `</div>`;
     }
     
@@ -3658,7 +3674,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const allResolved = Object.values(areaRec.tokens).every(t => t.escaped !== null);
     if (allResolved) {
-      const resolvedHtml = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. [Apply All Damage](!mp areadamageall --id ${rollId})</div>`;
+      const resolvedHtml = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. ${btnDanger(`Apply All Damage`, `!mp areadamageall --id ${rollId}`)}</div>`;
       if (CFG.GM_ONLY_BUTTONS) {
         chToChar("MP", resolvedHtml, areaRec.atkCharId);
       } else {
@@ -4095,8 +4111,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `</div>`;
     
     // Add counter-attack buttons
-    let buttons = `<br/>[Reflect at Original Attacker](!mp reflecthit --id ${reflectRollId} --target original)`;
-    buttons += ` [Reflect at Target...](!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id})`;
+    let buttons = `<br/>${btn(`Reflect at Original Attacker`, `!mp reflecthit --id ${reflectRollId} --target original`)}`;
+    buttons += ` ${btn(`Reflect at Target...`, `!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id}`)}`;
     
     chCombat("MP", html + buttons, rec.defCharId, rec.atkCharId);
     
@@ -4565,8 +4581,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         html += `<br/><span style="color:#fff; font-size:11px;">Compare to weapon's Breakpoint. If weapon breaks, attack is negated.</span>`;
         html += `</div>`;
         rec.afResolved = true;
-        buttons = `[Weapon Survives - Apply Damage](!mp afresume --id ${rollId}) `;
-        buttons += `[Weapon Destroyed - No Damage](!mp afcancel --id ${rollId})`;
+        buttons = `${btnDanger(`Weapon Survives - Apply Damage`, `!mp afresume --id ${rollId}`)} `;
+        buttons += `${btn(`Weapon Destroyed - No Damage`, `!mp afcancel --id ${rollId}`)}`;
         break;
         
       case "unarmed":
@@ -4607,8 +4623,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         }
         
         buttons = `<div style="margin-top:4px;"><b>Counter-damage to ${esc(atkName)}:</b></div>`;
-        buttons += `[Apply Counter](!mp afcounter --id ${afCounterId}) `;
-        buttons += `[Counter + RW](!mp afcounter --id ${afCounterId} --rw ?{Roll-With amount|0})`;
+        buttons += `${btnDanger(`Apply Counter`, `!mp afcounter --id ${afCounterId}`)} `;
+        buttons += `${btn(`Counter + RW`, `!mp afcounter --id ${afCounterId} --rw ?{Roll-With amount|0}`)}`;
         buttons += `<br/><span style="font-size:10px; color:#666;">If attacker is KO'd, their attack is aborted.</span>`;
         break;
         
@@ -4766,39 +4782,39 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (defIsVeh) {
       // Vehicles: Apply only, no roll-with options
       if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
-        buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot)`;
+        buttons = `${btnDanger(`Apply (No Prot)`, `!mp apply --id ${rollId} --mode noprot`)}`;
       } else if (critType === CRIT_TYPES.SOLID_HIT) {
-        buttons = `[Apply (+3 Solid)](!mp apply --id ${rollId} --mode solid)`;
+        buttons = `${btnDanger(`Apply (+3 Solid)`, `!mp apply --id ${rollId} --mode solid`)}`;
       } else {
-        buttons = `[Apply](!mp apply --id ${rollId} --mode noroll)`;
+        buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)}`;
       }
     } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
-      buttons = `[Apply (Head Shot)](!mp apply --id ${rollId} --mode headshot) `;
-      buttons += `[RW + Head Shot](!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply (Head Shot)`, `!mp apply --id ${rollId} --mode headshot`)} `;
+      buttons += `${btn(`RW + Head Shot`, `!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0}`)}`;
     } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && hasProtectedBrain) {
-      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
-      buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax) `;
-      buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
+      buttons += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rollwithmax`)} `;
+      buttons += `${btn(`Roll-With Custom`, `!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
     } else if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
-      buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot) `;
-      buttons += `[RW Max (No Prot)](!mp apply --id ${rollId} --mode noprot_rwmax) `;
-      buttons += `[RW Custom (No Prot)](!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply (No Prot)`, `!mp apply --id ${rollId} --mode noprot`)} `;
+      buttons += `${btn(`RW Max (No Prot)`, `!mp apply --id ${rollId} --mode noprot_rwmax`)} `;
+      buttons += `${btn(`RW Custom (No Prot)`, `!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0}`)}`;
     } else if (critType === CRIT_TYPES.SOLID_HIT) {
-      buttons = `[Apply (+3 Solid)](!mp apply --id ${rollId} --mode solid) `;
-      buttons += `[RW Max (+3)](!mp apply --id ${rollId} --mode solid_rwmax) `;
-      buttons += `[RW Custom (+3)](!mp apply --id ${rollId} --mode solid_rw --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply (+3 Solid)`, `!mp apply --id ${rollId} --mode solid`)} `;
+      buttons += `${btn(`RW Max (+3)`, `!mp apply --id ${rollId} --mode solid_rwmax`)} `;
+      buttons += `${btn(`RW Custom (+3)`, `!mp apply --id ${rollId} --mode solid_rw --amt ?{Divert to Power|0}`)}`;
     } else if (critType === CRIT_TYPES.PRECISE_HIT) {
-      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
-      buttons += `[RW Max (½)](!mp apply --id ${rollId} --mode precise_rwmax) `;
-      buttons += `[RW Custom (½)](!mp apply --id ${rollId} --mode precise_rw --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
+      buttons += `${btn(`RW Max (½)`, `!mp apply --id ${rollId} --mode precise_rwmax`)} `;
+      buttons += `${btn(`RW Custom (½)`, `!mp apply --id ${rollId} --mode precise_rw --amt ?{Divert to Power|0}`)}`;
     } else {
-      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
-      buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax) `;
-      buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
+      buttons += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rollwithmax`)} `;
+      buttons += `${btn(`Roll-With Custom`, `!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
     }
     
     if (causesKB) {
-      buttons += ` [KB](!mp kb --id ${rollId})`;
+      buttons += ` ${btn(`KB`, `!mp kb --id ${rollId}`)}`;
     }
     
     // Check for Absorption or Reflection
@@ -4808,20 +4824,20 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         if (absRef.mode === "absorption") {
           const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
           buttons += `<br/><span style="color:#9b59b6; font-weight:bold;">🔮 Absorption available${limitNote}</span>`;
-          buttons += ` [Absorb (¼ dmg, saved action)](!mp absorb --id ${rollId})`;
+          buttons += ` ${btn(`Absorb (¼ dmg, saved action)`, `!mp absorb --id ${rollId}`)}`;
         } else if (absRef.mode === "reflection") {
           const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
           buttons += `<br/><span style="color:#e67e22; font-weight:bold;">🔄 Reflection available${limitNote}</span>`;
-          buttons += ` [Reflect (¼ dmg, saved action)](!mp reflect --id ${rollId})`;
+          buttons += ` ${btn(`Reflect (¼ dmg, saved action)`, `!mp reflect --id ${rollId}`)}`;
         }
       }
     }
     
     if (!defIsVeh) {
       if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
-        buttons += `<br/>[Leg Shot Saves](!mp limbsave --id ${rollId} --limb leg)`;
+        buttons += `<br/>${btn(`Leg Shot Saves`, `!mp limbsave --id ${rollId} --limb leg`)}`;
       } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
-        buttons += `<br/>[Arm Shot Saves](!mp limbsave --id ${rollId} --limb arm)`;
+        buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
       } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
         buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
       }
@@ -4852,10 +4868,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         // Target has an active Ability Field - show attack type selection buttons
         buttons = `<div style="color:#e67e22; font-weight:bold; margin-bottom:4px;">🔥 Target has ${esc(afData.name)} active! (${afData.damage} ${afData.dmgType})</div>`;
         buttons += `<div style="font-size:10px; color:#666; margin-bottom:4px;">Select attack type to resolve Ability Field:</div>`;
-        buttons += `[Projectile](!mp afield --id ${rollId} --type projectile) `;
-        buttons += `[Non-Projectile](!mp afield --id ${rollId} --type nonproject) `;
-        buttons += `[Melee Weapon](!mp afield --id ${rollId} --type melee) `;
-        buttons += `[Unarmed/HTH](!mp afield --id ${rollId} --type unarmed)`;
+        buttons += `${btn(`Projectile`, `!mp afield --id ${rollId} --type projectile`)} `;
+        buttons += `${btn(`Non-Projectile`, `!mp afield --id ${rollId} --type nonproject`)} `;
+        buttons += `${btn(`Melee Weapon`, `!mp afield --id ${rollId} --type melee`)} `;
+        buttons += `${btn(`Unarmed/HTH`, `!mp afield --id ${rollId} --type unarmed`)}`;
         
         // Store AF data in pending record for later resolution
         state.MP_Engine.pending[rollId].afData = afData;
@@ -4880,45 +4896,45 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (defIsVeh) {
       // Vehicles: Apply only, no roll-with options
       if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
-        buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot)`;
+        buttons = `${btnDanger(`Apply (No Prot)`, `!mp apply --id ${rollId} --mode noprot`)}`;
       } else if (critType === CRIT_TYPES.SOLID_HIT) {
-        buttons = `[Apply (+3 Solid)](!mp apply --id ${rollId} --mode solid)`;
+        buttons = `${btnDanger(`Apply (+3 Solid)`, `!mp apply --id ${rollId} --mode solid`)}`;
       } else {
-        buttons = `[Apply](!mp apply --id ${rollId} --mode noroll)`;
+        buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)}`;
       }
     } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
       // Head shot: apply damage then double after prot/roll-with
-      buttons = `[Apply (Head Shot)](!mp apply --id ${rollId} --mode headshot) `;
-      buttons += `[RW + Head Shot](!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply (Head Shot)`, `!mp apply --id ${rollId} --mode headshot`)} `;
+      buttons += `${btn(`RW + Head Shot`, `!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0}`)}`;
     } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && hasProtectedBrain) {
       // Head shot negated by Protected Brain - show normal buttons
-      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
-      buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax) `;
-      buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
+      buttons += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rollwithmax`)} `;
+      buttons += `${btn(`Roll-With Custom`, `!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
     } else if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
       // Avoid armor: ignore protection (crit OR deliberate called shot)
-      buttons = `[Apply (No Prot)](!mp apply --id ${rollId} --mode noprot) `;
-      buttons += `[RW Max (No Prot)](!mp apply --id ${rollId} --mode noprot_rwmax) `;
-      buttons += `[RW Custom (No Prot)](!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply (No Prot)`, `!mp apply --id ${rollId} --mode noprot`)} `;
+      buttons += `${btn(`RW Max (No Prot)`, `!mp apply --id ${rollId} --mode noprot_rwmax`)} `;
+      buttons += `${btn(`RW Custom (No Prot)`, `!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0}`)}`;
     } else if (critType === CRIT_TYPES.SOLID_HIT) {
       // Solid hit: +3 damage
-      buttons = `[Apply (+3 Solid)](!mp apply --id ${rollId} --mode solid) `;
-      buttons += `[RW Max (+3)](!mp apply --id ${rollId} --mode solid_rwmax) `;
-      buttons += `[RW Custom (+3)](!mp apply --id ${rollId} --mode solid_rw --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply (+3 Solid)`, `!mp apply --id ${rollId} --mode solid`)} `;
+      buttons += `${btn(`RW Max (+3)`, `!mp apply --id ${rollId} --mode solid_rwmax`)} `;
+      buttons += `${btn(`RW Custom (+3)`, `!mp apply --id ${rollId} --mode solid_rw --amt ?{Divert to Power|0}`)}`;
     } else if (critType === CRIT_TYPES.PRECISE_HIT) {
       // Precise hit: halved roll-with
-      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
-      buttons += `[RW Max (½)](!mp apply --id ${rollId} --mode precise_rwmax) `;
-      buttons += `[RW Custom (½)](!mp apply --id ${rollId} --mode precise_rw --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
+      buttons += `${btn(`RW Max (½)`, `!mp apply --id ${rollId} --mode precise_rwmax`)} `;
+      buttons += `${btn(`RW Custom (½)`, `!mp apply --id ${rollId} --mode precise_rw --amt ?{Divert to Power|0}`)}`;
     } else {
       // Normal hit or other crit types
-      buttons = `[Apply](!mp apply --id ${rollId} --mode noroll) `;
-      buttons += `[Roll-With Max](!mp apply --id ${rollId} --mode rollwithmax) `;
-      buttons += `[Roll-With Custom](!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
+      buttons += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rollwithmax`)} `;
+      buttons += `${btn(`Roll-With Custom`, `!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
     }
     
     if (causesKB) {
-      buttons += ` [KB](!mp kb --id ${rollId})`;
+      buttons += ` ${btn(`KB`, `!mp kb --id ${rollId}`)}`;
     }
     
     // Check for Absorption or Reflection (requires saved action)
@@ -4928,11 +4944,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         if (absRef.mode === "absorption") {
           const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
           buttons += `<br/><span style="color:#9b59b6; font-weight:bold;">🔮 Absorption available${limitNote}</span>`;
-          buttons += ` [Absorb (¼ dmg, saved action)](!mp absorb --id ${rollId})`;
+          buttons += ` ${btn(`Absorb (¼ dmg, saved action)`, `!mp absorb --id ${rollId}`)}`;
         } else if (absRef.mode === "reflection") {
           const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
           buttons += `<br/><span style="color:#e67e22; font-weight:bold;">🔄 Reflection available${limitNote}</span>`;
-          buttons += ` [Reflect (¼ dmg, saved action)](!mp reflect --id ${rollId})`;
+          buttons += ` ${btn(`Reflect (¼ dmg, saved action)`, `!mp reflect --id ${rollId}`)}`;
         }
       }
     }
@@ -4940,9 +4956,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Add limb shot saves if applicable (crit OR deliberate called shot) - not for vehicles
     if (!defIsVeh) {
       if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
-        buttons += `<br/>[Leg Shot Saves](!mp limbsave --id ${rollId} --limb leg)`;
+        buttons += `<br/>${btn(`Leg Shot Saves`, `!mp limbsave --id ${rollId} --limb leg`)}`;
       } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
-        buttons += `<br/>[Arm Shot Saves](!mp limbsave --id ${rollId} --limb arm)`;
+        buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
       } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
         buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
       }
@@ -4978,9 +4994,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const saveRec = state.MP_Engine.pending[rollId];
     const saveDefIsVeh = saveRec && saveRec.defCharId && isVehicleMode(saveRec.defCharId);
     
-    let buttons = `[Make Save${modLabel}](!mp save --id ${rollId} --critmod ${critMod} --pushmod ${pushMod}) `;
+    let buttons = `${btn(`Make Save${modLabel}`, `!mp save --id ${rollId} --critmod ${critMod} --pushmod ${pushMod}`)} `;
     if (!saveDefIsVeh) {
-      buttons += `[Save + Roll-With${modLabel}](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod} --pushmod ${pushMod})`;
+      buttons += `${btn(`Save + Roll-With${modLabel}`, `!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod} --pushmod ${pushMod}`)}`;
     }
     
     return buttons;
@@ -5003,7 +5019,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       bonusLabel = ` (+${totalBonus} BP)`;
     }
     
-    return `[Apply Snare${bonusLabel}](!mp snare --id ${rollId} --bonus ${totalBonus})`;
+    return `${btnDanger(`Apply Snare${bonusLabel}`, `!mp snare --id ${rollId} --bonus ${totalBonus}`)}`;
   }
 
   // -------------------------
@@ -5432,8 +5448,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         ffLine = `<div style="color:#e74c3c; font-weight:bold; margin-top:2px; font-size:12px;">` +
           `🛡️ ${esc(ffData.name)} COLLAPSED! Deflected ${ffDeflected}, overflow ${ffOverflow} passes through` +
           `<br/><span style="font-weight:normal; color:#ccc;">Pool: ${ffData.accum}+${ffDeflected}=${ffData.accum + ffDeflected} / ${ffData.threshold}</span>` +
-          `<br/>[Reinforce (saved action, PR=${ffData.pr})](!mp ffreinforce --id ${rollId})` +
-          ` [Renew Later (PR=${ffData.pr})](!mp ffreset --target ${rec.defTokenId} --row ${ffData.rowId})` +
+          `<br/>${btn(`Reinforce (saved action, PR=${ffData.pr})`, `!mp ffreinforce --id ${rollId}`)}` +
+          ` ${btn(`Renew Later (PR=${ffData.pr})`, `!mp ffreset --target ${rec.defTokenId} --row ${ffData.rowId}`)}` +
           `</div>`;
       } else if (ffDeflected > 0) {
         const newAccum = ffData.accum + ffDeflected;
@@ -5525,7 +5541,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `<span style="font-size:16px;"><span style="color:#999; text-decoration:line-through;">${pow0}</span> <span style="color:#667;">→</span> <b style="color:#ff6b6b;">${pow1}</b></span></td>` +
       `</tr></table>` +
       statusLine +
-      (rec.condIdx !== undefined ? `<br/>[Try Again](!mp recover --target ${rec.defTokenId} --idx ${rec.condIdx})` : "") +
+      (rec.condIdx !== undefined ? `<br/>${btn(`Try Again`, `!mp recover --target ${rec.defTokenId} --idx ${rec.condIdx}`)}` : "") +
       `</div>`;
 
     // Undo: register the pre-mutation snapshot and append a button to the card.
@@ -5635,7 +5651,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (kb > 0) {
       msg_out += `<br/><i>Target pushed ${kb}" away from attacker. AG save at -${kb} or fall prone.</i>`;
-      msg_out += `<br/>[AG Save vs Knockdown](!mp kbsave --target ${rec.defTokenId} --penalty ${kb})`;
+      msg_out += `<br/>${btn(`AG Save vs Knockdown`, `!mp kbsave --target ${rec.defTokenId} --penalty ${kb}`)}`;
     }
 
     chCombat("MP", msg_out, rec.defCharId, rec.atkCharId);
@@ -5855,9 +5871,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           
           statusLine += `<br/><span style="color:#e94560;">Takes <b>${penetrating}</b> ${rec.dmgTypeStr || "Biochemical"} damage!</span>`;
           statusLine += ` (${condDamage} raw - ${dmgProt} prot)`;
-          damageButtons = `<br/>[Take Full Damage](!mp apply --id ${poisonRollId} --mode straight) `;
-          damageButtons += `[Roll-With Max](!mp apply --id ${poisonRollId} --mode rollwithmax) `;
-          damageButtons += `[Roll-With Custom](!mp apply --id ${poisonRollId} --mode rollwithcustom --amt ?{Power to divert|0})`;
+          damageButtons = `<br/>${btnDanger(`Take Full Damage`, `!mp apply --id ${poisonRollId} --mode straight`)} `;
+          damageButtons += `${btn(`Roll-With Max`, `!mp apply --id ${poisonRollId} --mode rollwithmax`)} `;
+          damageButtons += `${btn(`Roll-With Custom`, `!mp apply --id ${poisonRollId} --mode rollwithcustom --amt ?{Power to divert|0}`)}`;
         } else {
           statusLine += `<br/><span style="font-size:11px;">Poison damage blocked by ${dmgProt} ${rec.dmgTypeStr || "Biochemical"} protection</span>`;
         }
@@ -5870,7 +5886,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         statusLine += `<br/><span style="color:#ff0000; font-weight:bold;">💀 FUMBLE - Effect is PERMANENT!</span>`;
       } else if (!damageButtons) {
         // Only show Recovery Roll button if no damage buttons (damage buttons include Try Again after applied)
-        statusLine += `<br/>[Recovery Roll](!mp recover --target ${rec.defTokenId} --idx ${condIdx})`;
+        statusLine += `<br/>${btn(`Recovery Roll`, `!mp recover --target ${rec.defTokenId} --idx ${condIdx}`)}`;
       }
     }
 
@@ -6009,23 +6025,23 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           
           msg_out += `<br/><span style="color:#e94560;">Takes <b>${penetrating}</b> ${cond.dmgType || "Biochemical"} damage!</span>`;
           msg_out += ` (${cond.damage} raw - ${prot} prot)`;
-          msg_out += `<br/>[Take Full Damage](!mp apply --id ${poisonRollId} --mode straight) `;
-          msg_out += `[Roll-With Max](!mp apply --id ${poisonRollId} --mode rollwithmax) `;
-          msg_out += `[Roll-With Custom](!mp apply --id ${poisonRollId} --mode rollwithcustom --amt ?{Power to divert|0})`;
+          msg_out += `<br/>${btnDanger(`Take Full Damage`, `!mp apply --id ${poisonRollId} --mode straight`)} `;
+          msg_out += `${btn(`Roll-With Max`, `!mp apply --id ${poisonRollId} --mode rollwithmax`)} `;
+          msg_out += `${btn(`Roll-With Custom`, `!mp apply --id ${poisonRollId} --mode rollwithcustom --amt ?{Power to divert|0}`)}`;
           msg_out += `<br/><span style="font-size:11px;">Next recovery attempt: ${recTime}</span>`;
         } else {
           msg_out += `<br/><span style="font-size:11px;">Damage blocked by ${prot} ${cond.dmgType || "Biochemical"} protection</span>`;
           // Still show retry button even if damage was blocked
           msg_out += `<br/><span style="font-size:11px;">Next attempt: ${recTime}</span>`;
-          msg_out += `<br/>[Try Again](!mp recover --target ${tokId} --idx ${condIdx})`;
+          msg_out += `<br/>${btn(`Try Again`, `!mp recover --target ${tokId} --idx ${condIdx}`)}`;
         }
       } else {
         // Non-damaging condition (paralysis, etc.) - just show retry
         msg_out += `<br/><span style="font-size:11px;">Next attempt: ${recTime}</span>`;
         if (cond) {
-          msg_out += `<br/>[Try Again](!mp recover --target ${tokId} --idx ${condIdx})`;
+          msg_out += `<br/>${btn(`Try Again`, `!mp recover --target ${tokId} --idx ${condIdx}`)}`;
         } else {
-          msg_out += `<br/>[Try Again](!mp recover --target ${tokId} --bc ${bc} --tn ${tn})`;
+          msg_out += `<br/>${btn(`Try Again`, `!mp recover --target ${tokId} --bc ${bc} --tn ${tn}`)}`;
         }
       }
     }
@@ -6069,7 +6085,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         } else {
           msg_out += `<br/><span style="color:#e74c3c; font-size:11px;">⚠️ EXPIRED</span>`;
         }
-        msg_out += `<br/>[Clear Effect](!mp clearcondition --target ${tokId} --idx ${idx})`;
+        msg_out += `<br/>${btn(`Clear Effect`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
       } else if (cond.type === "duration") {
         // Durational ongoing effect
         msg_out += `<br/><br/><b>${idx + 1}. ⏱ DURATION</b>`;
@@ -6083,7 +6099,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           msg_out += `<br/><span style="font-size:11px;">Persists for ${esc(cond.unitLabel || "ongoing")} (manual)</span>`;
         }
         if (cond.escape) msg_out += `<br/><span style="font-size:11px; color:#9ad;">Escape: ${esc(cond.escape)}</span>`;
-        msg_out += `<br/>[End Effect](!mp clearcondition --target ${tokId} --idx ${idx})`;
+        msg_out += `<br/>${btn(`End Effect`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
       } else {
         // Standard condition
         const condLabel = cond.type.replace(/_/g, " ").toUpperCase();
@@ -6093,8 +6109,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         if (cond.permanent) {
           msg_out += `<br/><span style="color:#ff0000; font-size:11px;">⚠️ PERMANENT</span>`;
         } else {
-          msg_out += `<br/>[Recovery Roll](!mp recover --target ${tokId} --idx ${idx}) `;
-          msg_out += `[Remove](!mp clearcondition --target ${tokId} --idx ${idx})`;
+          msg_out += `<br/>${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${idx}`)} `;
+          msg_out += `${btn(`Remove`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
         }
       }
     });
@@ -6301,7 +6317,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     chCombat("MP", `<b>Snare Applied to ${esc(rec.defName)}</b><br/>` +
       `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
       `BP: ${bpDisplay} | Max: <b>${maxBp}</b>` +
-      `<br/>[Break Free](!mp break --target ${defTok.id})`, rec.defCharId);
+      `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)}`, rec.defCharId);
   }
 
   function cmdBreak(msg, args) {
@@ -6342,7 +6358,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       resultLine;
 
     if (!success) {
-      msg_out += `<br/>[Try Again](!mp break --target ${tokId}) [Push (+2)](!mp break --target ${tokId} --push 1)`;
+      msg_out += `<br/>${btn(`Try Again`, `!mp break --target ${tokId}`)} ${btn(`Push (+2)`, `!mp break --target ${tokId} --push 1`)}`;
     }
 
     chCombat("MP", msg_out, char.id);
@@ -6454,13 +6470,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Per 3.0.2.6: -3 restraint, -9 if fully restrained (locked)
     const restraintPenalty = lockAttempt ? -9 : -3;
     msg_out += `<i>Restraint: Both parties at <b>${restraintPenalty}</b> to physical tasks</i><br/>`;
-    msg_out += `[Squeeze](!mp squeeze --target ${defTokId}) ` +
-      (lockAttempt ? "" : `[Lock](!mp grapplelock --target ${defTokId}) `) +
-      `[Release](!mp grapplerelease --target ${defTokId})<br/>`;
+    msg_out += `${btn(`Squeeze`, `!mp squeeze --target ${defTokId}`)} ` +
+      (lockAttempt ? "" : `${btn(`Lock`, `!mp grapplelock --target ${defTokId}`)} `) +
+      `${btn(`Release`, `!mp grapplerelease --target ${defTokId}`)}<br/>`;
     msg_out += `<b>${esc(defChar.get("name"))}'s options:</b> `;
-    msg_out += `[Break Free](!mp grapplebreak --target ${defTokId}) ` +
-      `[Escape](!mp escape --target ${defTokId}) ` +
-      (remote || lockAttempt ? "" : `[Counter](!mp countergrapple --target ${defTokId})`);
+    msg_out += `${btn(`Break Free`, `!mp grapplebreak --target ${defTokId}`)} ` +
+      `${btn(`Escape`, `!mp escape --target ${defTokId}`)} ` +
+      (remote || lockAttempt ? "" : `${btn(`Counter`, `!mp countergrapple --target ${defTokId}`)}`);
 
     chCombat("MP", msg_out, defChar.id);
   }
@@ -6522,11 +6538,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<b>${esc(atkChar.get("name"))} Squeezes ${esc(defChar.get("name"))}</b>${gripLabel}<br/>`;
     html += `Damage: <span title="${hthExpr}"><b>${damage}</b></span> (Kinetic, no KB)<br/>`;
     if (sqDefIsVeh) {
-      html += `[Apply](!mp apply --id ${rollId} --mode noroll)`;
+      html += `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)}`;
     } else {
-      html += `[No Roll-With](!mp apply --id ${rollId} --mode noroll) `;
-      html += `[Roll-With Max](!mp apply --id ${rollId} --mode rwmax) `;
-      html += `[Roll-With...](!mp apply --id ${rollId} --mode rw --amt ?{Roll-With amount|0})`;
+      html += `${btn(`No Roll-With`, `!mp apply --id ${rollId} --mode noroll`)} `;
+      html += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rwmax`)} `;
+      html += `${btn(`Roll-With...`, `!mp apply --id ${rollId} --mode rw --amt ?{Roll-With amount|0}`)}`;
     }
     html += `</div>`;
 
@@ -6856,7 +6872,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (success) {
       tok.set("status_sleepy", false);
     } else {
-      msg_out += `<br/>[Try Again](!mp wakeup --target ${tokId})`;
+      msg_out += `<br/>${btn(`Try Again`, `!mp wakeup --target ${tokId}`)}`;
     }
 
     chCombat("MP", msg_out, char.id);
@@ -6898,7 +6914,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         if (cond.permanent) msg_out += ` (PERMANENT)`;
         else msg_out += ` [Rec: ${cond.recTN}-]`;
       });
-      msg_out += `<br/>[View Details](!mp conditions --target ${tokId})`;
+      msg_out += `<br/>${btn(`View Details`, `!mp conditions --target ${tokId}`)}`;
     }
 
     if (hits <= 0) {
@@ -7550,14 +7566,14 @@ function cmdStance(msg, args) {
       `<b>🧪 Grapple Test Harness</b> (roll bypassed)<br/>` +
       `${esc(atkChar.get("name"))} → ${esc(defChar.get("name"))}${lockedNow}${remoteNow}${gripNow}<br/>` +
       `<i>Stored chance-to-hit: ${tohitOverride}</i><br/>` +
-      `[Squeeze](!mp squeeze --target ${defTok.id}) ` +
-      (sn.locked ? "" : `[Lock Attempt](!mp grapplelock --target ${defTok.id}) `) +
-      `[Release](!mp grapplerelease --target ${defTok.id})<br/>` +
+      `${btn(`Squeeze`, `!mp squeeze --target ${defTok.id}`)} ` +
+      (sn.locked ? "" : `${btn(`Lock Attempt`, `!mp grapplelock --target ${defTok.id}`)} `) +
+      `${btn(`Release`, `!mp grapplerelease --target ${defTok.id}`)}<br/>` +
       `<b>Target options:</b> ` +
-      `[Break Free](!mp grapplebreak --target ${defTok.id}) ` +
-      `[Break Free (Push)](!mp grapplebreak --target ${defTok.id} --pushdef 1) ` +
-      `[Escape](!mp escape --target ${defTok.id}) ` +
-      (sn.remote || sn.locked ? "" : `[Counter](!mp countergrapple --target ${defTok.id} --wrestle ?{Wrestling background? (0/1)|0} --lock ?{Attempt Lock? (0/1)|0})`);
+      `${btn(`Break Free`, `!mp grapplebreak --target ${defTok.id}`)} ` +
+      `${btn(`Break Free (Push)`, `!mp grapplebreak --target ${defTok.id} --pushdef 1`)} ` +
+      `${btn(`Escape`, `!mp escape --target ${defTok.id}`)} ` +
+      (sn.remote || sn.locked ? "" : `${btn(`Counter`, `!mp countergrapple --target ${defTok.id} --wrestle ?{Wrestling background? (0/1)|0} --lock ?{Attempt Lock? (0/1)|0}`)}`);
 
     ch("MP", "/w gm " + out);
   }
@@ -7791,11 +7807,11 @@ function cmdStance(msg, args) {
     if (isHeadshot) mode = "headshot";
 
     const dmgIsVeh = isVehicleMode(char.id);
-    const buttons = `[Apply](!mp apply --id ${rollId} --mode ${mode}) ` +
+    const buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode ${mode}`)} ` +
       (dmgIsVeh ? "" :
-        `[RW Max](!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithmax"}) ` +
-        `[RW Custom](!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithcustom"} --amt ?{Divert to Power|0}) `) +
-      `[KB](!mp kb --id ${rollId})`;
+        `${btn(`RW Max`, `!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithmax"}`)} ` +
+        `${btn(`RW Custom`, `!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithcustom"} --amt ?{Divert to Power|0}`)} `) +
+      `${btn(`KB`, `!mp kb --id ${rollId}`)}`;
 
     ch("MP", "/w gm " + html + buttons);
   }
@@ -7863,9 +7879,9 @@ function cmdStance(msg, args) {
     html += `<br/><span style="color:#333; font-size:11px;">Save BC: ${bc} | Mod: ${saveMod} | Recovery: ${recMod} | Type: ${dmgType}${invulnNote}</span>`;
     html += `</div>`;
 
-    const buttons = `[Make Save](!mp save --id ${rollId} --critmod 0) ` +
+    const buttons = `${btn(`Make Save`, `!mp save --id ${rollId} --critmod 0`)} ` +
       (isVehicleMode(char.id) ? "" :
-        `[Save + Roll-With](!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod 0)`);
+        `${btn(`Save + Roll-With`, `!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod 0`)}`);
 
     ch("MP", "/w gm " + html + buttons);
   }
@@ -7927,7 +7943,7 @@ function cmdStance(msg, args) {
     html += `<br/><span style="color:#333; font-size:11px;">Type: ${snType} | BP: ${bp} | Max: ${maxBp}</span>`;
     html += `</div>`;
 
-    const buttons = `[Apply Snare](!mp snare --id ${rollId} --bonus 0)`;
+    const buttons = `${btnDanger(`Apply Snare`, `!mp snare --id ${rollId} --bonus 0`)}`;
 
     ch("MP", "/w gm " + html + buttons);
   }
@@ -8738,7 +8754,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.78.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.79.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9322,7 +9338,7 @@ function cmdStance(msg, args) {
     if (!forms || !forms.length) {
       const all = Object.keys(MP_GW_BESTIARY);
       const near = all.filter(k => k.indexOf(name.toLowerCase()) >= 0).slice(0, 8)
-        .map(k => `[${esc(k)}](!mp gwspawn --name ${esc(k)})`).join(" ");
+        .map(k => `${btn(`${esc(k)}`, `!mp gwspawn --name ${esc(k)}`)}`).join(" ");
       return ch("MP", `/w gm No GW creature named <b>${esc(name)}</b>.` + (near ? `<br/>Did you mean: ${near}` : ` (${all.length} creatures loaded)`));
     }
     let block = forms[0];
@@ -9332,7 +9348,7 @@ function cmdStance(msg, args) {
       if (!block) {
         const btns = forms.map(f => {
           const lbl = String(f.form || "").replace(/^.*[—:]\s*/, "").trim() || f.name;
-          return `[${esc(lbl)}](!mp gwspawn --name ${esc(name)} --form ${esc(lbl)})`;
+          return `${btn(`${esc(lbl)}`, `!mp gwspawn --name ${esc(name)} --form ${esc(lbl)}`)}`;
         }).join(" ");
         return ch("MP", `/w gm <b>${esc(name)}</b> has ${forms.length} forms — pick one: ${btns}`);
       }
@@ -9533,10 +9549,10 @@ function cmdStance(msg, args) {
                 created: Date.now()
               };
               frag += `<br/><span style="color:#f4d03f;">⏱ ${esc(name)}: ${esc(cond.sourceAtk)} — <b>${rolled}</b> ${esc(cond.dmgType || "")} this round</span>`;
-              frag += `<br/>[Apply](!mp apply --id ${rid} --mode noroll) `;
+              frag += `<br/>${btnDanger(`Apply`, `!mp apply --id ${rid} --mode noroll`)} `;
               if (!isVehicleMode(char.id)) {
-                frag += `[Roll-With Max](!mp apply --id ${rid} --mode rollwithmax) `;
-                frag += `[Roll-With Custom](!mp apply --id ${rid} --mode rollwithcustom --amt ?{Divert to Power|0})`;
+                frag += `${btn(`Roll-With Max`, `!mp apply --id ${rid} --mode rollwithmax`)} `;
+                frag += `${btn(`Roll-With Custom`, `!mp apply --id ${rid} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
               }
             }
           }
@@ -9595,7 +9611,7 @@ function cmdStance(msg, args) {
           const label = String(cond.type).replace(/_/g, " ").toUpperCase();
           frag += `<br/><span style="color:#e94560; font-weight:bold;">${esc(name)}: ${label}</span> ` +
             `<span style="font-size:11px;">recovery due — ${esc(cond.saveBC)} at <b>${cond.recTN}-</b></span>` +
-            `<br/>[Recovery Roll](!mp recover --target ${tokId} --idx ${idx})`;
+            `<br/>${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${idx}`)}`;
           cond.nextRecRound = newRound + interval; // schedule next opportunity
         }
       });
@@ -9657,11 +9673,11 @@ function cmdStance(msg, args) {
     setInterval(checkSiphonExpiry, 60000);
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.78.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.79.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.78.0 READY");
+  log("MP ENGINE v2.79.0 READY");
 });
