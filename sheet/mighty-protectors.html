@@ -1,4 +1,7 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.53 - Siphon Attack rows on the attack cog panel
+<!-- Mighty Protectors Roll20 Character Sheet v44.54 - Immunity flag on attack cog panel
+        - Row 2: Immune checkbox (attr_attack_immunity) beside Area — Immunity (+2.5) excludes
+          the attacker's own character from their Area Effect (engine v2.78.0)
+        v44.53: Siphon Attack rows on the attack cog panel
         - Row 6: Siphon Attack flag + Drains (Hits/Power/Ability CPs/Attribute), BC and Cat selectors
         - Row 6.5: Mode (Normal/Suppress/Mimicry), Replenish flag, Split spec (informational)
         - Row 6.75: Overload effect, Cap (Ability Cap 2.1.16.5), read-only engine-tracked Pool
@@ -841,6 +844,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <div class="sheet-panel-field">
             <label title="Area Effect: Diameter in inches">Area:</label>
             <input type="text" name="attr_attack_area" style="width:28px !important;" title="Area Effect: Diameter in inches" />
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_immunity" value="1" title="Immunity (+2.5): character ignores their own Ability — excluded from their own Area Effect; also counters Reflection" />
+            <label title="Immunity (+2.5): character ignores their own Ability — excluded from their own Area Effect; also counters Reflection">Immune</label>
           </div>
           <div class="sheet-panel-field">
             <label title="Duration: How long the effect lasts">Dur:</label>

@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.77.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.78.0 - 2026-07-05
+ * v2.78.0: Immunity modifier (+2.5) for Area Effects: new attack_immunity
+ *   flag read at attack time; handleAreaAttack excludes the attacker's own
+ *   character from tokensInArea (RAW: ignore negative effects of own
+ *   Ability). Enables touch-range area siphons (Sham) without self-drain.
+ *   Immunity-counters-Reflection is backlog. Area card label fixed:
+ *   "Area: N\"" (diameter, MP convention) replaces "Radius: N\"".
  * v2.77.0: SIPHON automation (MP Voluntary Ability, p.66-67). New attack row
  *   fields (attack_is_siphon, siphon_drain/mode/bc/cat/replenish/split/
  *   overload/cap/pool) read at attack time; siphon attacks never cause KB.
@@ -516,7 +522,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.77.0 FILE STARTING");
+log("MP ENGINE v2.78.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -2686,6 +2692,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const areaDiameter = num(areaRaw, 0);
     const isAreaAttack = areaDiameter > 0;
     const areaRadius = areaDiameter / 2;
+    const hasImmunity = (getAtk("attack_immunity") === "1");
     
     const skipCosts = (fields.nopr === "1");
     const atkPR = skipCosts ? 0 : num(getAtk("attack_cost") || fields.cost || "", 0);
@@ -2860,7 +2867,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       isSiphon: isSiphonAttack, siphonDrain, siphonMode, siphonBC, siphonCat,
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType,
-      isAreaAttack, areaRadius, areaDiameter,
+      isAreaAttack, areaRadius, areaDiameter, hasImmunity,
       calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot,
       hasDuration, durNum, durUnit, durRounds, durEscape, durDamageExpr: atkDamageExpr
     };
@@ -3198,8 +3205,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       scatterNote = ` Scatter: ${scatterDist}" ${direction}`;
     }
     
-    // Find all tokens in the area
-    const tokensInArea = getTokensInRadius(pageId, centerX, centerY, rec.areaRadius);
+    // Find all tokens in the area; Immunity (+2.5) excludes the attacker
+    // from their own Area Effect (RAW: ignore negative effects of own Ability)
+    let tokensInArea = getTokensInRadius(pageId, centerX, centerY, rec.areaRadius);
+    if (rec.hasImmunity) {
+      tokensInArea = tokensInArea.filter(t => t.charId !== rec.atkCharId);
+    }
     
     // Store area effect data
     cleanupPendingArea();
@@ -3253,7 +3264,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden; margin-top:4px;">`;
     html += `<div style="background:${hdrBg}; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">💥 AREA ${outcome}</div>`;
     html += `<div style="padding:6px 10px; background:#16213e; border-bottom:1px solid #2a2a4a;">`;
-    html += `Radius: <b style="color:#fff;">${rec.areaRadius}"</b> &middot; Damage: <b style="color:#fff;">${rec.damageTotal}</b> ${esc(rec.dmgTypeStr)}`;
+    html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; Damage: <b style="color:#fff;">${rec.damageTotal}</b> ${esc(rec.dmgTypeStr)}`;
     html += `<br/>To-Hit: <b style="color:#fff;">${rec.targetTotal}-</b> <span style="color:#aab; font-size:11px;">(+6 immobile, no def)</span> &middot; Roll: <b style="color:#fff;">${rec.roll}</b>`;
     if (scatterNote) html += `<br/><span style="color:#f1c40f; font-weight:bold;">${scatterNote.trim()}</span>`;
     html += `</div>`;
@@ -8727,7 +8738,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.77.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.78.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9646,11 +9657,11 @@ function cmdStance(msg, args) {
     setInterval(checkSiphonExpiry, 60000);
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.77.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.78.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.77.0 READY");
+  log("MP ENGINE v2.78.0 READY");
 });
