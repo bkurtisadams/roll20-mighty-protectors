@@ -1,4 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.85.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.86.0 - 2026-07-05
+ * v2.86.0: FIX Turn Tracker round advance. The v2.83-85 custom "Round" (+1)
+ *   entry never advanced because Roll20 only runs a custom entry's formula
+ *   when you click next-turn ON that entry, not each cycle — so the clock
+ *   never moved during combat. Replaced with Option A wrap detection: the
+ *   round anchor is the combatant on top when the round starts; Roll20
+ *   rotates the finished combatant to the bottom each next-turn, so the
+ *   anchor returns to top only after everyone has acted = one round, at
+ *   which point the clock advances 10s. leftAnchor guards against firing
+ *   before the anchor has rotated off. No custom tracker entry is inserted
+ *   anymore. Undo snapshots the wrap fields; combat end clears them.
  * v2.85.0: Game clock UI + undo integration. (1) Persistent player-visible
  *   HANDOUT ("⏱ Game Time", shared to all): rewritten on every clock move
  *   (tracker round, !mp round, !mp time, combat start/end, undo) with big
@@ -596,7 +606,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.85.0 FILE STARTING");
+log("MP ENGINE v2.86.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -779,7 +789,7 @@ MP.Engine = (function () {
   // { key: { charId, rowId, resource, expiry } } — points authoritative in row attr
   if (!state.MP_Engine.siphonPools) state.MP_Engine.siphonPools = {};
   // Ensure game clock exists for existing state (default: 2519-07-14 08:00, GW campaign start)
-  if (!state.MP_Engine.gameClock) state.MP_Engine.gameClock = { ms: Date.UTC(2519, 6, 14, 8, 0, 0), combatStartMs: null, combatStartRound: 0, lastTrackerRound: 0 };
+  if (!state.MP_Engine.gameClock) state.MP_Engine.gameClock = { ms: Date.UTC(2519, 6, 14, 8, 0, 0), combatStartMs: null, combatStartRound: 0, roundAnchor: null, topId: null, leftAnchor: false };
   // One-time migration from the v2.83.0 placeholder default
   if (state.MP_Engine.gameClock.ms === Date.UTC(2519, 0, 1, 8, 0, 0)) state.MP_Engine.gameClock.ms = Date.UTC(2519, 6, 14, 8, 0, 0);
   // Ensure bleeding registry exists (4.8.4.2): { tokenId: { charId, lastMs } }
@@ -975,7 +985,7 @@ MP.Engine = (function () {
       extra: extra || null,
       // Clock snapshot: reversing an attack also reverses its time effects
       // (bleed registrations, tracker round advances, clock movement).
-      clock: { ms: gc.ms, currentRound: state.MP_Engine.currentRound, lastTrackerRound: gc.lastTrackerRound },
+      clock: { ms: gc.ms, currentRound: state.MP_Engine.currentRound, roundAnchor: gc.roundAnchor, topId: gc.topId, leftAnchor: gc.leftAnchor },
       bleedKeys: Object.keys(state.MP_Engine.bleeds || {})
     };
     pruneUndo();
@@ -1026,7 +1036,11 @@ MP.Engine = (function () {
       const gc = state.MP_Engine.gameClock;
       gc.ms = rec.clock.ms;
       state.MP_Engine.currentRound = rec.clock.currentRound;
-      gc.lastTrackerRound = rec.clock.lastTrackerRound;
+      if ("roundAnchor" in rec.clock) {
+        gc.roundAnchor = rec.clock.roundAnchor;
+        gc.topId = rec.clock.topId;
+        gc.leftAnchor = rec.clock.leftAnchor;
+      }
       const prevBleeds = rec.bleedKeys || [];
       Object.keys(state.MP_Engine.bleeds || {}).forEach(k => {
         if (prevBleeds.indexOf(k) === -1) delete state.MP_Engine.bleeds[k];
@@ -9098,7 +9112,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.85.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.86.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10234,15 +10248,10 @@ function cmdStance(msg, args) {
     } catch (e) { return []; }
   }
 
-  function findRoundEntry(to) {
-    return to.find(e => e.id === "-1" && /round/i.test(String(e.custom || "")));
-  }
-
-  function ensureRoundEntry() {
-    const to = readTurnorder();
-    if (findRoundEntry(to)) return;
-    to.unshift({ id: "-1", pr: 1, custom: "Round", formula: "+1" });
-    Campaign().set("turnorder", JSON.stringify(to));
+  // Signature of the turn order: the sequence of entry ids. Used to detect a
+  // wrap (top combatant coming back around = a new 10-second round).
+  function turnorderTopId(to) {
+    return to.length ? String(to[0].id) : "";
   }
 
   function onTrackerPageChange(obj, prev) {
@@ -10253,37 +10262,43 @@ function cmdStance(msg, args) {
       state.MP_Engine.currentRound = 1;
       gc.combatStartMs = gc.ms;
       gc.combatStartRound = 1;
-      gc.lastTrackerRound = 1;
-      ensureRoundEntry();
+      gc.roundAnchor = turnorderTopId(readTurnorder());
+      gc.topId = gc.roundAnchor;
+      gc.leftAnchor = false;
       updateClockHandout();
       ch("MP", `/w gm ${clockCard("Combat Started", `<br/><span style="color:#f4d03f;">\u2694\ufe0f Round 1</span>`)}`);
     } else if (!nowOpen && wasOpen && gc.combatStartMs !== null) {
       const elapsed = Math.round((gc.ms - gc.combatStartMs) / 1000);
       const rounds = state.MP_Engine.currentRound - gc.combatStartRound + 1;
       gc.combatStartMs = null;
+      gc.roundAnchor = null;
+      gc.topId = null;
+      gc.leftAnchor = false;
       updateClockHandout();
       ch("MP", `/w gm ${clockCard("Combat Ended", `<br/><span style="color:#8a84a8;">${rounds} round(s), ${fmtElapsed(elapsed)} game time</span>`)}`);
     }
   }
 
+  // Option A: count wraps. The round anchor is the combatant on top when the
+  // round begins. Roll20 moves the finished combatant to the bottom on each
+  // "next turn", so the anchor returns to the top only after everyone has
+  // acted = one full round. Advance one round per return; manual !mp round
+  // remains the authoritative fallback.
   function onTurnorderChange() {
     if (!Campaign().get("initiativepage")) return;
     const to = readTurnorder();
     if (to.length === 0) return;
     const gc = state.MP_Engine.gameClock;
-    const entry = findRoundEntry(to);
-    if (!entry) {
-      to.unshift({ id: "-1", pr: gc.lastTrackerRound || 1, custom: "Round", formula: "+1" });
-      Campaign().set("turnorder", JSON.stringify(to));
-      return;
-    }
-    const pr = parseInt(entry.pr, 10) || 1;
-    if (pr > gc.lastTrackerRound) {
-      const delta = pr - gc.lastTrackerRound;
-      gc.lastTrackerRound = pr;
-      ch("MP", `/w gm ` + advanceRound(delta));
-    } else if (pr < gc.lastTrackerRound) {
-      gc.lastTrackerRound = pr;
+    const newTop = turnorderTopId(to);
+    if (!gc.roundAnchor) { gc.roundAnchor = newTop; gc.topId = newTop; return; }
+    if (newTop === gc.topId) return;  // no turn change (re-sort, edit, HP tweak)
+    gc.topId = newTop;
+    // Anchor back on top after having left it => the party cycled once.
+    if (newTop === gc.roundAnchor && gc.leftAnchor) {
+      gc.leftAnchor = false;
+      ch("MP", `/w gm ` + advanceRound(1));
+    } else if (newTop !== gc.roundAnchor) {
+      gc.leftAnchor = true;  // anchor has rotated off the top; a wrap is now possible
     }
   }
 
@@ -10349,16 +10364,17 @@ function cmdStance(msg, args) {
     runGameTimeSweep();
     updateClockHandout();
     if (Campaign().get("initiativepage")) {
-      const entry = findRoundEntry(readTurnorder());
-      if (entry) gc.lastTrackerRound = parseInt(entry.pr, 10) || 1;
+      const top = turnorderTopId(readTurnorder());
+      if (!gc.topId) gc.topId = top;
+      if (!gc.roundAnchor) gc.roundAnchor = top;
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.85.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.86.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.85.0 READY");
+  log("MP ENGINE v2.86.0 READY");
 });
