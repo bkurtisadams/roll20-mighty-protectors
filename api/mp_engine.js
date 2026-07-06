@@ -1,4 +1,15 @@
-/* Mighty Protectors Roll20 API Engine v2.84.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.85.0 - 2026-07-05
+ * v2.85.0: Game clock UI + undo integration. (1) Persistent player-visible
+ *   HANDOUT ("⏱ Game Time", shared to all): rewritten on every clock move
+ *   (tracker round, !mp round, !mp time, combat start/end, undo) with big
+ *   24h time, full date, phase-of-day badge, and an in-combat round/elapsed
+ *   block that collapses to "Narrative time" out of combat. (2) PHASE OF DAY
+ *   on fixed hours (CFG.DAY_PHASES: dawn 5-7, day 7-18, dusk 18-20, night
+ *   20-5); day-boundary and phase crossings announce once in chat on advance
+ *   (suppressed on multi-day jumps). (3) UNDO now snapshots the clock
+ *   (ms/currentRound/lastTrackerRound) and the bleed key set, so reversing an
+ *   attack rewinds its time effects and removes any bleed it registered.
+ *   New CFG: CLOCK_HANDOUT, CLOCK_HANDOUT_NAME, DAY_PHASES.
  * v2.84.0: ALL EFFECTS ON GAME TIME (Kurt ruling 2026-07-05). ABSORPTION
  *   effect expiry also migrated to game time (5 GAME minutes; the 5-minute
  *   value itself is an engine convention pending verification vs Absorption
@@ -585,7 +596,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.84.0 FILE STARTING");
+log("MP ENGINE v2.85.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -630,7 +641,18 @@ MP.Engine = (function () {
     AREA_MARKER_WIDTH: 3,
 
     // Combat scale (4.1): one combat round represents ten seconds of real time
-    SECONDS_PER_ROUND: 10
+    SECONDS_PER_ROUND: 10,
+
+    // Game clock handout (persistent player-visible panel)
+    CLOCK_HANDOUT: true,
+    CLOCK_HANDOUT_NAME: "⏱ Game Time",
+    // Phase-of-day boundaries (fixed hours, 24h). [startHour, label, icon-hint]
+    DAY_PHASES: [
+      { start: 5, end: 7, label: "Dawn · first light", color: "#f5c99a" },
+      { start: 7, end: 18, label: "Day", color: "#9ad" },
+      { start: 18, end: 20, label: "Dusk · fading light", color: "#f5a15a" },
+      { start: 20, end: 5, label: "Night", color: "#8a9bd6" }
+    ]
   };
 
   // Vehicle mode detection
@@ -945,11 +967,16 @@ MP.Engine = (function () {
   // tokenSnaps: array from snapshotToken(). extra: optional attacker-resource refund.
   function registerUndo(undoId, label, tokenSnaps, extra) {
     if (!state.MP_Engine.undo) state.MP_Engine.undo = {};
+    const gc = state.MP_Engine.gameClock;
     state.MP_Engine.undo[undoId] = {
       label: label || "action",
       ts: Date.now(),
       tokenSnaps: (tokenSnaps || []).filter(Boolean),
-      extra: extra || null
+      extra: extra || null,
+      // Clock snapshot: reversing an attack also reverses its time effects
+      // (bleed registrations, tracker round advances, clock movement).
+      clock: { ms: gc.ms, currentRound: state.MP_Engine.currentRound, lastTrackerRound: gc.lastTrackerRound },
+      bleedKeys: Object.keys(state.MP_Engine.bleeds || {})
     };
     pruneUndo();
   }
@@ -991,6 +1018,20 @@ MP.Engine = (function () {
       if (ex.voidPending && state.MP_Engine.pending[ex.voidPending]) {
         delete state.MP_Engine.pending[ex.voidPending];
       }
+    }
+
+    // Reverse time effects: restore the clock/round and drop any bleed that
+    // this action newly registered (a bleed present now but not at snapshot).
+    if (rec.clock) {
+      const gc = state.MP_Engine.gameClock;
+      gc.ms = rec.clock.ms;
+      state.MP_Engine.currentRound = rec.clock.currentRound;
+      gc.lastTrackerRound = rec.clock.lastTrackerRound;
+      const prevBleeds = rec.bleedKeys || [];
+      Object.keys(state.MP_Engine.bleeds || {}).forEach(k => {
+        if (prevBleeds.indexOf(k) === -1) delete state.MP_Engine.bleeds[k];
+      });
+      updateClockHandout();
     }
 
     delete state.MP_Engine.undo[undoId];
@@ -9057,7 +9098,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.84.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.85.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9938,8 +9979,79 @@ function cmdStance(msg, args) {
   };
 
   function advanceClock(seconds) {
+    const before = state.MP_Engine.gameClock.ms;
     state.MP_Engine.gameClock.ms += seconds * 1000;
     runGameTimeSweep();
+    announcePhaseCrossings(before, state.MP_Engine.gameClock.ms);
+    updateClockHandout();
+  }
+
+  // Phase of day for a given hour (fixed boundaries, CFG.DAY_PHASES)
+  function phaseForHour(h) {
+    for (const p of CFG.DAY_PHASES) {
+      if (p.start <= p.end) { if (h >= p.start && h < p.end) return p; }
+      else { if (h >= p.start || h < p.end) return p; }  // wraps midnight
+    }
+    return CFG.DAY_PHASES[CFG.DAY_PHASES.length - 1];
+  }
+
+  // Announce day-boundary and phase crossings in chat (not every round)
+  function announcePhaseCrossings(beforeMs, afterMs) {
+    if (afterMs <= beforeMs) return;
+    const bH = new Date(beforeMs).getUTCHours();
+    const aH = new Date(afterMs).getUTCHours();
+    const bDay = Math.floor(beforeMs / 86400000);
+    const aDay = Math.floor(afterMs / 86400000);
+    // Only announce if we didn't leap more than a day (avoid spam on big jumps)
+    if (aDay - bDay > 1) return;
+    if (aDay !== bDay) {
+      ch("MP", `/w gm <div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">🌅 <b>A new day dawns</b> — ${fmtGameClock()}</div>`);
+    }
+    const bp = phaseForHour(bH), ap = phaseForHour(aH);
+    if (bp.label !== ap.label && aDay === bDay) {
+      ch("MP", `/w gm <div style="background:#1e1e38; color:${ap.color}; padding:6px; border:2px solid #4a4070;">🕒 <b>${esc(ap.label)}</b> — ${fmtGameClock()}</div>`);
+    }
+  }
+
+  // Persistent player-visible handout, rewritten on every clock movement
+  function getClockHandout() {
+    let h = findObjs({ _type: "handout", name: CFG.CLOCK_HANDOUT_NAME })[0];
+    if (!h && CFG.CLOCK_HANDOUT) {
+      h = createObj("handout", { name: CFG.CLOCK_HANDOUT_NAME, inplayerjournals: "all" });
+    }
+    return h || null;
+  }
+
+  function updateClockHandout() {
+    if (!CFG.CLOCK_HANDOUT) return;
+    const h = getClockHandout();
+    if (!h) return;
+    const d = new Date(state.MP_Engine.gameClock.ms);
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const p2 = x => String(x).padStart(2, "0");
+    const phase = phaseForHour(d.getUTCHours());
+    const gc = state.MP_Engine.gameClock;
+    const inCombat = gc.combatStartMs !== null;
+
+    let combatBlock;
+    if (inCombat) {
+      const elapsed = Math.round((gc.ms - gc.combatStartMs) / 1000);
+      combatBlock = `<div style="margin-top:14px; padding-top:12px; border-top:1px solid #4a4070;">` +
+        `<span style="color:#e24b4a;">●</span> <b>In combat</b> &nbsp; Round <b>${state.MP_Engine.currentRound}</b>` +
+        `<br/><span style="color:#8a84a8; font-size:11px;">Elapsed this combat: ${fmtElapsed(elapsed)}</span></div>`;
+    } else {
+      combatBlock = `<div style="margin-top:14px; padding-top:12px; border-top:1px solid #4a4070;">` +
+        `<span style="color:#6c8;">●</span> Narrative time</div>`;
+    }
+
+    const body = `<div style="font-family:Arial,sans-serif; color:#eaeaea; background:#1e1e38; padding:12px; border-radius:6px;">` +
+      `<div style="font-size:13px; color:#c8b8ff; letter-spacing:0.03em; margin-bottom:6px;">🕐 GAME TIME</div>` +
+      `<div style="font-size:26px; font-weight:bold; color:#fff;">${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}</div>` +
+      `<div style="font-size:14px; color:#b9b3d6; margin-top:2px;">${days[d.getUTCDay()]}, ${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}</div>` +
+      `<div style="margin-top:10px; color:${phase.color}; font-size:13px;">☀ ${esc(phase.label)}</div>` +
+      combatBlock + `</div>`;
+    h.set("notes", body);
   }
 
   // Everything scheduled on game time fires whenever the clock moves
@@ -10104,6 +10216,7 @@ function cmdStance(msg, args) {
       const hh = tm ? parseInt(tm[1], 10) : 8;
       const mm = tm ? parseInt(tm[2], 10) : 0;
       state.MP_Engine.gameClock.ms = Date.UTC(parseInt(dm[1], 10), parseInt(dm[2], 10) - 1, parseInt(dm[3], 10), hh, mm, 0);
+      updateClockHandout();
       return ch("MP", `/w gm ${clockCard("Game Time Set")}`);
     }
     return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp time</code> | <code>!mp time advance N unit</code> | <code>!mp time set YYYY-MM-DD [HH:MM]</code>`);
@@ -10142,11 +10255,13 @@ function cmdStance(msg, args) {
       gc.combatStartRound = 1;
       gc.lastTrackerRound = 1;
       ensureRoundEntry();
+      updateClockHandout();
       ch("MP", `/w gm ${clockCard("Combat Started", `<br/><span style="color:#f4d03f;">\u2694\ufe0f Round 1</span>`)}`);
     } else if (!nowOpen && wasOpen && gc.combatStartMs !== null) {
       const elapsed = Math.round((gc.ms - gc.combatStartMs) / 1000);
       const rounds = state.MP_Engine.currentRound - gc.combatStartRound + 1;
       gc.combatStartMs = null;
+      updateClockHandout();
       ch("MP", `/w gm ${clockCard("Combat Ended", `<br/><span style="color:#8a84a8;">${rounds} round(s), ${fmtElapsed(elapsed)} game time</span>`)}`);
     }
   }
@@ -10232,17 +10347,18 @@ function cmdStance(msg, args) {
       });
     });
     runGameTimeSweep();
+    updateClockHandout();
     if (Campaign().get("initiativepage")) {
       const entry = findRoundEntry(readTurnorder());
       if (entry) gc.lastTrackerRound = parseInt(entry.pr, 10) || 1;
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.84.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.85.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.84.0 READY");
+  log("MP ENGINE v2.85.0 READY");
 });
