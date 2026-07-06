@@ -1,4 +1,22 @@
-/* Mighty Protectors Roll20 API Engine v2.83.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.84.0 - 2026-07-05
+ * v2.84.0: ALL EFFECTS ON GAME TIME (Kurt ruling 2026-07-05). ABSORPTION
+ *   effect expiry also migrated to game time (5 GAME minutes; the 5-minute
+ *   value itself is an engine convention pending verification vs Absorption
+ *   RAW) with display, expiry check, sweep hook, and ready rebase of old
+ *   wall-clock entries. Clock default
+ *   now 2519-07-14 08:00 (GW campaign start; v2.83.0 placeholder migrated).
+ *   advanceClock runs runGameTimeSweep (siphon expiry + bleeding + duration
+ *   expiry) whenever the clock moves — by tracker round, !mp round, or
+ *   !mp time advance. SIPHON dissipation is now 1 GAME hour: expiries stored
+ *   as game timestamps, list shows game minutes left, the 60s wall-clock
+ *   interval is removed, and pre-v2.84 wall-clock entries are rebased on
+ *   ready. BLEEDING (4.8.4.2): incapacitation in cmdApply/resolveAreaTarget
+ *   auto-registers a bleed (characters only); each game minute drains 1
+ *   Power (collapses over big time jumps), Hits>0 auto-stops, Power 0 =
+ *   DEAD (Hits AND Power 0) with bled-out summary; !mp bleed list/start/
+ *   stop (Medical task check). DURATIONS: non-round duration effects
+ *   (minute/hour/day/week/month/year) now stamp a game-time expiresMs and
+ *   auto-expire with a GM whisper + marker cleanup; perm never expires.
  * v2.83.0: GAME CLOCK + TURN TRACKER integration. state.gameClock holds a
  *   campaign timestamp (default 2519-01-01 08:00); CFG.SECONDS_PER_ROUND=10
  *   per RAW 4.1. New advanceRound(n) funnels rounds, clock, duration ticks,
@@ -567,7 +585,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.83.0 FILE STARTING");
+log("MP ENGINE v2.84.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -738,8 +756,12 @@ MP.Engine = (function () {
   // Ensure siphon pool registry exists for existing state
   // { key: { charId, rowId, resource, expiry } } — points authoritative in row attr
   if (!state.MP_Engine.siphonPools) state.MP_Engine.siphonPools = {};
-  // Ensure game clock exists for existing state (default: 2519-01-01 08:00, GW campaign)
-  if (!state.MP_Engine.gameClock) state.MP_Engine.gameClock = { ms: Date.UTC(2519, 0, 1, 8, 0, 0), combatStartMs: null, combatStartRound: 0, lastTrackerRound: 0 };
+  // Ensure game clock exists for existing state (default: 2519-07-14 08:00, GW campaign start)
+  if (!state.MP_Engine.gameClock) state.MP_Engine.gameClock = { ms: Date.UTC(2519, 6, 14, 8, 0, 0), combatStartMs: null, combatStartRound: 0, lastTrackerRound: 0 };
+  // One-time migration from the v2.83.0 placeholder default
+  if (state.MP_Engine.gameClock.ms === Date.UTC(2519, 0, 1, 8, 0, 0)) state.MP_Engine.gameClock.ms = Date.UTC(2519, 6, 14, 8, 0, 0);
+  // Ensure bleeding registry exists (4.8.4.2): { tokenId: { charId, lastMs } }
+  if (!state.MP_Engine.bleeds) state.MP_Engine.bleeds = {};
   // Ensure pendingArea exists for existing state
   if (!state.MP_Engine.pendingArea) state.MP_Engine.pendingArea = {};
   // Ensure currentRound exists for existing state
@@ -832,6 +854,10 @@ MP.Engine = (function () {
         protKey: rec.protKey || null,
         damageExpr: rec.durDamageExpr || "",
         roundsRemaining: ticks,
+        expiresMs: (ticks === 0 && rec.durNum > 0 && rec.durUnit && rec.durUnit !== "perm" && TIME_UNITS[rec.durUnit + (rec.durNum === 1 ? "" : "s")] !== undefined)
+          ? state.MP_Engine.gameClock.ms + rec.durNum * (TIME_UNITS[rec.durUnit + (rec.durNum === 1 ? "" : "s")] || 60) * 1000
+          : ((ticks === 0 && rec.durNum > 0 && rec.durUnit === "month") ? state.MP_Engine.gameClock.ms + rec.durNum * 2592000000
+          : ((ticks === 0 && rec.durNum > 0 && rec.durUnit === "year") ? state.MP_Engine.gameClock.ms + rec.durNum * 31536000000 : null)),
         unitLabel: unitLabel,
         escape: rec.durEscape || "",
         marker: marker,
@@ -845,7 +871,8 @@ MP.Engine = (function () {
       } else if (ticks > 0) {
         snippet += `<br/><span style="font-size:11px;">Effect persists ${ticks} more round(s)</span>`;
       } else {
-        snippet += `<br/><span style="font-size:11px;">Effect persists for ${esc(unitLabel)} (track manually)</span>`;
+        const auto = conds[conds.length - 1].expiresMs;
+        snippet += `<br/><span style="font-size:11px;">Effect persists for ${esc(unitLabel)}${auto ? " (auto-expires on the game clock)" : " (track manually)"}</span>`;
       }
       if (rec.durEscape) {
         snippet += `<br/><span style="font-size:11px; color:#9ad;">Escape: ${esc(rec.durEscape)}</span>`;
@@ -3642,6 +3669,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (incapacitated) {
       statusNote = " <b>INCAPACITATED!</b>";
       tok.set("status_dead", true);
+      if (!tokIsVehicle) statusNote += startBleed(tokId, tokData.charId);
     } else if (unconscious) {
       statusNote = " <b>UNCONSCIOUS!</b>";
       tok.set("status_sleepy", true);
@@ -3850,8 +3878,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isLedger || atkIsVeh) {
       const pool1 = pool0 + kept;
       setAttr(atkCharId, pfx + "attack_siphon_pool", pool1);
-      registerSiphonPool(atkCharId, rowId, siphonDrain, Date.now() + 3600000);
-      html += `<br/><span style="color:#c88fff;">Siphons <b>${kept}</b> ${esc(unitLabel)} (pool ${pool1}${cap > 0 ? `/${cap}` : ""}) — apply to a Siphoned (S) row. Dissipates in 1 hour.</span>`;
+      registerSiphonPool(atkCharId, rowId, siphonDrain, state.MP_Engine.gameClock.ms + 3600000);
+      html += `<br/><span style="color:#c88fff;">Siphons <b>${kept}</b> ${esc(unitLabel)} (pool ${pool1}${cap > 0 ? `/${cap}` : ""}) — apply to a Siphoned (S) row. Dissipates in 1 game hour.</span>`;
     } else {
       const barProp = siphonDrain === "power" ? CFG.POWER_BAR : CFG.HITS_BAR;
       const attrName = siphonDrain === "power" ? CFG.POWER_ATTR : CFG.HITS_ATTR;
@@ -3867,8 +3895,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       setResource(atkTok, atkCharId, barProp, attrName, cur + kept);
       const pool1 = pool0 + kept;
       setAttr(atkCharId, pfx + "attack_siphon_pool", pool1);
-      registerSiphonPool(atkCharId, rowId, siphonDrain, Date.now() + 3600000);
-      html += `<br/><span style="color:#c88fff;">Gains <b>${kept}</b> ${esc(unitLabel)} (${cur}→${cur + kept}, pool ${pool1}${cap > 0 ? `/${cap}` : ""}). Dissipates in 1 hour.</span>`;
+      registerSiphonPool(atkCharId, rowId, siphonDrain, state.MP_Engine.gameClock.ms + 3600000);
+      html += `<br/><span style="color:#c88fff;">Gains <b>${kept}</b> ${esc(unitLabel)} (${cur}→${cur + kept}, pool ${pool1}${cap > 0 ? `/${cap}` : ""}). Dissipates in 1 game hour.</span>`;
     }
 
     if (excess > 0) {
@@ -3938,9 +3966,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     });
   }
 
-  // Dissipation sweep (1 hour after taken) — runs on an interval from on("ready")
+  // Dissipation sweep (1 game hour after taken) — runs whenever the game clock moves
   function checkSiphonExpiry() {
-    const now = Date.now();
+    const now = state.MP_Engine.gameClock.ms;
     Object.keys(state.MP_Engine.siphonPools).forEach(k => {
       const rec = state.MP_Engine.siphonPools[k];
       if (rec.expiry > now) return;
@@ -4006,8 +4034,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const rec = state.MP_Engine.siphonPools[k];
         const char = getObj("character", rec.charId);
         const pool = getAttrNum(rec.charId, `repeating_attacks_${rec.rowId}_attack_siphon_pool`, 0);
-        const mins = Math.max(0, Math.ceil((rec.expiry - Date.now()) / 60000));
-        out += `<br/>• <b>${esc(char ? char.get("name") : rec.charId)}</b>: ${pool} ${esc(rec.resource)} (${mins} min left)`;
+        const mins = Math.max(0, Math.ceil((rec.expiry - state.MP_Engine.gameClock.ms) / 60000));
+        out += `<br/>• <b>${esc(char ? char.get("name") : rec.charId)}</b>: ${pool} ${esc(rec.resource)} (${mins} game min left)`;
       });
       return ch("MP", `/w gm ${out}`);
     }
@@ -4140,7 +4168,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Create absorption effect for BC stats and Other powers
     if (createEffect) {
-      const expiryTime = Date.now() + (5 * 60 * 1000);  // 5 minutes from now
+      const expiryTime = state.MP_Engine.gameClock.ms + (5 * 60 * 1000);  // 5 GAME minutes (verify vs Absorption RAW)
       
       const absEffect = {
         type: "absorption",
@@ -5528,6 +5556,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         }
       } else {
         statusLine = `<div style="color:#ff6b6b; font-weight:bold; margin-top:4px;">INCAPACITATED!</div>`;
+        statusLine += startBleed(rec.defTokenId, defChar.id);
       }
       defTok.set("status_dead", true);
     } else if (unconscious) {
@@ -6248,7 +6277,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     let msg_out = `<b>Conditions on ${esc(char.get("name"))}</b>`;
-    const now = Date.now();
+    const now = state.MP_Engine.gameClock.ms;
     
     conditions.forEach((cond, idx) => {
       if (cond.type === "absorption") {
@@ -6383,7 +6412,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!char) return;
     
     const conditions = state.MP_Engine.conditions[tokId] || [];
-    const now = Date.now();
+    const now = state.MP_Engine.gameClock.ms;
     let changed = false;
     let report = [];
     
@@ -8883,6 +8912,9 @@ function cmdStance(msg, args) {
       case "time":
         if (gmOnly(msg)) return;
         return cmdTime(msg, args);
+      case "bleed":
+        if (gmOnly(msg)) return;
+        return cmdBleed(msg, args);
 
       // Undo
       case "undo":
@@ -9025,13 +9057,14 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.83.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.84.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
           <code>!mp sv BC [mod]</code> - Save (EN/AG/IN/CL)<br/>
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt -N]</code> - Siphon pools<br/>
           <code>!mp time [advance N unit | set YYYY-MM-DD HH:MM]</code> - Game clock (Turn Tracker auto-advances rounds)<br/>
+          <code>!mp bleed list | start | stop --target TOKID</code> - Bleeding 4.8.4.2 (1 Power/game min)<br/>
           <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
@@ -9906,6 +9939,110 @@ function cmdStance(msg, args) {
 
   function advanceClock(seconds) {
     state.MP_Engine.gameClock.ms += seconds * 1000;
+    runGameTimeSweep();
+  }
+
+  // Everything scheduled on game time fires whenever the clock moves
+  function runGameTimeSweep() {
+    checkSiphonExpiry();
+    tickBleeds();
+    expireDurations();
+    Object.keys(state.MP_Engine.conditions).forEach(tokId => checkAbsorptionExpiry(tokId));
+  }
+
+  // 4.8.4.2: incapacitated characters lose 1 Power per game minute until a
+  // Medical task check stops the bleeding. Dead when Hits AND Power reach 0.
+  function startBleed(tokenId, charId) {
+    if (isVehicleMode(charId)) return "";
+    if (state.MP_Engine.bleeds[tokenId]) return "";
+    state.MP_Engine.bleeds[tokenId] = { charId: charId, lastMs: state.MP_Engine.gameClock.ms };
+    return `<div style="color:#ff6b6b; font-size:11px; margin-top:2px;">🩸 Bleeding (4.8.4.2): 1 Power/min until a Medical task check — ${btn(`Stop Bleeding`, `!mp bleed stop --target ${tokenId}`)}</div>`;
+  }
+
+  function tickBleeds() {
+    const gc = state.MP_Engine.gameClock;
+    Object.keys(state.MP_Engine.bleeds).forEach(tokenId => {
+      const rec = state.MP_Engine.bleeds[tokenId];
+      const tok = getObj("graphic", tokenId);
+      const char = getObj("character", rec.charId);
+      if (!tok || !char) { delete state.MP_Engine.bleeds[tokenId]; return; }
+      const name = char.get("name");
+      const hits = getResource(tok, rec.charId, CFG.HITS_BAR, CFG.HITS_ATTR);
+      if (hits > 0) {
+        delete state.MP_Engine.bleeds[tokenId];
+        ch("MP", `/w gm <b>MP:</b> ${esc(name)} has Hits again — bleeding stops.`);
+        return;
+      }
+      const minutes = Math.floor((gc.ms - rec.lastMs) / 60000);
+      if (minutes <= 0) return;
+      const pow0 = getResource(tok, rec.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      const loss = Math.min(pow0, minutes);
+      const pow1 = pow0 - loss;
+      setResource(tok, rec.charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+      if (pow0 - pow1 > 0) consumeSiphonPool(rec.charId, "power", pow0 - pow1);
+      rec.lastMs += minutes * 60000;
+      if (pow1 === 0) {
+        delete state.MP_Engine.bleeds[tokenId];
+        ch("MP", `/w gm <div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-size:13px; color:#eee; max-width:280px;"><b style="color:#ff6b6b;">☠ ${esc(name)} IS DEAD</b> — Hits and Power both 0 (4.8.4.2). Bled out after ${pow0} minute(s).</div>`);
+      } else {
+        ch("MP", `/w gm <div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-size:13px; color:#eee; max-width:280px;">🩸 <b>${esc(name)}</b> bleeds: -${loss} Power (${pow0}→${pow1}). Dead in ${pow1} minute(s) without Medical aid.</div>`);
+      }
+    });
+  }
+
+  // GM: !mp bleed list | start --target TOKID | stop --target TOKID
+  function cmdBleed(msg, args) {
+    const parts = msg.content.split(/\s+/);
+    const action = (parts[2] || "list").toLowerCase();
+    if (action === "list") {
+      const keys = Object.keys(state.MP_Engine.bleeds);
+      if (keys.length === 0) return ch("MP", `/w gm <b>MP:</b> No one is bleeding.`);
+      let out = `<b>Bleeding (4.8.4.2):</b>`;
+      keys.forEach(tokenId => {
+        const rec = state.MP_Engine.bleeds[tokenId];
+        const char = getObj("character", rec.charId);
+        const tok = getObj("graphic", tokenId);
+        const pow = tok ? getResource(tok, rec.charId, CFG.POWER_BAR, CFG.POWER_ATTR) : 0;
+        out += `<br/>• <b>${esc(char ? char.get("name") : rec.charId)}</b> — ${pow} Power (${pow} min to death)`;
+      });
+      return ch("MP", `/w gm ${out}`);
+    }
+    const tok = args.target ? getObj("graphic", args.target) : null;
+    if (!tok) return ch("MP", `/w gm <b>MP:</b> !mp bleed ${action} needs --target &lt;tokenId&gt;.`);
+    if (action === "stop") {
+      if (!state.MP_Engine.bleeds[tok.id]) return ch("MP", `/w gm <b>MP:</b> Not bleeding.`);
+      delete state.MP_Engine.bleeds[tok.id];
+      const char = getObj("character", tok.get("represents"));
+      return ch("MP", `<b>MP:</b> Bleeding stopped for <b>${esc(char ? char.get("name") : "target")}</b> (Medical task check).`);
+    }
+    if (action === "start") {
+      const charId = tok.get("represents");
+      if (!charId) return ch("MP", `/w gm <b>MP:</b> Token not linked to a character.`);
+      const frag = startBleed(tok.id, charId);
+      return ch("MP", `/w gm ${frag || "<b>MP:</b> Already bleeding (or a vehicle)."}`);
+    }
+    return ch("MP", `/w gm <b>MP:</b> Usage: !mp bleed list | start --target TOKID | stop --target TOKID`);
+  }
+
+  // Auto-expire non-round duration effects when the game clock crosses them
+  function expireDurations() {
+    const gc = state.MP_Engine.gameClock;
+    Object.keys(state.MP_Engine.conditions).forEach(tokenId => {
+      const conds = state.MP_Engine.conditions[tokenId];
+      if (!conds || !conds.length) return;
+      const tok = getObj("graphic", tokenId);
+      for (let i = conds.length - 1; i >= 0; i--) {
+        const c = conds[i];
+        if (c.type !== "duration" || !c.expiresMs || c.expiresMs > gc.ms) continue;
+        conds.splice(i, 1);
+        if (tok && c.marker && !conds.some(o => o.marker === c.marker)) {
+          tok.set("status_" + c.marker, false);
+        }
+        const name = tok ? tok.get("name") : "target";
+        ch("MP", `/w gm <b>MP:</b> ⏱ <b>${esc(name)}</b>: <b>${esc(c.sourceAtk || "duration effect")}</b> (${esc(c.unitLabel || "")}) has expired.`);
+      }
+      if (!conds.length) delete state.MP_Engine.conditions[tokenId];
+    });
   }
 
   function fmtGameClock() {
@@ -10081,22 +10218,31 @@ function cmdStance(msg, args) {
   on("change:campaign:initiativepage", onTrackerPageChange);
   on("change:campaign:turnorder", onTurnorderChange);
 
-  // Siphon dissipation: sweep once on ready (catches pools that expired during
-  // a sandbox restart), then every 60s. Also resync the tracker Round entry.
+  // On ready: migrate any wall-clock siphon expiries (pre-v2.84.0) to game
+  // time, run one game-time sweep, and resync the tracker Round entry.
   on("ready", function() {
-    checkSiphonExpiry();
-    setInterval(checkSiphonExpiry, 60000);
+    const gc = state.MP_Engine.gameClock;
+    Object.keys(state.MP_Engine.siphonPools).forEach(k => {
+      const rec = state.MP_Engine.siphonPools[k];
+      if (rec.expiry > 0 && rec.expiry < Date.UTC(2100, 0, 1)) rec.expiry = gc.ms + 3600000;
+    });
+    Object.keys(state.MP_Engine.conditions).forEach(tokId => {
+      (state.MP_Engine.conditions[tokId] || []).forEach(c => {
+        if (c.type === "absorption" && c.expires && c.expires < Date.UTC(2100, 0, 1)) c.expires = gc.ms + 300000;
+      });
+    });
+    runGameTimeSweep();
     if (Campaign().get("initiativepage")) {
       const entry = findRoundEntry(readTurnorder());
-      if (entry) state.MP_Engine.gameClock.lastTrackerRound = parseInt(entry.pr, 10) || 1;
+      if (entry) gc.lastTrackerRound = parseInt(entry.pr, 10) || 1;
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.83.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.84.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.83.0 READY");
+  log("MP ENGINE v2.84.0 READY");
 });
