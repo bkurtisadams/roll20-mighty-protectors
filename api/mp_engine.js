@@ -1,4 +1,23 @@
-/* Mighty Protectors Roll20 API Engine v2.81.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.83.0 - 2026-07-05
+ * v2.83.0: GAME CLOCK + TURN TRACKER integration. state.gameClock holds a
+ *   campaign timestamp (default 2519-01-01 08:00); CFG.SECONDS_PER_ROUND=10
+ *   per RAW 4.1. New advanceRound(n) funnels rounds, clock, duration ticks,
+ *   and recovery prompts through one path: !mp round forward advances use it
+ *   (backward/absolute sets move the counter but never the clock), and the
+ *   Turn Tracker drives it automatically — opening the tracker starts combat
+ *   at Round 1 and injects a custom "Round" (+1) entry that Roll20 cycles;
+ *   turnorder changes mirror its value into currentRound and advance the
+ *   clock; closing the tracker whispers rounds + elapsed game time. Deleted
+ *   Round entries are re-inserted; on(ready) resyncs after sandbox restarts;
+ *   tracker resets resync without rewinding. New GM command !mp time
+ *   [show | advance N sec/min/hour/day/week/round | set YYYY-MM-DD HH:MM].
+ *   Effect migrations to game time (siphon 1-hour dissipation, bleeding,
+ *   long recovery times) are the next slice, pending rulings.
+ * v2.82.0: !mp buttondemo (GM) posts one inert sample decision card per
+ *   button-color candidate (A steel blue, B bright blue, C graphite, D teal,
+ *   E1/E2 green ghosts, F/G V&V oranges, H orange ghost) in real chat so the
+ *   color choice can be made in-theme at the table. Samples are styled spans
+ *   matching live btn()/btnDanger() output exactly; danger red constant.
  * v2.81.0: ROLL-WITH vs AREA EFFECTS (4.8.3 audit vs rules text). Area
  *   targets who fail to escape may now roll with the damage: cmdAreaDamageAll
  *   computes per-target coverage-adjusted penetration (computeAreaPen), and
@@ -548,7 +567,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.81.0 FILE STARTING");
+log("MP ENGINE v2.83.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -590,7 +609,10 @@ MP.Engine = (function () {
     // Area effect map marker (dashed circle drawn at blast center)
     AREA_MARKER: true,
     AREA_MARKER_COLOR: "#e74c3c",
-    AREA_MARKER_WIDTH: 3
+    AREA_MARKER_WIDTH: 3,
+
+    // Combat scale (4.1): one combat round represents ten seconds of real time
+    SECONDS_PER_ROUND: 10
   };
 
   // Vehicle mode detection
@@ -716,6 +738,8 @@ MP.Engine = (function () {
   // Ensure siphon pool registry exists for existing state
   // { key: { charId, rowId, resource, expiry } } — points authoritative in row attr
   if (!state.MP_Engine.siphonPools) state.MP_Engine.siphonPools = {};
+  // Ensure game clock exists for existing state (default: 2519-01-01 08:00, GW campaign)
+  if (!state.MP_Engine.gameClock) state.MP_Engine.gameClock = { ms: Date.UTC(2519, 0, 1, 8, 0, 0), combatStartMs: null, combatStartRound: 0, lastTrackerRound: 0 };
   // Ensure pendingArea exists for existing state
   if (!state.MP_Engine.pendingArea) state.MP_Engine.pendingArea = {};
   // Ensure currentRound exists for existing state
@@ -3938,6 +3962,36 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       setAttr(rec.charId, pfx + "attack_siphon_pool", 0);
       delete state.MP_Engine.siphonPools[k];
     });
+  }
+
+  // GM: post one sample decision card per button-color candidate, in real chat.
+  // Buttons are inert spans styled identically to live btn()/btnDanger() output.
+  function cmdButtonDemo(msg, args) {
+    const variants = [
+      ["A", "Steel blue (current)", "#3d5a80", "#fff", false],
+      ["B", "Bright blue", "#3498db", "#fff", false],
+      ["C", "Graphite", "#44475a", "#f8f8f2", false],
+      ["D", "Teal", "#16a085", "#fff", false],
+      ["E1", "Ghost bright green", "#50fa7b", "#50fa7b", true],
+      ["E2", "Ghost soft mint", "#7bed9f", "#7bed9f", true],
+      ["F", "V&V orange, dark text", "#f47b20", "#2c1500", false],
+      ["G", "Burnt orange", "#b35c12", "#fff", false],
+      ["H", "Ghost soft orange", "#f5a15a", "#f5a15a", true]
+    ];
+    const fake = (label, bg, fg, ghost) =>
+      `<span style="background:${ghost ? "transparent" : bg}; color:${fg}; border:1px solid ${ghost ? bg : "#2a2a4a"}; border-radius:3px; padding:1px 8px; font-size:12px; font-weight:bold; display:inline-block; margin:2px 2px 0 0;">${label}</span>`;
+    const danger = `<span style="background:#c0392b; color:#fff; border:1px solid #2a2a4a; border-radius:3px; padding:1px 8px; font-size:12px; font-weight:bold; display:inline-block; margin:2px 2px 0 0;">Apply</span>`;
+    let out = "";
+    variants.forEach(v => {
+      out += `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px; margin-top:6px;">`;
+      out += `<b style="color:#f1c40f;">${v[0]}</b> <span style="color:#aab;">${esc(v[1])} ${esc(v[2])}</span><br/>`;
+      out += fake("Roll-With Max", v[2], v[3], v[4]);
+      out += fake("RW Custom", v[2], v[3], v[4]);
+      out += fake("KB", v[2], v[3], v[4]);
+      out += danger;
+      out += `</div>`;
+    });
+    ch("MP", `/w gm <b>Button color candidates</b> (inert samples; reply with a letter):${out}`);
   }
 
   // GM command: !mp siphon list | clear --target <tokenId> | adjust --target <tokenId> --amt -N
@@ -8801,6 +8855,11 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdSiphon(msg, args);
 
+      // Button color preview
+      case "buttondemo":
+        if (gmOnly(msg)) return;
+        return cmdButtonDemo(msg, args);
+
       // Absorption/Reflection commands
       case "absorb": return cmdAbsorb(msg, args);
       case "reflect": return cmdReflect(msg, args);
@@ -8821,6 +8880,9 @@ function cmdStance(msg, args) {
       case "round":
         if (gmOnly(msg)) return;
         return cmdRound(msg, args);
+      case "time":
+        if (gmOnly(msg)) return;
+        return cmdTime(msg, args);
 
       // Undo
       case "undo":
@@ -8963,12 +9025,13 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.81.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.83.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
           <code>!mp sv BC [mod]</code> - Save (EN/AG/IN/CL)<br/>
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt -N]</code> - Siphon pools<br/>
+          <code>!mp time [advance N unit | set YYYY-MM-DD HH:MM]</code> - Game clock (Turn Tracker auto-advances rounds)<br/>
           <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
@@ -9828,6 +9891,150 @@ function cmdStance(msg, args) {
     return frag ? `<br/><b>Recovery saves due:</b>${frag}` : "";
   }
 
+  // -------------------------
+  // GAME CLOCK & TURN TRACKER (4.1: one round = 10 seconds)
+  // -------------------------
+
+  const TIME_UNITS = {
+    s: 1, sec: 1, second: 1, seconds: 1,
+    min: 60, minute: 60, minutes: 60,
+    h: 3600, hour: 3600, hours: 3600,
+    d: 86400, day: 86400, days: 86400,
+    w: 604800, week: 604800, weeks: 604800,
+    r: 0, round: 0, rounds: 0
+  };
+
+  function advanceClock(seconds) {
+    state.MP_Engine.gameClock.ms += seconds * 1000;
+  }
+
+  function fmtGameClock() {
+    const d = new Date(state.MP_Engine.gameClock.ms);
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const p2 = x => String(x).padStart(2, "0");
+    return `${days[d.getUTCDay()]} ${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
+  }
+
+  function fmtElapsed(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  }
+
+  function clockCard(title, extra) {
+    return `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">` +
+      `<b>\ud83d\udd50 ${title}</b><br/>${fmtGameClock()}${extra || ""}</div>`;
+  }
+
+  // Shared round advance: rounds, clock, duration ticks, recovery prompts.
+  // Both !mp round and the Turn Tracker funnel through here.
+  function advanceRound(n) {
+    const newRound = state.MP_Engine.currentRound + n;
+    state.MP_Engine.currentRound = newRound;
+    advanceClock(n * CFG.SECONDS_PER_ROUND);
+    const durFrag = tickDurationEffects(n);
+    const recFrag = promptDueRecoveries(newRound);
+    let report = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">`;
+    report += `<b>\u2694\ufe0f Round ${newRound}</b> <span style="color:#8a84a8; font-size:11px;">${fmtGameClock()}</span><br/>`;
+    report += `<span style="color:#f4d03f;">\u23f1\ufe0f Check active durations - deduct PR/charges as needed</span>`;
+    report += durFrag;
+    report += recFrag;
+    report += `</div>`;
+    return report;
+  }
+
+  // GM: !mp time | advance N unit | set YYYY-MM-DD [HH:MM]
+  function cmdTime(msg, args) {
+    const parts = msg.content.split(/\s+/);
+    const sub = (parts[2] || "show").toLowerCase();
+    if (sub === "show") {
+      return ch("MP", `/w gm ${clockCard("Game Time")}`);
+    }
+    if (sub === "advance" || sub === "adv") {
+      const n = parseFloat(parts[3]);
+      const unitKey = (parts[4] || "min").toLowerCase();
+      if (isNaN(n) || n <= 0 || !(unitKey in TIME_UNITS)) {
+        return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp time advance N sec|min|hour|day|week|round</code>`);
+      }
+      const mult = TIME_UNITS[unitKey] || CFG.SECONDS_PER_ROUND;
+      advanceClock(Math.round(n * mult));
+      return ch("MP", `/w gm ${clockCard("Game Time", `<br/><span style="color:#8a84a8;">Advanced ${n} ${esc(unitKey)}</span>`)}`);
+    }
+    if (sub === "set") {
+      const dm = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(parts[3] || "");
+      const tm = /^(\d{1,2}):(\d{2})$/.exec(parts[4] || "");
+      if (!dm) return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp time set YYYY-MM-DD [HH:MM]</code>`);
+      const hh = tm ? parseInt(tm[1], 10) : 8;
+      const mm = tm ? parseInt(tm[2], 10) : 0;
+      state.MP_Engine.gameClock.ms = Date.UTC(parseInt(dm[1], 10), parseInt(dm[2], 10) - 1, parseInt(dm[3], 10), hh, mm, 0);
+      return ch("MP", `/w gm ${clockCard("Game Time Set")}`);
+    }
+    return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp time</code> | <code>!mp time advance N unit</code> | <code>!mp time set YYYY-MM-DD [HH:MM]</code>`);
+  }
+
+  // --- Turn Tracker integration ---
+  // A custom "Round" entry (formula +1) is inserted when the tracker opens;
+  // Roll20 increments it each full cycle and the engine mirrors it into
+  // currentRound + the game clock via advanceRound.
+
+  function readTurnorder() {
+    try {
+      const raw = Campaign().get("turnorder");
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+
+  function findRoundEntry(to) {
+    return to.find(e => e.id === "-1" && /round/i.test(String(e.custom || "")));
+  }
+
+  function ensureRoundEntry() {
+    const to = readTurnorder();
+    if (findRoundEntry(to)) return;
+    to.unshift({ id: "-1", pr: 1, custom: "Round", formula: "+1" });
+    Campaign().set("turnorder", JSON.stringify(to));
+  }
+
+  function onTrackerPageChange(obj, prev) {
+    const nowOpen = !!obj.get("initiativepage");
+    const wasOpen = !!(prev && prev.initiativepage);
+    const gc = state.MP_Engine.gameClock;
+    if (nowOpen && !wasOpen) {
+      state.MP_Engine.currentRound = 1;
+      gc.combatStartMs = gc.ms;
+      gc.combatStartRound = 1;
+      gc.lastTrackerRound = 1;
+      ensureRoundEntry();
+      ch("MP", `/w gm ${clockCard("Combat Started", `<br/><span style="color:#f4d03f;">\u2694\ufe0f Round 1</span>`)}`);
+    } else if (!nowOpen && wasOpen && gc.combatStartMs !== null) {
+      const elapsed = Math.round((gc.ms - gc.combatStartMs) / 1000);
+      const rounds = state.MP_Engine.currentRound - gc.combatStartRound + 1;
+      gc.combatStartMs = null;
+      ch("MP", `/w gm ${clockCard("Combat Ended", `<br/><span style="color:#8a84a8;">${rounds} round(s), ${fmtElapsed(elapsed)} game time</span>`)}`);
+    }
+  }
+
+  function onTurnorderChange() {
+    if (!Campaign().get("initiativepage")) return;
+    const to = readTurnorder();
+    if (to.length === 0) return;
+    const gc = state.MP_Engine.gameClock;
+    const entry = findRoundEntry(to);
+    if (!entry) {
+      to.unshift({ id: "-1", pr: gc.lastTrackerRound || 1, custom: "Round", formula: "+1" });
+      Campaign().set("turnorder", JSON.stringify(to));
+      return;
+    }
+    const pr = parseInt(entry.pr, 10) || 1;
+    if (pr > gc.lastTrackerRound) {
+      const delta = pr - gc.lastTrackerRound;
+      gc.lastTrackerRound = pr;
+      ch("MP", `/w gm ` + advanceRound(delta));
+    } else if (pr < gc.lastTrackerRound) {
+      gc.lastTrackerRound = pr;
+    }
+  }
+
   function cmdRound(msg, args) {
     const parts = msg.content.split(/\s+/);
     const subCmd = parts[2] || "";
@@ -9852,19 +10059,16 @@ function cmdStance(msg, args) {
     
     state.MP_Engine.currentRound = newRound;
     
-    // Tick durational effects only when the clock moves forward.
-    let durFrag = "";
-    let recFrag = "";
+    // Forward advances funnel through advanceRound (clock + ticks); jumps
+    // backward or absolute sets move the counter without moving the clock.
     if (newRound > oldRound) {
-      durFrag = tickDurationEffects(newRound - oldRound);
-      recFrag = promptDueRecoveries(newRound);
+      state.MP_Engine.currentRound = oldRound;
+      return ch("MP", `/w gm ` + advanceRound(newRound - oldRound));
     }
     
     let report = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">`;
-    report += `<b>⚔️ Round ${newRound}</b><br/>`;
+    report += `<b>⚔️ Round ${newRound}</b> <span style="color:#8a84a8; font-size:11px;">clock unchanged</span><br/>`;
     report += `<span style="color:#f4d03f;">⏱️ Check active durations - deduct PR/charges as needed</span>`;
-    report += durFrag;
-    report += recFrag;
     report += `</div>`;
     
     return ch("MP", `/w gm ` + report);
@@ -9874,19 +10078,25 @@ function cmdStance(msg, args) {
   // INIT
   // -------------------------
   on("chat:message", onChat);
+  on("change:campaign:initiativepage", onTrackerPageChange);
+  on("change:campaign:turnorder", onTurnorderChange);
 
   // Siphon dissipation: sweep once on ready (catches pools that expired during
-  // a sandbox restart), then every 60s.
+  // a sandbox restart), then every 60s. Also resync the tracker Round entry.
   on("ready", function() {
     checkSiphonExpiry();
     setInterval(checkSiphonExpiry, 60000);
+    if (Campaign().get("initiativepage")) {
+      const entry = findRoundEntry(readTurnorder());
+      if (entry) state.MP_Engine.gameClock.lastTrackerRound = parseInt(entry.pr, 10) || 1;
+    }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.81.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.83.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.81.0 READY");
+  log("MP ENGINE v2.83.0 READY");
 });
