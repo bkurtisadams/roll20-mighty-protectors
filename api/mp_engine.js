@@ -1,4 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.86.1 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.87.0 - 2026-07-05
+ * v2.87.0: !mp status reworked into a live, self-regenerating token CONTROL
+ *   card (set it as a Token Action for a persistent per-token button). Reads
+ *   current state so it can never be stale like the original chat cards.
+ *   Shows Hits/Power with status flags and contextual action buttons:
+ *   Grappled-by (Break Free / Counter / Release), Grappling-someone
+ *   (Squeeze / Lock / Release — the release Kurt couldn't find after a card
+ *   scrolled off), snare (Break Free / +push), Bleeding (Stop Bleeding),
+ *   Conditions (Details), and Siphon pool (Clear), plus a Refresh button.
+ *   Works on selected token(s) or legacy --target. All buttons call existing
+ *   handlers; no new grapple/snare state.
  * v2.86.1: handout time now shows seconds (HH:MM:SS, seconds in smaller
  *   muted text) so per-round 10s clock ticks are visible on the panel.
  * v2.86.0: FIX Turn Tracker round advance. The v2.83-85 custom "Round" (+1)
@@ -608,7 +618,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.86.1 FILE STARTING");
+log("MP ENGINE v2.87.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -7150,47 +7160,124 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // -------------------------
 
   function cmdStatus(msg, args) {
-    const tokId = args.target;
+    // Prefer selected tokens (works as a persistent Token Action); fall back to
+    // an explicit --target for legacy card buttons.
+    const ids = [];
+    if (msg.selected && msg.selected.length) {
+      msg.selected.forEach(s => { if (s._type === "graphic") ids.push(s._id); });
+    } else if (args.target) {
+      ids.push(args.target);
+    }
+    if (!ids.length) return ch("MP", `/w gm <b>MP:</b> Select a token first (or use --target).`);
+
+    ids.forEach(tokId => ch("MP", `/w gm ` + buildStatusCard(tokId)));
+  }
+
+  // Live, self-regenerating control card for one token — reads current state
+  // so it is never stale, unlike the original chat cards.
+  function buildStatusCard(tokId) {
     const tok = getObj("graphic", tokId);
     const char = getCharFromToken(tok);
+    if (!tok || !char) return `<div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-size:13px; color:#eee; max-width:280px;"><b>MP:</b> Token missing.</div>`;
 
-    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
+    const isVeh = isVehicleMode(char.id);
+    const hits = isVeh ? getVehicleHits(tok, char.id) : getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const hitsMax = isVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const pow = isVeh ? getVehiclePower(tok, char.id) : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const powMax = isVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const label = isVeh ? (getAttr(char.id, "vehicle_name") || char.get("name")) : char.get("name");
 
-    const statIsVeh = isVehicleMode(char.id);
-    const hits = statIsVeh ? getVehicleHits(tok, char.id) : getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const hitsMax = statIsVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
-    const pow = statIsVeh ? getVehiclePower(tok, char.id) : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const powMax = statIsVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const hitsColor = hits <= 0 ? "#ff6b6b" : (hits <= hitsMax / 2 ? "#f4d03f" : "#2ecc71");
+    let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px; overflow:hidden;">`;
+    html += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">${esc(label)}${isVeh ? " 🚗" : ""} — Status</div>`;
+    html += `<div style="padding:6px 10px;">`;
+    html += `Hits: <b style="color:${hitsColor};">${hits}/${hitsMax}</b> &middot; Power: <b style="color:#5dade2;">${pow}/${powMax}</b>`;
+    if (hits <= 0) html += ` <span style="color:#ff6b6b; font-weight:bold;">INCAPACITATED</span>`;
+    else if (pow <= 0) html += ` <span style="color:#f4d03f; font-weight:bold;">FATIGUED</span>`;
 
-    const snare = state.MP_Engine.snares[tokId];
+    // --- Grapple / Snare (this token is the one held) ---
+    const heldHere = state.MP_Engine.snares[tokId];
+    if (heldHere) {
+      const grappler = heldHere.grapplerTokenId ? getObj("graphic", heldHere.grapplerTokenId) : null;
+      const grapplerChar = grappler ? getCharFromToken(grappler) : null;
+      const byName = grapplerChar ? grapplerChar.get("name") : (heldHere.source || "?");
+      if (heldHere.type === "Grapple") {
+        html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+        html += `<span style="color:#e67e22;">✊ Grappled by <b>${esc(byName)}</b>${heldHere.locked ? " (LOCKED)" : ""}${heldHere.remote ? " (Remote)" : ""}</span><br/>`;
+        html += `${btn(`Break Free`, `!mp grapplebreak --target ${tokId}`)} `;
+        if (!heldHere.locked) html += `${btn(`Counter`, `!mp countergrapple --target ${tokId}`)} `;
+        html += `${btnDanger(`Release`, `!mp grapplerelease --target ${tokId}`)}`;
+        html += `</div>`;
+      } else {
+        html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+        html += `<span style="color:#e67e22;">🕸 ${esc(heldHere.type)}${heldHere.bp != null ? ` (BP ${heldHere.bp})` : ""} by <b>${esc(byName)}</b></span><br/>`;
+        html += `${btn(`Break Free`, `!mp break --target ${tokId}`)} ${btn(`Break (+push)`, `!mp break --target ${tokId} --push 1`)}`;
+        html += `</div>`;
+      }
+    }
+
+    // --- This token is grappling someone else ---
+    const holdingIds = Object.keys(state.MP_Engine.snares).filter(k => {
+      const s = state.MP_Engine.snares[k];
+      return s.type === "Grapple" && s.grapplerTokenId === tokId;
+    });
+    holdingIds.forEach(heldId => {
+      const heldTok = getObj("graphic", heldId);
+      const heldChar = heldTok ? getCharFromToken(heldTok) : null;
+      const heldName = heldChar ? heldChar.get("name") : "target";
+      const s = state.MP_Engine.snares[heldId];
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="color:#c88fff;">✊ Grappling <b>${esc(heldName)}</b>${s.locked ? " (LOCKED)" : ""}</span><br/>`;
+      html += `${btn(`Squeeze`, `!mp squeeze --target ${heldId}`)} `;
+      if (!s.locked) html += `${btn(`Lock`, `!mp grapplelock --target ${heldId}`)} `;
+      html += `${btnDanger(`Release`, `!mp grapplerelease --target ${heldId}`)}`;
+      html += `</div>`;
+    });
+
+    // --- Bleeding ---
+    if (state.MP_Engine.bleeds && state.MP_Engine.bleeds[tokId]) {
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="color:#ff6b6b;">🩸 Bleeding — ${pow} min to death</span><br/>`;
+      html += `${btn(`Stop Bleeding`, `!mp bleed stop --target ${tokId}`)}`;
+      html += `</div>`;
+    }
+
+    // --- Conditions ---
     const conditions = state.MP_Engine.conditions[tokId] || [];
-
-    const label = statIsVeh ? (getAttr(char.id, "vehicle_name") || char.get("name")) : char.get("name");
-    let msg_out = `<b>${esc(label)} Status</b>${statIsVeh ? " 🚗" : ""}<br/>` +
-      `Hits: <b>${hits}/${hitsMax}</b> | Power: <b>${pow}/${powMax}</b>`;
-
-    if (snare) {
-      msg_out += `<br/>Snared: <b>${snare.type}</b> (BP ${snare.bp || "N/A"}) by ${snare.source}`;
-    }
-    
-    if (conditions.length > 0) {
-      msg_out += `<br/><b>Conditions:</b>`;
-      conditions.forEach((cond, idx) => {
-        const condLabel = cond.type.replace(/_/g, " ");
-        msg_out += `<br/>• ${condLabel}`;
-        if (cond.permanent) msg_out += ` (PERMANENT)`;
-        else msg_out += ` [Rec: ${cond.recTN}-]`;
+    if (conditions.length) {
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<b>Conditions:</b>`;
+      conditions.forEach(cond => {
+        const condLabel = String(cond.type || "effect").replace(/_/g, " ");
+        html += `<br/>• ${esc(condLabel)}`;
+        if (cond.permanent) html += ` <span style="color:#aab;">(permanent)</span>`;
+        else if (cond.recTN != null) html += ` <span style="color:#aab;">[Rec ${cond.recTN}-]</span>`;
+        else if (cond.unitLabel) html += ` <span style="color:#aab;">(${esc(cond.unitLabel)})</span>`;
       });
-      msg_out += `<br/>${btn(`View Details`, `!mp conditions --target ${tokId}`)}`;
+      html += `<br/>${btn(`Details`, `!mp conditions --target ${tokId}`)}`;
+      html += `</div>`;
     }
 
-    if (hits <= 0) {
-      msg_out += `<br/><span style="color:#e94560">INCAPACITATED</span>`;
-    } else if (pow <= 0) {
-      msg_out += `<br/><span style="color:#f4d03f">FATIGUED</span>`;
+    // --- Siphon pools held by this character ---
+    const sipKeys = Object.keys(state.MP_Engine.siphonPools || {}).filter(k => state.MP_Engine.siphonPools[k].charId === char.id);
+    if (sipKeys.length) {
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      sipKeys.forEach(k => {
+        const rec = state.MP_Engine.siphonPools[k];
+        const p = getAttrNum(char.id, `repeating_attacks_${rec.rowId}_attack_siphon_pool`, 0);
+        const mins = Math.max(0, Math.ceil((rec.expiry - state.MP_Engine.gameClock.ms) / 60000));
+        html += `<span style="color:#c88fff;">Siphon pool: ${p} ${esc(rec.resource)} (${mins} min left)</span><br/>`;
+      });
+      html += `${btnDanger(`Clear Siphon`, `!mp siphon clear --target ${tokId}`)}`;
+      html += `</div>`;
     }
 
-    ch("MP", wt(msg) + msg_out);
+    html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a; font-size:11px;">`;
+    html += `${btn(`↻ Refresh`, `!mp status --target ${tokId}`)}`;
+    html += `</div>`;
+
+    html += `</div></div>`;
+    return html;
   }
   
   // Restore selected tokens to full Hits and Power
@@ -9114,7 +9201,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.86.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.87.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9143,7 +9230,7 @@ function cmdStance(msg, args) {
           <code>!mp ffreset --target TOKID</code> - Renew FF (zero accum, PR cost)<br/>
           <code>!mp ffreinforce --id ID</code> - Reinforce FF with saved action at collapse<br/>
           <code>!mp wakeup --target TOKID</code><br/>
-          <code>!mp status --target TOKID</code><br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
+          <code>!mp status</code> (select token — live control card: grapple/snare/bleed/siphon buttons)<br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
           <b>Vehicle:</b><br/>
           <code>!mp vehicle [--on|--off]</code> - Toggle vehicle mode on dedicated vehicle token<br/>
 
@@ -10372,11 +10459,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.86.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.87.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.86.1 READY");
+  log("MP ENGINE v2.87.0 READY");
 });
