@@ -1,4 +1,6 @@
-/* Mighty Protectors Roll20 API Engine v2.86.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.86.1 - 2026-07-05
+ * v2.86.1: handout time now shows seconds (HH:MM:SS, seconds in smaller
+ *   muted text) so per-round 10s clock ticks are visible on the panel.
  * v2.86.0: FIX Turn Tracker round advance. The v2.83-85 custom "Round" (+1)
  *   entry never advanced because Roll20 only runs a custom entry's formula
  *   when you click next-turn ON that entry, not each cycle — so the clock
@@ -606,7 +608,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.86.0 FILE STARTING");
+log("MP ENGINE v2.86.1 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -9112,7 +9114,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.86.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.86.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10061,7 +10063,7 @@ function cmdStance(msg, args) {
 
     const body = `<div style="font-family:Arial,sans-serif; color:#eaeaea; background:#1e1e38; padding:12px; border-radius:6px;">` +
       `<div style="font-size:13px; color:#c8b8ff; letter-spacing:0.03em; margin-bottom:6px;">🕐 GAME TIME</div>` +
-      `<div style="font-size:26px; font-weight:bold; color:#fff;">${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}</div>` +
+      `<div style="font-size:26px; font-weight:bold; color:#fff;">${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}<span style="font-size:18px; color:#b9b3d6;">:${p2(d.getUTCSeconds())}</span></div>` +
       `<div style="font-size:14px; color:#b9b3d6; margin-top:2px;">${days[d.getUTCDay()]}, ${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}</div>` +
       `<div style="margin-top:10px; color:${phase.color}; font-size:13px;">☀ ${esc(phase.label)}</div>` +
       combatBlock + `</div>`;
@@ -10370,11 +10372,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.86.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.86.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.86.0 READY");
+  log("MP ENGINE v2.86.1 READY");
 });
