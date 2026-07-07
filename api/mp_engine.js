@@ -1,4 +1,18 @@
-/* Mighty Protectors Roll20 API Engine v2.87.1 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.87.3 - 2026-07-05
+ * v2.87.3: label negative protection as "(vulnerable)". A protection row
+ *   with negative values (Azu: Kin/Ent -2) means the target takes extra
+ *   damage; cards now show e.g. "7 +2 (vulnerable) = 9 pen" instead of a
+ *   bare/again-confusing number. Applied to the main apply card (which
+ *   previously hid the armor line entirely when prot <= 0), plus the area,
+ *   reflected, and AF counter cards. Engine has no damage-type name for a
+ *   bare negative prot, so the label is the generic mechanical effect.
+ *   Math unchanged.
+ * v2.87.2: fix negative-protection display. When effective protection is
+ *   below zero (target vulnerable / Attract), the area damage, reflected
+ *   damage, and AF counter cards showed a jammed double-dash ("7--2 prot").
+ *   Now rendered as an addition ("7+2 prot" / "Raw: 7 + 2 prot"). Math was
+ *   always correct; display only. Main apply card unaffected (it omits the
+ *   armor line when prot <= 0).
  * v2.87.1: !mp snareclear (GM) force-clears any snare or grapple on the
  *   target with no roll — clears both sides of a grapple and only drops the
  *   grappler's "fist" marker if they aren't still holding someone else.
@@ -623,7 +637,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.87.1 FILE STARTING");
+log("MP ENGINE v2.87.3 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -3755,7 +3769,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    let line = `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b>: ${c.raw}-${c.effectiveProt} prot`;
+    const negProt = c.effectiveProt < 0;
+    const protStr = negProt ? `+${-c.effectiveProt} <span style="color:#e67e22;">(vulnerable)</span>` : `-${c.effectiveProt} prot`;
+    let line = `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b>: ${c.raw}${protStr}`;
     if (c.hasInvuln) line += ` [\u00d7\u00bc]`;
     if (c.hasAdapt) line += c.isOtherType ? ` [IMMUNE]` : ` [\u00d7\u00bd]`;
     if (divert > 0) line += ` [RW ${divert}]`;
@@ -4491,7 +4507,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let html = `<div style="background:#e67e22; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
     html += `<span style="color:#fff; font-weight:bold; font-size:14px;">🔄 REFLECTED DAMAGE!</span>`;
     html += `<br/><span style="color:#fff;"><b>${esc(targetName)}</b> hit by reflected ${rec.dmgTypeStr}</span>`;
-    html += `<br/><span style="color:#fff;">Raw: ${rec.damageTotal} - ${prot} prot`;
+    html += `<br/><span style="color:#fff;">Raw: ${rec.damageTotal} ${prot < 0 ? `+ ${-prot} <span style="color:#e67e22;">(vulnerable)</span>` : `- ${prot} prot`}`;
     if (hasInvuln) html += ` [×¼]`;
     if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
     html += ` = ${penetrating} penetrating</span>`;
@@ -5010,7 +5026,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     let html = `<div style="background:#e74c3c; border:3px solid #000; padding:4px 8px;">`;
     html += `<span style="color:#fff; font-weight:bold;">⚡ AF Counter-Damage to ${esc(atkName)}</span>`;
-    html += `<br/><span style="color:#fff;">Raw: ${rec.damageTotal} - ${prot} prot`;
+    html += `<br/><span style="color:#fff;">Raw: ${rec.damageTotal} ${prot < 0 ? `+ ${-prot} <span style="color:#e67e22;">(vulnerable)</span>` : `- ${prot} prot`}`;
     if (hasInvuln) html += ` [×¼]`;
     if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
     html += ` = ${afterProt}</span>`;
@@ -5755,6 +5771,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     if (effectiveProt > 0 || bypassProt) {
       dmgLine += ` - <span title="${protHover}">${Math.floor(effectiveProt)}</span> armor${apIndicator}`;
+    } else if (effectiveProt < 0) {
+      dmgLine += ` + <span style="color:#e67e22;" title="Negative protection: target is vulnerable to this damage type">${-Math.floor(effectiveProt)} (vulnerable)</span>`;
     }
     
     if (hasInvuln && invulnReduction > 0) {
@@ -9257,7 +9275,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.87.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.87.3</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10516,11 +10534,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.87.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.87.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.87.1 READY");
+  log("MP ENGINE v2.87.3 READY");
 });
