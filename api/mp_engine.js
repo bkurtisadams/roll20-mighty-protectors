@@ -1,4 +1,16 @@
-/* Mighty Protectors Roll20 API Engine v2.87.3 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.88.0 - 2026-07-05
+ * v2.88.0: HEALING (4.13) + MEDICAL task check (4.13.1). Shared applyHealing
+ *   restores Power first then Hits (4.13), capped at max. rollHealingRate
+ *   reads healing_rate and rolls the d10 fractional-bonus. !mp dailyheal
+ *   (select token) applies a day's rest healing to the BARS — the companion
+ *   to the sheet Heal button, which only rolls/displays. !mp medical
+ *   success|crit|fumble (select patient) applies the outcome of a GM-rolled
+ *   Medical check: success heals Healing Rate + stops bleeding, crit doubles,
+ *   fumble deals d8+1; one successful benefit per patient per game-DAY (any
+ *   medic, gated via state.medicalDays + game clock). Modifiers/TN are GM
+ *   adjudication per 3.0.2, so the engine applies results, not the roll.
+ *   Status card gains a Healing row (Daily Rest / Medical / Crit / Fumble)
+ *   when the token is below full, hidden once Medical is used that day.
  * v2.87.3: label negative protection as "(vulnerable)". A protection row
  *   with negative values (Azu: Kin/Ent -2) means the target takes extra
  *   damage; cards now show e.g. "7 +2 (vulnerable) = 9 pen" instead of a
@@ -637,7 +649,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.87.3 FILE STARTING");
+log("MP ENGINE v2.88.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -7313,6 +7325,23 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `</div>`;
     }
 
+    // --- Healing / Medical (shown when below full Hits or Power) ---
+    if (!isVeh && (hits < hitsMax || pow < powMax)) {
+      const today = gameDayStamp();
+      const medDone = state.MP_Engine.medicalDays && state.MP_Engine.medicalDays[char.id] === today;
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="color:#2ecc71;">✚ Healing</span> <span style="color:#aab; font-size:11px;">(rate ${esc(getAttr(char.id, "healing_rate") || "0")})</span><br/>`;
+      html += `${btn(`Daily Rest`, `!mp dailyheal --target ${tokId}`)} `;
+      if (medDone) {
+        html += `<span style="color:#8a8498; font-size:11px;">Medical used today</span>`;
+      } else {
+        html += `${btn(`Medical ✓`, `!mp medical success --target ${tokId}`)} `;
+        html += `${btn(`Crit`, `!mp medical crit --target ${tokId}`)} `;
+        html += `${btnDanger(`Fumble`, `!mp medical fumble --target ${tokId}`)}`;
+      }
+      html += `</div>`;
+    }
+
     // --- Conditions ---
     const conditions = state.MP_Engine.conditions[tokId] || [];
     if (conditions.length) {
@@ -9133,6 +9162,12 @@ function cmdStance(msg, args) {
       case "bleed":
         if (gmOnly(msg)) return;
         return cmdBleed(msg, args);
+      case "medical":
+        if (gmOnly(msg)) return;
+        return cmdMedical(msg, args);
+      case "dailyheal":
+        if (gmOnly(msg)) return;
+        return cmdDailyHeal(msg, args);
 
       // Undo
       case "undo":
@@ -9275,7 +9310,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.87.3</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.88.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9283,6 +9318,8 @@ function cmdStance(msg, args) {
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt -N]</code> - Siphon pools<br/>
           <code>!mp time [advance N unit | set YYYY-MM-DD HH:MM]</code> - Game clock (Turn Tracker auto-advances rounds)<br/>
           <code>!mp bleed list | start | stop --target TOKID</code> - Bleeding 4.8.4.2 (1 Power/game min)<br/>
+          <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
+          <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
           <code>!mp apply --id ID --mode MODE --amt N</code><br/>
           <code>!mp limbsave --id ID --limb leg|arm</code><br/>
@@ -10281,6 +10318,140 @@ function cmdStance(msg, args) {
   }
 
   // GM: !mp bleed list | start --target TOKID | stop --target TOKID
+  // -------------------------
+  // HEALING (4.13) — daily rest heal + Medical task check (4.13.1)
+  // -------------------------
+
+  // Apply N points of healing to a token, Power first then Hits (4.13). Returns
+  // { powHealed, hitsHealed, pow0, pow1, hits0, hits1 } for reporting.
+  function applyHealing(tok, charId, amount) {
+    const isVeh = isVehicleMode(charId);
+    const pow0 = isVeh ? getVehiclePower(tok, charId) : getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    const powMax = isVeh ? getAttrNum(charId, "vehicle_power_max", 0) : getAttrNum(charId, CFG.POWER_MAX_ATTR, 0);
+    const hits0 = isVeh ? getVehicleHits(tok, charId) : getResource(tok, charId, CFG.HITS_BAR, CFG.HITS_ATTR);
+    const hitsMax = isVeh ? getAttrNum(charId, "vehicle_hits_max", 0) : getAttrNum(charId, CFG.HITS_MAX_ATTR, 0);
+
+    let remaining = amount;
+    const powRoom = powMax > 0 ? Math.max(0, powMax - pow0) : remaining;
+    const powHealed = Math.min(remaining, powRoom);
+    const pow1 = pow0 + powHealed;
+    remaining -= powHealed;
+    const hitsRoom = hitsMax > 0 ? Math.max(0, hitsMax - hits0) : remaining;
+    const hitsHealed = Math.min(remaining, hitsRoom);
+    const hits1 = hits0 + hitsHealed;
+
+    if (isVeh) {
+      if (powHealed > 0) setVehiclePower(tok, charId, pow1);
+      if (hitsHealed > 0) setVehicleHits(tok, charId, hits1);
+    } else {
+      if (powHealed > 0) setResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+      if (hitsHealed > 0) setResource(tok, charId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+    }
+    return { powHealed, hitsHealed, pow0, pow1, hits0, hits1 };
+  }
+
+  // Healing Rate as a base + decimal-chance (4.13). Rolls the d10 for the
+  // fractional bonus point. Returns { amount, base, bonus, rate }.
+  function rollHealingRate(charId) {
+    const rate = parseFloat(getAttr(charId, "healing_rate")) || 0;
+    const base = Math.floor(rate);
+    const decimal = Math.round((rate % 1) * 10);
+    const d10 = randomInteger(10);
+    const bonus = (decimal > 0 && d10 <= decimal) ? 1 : 0;
+    return { amount: base + bonus, base, bonus, rate, d10, decimal };
+  }
+
+  function healResultLine(name, r, prefix) {
+    let parts = [];
+    if (r.powHealed > 0) parts.push(`Power ${r.pow0}→${r.pow1}`);
+    if (r.hitsHealed > 0) parts.push(`Hits ${r.hits0}→${r.hits1}`);
+    const body = parts.length ? parts.join(" · ") : "already at full";
+    return `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#2ecc71;">${esc(name)}</b> ${prefix}<br/><span style="color:#aab;">${body}</span></div>`;
+  }
+
+  function gameDayStamp() {
+    return Math.floor(state.MP_Engine.gameClock.ms / 86400000);
+  }
+
+  // !mp dailyheal — apply a full day's rest healing (Healing Rate, Power first
+  // then Hits) to selected token(s). This is the bar-applying companion to the
+  // sheet's Heal button (which only rolls/displays the number).
+  function cmdDailyHeal(msg, args) {
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else if (msg.selected && msg.selected.length) msg.selected.forEach(s => { if (s._type === "graphic") ids.push(s._id); });
+    if (!ids.length) return ch("MP", `/w gm <b>MP:</b> Select a token or pass --target.`);
+
+    ids.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      const char = getCharFromToken(tok);
+      if (!tok || !char) return;
+      const roll = rollHealingRate(char.id);
+      if (roll.amount <= 0) {
+        return ch("MP", `/w gm <b>${esc(char.get("name"))}</b>: Healing Rate 0 — no daily healing.`);
+      }
+      const r = applyHealing(tok, char.id, roll.amount);
+      const bonusNote = roll.bonus > 0 ? ` (+1 bonus, rolled ${roll.d10} vs ${roll.decimal})` : (roll.decimal > 0 ? ` (no bonus, rolled ${roll.d10} vs ${roll.decimal})` : "");
+      chCombat("MP", healResultLine(char.get("name"), r, `rests — heals ${roll.amount}${bonusNote}`), char.id);
+    });
+  }
+
+  // !mp medical <success|crit|fumble> — apply the OUTCOME of a Medical task
+  // check (4.13.1). GM rolls the check (IN-based, modifiers are GM adjudication
+  // per 3.0.2); this applies the mechanical result: success heals Healing Rate
+  // and stops bleeding, crit doubles, fumble deals d8+1. One successful benefit
+  // per patient per game-day (any medic).
+  function cmdMedical(msg, args) {
+    const parts = msg.content.split(/\s+/);
+    const outcome = (parts[2] || "").toLowerCase();
+    const tokId = args.target || (msg.selected && msg.selected[0] && msg.selected[0]._type === "graphic" ? msg.selected[0]._id : null);
+    if (!tokId) return ch("MP", `/w gm <b>MP:</b> Select the patient (or --target).`);
+    const tok = getObj("graphic", tokId);
+    const char = getCharFromToken(tok);
+    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Patient token missing.`);
+    const name = char.get("name");
+
+    if (outcome === "fumble") {
+      const dmg = randomInteger(8) + 1;
+      const isVeh = isVehicleMode(char.id);
+      const hits0 = isVeh ? getVehicleHits(tok, char.id) : getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+      const hits1 = Math.max(0, hits0 - dmg);
+      if (isVeh) setVehicleHits(tok, char.id, hits1); else setResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
+      return chCombat("MP", `<div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-size:13px; color:#eee; max-width:280px;"><b style="color:#ff6b6b;">Medical FUMBLE on ${esc(name)}</b><br/><span style="color:#aab;">d8+1 = ${dmg} damage (Hits ${hits0}→${hits1})</span></div>`, char.id);
+    }
+
+    if (outcome !== "success" && outcome !== "crit") {
+      return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp medical success|crit|fumble</code> (select patient).`);
+    }
+
+    // Once-per-day gate (any medic)
+    if (!state.MP_Engine.medicalDays) state.MP_Engine.medicalDays = {};
+    const today = gameDayStamp();
+    if (state.MP_Engine.medicalDays[char.id] === today) {
+      return ch("MP", `/w gm <b>MP:</b> ${esc(name)} already received Medical care today (one benefit per patient per day, 4.13.1).`);
+    }
+
+    const roll = rollHealingRate(char.id);
+    let amount = roll.amount;
+    if (outcome === "crit") amount *= 2;
+    const r = applyHealing(tok, char.id, amount);
+
+    // Success stops bleeding (4.13.1 / 4.8.4.2)
+    let bleedNote = "";
+    if (state.MP_Engine.bleeds && state.MP_Engine.bleeds[tokId]) {
+      delete state.MP_Engine.bleeds[tokId];
+      bleedNote = `<br/><span style="color:#2ecc71;">Bleeding stopped.</span>`;
+    }
+    state.MP_Engine.medicalDays[char.id] = today;
+
+    const critNote = outcome === "crit" ? " (CRIT ×2)" : "";
+    let parts2 = [];
+    if (r.powHealed > 0) parts2.push(`Power ${r.pow0}→${r.pow1}`);
+    if (r.hitsHealed > 0) parts2.push(`Hits ${r.hits0}→${r.hits1}`);
+    const body = parts2.length ? parts2.join(" · ") : "already at full";
+    chCombat("MP", `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:6px 10px; font-size:13px; color:#eee; max-width:280px;"><b style="color:#2ecc71;">Medical care${critNote} for ${esc(name)}</b><br/><span style="color:#aab;">Heals ${amount} — ${body}</span>${bleedNote}</div>`, char.id);
+  }
+
   function cmdBleed(msg, args) {
     const parts = msg.content.split(/\s+/);
     const action = (parts[2] || "list").toLowerCase();
@@ -10534,11 +10705,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.87.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.88.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.87.3 READY");
+  log("MP ENGINE v2.88.0 READY");
 });
