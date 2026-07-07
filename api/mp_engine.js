@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.87.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.87.1 - 2026-07-05
+ * v2.87.1: !mp snareclear (GM) force-clears any snare or grapple on the
+ *   target with no roll — clears both sides of a grapple and only drops the
+ *   grappler's "fist" marker if they aren't still holding someone else.
+ *   Works on --target or selected token(s). Added as a red Clear button on
+ *   the snare row of the !mp status control card, and to !mp help.
  * v2.87.0: !mp status reworked into a live, self-regenerating token CONTROL
  *   card (set it as a Token Action for a persistent per-token button). Reads
  *   current state so it can never be stale like the original chat cards.
@@ -618,7 +623,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.87.0 FILE STARTING");
+log("MP ENGINE v2.87.1 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -6641,6 +6646,54 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     chCombat("MP", msg_out, char.id);
   }
 
+  // GM: force-clear any snare or grapple on the target with no roll (cleanup).
+  // Works on --target or selected token(s); clears both sides of a grapple.
+  function cmdSnareClear(msg, args) {
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else if (msg.selected && msg.selected.length) msg.selected.forEach(s => { if (s._type === "graphic") ids.push(s._id); });
+    if (!ids.length) return ch("MP", `/w gm <b>MP:</b> Select a token or pass --target.`);
+
+    let cleared = 0;
+    ids.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      if (!tok) return;
+      const sn = state.MP_Engine.snares[tokId];
+      // This token is held: clear it and the grappler's "fist" if applicable
+      if (sn) {
+        if (sn.grapplerTokenId) {
+          const gTok = getObj("graphic", sn.grapplerTokenId);
+          if (gTok && !isGrapplingAnyoneElse(sn.grapplerTokenId, tokId)) gTok.set("status_fist", false);
+        }
+        delete state.MP_Engine.snares[tokId];
+        tok.set("status_grab", false);
+        tok.set("status_cobweb", false);
+        cleared++;
+      }
+      // This token is grappling others: release each held target
+      Object.keys(state.MP_Engine.snares).forEach(heldId => {
+        const s = state.MP_Engine.snares[heldId];
+        if (s.type === "Grapple" && s.grapplerTokenId === tokId) {
+          const hTok = getObj("graphic", heldId);
+          if (hTok) hTok.set("status_grab", false);
+          delete state.MP_Engine.snares[heldId];
+          cleared++;
+        }
+      });
+      tok.set("status_fist", false);
+    });
+    return ch("MP", `/w gm <b>MP:</b> Cleared ${cleared} snare/grapple link(s).`);
+  }
+
+  // True if grapplerTokenId is still grappling someone other than exceptId
+  function isGrapplingAnyoneElse(grapplerTokenId, exceptId) {
+    return Object.keys(state.MP_Engine.snares).some(k => {
+      if (k === exceptId) return false;
+      const s = state.MP_Engine.snares[k];
+      return s.type === "Grapple" && s.grapplerTokenId === grapplerTokenId;
+    });
+  }
+
   // -------------------------
   // GRAPPLE COMMANDS (4.11)
   // -------------------------
@@ -7211,7 +7264,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       } else {
         html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
         html += `<span style="color:#e67e22;">🕸 ${esc(heldHere.type)}${heldHere.bp != null ? ` (BP ${heldHere.bp})` : ""} by <b>${esc(byName)}</b></span><br/>`;
-        html += `${btn(`Break Free`, `!mp break --target ${tokId}`)} ${btn(`Break (+push)`, `!mp break --target ${tokId} --push 1`)}`;
+        html += `${btn(`Break Free`, `!mp break --target ${tokId}`)} ${btn(`Break (+push)`, `!mp break --target ${tokId} --push 1`)} ${btnDanger(`Clear`, `!mp snareclear --target ${tokId}`)}`;
         html += `</div>`;
       }
     }
@@ -8996,6 +9049,9 @@ function cmdStance(msg, args) {
       case "clearcondition": return cmdClearCondition(msg, args);
       case "snare": return cmdSnare(msg, args);
       case "break": return cmdBreak(msg, args);
+      case "snareclear":
+        if (gmOnly(msg)) return;
+        return cmdSnareClear(msg, args);
       case "kb": return cmdKnockback(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
       case "grapple": return cmdGrapple(msg, args);
@@ -9201,7 +9257,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.87.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.87.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9230,7 +9286,8 @@ function cmdStance(msg, args) {
           <code>!mp ffreset --target TOKID</code> - Renew FF (zero accum, PR cost)<br/>
           <code>!mp ffreinforce --id ID</code> - Reinforce FF with saved action at collapse<br/>
           <code>!mp wakeup --target TOKID</code><br/>
-          <code>!mp status</code> (select token — live control card: grapple/snare/bleed/siphon buttons)<br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
+          <code>!mp status</code> (select token — live control card: grapple/snare/bleed/siphon buttons)<br/>
+          <code>!mp snareclear</code> (select token — GM force-clear any snare/grapple, no roll)<br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
           <b>Vehicle:</b><br/>
           <code>!mp vehicle [--on|--off]</code> - Toggle vehicle mode on dedicated vehicle token<br/>
 
@@ -10459,11 +10516,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.87.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.87.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.87.0 READY");
+  log("MP ENGINE v2.87.1 READY");
 });
