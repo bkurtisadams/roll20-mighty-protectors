@@ -1,5 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.57 - Dazzle option in the Called Shot query
+<!-- Mighty Protectors Roll20 Character Sheet v44.58 - Sense Field row on abilities cog panel
      Requires MP Engine v2.89.1+ for sense-loss save resolution.
+        v44.58: Sense Field row (Row 1.75) on the abilities cog panel - Field type
+          (Darkness/Glare/Glow), Ranks, Senses (=PR/round), Diameter, and a Field Card
+          button posting the engine's GM control card (!mp fieldcard, engine v2.90.2)
         v44.57: "Dazzle (-6 / blind)" added to the Called Shot roll query (engine v2.90.1
           resolves it: no damage, ignores protection, EN save at the row's Init mod vs
           dazzled 2 levels; recovery each between-rounds phase, no permanence on fumble)
@@ -1598,6 +1601,38 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <div class="sheet-panel-field">
             <label title="Only one ability with same Group ID can be active at a time (-10 CP each)">Multi:</label>
             <input type="text" name="attr_ability_multi_group" style="width:50px !important;" title="Group ID - only one ability in group active at a time (-10 CP each)" placeholder="B" />
+          </div>
+        </div>
+
+        <!-- Row 1.75: Sense Field (Darkness / Glare / Glow) - engine v2.90.2 -->
+        <div class="sheet-panel-row" style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
+          <div class="sheet-panel-field">
+            <label title="Light Control / Darkness Control field type">Field:</label>
+            <select name="attr_ability_sense_field" title="Light Control / Darkness Control field type" style="width:78px !important;">
+              <option value="" selected>--</option>
+              <option value="darkness">Darkness</option>
+              <option value="glare">Glare</option>
+              <option value="glow">Glow</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Ranks of sense loss (Darkness/Glare): 1 = Basic modifier, 2 = standard, 3 = Full modifier">Ranks:</label>
+            <select name="attr_ability_sf_ranks" title="Ranks of sense loss (Darkness/Glare): 1 = Basic modifier, 2 = standard, 3 = Full modifier" style="width:42px !important;">
+              <option value="1">1</option>
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Number of senses affected - equals PR per round (Darkness/Glare table)">Senses:</label>
+            <input type="text" name="attr_ability_sf_senses" maxlength="2" style="width:24px !important;" title="Number of senses affected - equals PR per round (Darkness/Glare table)" placeholder="1" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Field diameter in inches (from the ability's CP table)">Diam:</label>
+            <input type="text" name="attr_ability_sf_diameter" maxlength="3" style="width:32px !important;" title="Field diameter in inches (from the ability's CP table)" placeholder="9" />
+          </div>
+          <div class="sheet-panel-field">
+            <button type="roll" name="roll_ability_field_card" value="!mp fieldcard --kind @{ability_sense_field} --ranks @{ability_sf_ranks} --senses @{ability_sf_senses} --diameter @{ability_sf_diameter} --name @{ability_name}" title="Post the GM control card for this field (apply/remove/ring/glow buttons)" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 6px; margin:0; background:#5a4fcf; color:#fff; border:1px solid #2a2040; cursor:pointer;">Field Card</button>
           </div>
         </div>
 

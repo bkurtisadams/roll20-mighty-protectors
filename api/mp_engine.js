@@ -1,4 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.90.1 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.90.2 - 2026-07-10
+ * v2.90.2: GLOW + ABILITIES-PANEL FIELD UI (chunk 4). !mp glow --diameter
+ *   N sets the selected/target token's aura1 to the field radius (light
+ *   yellow, player-visible); --off clears it. PR 1 + 1/hour is a card
+ *   reminder (GM-managed). Not GM-gated - players can light their own
+ *   torch. Sheet v44.58 adds a Sense Field row to the abilities cog panel
+ *   (Field type Darkness/Glare/Glow, Ranks, Senses=PR, Diameter) with a
+ *   "Field Card" button posting !mp fieldcard - a GM control card whose
+ *   buttons wrap the existing commands (Apply/Remove on selected, Draw/
+ *   Remove ring, Glow on/off) using the row's stored values, acting on
+ *   whatever is selected at click time.
  * v2.90.1: DAZZLE CALLED SHOT (chunk 3) + FIELD RINGS.
  *   Dazzle called shot (Light Control A, Laser): "Dazzle" in the called
  *   shot maps (engine + !mp atk + sheet v44.57 query) at -6 to hit. On a
@@ -749,7 +759,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.90.1 FILE STARTING");
+log("MP ENGINE v2.90.2 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1211,6 +1221,64 @@ MP.Engine = (function () {
       out += `<br/><span style="font-size:11px; color:#aab;">GM: pay caster PR per round manually (PR = senses affected); toggle tokens as they enter/leave. Darkness &amp; Glare ranks cancel.</span>`;
     }
     ch("MP", `/w gm ` + out);
+  }
+
+  // v2.90.2: GLOW (Light Control D) - illuminate an area around the caster.
+  // Sets the token's aura1 to the field radius. PR 1 to activate, 1/hour
+  // to maintain (GM-managed). !mp glow --diameter N [--off] [--target ID]
+  function cmdGlow(msg, args) {
+    let tok = args.target ? getObj("graphic", args.target) : null;
+    if (!tok && msg.selected && msg.selected.length) {
+      const s = msg.selected.find(x => x._type === "graphic");
+      if (s) tok = getObj("graphic", s._id);
+    }
+    if (!tok) return ch("MP", `${wt(msg)}<b>MP:</b> Select a token (or --target). Usage: <code>!mp glow --diameter N | --off</code>`);
+    const char = getCharFromToken(tok);
+    const name = char ? char.get("name") : (tok.get("name") || "token");
+
+    if ("off" in args) {
+      tok.set("aura1_radius", "");
+      return ch("MP", `${wt(msg)}<b>Glow</b> ☀️ <b>${esc(name)}</b> — light out.`);
+    }
+    const diameter = num(args.diameter, 0);
+    if (diameter <= 0) return ch("MP", `${wt(msg)}<b>MP:</b> Usage: <code>!mp glow --diameter N</code> (inches, from the Glow CP table) or <code>--off</code>.`);
+    tok.set("aura1_radius", diameter / 2);
+    tok.set("aura1_color", "#f7e463");
+    tok.set("showplayers_aura1", true);
+    return ch("MP", `${wt(msg)}<b>Glow</b> ☀️ <b>${esc(name)}</b> lights a <b>${diameter}"</b> area. <span style="font-size:11px; color:#aab;">PR 1 to activate, 1/hour to maintain (GM).</span> ${btn(`Glow Off`, `!mp glow --off --target ${tok.id}`)}`);
+  }
+
+  // v2.90.2: GM control card for a Darkness/Glare/Glow field, posted by the
+  // abilities-panel "Field Card" button. Buttons wrap the existing commands
+  // and act on whatever tokens the GM has selected at click time.
+  function cmdFieldCard(msg, args) {
+    const kind = String(args.kind || "").toLowerCase();
+    if (kind !== "darkness" && kind !== "glare" && kind !== "glow") {
+      return ch("MP", `/w gm <b>MP:</b> Set the ability's Field type (Darkness/Glare/Glow) first.`);
+    }
+    const ranks = Math.max(1, Math.min(3, num(args.ranks, 2)));
+    const senses = Math.max(1, num(args.senses, 1));
+    const diameter = num(args.diameter, 0);
+    const abilityName = args.name || (kind.charAt(0).toUpperCase() + kind.slice(1));
+    const label = kind.charAt(0).toUpperCase() + kind.slice(1);
+    const icon = kind === "darkness" ? "🌑" : "☀️";
+
+    let html = `<div style="background:#1a1a2e; border:2px solid #5a4fcf; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px; overflow:hidden;">`;
+    html += `<div style="background:#5a4fcf; padding:6px 10px; font-weight:bold; color:#fff;">${icon} ${esc(abilityName)} — ${label}</div>`;
+    html += `<div style="padding:6px 10px;">`;
+    if (kind === "glow") {
+      html += `Diameter: <b>${diameter || "?"}"</b> &middot; <span style="color:#aab; font-size:11px;">PR 1 + 1/hour</span><br/>`;
+      html += `<div style="margin-top:6px;">${btn(`Glow On (select caster)`, `!mp glow --diameter ${diameter}`)} ${btnDanger(`Glow Off`, `!mp glow --off`)}</div>`;
+    } else {
+      html += `Ranks: <b>${ranks}</b> &middot; Diameter: <b>${diameter || "?"}"</b> &middot; PR: <b>${senses}/round</b> (${senses} sense${senses === 1 ? "" : "s"})<br/>`;
+      html += `<div style="margin-top:6px;">${btn(`Apply to selected`, `!mp ${kind} --ranks ${ranks}`)} ${btnDanger(`Remove from selected`, `!mp ${kind} --off`)}</div>`;
+      if (diameter > 0) {
+        html += `<div style="margin-top:4px;">${btn(`Draw ${diameter}" ring (select center)`, `!mp ${kind} --circle ${diameter}`)} ${btnDanger(`Remove rings`, `!mp ${kind} --circle off`)}</div>`;
+      }
+      html += `<div style="margin-top:4px; font-size:10px; color:#aab;">Caster is immune to their own field. Darkness &amp; Glare ranks cancel. Toggle tokens as they enter/leave.</div>`;
+    }
+    html += `</div></div>`;
+    ch("MP", `/w gm ` + html);
   }
 
   // Self-test: !mp test senseloss (GM, 1 selected token). Non-destructive:
@@ -9838,6 +9906,8 @@ function cmdStance(msg, args) {
       case "glare":
         if (gmOnly(msg)) return;
         return cmdSenseField(msg, args, "glare");
+      case "glow": return cmdGlow(msg, args);
+      case "fieldcard": return cmdFieldCard(msg, args);
 
       case "kb": return cmdKnockback(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
@@ -10050,7 +10120,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.90.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.90.2</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10061,6 +10131,7 @@ function cmdStance(msg, args) {
           <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Darkness field on selected tokens (GM)<br/>
           <code>!mp glare --ranks 1-3 [--off] [--target TOKID]</code> - Glare field (cancels Darkness ranks) (GM)<br/>
           <code>!mp darkness|glare --circle N | --circle off</code> - Draw/remove a persistent N" field ring at selected token (GM)<br/>
+          <code>!mp glow --diameter N | --off</code> - Glow (Light Control D): aura light on selected token<br/>
           <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
           <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
@@ -11448,11 +11519,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.90.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.90.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.90.1 READY");
+  log("MP ENGINE v2.90.2 READY");
 });
