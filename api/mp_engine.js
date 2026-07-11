@@ -1,4 +1,20 @@
-/* Mighty Protectors Roll20 API Engine v2.91.2 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.91.3 - 2026-07-10
+ * v2.91.3: STEALTH 3.1.5.1 (RAW-corrected). NEW !mp sneak | --off:
+ *   standalone sneaking condition (tread marker, no PR, 1/2-move
+ *   reminder). Correct scope: sneaking does NOT conceal from a Full
+ *   sense with the sneaker in its vision arc - bare sneaking forces no
+ *   acquisition roll for a Full-vision attacker. The 3.1.5.1 crit-only
+ *   gate applies when the resolved sense is BASIC (hearing fallback vs
+ *   an invisible sneaker, or vision degraded to Basic by darkness):
+ *   rollAcquisition's new sneakGate drops all non-crit-success outcomes
+ *   to "-" (undetected, cannot attack), noted in the roll text. AG
+ *   opposition (3.0.2.4) now sourced from either the standalone sneak
+ *   condition or Invisibility's --sneaking flag. Out-of-arc/"from
+ *   behind" is GM adjudication: a SNEAKING ATTACKER gets a reminder
+ *   card (crit-only Basic detection + Surprise bonus). Acquire-once
+ *   signature includes sneaking state; !mp status Sneaking row with
+ *   Stop button; !mp restore clears tread; recover refuses (points at
+ *   !mp sneak --off).
  * v2.91.2: SENSE CARD CONTRAST + STOPWATCH RESTORE FIX. The Invisibility,
  *   Darkness/Glare apply-remove, and Glow chat cards emitted bare text
  *   with #aab gray annotations - unreadable on Roll20's light chat
@@ -801,7 +817,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.91.2 FILE STARTING");
+log("MP ENGINE v2.91.3 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1011,6 +1027,7 @@ MP.Engine = (function () {
     darkness: "ninja-mask",
     glare: "aura",
     invisible: "half-haze",
+    sneaking: "tread",
     generic: "padlock"
   };
 
@@ -1139,7 +1156,11 @@ MP.Engine = (function () {
   // [first, confirm] for the test harness.
   // v2.91.0: optional modifier adjusts the perception TN (e.g. opposition
   // from a sneaking target per 3.0.2.4: -(target AG save - 10)).
-  function rollAcquisition(charId, senseLevel, forcedRolls, modifier) {
+  // v2.91.3: sneakGate applies 3.1.5.1 - vs a sneaking target, BASIC sense
+  // checks only detect on a critical success; all other outcomes drop to
+  // "-" (undetected, cannot attack). Full/Analytical senses are unaffected
+  // by the gate (only by the AG opposition modifier).
+  function rollAcquisition(charId, senseLevel, forcedRolls, modifier, sneakGate) {
     const inSave = getAttrNum(charId, "intelligence_save", 10);
     const mod = num(modifier, 0);
     const tn = inSave + mod;
@@ -1155,11 +1176,16 @@ MP.Engine = (function () {
       outcome = (d1 <= tn) ? "succeed" : "fail";
     }
     const row = ACQ_TABLE[Math.max(0, Math.min(3, senseLevel))] || ACQ_TABLE[1];
-    const tier = row[outcome];
+    let tier = row[outcome];
+    let gated = false;
+    if (sneakGate && senseLevel === 1 && outcome !== "critSuccess") {
+      tier = "-"; // 3.1.5.1: Basic senses detect a sneaking target only on a crit
+      gated = true;
+    }
     const eff = acqTierEffect(tier);
     return {
       tier, outcome, blocked: eff.blocked, toHitMod: eff.toHitMod, label: eff.label,
-      inSave, mod, tn, d1, d2
+      inSave, mod, tn, d1, d2, gated
     };
   }
 
@@ -1178,15 +1204,24 @@ MP.Engine = (function () {
     const atkVision = visionLossInfo(atkTokId);
     const defConds = (state.MP_Engine.conditions && state.MP_Engine.conditions[defTokId]) || [];
     const inv = defConds.find(c => c.type === "invisible");
+    // v2.91.3: sneaking is standalone (3.1.5.1) - a sneaking condition on
+    // the defender, or the --sneaking flag on their Invisibility.
+    const sneaking = !!defConds.find(c => c.type === "sneaking") || !!(inv && inv.sneaking);
     let visLevel = atkVision.effective;
     if (inv) visLevel = inv.blur ? Math.max(0, visLevel - 1) : 0;
-    const oppMod = (inv && inv.sneaking) ? -Math.max(0, getAttrNum(defCharId, "agility_save", 10) - 10) : 0;
+    const oppMod = sneaking ? -Math.max(0, getAttrNum(defCharId, "agility_save", 10) - 10) : 0;
+    // Bare sneaking does NOT force a roll: a Full-vision observer with the
+    // target in their vision arc simply sees them (3.1.5.1 gates BASIC
+    // senses only). Sneaking bites when the resolved sense is Basic -
+    // hearing fallback, or vision degraded to Basic. Out-of-arc ("from
+    // behind") situations are GM adjudication via the sneak-attacker card.
     const needsRoll = atkVision.lost > 0 || !!inv;
     if (visLevel > 0) {
       const lvlLabel = visLevel === 2 ? "Full" : "Basic";
-      return { level: visLevel, label: `vision (${lvlLabel}${inv && inv.blur ? ", blurred" : ""})`, oppMod, needsRoll, inv, atkVision };
+      const sneakGate = sneaking && visLevel === 1;
+      return { level: visLevel, label: `vision (${lvlLabel}${inv && inv.blur ? ", blurred" : ""})`, oppMod, needsRoll, inv, sneaking, sneakGate, atkVision };
     }
-    return { level: 1, label: `hearing (Basic${inv && !inv.blur ? " - target invisible" : ""})`, oppMod, needsRoll, inv, atkVision };
+    return { level: 1, label: `hearing (Basic${inv && !inv.blur ? " - target invisible" : ""})`, oppMod, needsRoll, inv, sneaking, sneakGate: sneaking, atkVision };
   }
 
   // !mp invis --on [--blur] [--sneaking] | --off  (selected tokens or --target)
@@ -1250,6 +1285,58 @@ MP.Engine = (function () {
     out += `<b style="color:#c8b8ff;">🫥 Invisibility</b>`;
     lines.forEach(l => out += `<br/>` + l);
     if (!turnOff) out += `<br/><span style="font-size:11px; color:#8a84a8;">Undetected characters get the Surprise bonus (4.6). Basic senses (hearing) still detect a non-sneaking invisible character.</span>`;
+    out += `</div>`;
+    ch("MP", `${wt(msg)}` + out);
+  }
+
+  // !mp sneak [--off] (selected tokens or --target). 3.1.5.1: move at 1/2
+  // rate; observers' BASIC-sense checks detect only on a critical success,
+  // opposed by the sneaker's AG. Sneaking does NOT conceal from a Full
+  // sense with the sneaker in its vision arc - it matters from behind /
+  // out of arc (GM adjudicated), in darkness, or combined with
+  // Invisibility. No PR cost.
+  function cmdSneak(msg, args) {
+    const turnOff = ("off" in args);
+    const marker = CONDITION_MARKERS.sneaking;
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else if (msg.selected && msg.selected.length) {
+      msg.selected.forEach(s => { if (s._type === "graphic") ids.push(s._id); });
+    }
+    if (!ids.length) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Select token(s) or use --target. Usage: <code>!mp sneak | --off</code>`);
+    }
+    const lines = [];
+    ids.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      if (!tok) return;
+      const tokChar = getCharFromToken(tok);
+      const tokName = tokChar ? tokChar.get("name") : (tok.get("name") || "token");
+      if (!state.MP_Engine.conditions[tokId]) state.MP_Engine.conditions[tokId] = [];
+      const conds = state.MP_Engine.conditions[tokId];
+      const idx = conds.findIndex(c => c.type === "sneaking");
+      if (turnOff) {
+        if (idx >= 0) {
+          conds.splice(idx, 1);
+          if (!conds.some(c => c.marker === marker)) tok.set("status_" + marker, false);
+          lines.push(`<b>${esc(tokName)}</b> — stops sneaking.`);
+        } else lines.push(`<b>${esc(tokName)}</b> — wasn't sneaking.`);
+        return;
+      }
+      const condition = {
+        type: "sneaking", sourceAtk: "Stealth", marker: marker,
+        permanent: false, environmental: true,
+        effectDesc: getConditionDesc("sneaking", "Stealth"),
+        startRound: state.MP_Engine.currentRound, created: Date.now()
+      };
+      if (idx >= 0) conds[idx] = condition; else conds.push(condition);
+      tok.set("status_" + marker, true);
+      lines.push(`<b>${esc(tokName)}</b> — SNEAKING (1/2 move rate).`);
+    });
+    let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    out += `<b>👣 Stealth (3.1.5.1)</b>`;
+    lines.forEach(l => out += `<br/>` + l);
+    if (!turnOff) out += `<br/><span style="font-size:11px; color:#8a84a8;">Still visible to Full senses (e.g. vision) with the sneaker in their arc. BASIC-sense checks (hearing/scent, or vision degraded to Basic) detect only on a CRITICAL success, opposed by the sneaker's AG — e.g. approaching from behind. Undetected = Surprise bonus (4.6).</span>`;
     out += `</div>`;
     ch("MP", `${wt(msg)}` + out);
   }
@@ -3792,7 +3879,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const acqKey = atkTok.id + "|" + defTokenId;
       const acqSig = [
         Math.round(num(defTok.get("left"), 0)), Math.round(num(defTok.get("top"), 0)),
-        obs.inv ? `inv:${obs.inv.blur ? 1 : 0}:${obs.inv.sneaking ? 1 : 0}` : "vis",
+        obs.inv ? `inv:${obs.inv.blur ? 1 : 0}` : "vis",
+        `snk:${obs.sneaking ? 1 : 0}`,
         `atk:${atkVision.lost}:${atkVision.causes.join("|")}`,
         `lvl:${obs.level}:${obs.oppMod}`
       ].join(";");
@@ -3804,13 +3892,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">🎯 Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)</div>`;
         ch("MP", `${wt(msg)}` + acqNote);
       } else {
-        const acq = rollAcquisition(atkCharId, obs.level, undefined, obs.oppMod);
+        const acq = rollAcquisition(atkCharId, obs.level, undefined, obs.oppMod, obs.sneakGate);
         atkVisionPenalty = acq.toHitMod;
-        const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (sneaking) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}`;
+        const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (sneaking) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}`;
         const causeTxt = [
           atkVision.causes.length ? atkVision.causes.join(", ") : null,
           obs.inv ? (obs.inv.blur ? "target Blurred" : "target Invisible") : null,
-          obs.inv && obs.inv.sneaking ? "sneaking" : null
+          obs.sneaking ? "target sneaking" : null
         ].filter(Boolean).join("; ");
         acqHover = `&#10;Acquire [${acq.tier}]: ${acq.toHitMod} (${obs.label}, ${rollTxt})`;
         if (acq.blocked) {
@@ -3832,6 +3920,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const atkInv = atkConds.find(c => c.type === "invisible");
       if (atkInv) {
         ch("MP", `${wt(msg)}<div style="background:#2a2a4a; border:1px solid #5a4fcf; padding:3px 8px; font-size:11px; color:#eee;">🫥 <b>${esc(atkChar.get("name"))}</b> is ${atkInv.blur ? "Blurred" : "INVISIBLE"} — if undetected by the target, the <b>Surprise bonus (4.6)</b> applies (GM: add via --mod / Other).</div>`);
+      }
+      const atkSneak = atkConds.find(c => c.type === "sneaking");
+      if (atkSneak && !atkInv) {
+        ch("MP", `${wt(msg)}<div style="background:#2a2a4a; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">👣 <b>${esc(atkChar.get("name"))}</b> is SNEAKING — if outside the target's vision arc (e.g. from behind), the target detects only on a CRITICAL Basic-sense check opposed by AG (3.1.5.1); undetected = <b>Surprise bonus (4.6)</b> (GM: add via --mod).</div>`);
       }
     }
 
@@ -7254,6 +7346,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       case "darkness": return "In Darkness field - vision dampened";
       case "glare": return "In Glare field - vision overloaded";
       case "invisible": return "Invisible - undetectable by sight (PR 1/round)";
+      case "sneaking": return "Sneaking - 1/2 move; Basic senses detect only on crit (3.1.5.1)";
       default: return `Affected by ${atkName}`;
     }
   }
@@ -7287,8 +7380,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (cond.permanent) {
         return ch("MP", `/w gm <b>MP:</b> This condition is <b>PERMANENT</b> and cannot be recovered from naturally.`);
       }
-      if (cond.environmental || SENSE_ENV_TYPES.indexOf(cond.type) >= 0 || cond.type === "invisible") {
-        const offCmd = (cond.type === "invisible") ? "invis" : cond.type;
+      if (cond.environmental || SENSE_ENV_TYPES.indexOf(cond.type) >= 0 || cond.type === "invisible" || cond.type === "sneaking") {
+        const offCmd = (cond.type === "invisible") ? "invis" : (cond.type === "sneaking" ? "sneak" : cond.type);
         return ch("MP", `/w gm <b>MP:</b> <b>${esc(cond.type)}</b> has no recovery roll. Clear it with <code>!mp ${offCmd} --off --target ${tokId}</code>.`);
       }
       tn = cond.recTN;
@@ -8360,6 +8453,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `</div>`;
     }
 
+    // --- Sneaking (v2.91.3) ---
+    const snkCond = (state.MP_Engine.conditions[tokId] || []).find(c => c.type === "sneaking");
+    if (snkCond) {
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="color:#d8c690;">👣 Sneaking</span> <span style="color:#aab; font-size:11px;">1/2 move; Basic senses detect on crit only</span><br/>`;
+      html += `${btnDanger(`Stop Sneaking`, `!mp sneak --off --target ${tokId}`)}`;
+      html += `</div>`;
+    }
+
     // --- Bleeding ---
     if (state.MP_Engine.bleeds && state.MP_Engine.bleeds[tokId]) {
       html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
@@ -8463,6 +8565,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         tok.set("status_aura", false);
         tok.set("status_half-haze", false);
         tok.set("status_stopwatch", false);
+        tok.set("status_tread", false);
         tok.set(CFG.DEF_MOD_BAR, 0);
         
         // v2.89.2: clear conditions (darkness/glare etc.) - previously the
@@ -8503,6 +8606,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tok.set("status_aura", false);         // Glare field
       tok.set("status_half-haze", false);    // Invisible (v2.91.0)
       tok.set("status_stopwatch", false);    // Duration effect badge (v2.91.2)
+      tok.set("status_tread", false);        // Sneaking (v2.91.3)
       // v2.91.1: forget acquisitions involving this token
       if (state.MP_Engine.acquired) {
         Object.keys(state.MP_Engine.acquired).forEach(k => {
@@ -10203,6 +10307,8 @@ function cmdStance(msg, args) {
       case "fieldcard": return cmdFieldCard(msg, args);
       case "invis":
       case "invisible": return cmdInvis(msg, args);
+      case "sneak":
+      case "sneaking": return cmdSneak(msg, args);
 
       case "kb": return cmdKnockback(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
@@ -10415,7 +10521,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.91.2</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.91.3</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10428,6 +10534,7 @@ function cmdStance(msg, args) {
           <code>!mp darkness|glare --circle N | --circle off</code> - Draw/remove a persistent N" field ring at selected token (GM)<br/>
           <code>!mp glow --diameter N | --off</code> - Glow (Light Control D): aura light on selected token<br/>
           <code>!mp invis [--blur] [--sneaking] | --off</code> - Invisibility on selected tokens (PR 1/round auto-drains)<br/>
+          <code>!mp sneak | --off</code> - Stealth 3.1.5.1 on selected tokens (1/2 move; Basic senses detect on crit only)<br/>
           <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
           <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
@@ -11823,11 +11930,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.91.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.91.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.91.2 READY");
+  log("MP ENGINE v2.91.3 READY");
 });
