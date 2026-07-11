@@ -1,4 +1,31 @@
-/* Mighty Protectors Roll20 API Engine v2.89.2 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.89.4 - 2026-07-10
+ * v2.89.4: MOOK ATTACKERS - token-aware attacker resolution. Previously
+ *   handleMpAttack found the attacker token by unique represents-lookup
+ *   and refused when a character had 2+ tokens on the map ("Delete
+ *   duplicates before attacking"), which made mooks (unlinked multi-token
+ *   characters) unable to attack at all. New priority: (1) explicit
+ *   {{atktok=...}} - now passed by !mp atk and !mp autofire, which always
+ *   knew the token id but dropped it; (2) a selected token representing
+ *   the attacker (sheet-button rolls with the token selected); (3) unique
+ *   lookup as before. Error only when 2+ candidates remain unidentified,
+ *   with guidance to select the token or use !mp atk. PR deduction was
+ *   already token-bar aware (getResource prefers bar values), so mook
+ *   Power drains from the attacking token, not the shared sheet.
+ *   KNOWN LIMIT: attack CHARGES live on the shared sheet row, so mooks
+ *   share a charge pool.
+ * v2.89.3: AREA attacks vs generic/unlinked tokens. An area attack (Flash,
+ *   blasts) may now target a token with no character sheet - it's just the
+ *   blast center point (area attacks apply no target defense; +6 immobile).
+ *   handleMpAttack substitutes a null-id stub character when the target has
+ *   no sheet AND the attack row has Area > 0; all downstream attr lookups
+ *   fall through to defaults (getAttr/chToChars/getTokensInRadius already
+ *   skip null charIds). cmdQuickAttack (!mp atk N) reordered to find the
+ *   row before the target-character guard and allows the same. Non-area
+ *   attacks vs generic tokens still refuse, with a clearer message.
+ *   NOTE: the SHEET Roll button still cannot target generic tokens - its
+ *   macro reads @{target|...|physical_def} which Roll20 hard-fails on
+ *   sheetless tokens ("No character was found for 'target|Target'"). Use
+ *   the !mp atk quick macro for point-targeted area attacks.
  * v2.89.2: !mp restore now clears sense-loss state. Player branch clears
  *   the four sense markers (bleeding-eye dazzle, interdiction blind,
  *   ninja-mask darkness, aura glare); condition records were already
@@ -687,7 +714,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.89.2 FILE STARTING");
+log("MP ENGINE v2.89.4 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -2991,10 +3018,31 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const atkChar = getObj("character", atkCharId);
     const defTok = getObj("graphic", defTokenId);
-    const defChar = getCharFromToken(defTok);
+    let defChar = getCharFromToken(defTok);
+
+    // v2.89.3: AREA attacks may target a generic/unlinked token - it's just
+    // the blast center point (area attacks apply no defense; +6 immobile).
+    // Substitute a stub character so downstream attr lookups fall through to
+    // defaults (getAttr/chToChars/getTokensInRadius all skip null charIds).
+    let defIsPointTarget = false;
+    if (atkChar && defTok && !defChar) {
+      const rowAreaPeek = isVehicleMode(atkCharId)
+        ? num(fields.area, 0)
+        : num(getRepeatingAttackAttr(atkCharId, rowId, "attack_area"), num(fields.area, 0));
+      if (rowAreaPeek > 0) {
+        defIsPointTarget = true;
+        defChar = {
+          id: null,
+          get: (k) => (k === "name" ? (defTok.get("name") || "Target Point") : "")
+        };
+      }
+    }
 
     if (!atkChar || !defTok || !defChar) {
-      ch("MP", `${wt(msg)}<b>MP:</b> Could not resolve attacker/defender. Select a target token.`);
+      const hint = (atkChar && defTok && !defChar)
+        ? " Target token has no character sheet - only AREA attacks can target a generic point token."
+        : "";
+      ch("MP", `${wt(msg)}<b>MP:</b> Could not resolve attacker/defender. Select a target token.${hint}`);
       return;
     }
 
@@ -3195,12 +3243,29 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       : getAttrNum(atkCharId, atkSaveAttr, 10);
     
     const defPageId = defTok.get("_pageid");
+    // v2.89.4: token-aware attacker resolution (mook attackers). Priority:
+    //   1. Explicit {{atktok=...}} from the quick macros (!mp atk/autofire)
+    //   2. A selected token representing the attacker (sheet-button rolls)
+    //   3. Unique represents-lookup on the map (the original behavior)
+    // Only error when multiple candidates remain and none is identified.
+    let atkTok = null;
     const atkTokCandidates = findObjs({ _type: "graphic", represents: atkCharId, _pageid: defPageId });
-    if (atkTokCandidates.length > 1) {
-      ch("MP", `${wt(msg)}<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkChar.get("name"))}</b> has ${atkTokCandidates.length} tokens on this map! Delete duplicates before attacking.</div>`);
-      return;
+    const explicitAtkTok = fields.atktok ? getObj("graphic", fields.atktok) : null;
+    if (explicitAtkTok && explicitAtkTok.get("represents") === atkCharId && explicitAtkTok.get("_pageid") === defPageId) {
+      atkTok = explicitAtkTok;
+    } else if (msg.selected && msg.selected.length) {
+      const selMatch = msg.selected
+        .map(s => (s._type === "graphic" ? getObj("graphic", s._id) : null))
+        .find(t => t && t.get("represents") === atkCharId && t.get("_pageid") === defPageId);
+      if (selMatch) atkTok = selMatch;
     }
-    const atkTok = atkTokCandidates[0];
+    if (!atkTok) {
+      if (atkTokCandidates.length > 1) {
+        ch("MP", `${wt(msg)}<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkChar.get("name"))}</b> has ${atkTokCandidates.length} tokens on this map. Select the attacking token before rolling, or use the <code>!mp atk</code> token action (which passes the token id).</div>`);
+        return;
+      }
+      atkTok = atkTokCandidates[0];
+    }
     const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
     
     if (atkDefMod === 6) {
@@ -9204,12 +9269,19 @@ function cmdStance(msg, args) {
     const defTok = getObj("graphic", defTokenId);
     if (!defTok) return ch("MP", `${wt(msg)}Target token not found.`);
 
-    const defChar = getCharFromToken(defTok);
-    if (!defChar) return ch("MP", `${wt(msg)}Target token not linked to character.`);
-
-    // Find attack row
+    // Find attack row (before the target-character check: area attacks may
+    // target a generic/unlinked token as the blast center point - v2.89.3)
     const rowId = findAttackRowByIndex(atkCharId, atkIndex);
     if (!rowId) return ch("MP", `/w gm Attack #${atkIndex} not found for ${esc(atkName)}.`);
+
+    const defChar = getCharFromToken(defTok);
+    if (!defChar) {
+      const rowArea = num(getRepeatingAttackAttr(atkCharId, rowId, "attack_area"), 0);
+      if (rowArea <= 0) {
+        return ch("MP", `${wt(msg)}Target token not linked to character. Only AREA attacks can target a generic point token.`);
+      }
+      // else: fall through - handleMpAttack substitutes a point-target stub
+    }
 
     const getAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
 
@@ -9243,7 +9315,7 @@ function cmdStance(msg, args) {
     // Push (positive) adds damage, Hold Back (negative) reduces damage
     const pushDmg = pushAmount !== 0 ? (pushAmount > 0 ? `+${pushAmount}` : `${pushAmount}`) : "";
     
-    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{playerid=${msg.playerid}}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{calledtype=${calledType}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
+    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{playerid=${msg.playerid}}} {{atk=${atkCharId}}} {{atktok=${atkTokenId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{calledtype=${calledType}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
 
     sendChat(`character|${atkCharId}`, rollMsg);
   }
@@ -9421,7 +9493,7 @@ function cmdStance(msg, args) {
     for (let shot = 1; shot <= autofireRate; shot++) {
       setTimeout(() => {
         // Build roll message - pass nopr=1 since we already deducted PR/charges upfront
-        const rollMsg = `&{template:mpattack} {{mpapi=1}} {{playerid=${msg.playerid}}} {{atk=${atkCharId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{nopr=1}} {{name=${atkName} - ${attackName} (Shot ${shot}/${autofireRate})}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
+        const rollMsg = `&{template:mpattack} {{mpapi=1}} {{playerid=${msg.playerid}}} {{atk=${atkCharId}}} {{atktok=${atkTokenId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{nopr=1}} {{name=${atkName} - ${attackName} (Shot ${shot}/${autofireRate})}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
         
         sendChat(`character|${atkCharId}`, rollMsg);
       }, (shot - 1) * 500); // 500ms delay between shots
@@ -9774,7 +9846,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.89.2</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.89.4</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -11171,11 +11243,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.89.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.89.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.89.2 READY");
+  log("MP ENGINE v2.89.4 READY");
 });
