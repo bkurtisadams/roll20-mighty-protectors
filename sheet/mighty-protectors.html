@@ -1,5 +1,7 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.60 - Heightened/Diminished Sense block on abilities cog panel
+<!-- Mighty Protectors Roll20 Character Sheet v44.61 - Perceive button on the sense block
      Requires MP Engine v2.89.1+ for sense-loss save resolution.
+        v44.61: Perceive roll button on the sense block - !mp perceive with the row's
+          sense (engine v2.92.0); select your token before clicking
         v44.60: Heightened/Diminished Sense block (Rows 1.8-1.9) on the abilities cog
           panel: Detects (full HS type list), Level (Basic/Full/Analytical/Minimum/
           None-removed), standard Diminished Sense weakness select, Radiates
@@ -1765,6 +1767,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_ability_sense_retro" value="1" title="Retrocognitive (+15): sense the past" />
             <label title="Retrocognitive (+15)">Retro</label>
+          </div>
+          <div class="sheet-panel-field">
+            <button type="roll" name="roll_ability_sense_perceive" value="!mp perceive --charid @{character_id} --sense @{ability_sense_detects}" title="Roll a 3.1.5 perception check with this sense (select your token first; select a subject token second for sneaking opposition)" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 6px; margin:0; background:#3d5a80; color:#fff; border:1px solid #2a2040; cursor:pointer;">Perceive</button>
           </div>
           <div class="sheet-panel-field">
             <input type="text" name="attr_ability_sense_cp_calc" readonly style="width:200px !important; border:none !important; background:transparent !important; color:#5b7a3a !important; font-weight:bold;" title="Computed sense cost (before general ability modifiers). Includes the default-sense credit when upgrading a default, and the refund when Level = None. Compare with the row's CP field." />

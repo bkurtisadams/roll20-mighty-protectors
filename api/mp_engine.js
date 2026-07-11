@@ -1,4 +1,25 @@
-/* Mighty Protectors Roll20 API Engine v2.91.4 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.92.0 - 2026-07-11
+ * v2.92.0: CHARACTER SENSE ROWS (phase 2 of sheet v44.60/61).
+ *   getCharacterSenses(charId): six-default baseline + repeating_abilities
+ *   sense rows - overrides replace, Level=none removals are always-on,
+ *   Off/Held/Gear+Broken rows are skipped (default stands). visionLossInfo
+ *   now takes charId: base level from the character's visible sense
+ *   (Analytical possible), Amplified negates Darkness dampening, Protected
+ *   negates Glare+Flash overload (Darkness/Glare still cancel first).
+ *   observationLevel: vision-blocked fallback = the character's BEST
+ *   remaining Ranged/Global sense (blinded radar user keeps Full-row
+ *   acquisition; no usable sense = None row). Range-conditional Diminished
+ *   Senses automate off attack range: Nearsighted caps vision at Basic
+ *   beyond 4", Farsighted within 5", No Depth Perception adds a flat -2
+ *   to hit by sight beyond 1". Acquisition modifier now includes the
+ *   sense's Chk mod (Acute/Imperceptive) and its range penalty offset by
+ *   Telescopic (3.1.5/4.7.3); breakdown shown in the roll text. Acquire-
+ *   once sig adds chkMod and a range bucket (only when a range weakness
+ *   is live). NEW !mp perceive [--sense KEY] [--mod N]: 3.1.5 perception
+ *   check with the sense's mods, sneaking opposition + 3.1.5.1 gate for
+ *   a selected subject, tier detail text, crit = one level higher.
+ *   Status card gains a Senses line (deviations from baseline only).
+ *   !mp test senses reports the resolved map + fallback pick.
  * v2.91.4: SENSES PANEL. !mp sensepanel (GM) posts one whispered control
  *   card for the whole subsystem: Darkness/Glare rank buttons (1/2/3,
  *   one-click) + Off + ring draw/clear (diameter prompts once),
@@ -824,7 +845,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.91.4 FILE STARTING");
+log("MP ENGINE v2.92.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1089,7 +1110,68 @@ MP.Engine = (function () {
 
   const SENSE_ENV_TYPES = ["darkness", "glare"];
 
-  function visionLossInfo(tokId) {
+  // -------------------------
+  // CHARACTER SENSES (v2.92.0) - sheet v44.60 sense rows
+  // -------------------------
+  // Baseline: the six default human senses. Rows on repeating_abilities
+  // (ability_sense_detects != "") override, add, or remove senses.
+  // Level=none removal rows are ALWAYS-ON (blindness doesn't toggle off);
+  // other rows are skipped when State is Off/Held or Gear+Broken.
+  const SENSE_LEVEL_NUM = { none: 0, minimum: 1, basic: 1, full: 2, analytical: 3 };
+
+  function defaultSenses() {
+    return {
+      visible: { lvl: 2, rng: 1, glob: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "vision" },
+      audible: { lvl: 1, rng: 1, glob: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "hearing" },
+      odors:   { lvl: 1, rng: 1, glob: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "scent" },
+      shapes:  { lvl: 1, rng: 0, glob: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "touch" },
+      flavors: { lvl: 1, rng: 0, glob: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "taste" },
+      time:    { lvl: 1, rng: 0, glob: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "time" }
+    };
+  }
+
+  function getCharacterSenses(charId) {
+    const senses = defaultSenses();
+    if (!charId) return senses;
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    // gather rows by suffix match (row ids may contain any chars)
+    const rows = {};
+    attrs.forEach(a => {
+      const n = a.get("name");
+      const m = n.match(/^repeating_abilities_(.+)_ability_(sense_detects|sense_level|sense_weakness|sense_ranged|sense_global|sense_chkmod|sense_tele|sense_amp|sense_prot|state|gear|broken)$/);
+      if (!m) return;
+      if (!rows[m[1]]) rows[m[1]] = {};
+      rows[m[1]][m[2]] = a.get("current");
+    });
+    Object.keys(rows).forEach(rid => {
+      const r = rows[rid];
+      const detects = (r.sense_detects || "").toLowerCase();
+      if (!detects) return;
+      const level = (r.sense_level || "basic").toLowerCase();
+      if (level === "none") {
+        // removal weakness: always-on regardless of State/Broken
+        senses[detects] = { lvl: 0, rng: 0, glob: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", removed: true, label: detects };
+        return;
+      }
+      const state = r.state || "Off";
+      const inactive = (state === "Off" || state === "Held") || (r.gear === "1" && r.broken === "1");
+      if (inactive) return; // default (if any) stands
+      senses[detects] = {
+        lvl: SENSE_LEVEL_NUM[level] != null ? SENSE_LEVEL_NUM[level] : 1,
+        rng: r.sense_ranged === "1" ? 1 : 0,
+        glob: (r.sense_global === "full" || r.sense_global === "circle") ? 1 : 0,
+        chk: num(r.sense_chkmod, 0),
+        tele: num(r.sense_tele, 0),
+        amp: num(r.sense_amp, 0),
+        prot: num(r.sense_prot, 0),
+        weak: (r.sense_weakness || "").toLowerCase(),
+        label: (senses[detects] && senses[detects].label) || detects
+      };
+    });
+    return senses;
+  }
+
+  function visionLossInfo(tokId, charId) {
     const conds = (state.MP_Engine.conditions && state.MP_Engine.conditions[tokId]) || [];
     let dazzle = 0, darkness = 0, glare = 0;
     conds.forEach(c => {
@@ -1100,16 +1182,27 @@ MP.Engine = (function () {
         dazzle += (c.senseLevels != null) ? num(c.senseLevels, 0) : 2;
       }
     });
-    const env = Math.abs(darkness - glare); // darkness & glare cancel
-    const lost = dazzle + env;
-    const effective = Math.max(0, 2 - lost); // 2 Full, 1 Basic, 0 None
-    const effLabel = effective === 2 ? "Full" : (effective === 1 ? "Basic" : "BLIND");
+    // v2.92.0: sense rows supply the base level and Amplified/Protected
+    // ranks. Amp negates dampening (Darkness); Prot negates overload
+    // (Glare, Flash dazzle). Darkness & Glare still cancel first.
+    const vis = charId ? getCharacterSenses(charId).visible : defaultSenses().visible;
+    const base = vis.lvl;
+    const net = darkness - glare;
+    const dampening = Math.max(0, Math.max(0, net) - num(vis.amp, 0));
+    const overload = Math.max(0, Math.max(0, -net) + dazzle - num(vis.prot, 0));
+    const lost = dampening + overload;
+    const env = Math.abs(net); // for cause display
+    const effective = Math.max(0, base - lost);
+    const effLabel = effective >= 3 ? "Analytical" : (effective === 2 ? "Full" : (effective === 1 ? "Basic" : "BLIND"));
     const causes = [];
     if (dazzle) causes.push(`Dazzle ${dazzle}`);
     if (darkness) causes.push(`Darkness ${darkness}`);
     if (glare) causes.push(`Glare ${glare}`);
     if (darkness && glare) causes.push(`net ${env} (cancel)`);
-    return { dazzle, darkness, glare, env, lost, effective, effLabel, causes };
+    if (charId && vis.amp) causes.push(`Amp ${vis.amp}`);
+    if (charId && vis.prot) causes.push(`Prot ${vis.prot}`);
+    if (charId && vis.removed) causes.push(`BLIND (Diminished Sense)`);
+    return { dazzle, darkness, glare, env, lost, base, effective, effLabel, causes, vis };
   }
 
   // To-hit penalty for a vision-impaired attacker. Basic vision: -3
@@ -1207,28 +1300,56 @@ MP.Engine = (function () {
   //     character easily unless they're ALSO sneaking - a sneaking target
   //     opposes the check at -(AG save - 10) per 3.0.2.4.
   //   - Blur reduces the observer's effective vision by one level.
-  function observationLevel(atkTokId, defTokId, defCharId) {
-    const atkVision = visionLossInfo(atkTokId);
+  function observationLevel(atkTokId, defTokId, defCharId, atkCharId, rangeInches, rangePenalty) {
+    const atkVision = visionLossInfo(atkTokId, atkCharId);
+    const senses = atkCharId ? getCharacterSenses(atkCharId) : defaultSenses();
     const defConds = (state.MP_Engine.conditions && state.MP_Engine.conditions[defTokId]) || [];
     const inv = defConds.find(c => c.type === "invisible");
-    // v2.91.3: sneaking is standalone (3.1.5.1) - a sneaking condition on
-    // the defender, or the --sneaking flag on their Invisibility.
     const sneaking = !!defConds.find(c => c.type === "sneaking") || !!(inv && inv.sneaking);
     let visLevel = atkVision.effective;
     if (inv) visLevel = inv.blur ? Math.max(0, visLevel - 1) : 0;
-    const oppMod = sneaking ? -Math.max(0, getAttrNum(defCharId, "agility_save", 10) - 10) : 0;
-    // Bare sneaking does NOT force a roll: a Full-vision observer with the
-    // target in their vision arc simply sees them (3.1.5.1 gates BASIC
-    // senses only). Sneaking bites when the resolved sense is Basic -
-    // hearing fallback, or vision degraded to Basic. Out-of-arc ("from
-    // behind") situations are GM adjudication via the sneak-attacker card.
-    const needsRoll = atkVision.lost > 0 || !!inv;
-    if (visLevel > 0) {
-      const lvlLabel = visLevel === 2 ? "Full" : "Basic";
-      const sneakGate = sneaking && visLevel === 1;
-      return { level: visLevel, label: `vision (${lvlLabel}${inv && inv.blur ? ", blurred" : ""})`, oppMod, needsRoll, inv, sneaking, sneakGate, atkVision };
+
+    // v2.92.0: range-conditional Diminished Senses on vision (auto):
+    // Nearsighted = Basic beyond 4"; Farsighted = Basic within 5";
+    // No Depth Perception = -2 to hit by sight beyond 1".
+    const vis = senses.visible || defaultSenses().visible;
+    let weakNote = "", extraToHit = 0, rangeWeak = false;
+    if (visLevel > 0 && rangeInches != null) {
+      if (vis.weak === "nearsighted" && rangeInches > 4 && visLevel > 1) { visLevel = 1; weakNote = "Nearsighted >4\""; rangeWeak = true; }
+      else if (vis.weak === "farsighted" && rangeInches < 5 && visLevel > 1) { visLevel = 1; weakNote = "Farsighted <5\""; rangeWeak = true; }
+      if (vis.weak === "nodepth" && rangeInches > 1) { extraToHit = -2; weakNote = (weakNote ? weakNote + "; " : "") + "No Depth >1\" (-2)"; rangeWeak = true; }
     }
-    return { level: 1, label: `hearing (Basic${inv && !inv.blur ? " - target invisible" : ""})`, oppMod, needsRoll, inv, sneaking, sneakGate: sneaking, atkVision };
+
+    const oppMod = sneaking ? -Math.max(0, getAttrNum(defCharId, "agility_save", 10) - 10) : 0;
+    const needsRoll = atkVision.lost > 0 || !!inv || (rangeWeak && visLevel <= 1);
+
+    // Perception range penalty offset by Telescopic (3.1.5 / 4.7.3):
+    const acqRangeMod = (senseObj) => Math.min(0, num(rangePenalty, 0) + num(senseObj.tele, 0));
+
+    if (visLevel > 0) {
+      const lvlLabel = visLevel >= 3 ? "Analytical" : (visLevel === 2 ? "Full" : "Basic");
+      const sneakGate = sneaking && visLevel === 1;
+      return { level: visLevel, label: `vision (${lvlLabel}${inv && inv.blur ? ", blurred" : ""}${weakNote ? ", " + weakNote : ""})`,
+        oppMod, chkMod: num(vis.chk, 0), rngMod: acqRangeMod(vis), extraToHit, needsRoll, inv, sneaking, sneakGate, atkVision, senseKey: "visible" };
+    }
+
+    // Vision unusable: best remaining sense with reach (Ranged or Global),
+    // highest level first, then best check mod. No usable sense = None row.
+    let bestKey = null, best = null;
+    Object.keys(senses).forEach(k => {
+      if (k === "visible") return;
+      const s = senses[k];
+      if (s.removed || s.lvl <= 0 || (!s.rng && !s.glob)) return;
+      if (!best || s.lvl > best.lvl || (s.lvl === best.lvl && num(s.chk, 0) > num(best.chk, 0))) { best = s; bestKey = k; }
+    });
+    if (!best) {
+      return { level: 0, label: "no usable sense", oppMod, chkMod: 0, rngMod: 0, extraToHit: 0,
+        needsRoll: true, inv, sneaking, sneakGate: sneaking, atkVision, senseKey: null };
+    }
+    const bLabel = best.lvl >= 3 ? "Analytical" : (best.lvl === 2 ? "Full" : "Basic");
+    return { level: best.lvl, label: `${best.label} (${bLabel}${inv && !inv.blur ? " - target invisible" : ""})`,
+      oppMod, chkMod: num(best.chk, 0), rngMod: acqRangeMod(best), extraToHit: 0,
+      needsRoll: true, inv, sneaking, sneakGate: sneaking && best.lvl === 1, atkVision, senseKey: bestKey };
   }
 
   // !mp invis --on [--blur] [--sneaking] | --off  (selected tokens or --target)
@@ -1348,6 +1469,116 @@ MP.Engine = (function () {
     ch("MP", `${wt(msg)}` + out);
   }
 
+  // !mp perceive [--sense KEY] [--mod N] (select observer token; optional
+  // second selected token or --target = subject, for sneaking opposition).
+  // 3.1.5: IN check + the sense's Chk mod + situational --mod; crit success
+  // perceives at one higher sense level. Sheet button passes --charid.
+  function cmdPerceive(msg, args) {
+    // resolve observer: selected token, or --charid via unique/selected token
+    let obsTok = null;
+    const sel = (msg.selected || []).filter(s => s._type === "graphic").map(s => getObj("graphic", s._id)).filter(Boolean);
+    if (args.charid) {
+      obsTok = sel.find(t => t.get("represents") === args.charid) || null;
+      if (!obsTok) {
+        const cands = findObjs({ _type: "graphic", represents: args.charid }).filter(t => t.get("_pageid") === (sel[0] ? sel[0].get("_pageid") : t.get("_pageid")));
+        if (cands.length === 1) obsTok = cands[0];
+      }
+    }
+    if (!obsTok && sel.length) obsTok = sel[0];
+    const obsChar = obsTok ? getCharFromToken(obsTok) : (args.charid ? getObj("character", args.charid) : null);
+    if (!obsChar) return ch("MP", `${wt(msg)}<b>MP:</b> Select the observer's token (linked), then <code>!mp perceive [--sense visible|audible|radar|...] [--mod N]</code>`);
+    const obsName = obsChar.get("name");
+
+    const senses = getCharacterSenses(obsChar.id);
+    let key = (args.sense || args.detects || "").toLowerCase();
+    if (!key || !senses[key] || senses[key].removed || senses[key].lvl <= 0) {
+      // default: best available sense overall (vision first if usable)
+      key = null;
+      Object.keys(senses).forEach(k => {
+        const s = senses[k];
+        if (s.removed || s.lvl <= 0) return;
+        if (!key || s.lvl > senses[key].lvl || (k === "visible" && s.lvl === senses[key].lvl)) key = k;
+      });
+      if (!key) return ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(obsName)}</b> has no usable senses.`);
+    }
+    const s = senses[key];
+    const lvlLabel = s.lvl >= 3 ? "Analytical" : (s.lvl === 2 ? "Full" : "Basic");
+
+    // optional subject: --target or 2nd selected token (sneaking opposition)
+    let subjTok = args.target ? getObj("graphic", args.target) : (sel.length > 1 && sel[1] !== obsTok ? sel[1] : null);
+    let oppMod = 0, oppNote = "";
+    if (subjTok) {
+      const sConds = (state.MP_Engine.conditions && state.MP_Engine.conditions[subjTok.id]) || [];
+      const inv = sConds.find(c => c.type === "invisible");
+      const snk = !!sConds.find(c => c.type === "sneaking") || !!(inv && inv.sneaking);
+      if (snk) {
+        const sc = getCharFromToken(subjTok);
+        oppMod = -Math.max(0, getAttrNum(sc ? sc.id : null, "agility_save", 10) - 10);
+        oppNote = ` opp ${oppMod} (sneaking)`;
+      }
+    }
+
+    const mod = num(args.mod, 0) + num(s.chk, 0) + oppMod;
+    const sneakGate = !!oppNote && s.lvl === 1;
+    const acq = rollAcquisition(obsChar.id, s.lvl, undefined, mod, sneakGate);
+
+    const detail = {
+      "-": "perceives nothing",
+      "?": "senses something is around, but can't locate or identify it",
+      "-3": "crude perception - located and identified, details need another check",
+      "ID": "clearly perceives and identifies",
+      "+": "clearly perceives; notices gear / internal systems",
+      "++": "full detail - dimensions, distance, velocity, etc."
+    }[acq.tier] || acq.tier;
+    const critNote = (acq.outcome === "critSuccess") ? " <span style=\"color:#2ecc71;\">(critical: one sense level higher detail)</span>" : "";
+    const modBits = [];
+    if (num(args.mod, 0)) modBits.push(`${num(args.mod, 0)} situational`);
+    if (num(s.chk, 0)) modBits.push(`${s.chk > 0 ? "+" : ""}${s.chk} chk`);
+    if (oppNote) modBits.push(oppNote.trim());
+
+    let out = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    out += `<b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b> by ${esc(s.label || key)} (${lvlLabel})<br/>`;
+    out += `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (${modBits.join(", ")}) = ${acq.tn}-` : ""} · rolled <b>${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}</b>${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}<br/>`;
+    out += `<b>[${acq.tier}]</b> ${esc(detail)}${critNote}`;
+    out += `</div>`;
+    ch("MP", `${wt(msg)}` + out);
+  }
+
+  // Report: !mp test senses - dump the selected token's resolved sense map
+  // (baseline + sheet rows) and which sense acquisition would fall back to.
+  function testSenses(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then run <code>!mp test senses</code>.`);
+    const tok = getObj("graphic", sel[0]._id);
+    const char = getCharFromToken(tok);
+    if (!char) return ch("MP", `/w gm <b>MP:</b> Token must be linked to a character.`);
+    const sm = getCharacterSenses(char.id);
+    const vinfo = visionLossInfo(tok.id, char.id);
+    let out = `<b style="color:#c88fff;">SENSES</b> — ${esc(char.get("name"))}<br/>`;
+    Object.keys(sm).forEach(k => {
+      const s = sm[k];
+      const L = s.removed || s.lvl <= 0 ? "NONE" : (s.lvl >= 3 ? "Analytical" : (s.lvl === 2 ? "Full" : "Basic"));
+      const bits = [];
+      if (s.rng) bits.push("Rng"); if (s.glob) bits.push("Glob");
+      if (s.chk) bits.push(`chk${s.chk > 0 ? "+" : ""}${s.chk}`);
+      if (s.tele) bits.push(`tele+${s.tele}`);
+      if (s.amp) bits.push(`amp${s.amp}`); if (s.prot) bits.push(`prot${s.prot}`);
+      if (s.weak) bits.push(s.weak);
+      out += `&nbsp;&nbsp;${esc(s.label || k)}: <b>${L}</b>${bits.length ? ` (${bits.join(", ")})` : ""}<br/>`;
+    });
+    out += `Vision now: <b>${vinfo.effLabel}</b>${vinfo.causes.length ? ` (${esc(vinfo.causes.join(", "))})` : ""}<br/>`;
+    // simulate the vision-blocked fallback pick
+    let bestKey = null;
+    Object.keys(sm).forEach(k => {
+      if (k === "visible") return;
+      const s = sm[k];
+      if (s.removed || s.lvl <= 0 || (!s.rng && !s.glob)) return;
+      if (!bestKey || s.lvl > sm[bestKey].lvl || (s.lvl === sm[bestKey].lvl && num(s.chk, 0) > num(sm[bestKey].chk, 0))) bestKey = k;
+    });
+    out += `If vision blocked, acquires by: <b>${bestKey ? esc(sm[bestKey].label || bestKey) : "NO USABLE SENSE"}</b>`;
+    ch("MP", `/w gm ` + out);
+  }
+
   // Round-advance upkeep: PR 1/round per invisible token; drops at 0 Power.
   function tickInvisibility(n) {
     let frag = "";
@@ -1458,14 +1689,14 @@ MP.Engine = (function () {
         if (idx >= 0) conds[idx] = condition; // refresh in place, no stacking
         else conds.push(condition);
         tok.set("status_" + marker, true);
-        const info = visionLossInfo(tokId);
+        const info = visionLossInfo(tokId, tokChar ? tokChar.id : null);
         applied.push(`<b>${esc(tokName)}</b> — ${label} ${ranks} (vision now <b>${info.effLabel}</b>)`);
       } else {
         if (idx >= 0) {
           conds.splice(idx, 1);
           const markerStillUsed = conds.some(c => c.marker === marker);
           if (!markerStillUsed) tok.set("status_" + marker, false);
-          const info = visionLossInfo(tokId);
+          const info = visionLossInfo(tokId, tokChar ? tokChar.id : null);
           removed.push(`<b>${esc(tokName)}</b> — ${label} cleared (vision now <b>${info.effLabel}</b>)`);
         } else {
           removed.push(`<b>${esc(tokName)}</b> — no ${label} to clear`);
@@ -3903,9 +4134,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // observationLevel() combines attacker impairment with defender
     // concealment, and a sneaking invisible target opposes at -(AG-10).
     // RAW: re-roll acquisition if the target moves/sneaks/turns invisible.
-    const atkVision = atkTok ? visionLossInfo(atkTok.id) : { lost: 0, effective: 2, effLabel: "Full", causes: [] };
-    const obs = atkTok ? observationLevel(atkTok.id, defTokenId, defChar.id)
-      : { level: 2, label: "vision (Full)", oppMod: 0, needsRoll: false, inv: null, atkVision };
+    const atkVision = atkTok ? visionLossInfo(atkTok.id, atkCharId) : { lost: 0, effective: 2, effLabel: "Full", causes: [] };
+    const obs = atkTok ? observationLevel(atkTok.id, defTokenId, defChar.id, atkCharId, rangeData.inches, rangeData.penalty)
+      : { level: 2, label: "vision (Full)", oppMod: 0, chkMod: 0, rngMod: 0, extraToHit: 0, needsRoll: false, inv: null, atkVision };
     let atkVisionPenalty = 0;
     let acqNote = "";
     let acqHover = "";
@@ -3923,19 +4154,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         obs.inv ? `inv:${obs.inv.blur ? 1 : 0}` : "vis",
         `snk:${obs.sneaking ? 1 : 0}`,
         `atk:${atkVision.lost}:${atkVision.causes.join("|")}`,
-        `lvl:${obs.level}:${obs.oppMod}`
+        `lvl:${obs.level}:${obs.oppMod}:${obs.chkMod || 0}`,
+        (obs.extraToHit || /Nearsighted|Farsighted/.test(obs.label)) ? `rb:${Math.round(num(rangeData.inches, 0))}` : "rb:-"
       ].join(";");
       const cached = state.MP_Engine.acquired[acqKey];
 
       if (cached && cached.sig === acqSig) {
-        atkVisionPenalty = cached.toHitMod;
+        atkVisionPenalty = cached.toHitMod + num(obs.extraToHit, 0);
         acqHover = `&#10;Acquired [${cached.tier}]: ${cached.toHitMod} (${obs.label}, held from round ${cached.round})`;
         acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">🎯 Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)</div>`;
         ch("MP", `${wt(msg)}` + acqNote);
       } else {
-        const acq = rollAcquisition(atkCharId, obs.level, undefined, obs.oppMod, obs.sneakGate);
-        atkVisionPenalty = acq.toHitMod;
-        const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (sneaking) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}`;
+        const acqMod = num(obs.oppMod, 0) + num(obs.chkMod, 0) + num(obs.rngMod, 0);
+        const acq = rollAcquisition(atkCharId, obs.level, undefined, acqMod, obs.sneakGate);
+        atkVisionPenalty = acq.toHitMod + num(obs.extraToHit, 0);
+        const modParts = [];
+        if (obs.oppMod) modParts.push(`${obs.oppMod} sneak`);
+        if (obs.chkMod) modParts.push(`${obs.chkMod > 0 ? "+" : ""}${obs.chkMod} chk`);
+        if (obs.rngMod) modParts.push(`${obs.rngMod} range`);
+        const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (${modParts.join(", ")}) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}`;
         const causeTxt = [
           atkVision.causes.length ? atkVision.causes.join(", ") : null,
           obs.inv ? (obs.inv.blur ? "target Blurred" : "target Invisible") : null,
@@ -4161,6 +4398,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
     if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
     if (acqHover) hoverBreakdown += acqHover;
+    if (obs.extraToHit) hoverBreakdown += `&#10;Depth/weakness: ${obs.extraToHit}`;
     if (defVisionPenalty !== 0) hoverBreakdown += `&#10;Tgt vision impaired: +3 (def ${defBase + defMod} → ${defValue})`;
     
     // Range penalty tooltip
@@ -4814,7 +5052,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     else { condList.push(condition); condIdx = condList.length - 1; }
     tok.set("status_" + marker, true);
 
-    const visNow = visionLossInfo(tokId);
+    const visNow = visionLossInfo(tokId, tokData.charId);
     let out = `<br/><span style="color:#e94560;">\u2717 <b>${esc(tokData.name)}</b> FAILS (${tn}-, rolled ${d20}${isFumble ? " FUMBLE" : ""}) — loses ${levels} vision level(s), now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
     if (isFumble) {
       out += `<br/><span style="color:#ff0000; font-weight:bold; font-size:11px;">\ud83d\udc80 FUMBLE — blindness is PERMANENT!</span>`;
@@ -7297,7 +7535,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const condLabel = condType.replace(/_/g, " ").toUpperCase();
       statusLine = `<br/><span style="color:#e94560; font-weight:bold;">⚠️ ${condLabel}!</span>`;
       if (isSenseLossAttack) {
-        const visNow = visionLossInfo(rec.defTokenId);
+        const visNow = visionLossInfo(rec.defTokenId, rec.defCharId);
         statusLine += `<br/><span style="font-size:11px;">Loses <b>${num(rec.senseLoss, 0)}</b> level(s) of vision — now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
       }
       
@@ -8470,8 +8708,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     });
 
     // --- Vision (v2.89.0: dazzle/darkness/glare sense loss) ---
-    const vis = visionLossInfo(tokId);
-    if (vis.lost > 0) {
+    const vis = visionLossInfo(tokId, char ? char.id : null);
+    if (vis.lost > 0 || (vis.vis && vis.vis.removed)) {
       const visColor = vis.effective === 0 ? "#ff6b6b" : "#f4d03f";
       html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
       html += `<span style="color:${visColor};">👁 Vision: <b>${vis.effLabel}</b></span> <span style="color:#aab; font-size:11px;">(${esc(vis.causes.join(", "))})</span><br/>`;
@@ -8483,6 +8721,31 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (vis.darkness > 0) html += `${btnDanger(`Clear Darkness`, `!mp darkness --off --target ${tokId}`)} `;
       if (vis.glare > 0) html += `${btnDanger(`Clear Glare`, `!mp glare --off --target ${tokId}`)}`;
       html += `</div>`;
+    }
+
+    // --- Senses summary (v2.92.0: only when sheet rows deviate from baseline) ---
+    if (char) {
+      const sm = getCharacterSenses(char.id);
+      const dv = defaultSenses();
+      const devs = [];
+      Object.keys(sm).forEach(k => {
+        const s = sm[k], d = dv[k];
+        const changed = !d || s.removed || s.lvl !== d.lvl || s.chk || s.tele || s.amp || s.prot || s.weak;
+        if (!changed) return;
+        const L = s.removed || s.lvl <= 0 ? "NONE" : (s.lvl >= 3 ? "A" : (s.lvl === 2 ? "F" : "B"));
+        const bits = [];
+        if (s.chk) bits.push(`chk${s.chk > 0 ? "+" : ""}${s.chk}`);
+        if (s.tele) bits.push(`tele+${s.tele}`);
+        if (s.amp) bits.push(`amp${s.amp}`);
+        if (s.prot) bits.push(`prot${s.prot}`);
+        if (s.weak) bits.push(s.weak);
+        devs.push(`${esc(s.label || k)} <b>${L}</b>${bits.length ? ` <span style="color:#aab;">(${bits.join(",")})</span>` : ""}`);
+      });
+      if (devs.length) {
+        html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+        html += `<span style="color:#d8c690;">👂 Senses:</span> <span style="font-size:11px;">${devs.join(" · ")}</span>`;
+        html += `</div>`;
+      }
     }
 
     // --- Invisibility (v2.91.0) ---
@@ -9167,6 +9430,8 @@ function cmdStance(msg, args) {
         return testAcquire(msg, args);
       case "invis":
         return testInvis(msg, args);
+      case "senses":
+        return testSenses(msg, args);
       case "heal":
         return testHeal(msg, args);
       case "reset":
@@ -9184,6 +9449,7 @@ function cmdStance(msg, args) {
           <code>!mp test flash [LEVELS]</code> - Flash save/condition self-test (select 1 token; non-destructive)<br/>
           <code>!mp test acquire</code> - 4.6 target-acquisition table self-test (select 1 token)<br/>
           <code>!mp test invis</code> - Invisibility/observation self-test (select 2 tokens: observer, target)<br/>
+          <code>!mp test senses</code> - Report the selected token's resolved sense map + acquisition fallback<br/>
           <code>!mp test heal N</code> - Heal N hits to selected token<br/>
           <code>!mp test reset</code> - Reset selected token to full Hits/Power<br/>
           <code>!mp test status</code> - Show selected token's full status (shows Hardened/Invuln)`);
@@ -10353,6 +10619,7 @@ function cmdStance(msg, args) {
       case "sensepanel":
         if (gmOnly(msg)) return;
         return cmdSensePanel(msg, args);
+      case "perceive": return cmdPerceive(msg, args);
 
       case "kb": return cmdKnockback(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
@@ -10565,7 +10832,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.91.4</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.92.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10580,6 +10847,7 @@ function cmdStance(msg, args) {
           <code>!mp invis [--blur] [--sneaking] | --off</code> - Invisibility on selected tokens (PR 1/round auto-drains)<br/>
           <code>!mp sneak | --off</code> - Stealth 3.1.5.1 on selected tokens (1/2 move; Basic senses detect on crit only)<br/>
           <code>!mp sensepanel</code> - GM control card for the whole senses subsystem (buttons act on selection)<br/>
+          <code>!mp perceive [--sense KEY] [--mod N]</code> - 3.1.5 perception check (select observer; 2nd token = subject)<br/>
           <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
           <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
@@ -11975,11 +12243,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.91.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.92.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
-  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel };
+  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.91.4 READY");
+  log("MP ENGINE v2.92.0 READY");
 });
