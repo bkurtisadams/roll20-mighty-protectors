@@ -1,5 +1,17 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.59 - Importer tags for sense abilities
+<!-- Mighty Protectors Roll20 Character Sheet v44.60 - Heightened/Diminished Sense block on abilities cog panel
      Requires MP Engine v2.89.1+ for sense-loss save resolution.
+        v44.60: Heightened/Diminished Sense block (Rows 1.8-1.9) on the abilities cog
+          panel: Detects (full HS type list), Level (Basic/Full/Analytical/Minimum/
+          None-removed), standard Diminished Sense weakness select, Radiates
+          (auto-derived from Detects), and the sensory modifiers (Ranged, Global,
+          signed Chk mod = Acute/Imperceptive, Telescopic, Amplified, Protected,
+          Tracking, Penetrating+blocked-by, Precog, Retro). Computed-cost readout
+          validates the row's CP field: default-sense upgrade credit (pay the
+          difference), Level=None refunds the default build (Blind -15, Deaf -20),
+          weakness values included; general ability modifiers not yet in the math.
+          Baseline model: engine assumes the six default human senses; rows exist
+          only for upgrades, additions, and Diminished Senses. Notes tag
+          sense:TYPE:LEVEL[:flags] (match-only) for the importer.
         v44.59: Notes-tag recognition for sense abilities (chunk 6). Attack notes:
           flash:LEVELS[:SAVEMOD] populates Flash save rows (is_save, no_damage, EN,
           sense_loss); dazzle:SAVEMOD populates Laser dazzle save fields. Ability notes:
@@ -1641,6 +1653,124 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
         </div>
 
+        <!-- Row 1.8-1.9: Heightened / Diminished Sense (v44.60) -->
+        <div class="sheet-panel-row" style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
+          <span style="color:#c0a070; font-size:9px; font-weight:bold; letter-spacing:0.5px;">SENSE:</span>
+          <div class="sheet-panel-field">
+            <label title="What this sense detects. '--' = not a sense row (normal ability).">Detects:</label>
+            <select name="attr_ability_sense_detects" title="What this sense detects. '--' = not a sense row (normal ability)." style="width:112px !important;">
+              <option value="" selected>--</option>
+              <option value="visible">Visible Light</option>
+              <option value="infrared">Infrared</option>
+              <option value="ultraviolet">Ultraviolet</option>
+              <option value="audible">Audible Sound</option>
+              <option value="subsonic">Subsonic</option>
+              <option value="ultrasonic">Ultrasonic</option>
+              <option value="odors">Odors</option>
+              <option value="flavors">Flavors</option>
+              <option value="shapes">Shapes/Touch</option>
+              <option value="radio">Radio Waves</option>
+              <option value="mental">Mental Waves</option>
+              <option value="mood">Mood/Emotion</option>
+              <option value="life">Life Energy</option>
+              <option value="magic">Magical Energy</option>
+              <option value="magnetism">Magnetism</option>
+              <option value="radiation">Radiation</option>
+              <option value="danger">Danger</option>
+              <option value="motion">Motion</option>
+              <option value="time">Time</option>
+              <option value="radar">Radar</option>
+              <option value="xrays">X-Rays</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Sensory level. None (removed) = Diminished Sense weakness: CP refunds the default's build cost (Blind -15, Deaf -20); treated as always-on by the engine.">Level:</label>
+            <select name="attr_ability_sense_level" title="Sensory level. None (removed) = Diminished Sense weakness: CP refunds the default's build cost (Blind -15, Deaf -20); treated as always-on by the engine." style="width:92px !important;">
+              <option value="basic" selected>Basic (5)</option>
+              <option value="full">Full (10)</option>
+              <option value="analytical">Analytical (20)</option>
+              <option value="minimum">Minimum (2.5)</option>
+              <option value="none">None (removed)</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Standard Diminished Senses. Nearsighted/Farsighted/No Depth apply automatically from attack range; Dayblind is a GM toggle; color-blindness is narrative.">Weakness:</label>
+            <select name="attr_ability_sense_weakness" title="Standard Diminished Senses. Nearsighted/Farsighted/No Depth apply automatically from attack range; Dayblind is a GM toggle; color-blindness is narrative." style="width:118px !important;">
+              <option value="" selected>--</option>
+              <option value="dayblind">Dayblind (-2.5)</option>
+              <option value="nearsighted">Nearsighted (-2.5)</option>
+              <option value="farsighted">Farsighted (-2.5)</option>
+              <option value="nodepth">No Depth Perc. (-5)</option>
+              <option value="cbpart">Color-blind part. (-2.5)</option>
+              <option value="cbtotal">Color-blind total (-5)</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_sense_radiates" value="1" title="Stimulus radiates (auto-derived from Detects; override for odd builds). Radiating stimuli allow IN+6 perception vs range penalties with a Ranged sense." />
+            <label title="Stimulus radiates (auto-derived from Detects)">Radiates</label>
+          </div>
+        </div>
+        <div class="sheet-panel-row">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_sense_ranged" value="1" title="Ranged (+5): use at IN/2 inches, or IN+6 vs range penalties if the stimulus radiates" />
+            <label title="Ranged (+5)">Ranged</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Global (+10 all directions / +5 horizontal circle)">Global:</label>
+            <select name="attr_ability_sense_global" title="Global (+10 all directions / +5 horizontal circle)" style="width:70px !important;">
+              <option value="" selected>None</option>
+              <option value="circle">Circle (+5)</option>
+              <option value="full">Full (+10)</option>
+            </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Signed check modifier: positive = Acute (+3 per +2.5 CP); negative = Imperceptive, this sense only (-3 per -5 CP). Use multiples of 3.">Chk mod</label>
+            <input type="text" name="attr_ability_sense_chkmod" maxlength="3" style="width:26px !important;" title="Signed check modifier: positive = Acute (+3 per +2.5 CP); negative = Imperceptive, this sense only (-3 per -5 CP). Use multiples of 3." placeholder="0" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Telescopic: +2 vs range penalties per +2.5 CP. Use multiples of 2.">Tele +</label>
+            <input type="text" name="attr_ability_sense_tele" maxlength="3" style="width:26px !important;" title="Telescopic: +2 vs range penalties per +2.5 CP. Use multiples of 2." placeholder="0" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Amplified: ranks of sensory dampening (Darkness) ignored, +5 each">Amp</label>
+            <input type="text" name="attr_ability_sense_amp" maxlength="2" style="width:22px !important;" title="Amplified: ranks of sensory dampening (Darkness) ignored, +5 each" placeholder="0" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Protected: ranks of sensory overload (Glare/Flash) ignored, +5 each">Prot</label>
+            <input type="text" name="attr_ability_sense_prot" maxlength="2" style="width:22px !important;" title="Protected: ranks of sensory overload (Glare/Flash) ignored, +5 each" placeholder="0" />
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_sense_tracking" value="1" title="Tracking (+2.5): +3 on tracking task checks (3.1.6)" />
+            <label title="Tracking (+2.5)">Track</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Misc CP rider for extras not covered by the standard fields (e.g. touch's +5 pain/temperature detection, custom GM-approved modifiers)">Misc</label>
+            <input type="text" name="attr_ability_sense_misc" maxlength="5" style="width:30px !important;" title="Misc CP rider for extras not covered by the standard fields (e.g. touch's +5 pain/temperature detection)" placeholder="0" />
+          </div>
+        </div>
+        <div class="sheet-panel-row">
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_sense_pen" value="1" title="Penetrating (+10): ignores blocking obstacles; specify a common barrier that still blocks it" />
+            <label title="Penetrating (+10)">Penetr.</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label>blocked by:</label>
+            <input type="text" name="attr_ability_sense_pen_block" style="width:80px !important;" placeholder="e.g. lead" title="Common barrier that still blocks the Penetrating sense" />
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_sense_precog" value="1" title="Precognitive (+15): sense the future; time-difficulty procedure per the HS rules" />
+            <label title="Precognitive (+15)">Precog</label>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_ability_sense_retro" value="1" title="Retrocognitive (+15): sense the past" />
+            <label title="Retrocognitive (+15)">Retro</label>
+          </div>
+          <div class="sheet-panel-field">
+            <input type="text" name="attr_ability_sense_cp_calc" readonly style="width:200px !important; border:none !important; background:transparent !important; color:#5b7a3a !important; font-weight:bold;" title="Computed sense cost (before general ability modifiers). Includes the default-sense credit when upgrading a default, and the refund when Level = None. Compare with the row's CP field." />
+          </div>
+        </div>
+
         <!-- Row 2: BC modifiers + defense -->
         <div class="sheet-panel-row" style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px; gap:4px 8px !important;">
           <span style="color:#888; font-size:9px;">BC:</span>
@@ -1742,7 +1872,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Row 4: Codes -->
         <div style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
           <label style="color:#888; font-size:9px; display:block; margin-bottom:2px;" title="Effect Codes for API automation">Codes:</label>
-          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, field:darkness:2:1:9..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR | field:darkness|glare:RANKS:SENSES:DIAM | field:glow:DIAM" />
+          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, field:darkness:2:1:9..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR | field:darkness|glare:RANKS:SENSES:DIAM | field:glow:DIAM | sense:TYPE:LEVEL[:rng,glob,tele4,chk+3,weak=nearsighted,...]" />
         </div>
 
         <!-- Info button -->
@@ -4774,6 +4904,105 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     calcIPTotals();
   });
 
+  /* ===== Heightened/Diminished Sense workers (v44.60) ===== */
+
+  var SENSE_RADIATING = { visible:1, infrared:1, ultraviolet:1, audible:1, subsonic:1, ultrasonic:1,
+    odors:1, radio:1, mental:1, mood:1, life:1, magic:1, magnetism:1, radiation:1, danger:1, xrays:1 };
+  /* default human senses: total free build cost (for upgrade credit / removal refund) */
+  var SENSE_DEFAULT_COST = { visible:15, audible:20, odors:20, shapes:20, flavors:5, time:5 };
+  var SENSE_LEVEL_COST = { basic:5, full:10, analytical:20, minimum:2.5, none:0 };
+  var SENSE_WEAKNESS_COST = { dayblind:-2.5, nearsighted:-2.5, farsighted:-2.5, nodepth:-5, cbpart:-2.5, cbtotal:-5 };
+
+  function computeSenseCost(v, prefix) {
+    var detects = v[prefix + "_ability_sense_detects"] || "";
+    if (!detects) return null; /* not a sense row */
+    var level = v[prefix + "_ability_sense_level"] || "basic";
+    var num = function(x) { var n = parseFloat(x); return isNaN(n) ? 0 : n; };
+    var parts = [];
+    var cost = 0;
+
+    if (level === "none") {
+      /* Diminished Sense removal: refund the default's build cost */
+      var refund = SENSE_DEFAULT_COST[detects] || 0;
+      cost = -refund;
+      parts.push(refund > 0 ? ("removal refund -" + refund) : "not a default sense (0)");
+    } else {
+      cost += SENSE_LEVEL_COST[level] || 5;
+      parts.push(level + " " + (SENSE_LEVEL_COST[level] || 5));
+      if (v[prefix + "_ability_sense_ranged"] === "1") { cost += 5; parts.push("rng 5"); }
+      var glob = v[prefix + "_ability_sense_global"] || "";
+      if (glob === "circle") { cost += 5; parts.push("glob 5"); }
+      else if (glob === "full") { cost += 10; parts.push("glob 10"); }
+      var chk = num(v[prefix + "_ability_sense_chkmod"]);
+      if (chk > 0) { var c1 = (chk / 3) * 2.5; cost += c1; parts.push("acute+" + chk + " " + c1); }
+      else if (chk < 0) { var c2 = (chk / 3) * 5; cost += c2; parts.push("impercep" + chk + " " + c2); }
+      var tele = num(v[prefix + "_ability_sense_tele"]);
+      if (tele > 0) { var c3 = (tele / 2) * 2.5; cost += c3; parts.push("tele+" + tele + " " + c3); }
+      var amp = num(v[prefix + "_ability_sense_amp"]);
+      if (amp > 0) { cost += amp * 5; parts.push("amp" + amp + " " + (amp * 5)); }
+      var prot = num(v[prefix + "_ability_sense_prot"]);
+      if (prot > 0) { cost += prot * 5; parts.push("prot" + prot + " " + (prot * 5)); }
+      if (v[prefix + "_ability_sense_tracking"] === "1") { cost += 2.5; parts.push("track 2.5"); }
+      if (v[prefix + "_ability_sense_pen"] === "1") { cost += 10; parts.push("pen 10"); }
+      if (v[prefix + "_ability_sense_precog"] === "1") { cost += 15; parts.push("precog 15"); }
+      if (v[prefix + "_ability_sense_retro"] === "1") { cost += 15; parts.push("retro 15"); }
+      var misc = num(v[prefix + "_ability_sense_misc"]);
+      if (misc !== 0) { cost += misc; parts.push("misc " + misc); }
+      /* upgrading a default sense: pay only the difference */
+      var credit = SENSE_DEFAULT_COST[detects] || 0;
+      if (credit > 0) { cost -= credit; parts.push("default credit -" + credit); }
+    }
+    var wk = v[prefix + "_ability_sense_weakness"] || "";
+    if (wk && SENSE_WEAKNESS_COST[wk] !== undefined) { cost += SENSE_WEAKNESS_COST[wk]; parts.push(wk + " " + SENSE_WEAKNESS_COST[wk]); }
+
+    var rowCP = num(v[prefix + "_ability_cp"]);
+    var mark = (rowCP === cost) ? "\u2713" : ("\u2717 row CP " + rowCP);
+    return "Sense: " + cost + " CP " + mark + " (" + parts.join(", ") + ")";
+  }
+
+  var SENSE_ATTRS = ["detects","level","weakness","ranged","global","chkmod","tele","amp","prot","tracking","pen","precog","retro","misc"];
+  var senseChangeEvents = SENSE_ATTRS.map(function(a) { return "change:repeating_abilities:ability_sense_" + a; }).join(" ") + " change:repeating_abilities:ability_cp";
+
+  on(senseChangeEvents, function(eventInfo) {
+    var m = eventInfo.sourceAttribute.match(/^(repeating_abilities_[^_]+)_/);
+    if (!m) return;
+    var prefix = m[1];
+    var attrList = SENSE_ATTRS.map(function(a) { return prefix + "_ability_sense_" + a; });
+    attrList.push(prefix + "_ability_cp");
+    getAttrs(attrList, function(v) {
+      var updates = {};
+      /* auto-derive Radiates when Detects changes */
+      if (eventInfo.sourceAttribute === prefix + "_ability_sense_detects") {
+        var d = v[prefix + "_ability_sense_detects"] || "";
+        updates[prefix + "_ability_sense_radiates"] = SENSE_RADIATING[d] ? "1" : "0";
+      }
+      var readout = computeSenseCost(v, prefix);
+      updates[prefix + "_ability_sense_cp_calc"] = readout || "";
+      setAttrs(updates);
+    });
+  });
+
+  function initSenseReadouts() {
+    getSectionIDs("repeating_abilities", function(ids) {
+      if (ids.length === 0) return;
+      var attrList = [];
+      ids.forEach(function(id) {
+        var prefix = "repeating_abilities_" + id;
+        SENSE_ATTRS.forEach(function(a) { attrList.push(prefix + "_ability_sense_" + a); });
+        attrList.push(prefix + "_ability_cp");
+      });
+      getAttrs(attrList, function(v) {
+        var updates = {};
+        ids.forEach(function(id) {
+          var prefix = "repeating_abilities_" + id;
+          var readout = computeSenseCost(v, prefix);
+          if (readout !== null) updates[prefix + "_ability_sense_cp_calc"] = readout;
+        });
+        if (Object.keys(updates).length > 0) setAttrs(updates);
+      });
+    });
+  }
+
   function initAbilityNotes() {
     getSectionIDs("repeating_abilities", function(ids) {
       if (ids.length === 0) return;
@@ -4849,6 +5078,39 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           if (glowMatch) {
             updates[prefix + "_ability_sense_field"] = "glow";
             updates[prefix + "_ability_sf_diameter"] = glowMatch[1];
+          }
+          
+          // sense:TYPE:LEVEL[:flag,flag,...] (v44.60) - Heightened/Diminished Sense.
+          // TYPE: visible|infrared|ultraviolet|audible|subsonic|ultrasonic|odors|
+          //   flavors|shapes|radio|mental|mood|life|magic|magnetism|radiation|
+          //   danger|motion|time|radar|xrays|other
+          // LEVEL: basic|full|analytical|minimum|none
+          // flags: rng, glob, glob5, chk<+-N>, tele<N>, amp<N>, prot<N>, track,
+          //   pen, precog, retro, weak=<dayblind|nearsighted|farsighted|nodepth|cbpart|cbtotal>
+          // e.g. sense:radar:full:rng,tele4,track  |  sense:visible:none (Blind)
+          var senseMatch = notesLower.match(/sense:(\w+):(basic|full|analytical|minimum|none)(?::([\w+\-=,]+))?/);
+          if (senseMatch) {
+            updates[prefix + "_ability_sense_detects"] = senseMatch[1];
+            updates[prefix + "_ability_sense_level"] = senseMatch[2];
+            var radSet = { visible:1, infrared:1, ultraviolet:1, audible:1, subsonic:1, ultrasonic:1,
+              odors:1, radio:1, mental:1, mood:1, life:1, magic:1, magnetism:1, radiation:1, danger:1, xrays:1 };
+            updates[prefix + "_ability_sense_radiates"] = radSet[senseMatch[1]] ? "1" : "0";
+            (senseMatch[3] || "").split(",").forEach(function(f) {
+              f = f.trim();
+              if (f === "rng") updates[prefix + "_ability_sense_ranged"] = "1";
+              else if (f === "glob") updates[prefix + "_ability_sense_global"] = "full";
+              else if (f === "glob5") updates[prefix + "_ability_sense_global"] = "circle";
+              else if (f === "track") updates[prefix + "_ability_sense_tracking"] = "1";
+              else if (f === "pen") updates[prefix + "_ability_sense_pen"] = "1";
+              else if (f === "precog") updates[prefix + "_ability_sense_precog"] = "1";
+              else if (f === "retro") updates[prefix + "_ability_sense_retro"] = "1";
+              else if (f.indexOf("weak=") === 0) updates[prefix + "_ability_sense_weakness"] = f.slice(5);
+              else if (f.indexOf("chk") === 0) updates[prefix + "_ability_sense_chkmod"] = f.slice(3);
+              else if (f.indexOf("tele") === 0) updates[prefix + "_ability_sense_tele"] = f.slice(4);
+              else if (f.indexOf("amp") === 0) updates[prefix + "_ability_sense_amp"] = f.slice(3);
+              else if (f.indexOf("prot") === 0) updates[prefix + "_ability_sense_prot"] = f.slice(4);
+              else if (f.indexOf("misc") === 0) updates[prefix + "_ability_sense_misc"] = f.slice(4);
+            });
           }
           
           if (notesLower.indexOf("conductive") !== -1) {
@@ -5074,6 +5336,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   on("sheet:opened", function() {
     recalcAbilityBonuses();
     initAbilityNotes();
+    initSenseReadouts();
     recalcAll();
     calcTotalEPs();
     calcSecurityClearance();
