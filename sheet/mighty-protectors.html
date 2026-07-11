@@ -1,5 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.56 - Plain-text Sense Loss label (emoji tofu fix)
+<!-- Mighty Protectors Roll20 Character Sheet v44.57 - Dazzle option in the Called Shot query
      Requires MP Engine v2.89.1+ for sense-loss save resolution.
+        v44.57: "Dazzle (-6 / blind)" added to the Called Shot roll query (engine v2.90.1
+          resolves it: no damage, ignores protection, EN save at the row's Init mod vs
+          dazzled 2 levels; recovery each between-rounds phase, no permanence on fumble)
         v44.56: Replace eye-emoji label on the Sense Loss select with plain text
           ("Sense Loss:") — Roll20 sheet fonts render the emoji as tofu (empty box)
         v44.55: Sense Loss select (attr_attack_sense_loss) on the save-attack row — Flash /
@@ -4155,8 +4158,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       updates.range_query = (v.query_range === "1" && !useApi) ? "?{Range Penalty|1-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
       updates.multi_query = v.query_multi === "1" ? "?{Actions This Phase|1 Action,0|2 Actions,-3|3 Actions,-6|4 Actions,-9|5 Actions,-12}" : "0";
       // Called shot: type query returns text for API, mod query returns number for calculation
-      updates.called_type_query = v.query_called === "1" ? "?{Called Shot|None|Head (-6 / x2 dmg)|Arm (-3 / saves)|Leg (-3 / saves)|Avoid Light Armor (-3)|Avoid Heavy Armor (-6)|Gear (-3 / break)}" : "None";
-      updates.called_mod_query = v.query_called === "1" ? "?{Called Shot|None,0|Head (-6 / x2 dmg),-6|Arm (-3 / saves),-3|Leg (-3 / saves),-3|Avoid Light Armor (-3),-3|Avoid Heavy Armor (-6),-6|Gear (-3 / break),-3}" : "0";
+      updates.called_type_query = v.query_called === "1" ? "?{Called Shot|None|Head (-6 / x2 dmg)|Arm (-3 / saves)|Leg (-3 / saves)|Avoid Light Armor (-3)|Avoid Heavy Armor (-6)|Gear (-3 / break)|Dazzle (-6 / blind)}" : "None";
+      updates.called_mod_query = v.query_called === "1" ? "?{Called Shot|None,0|Head (-6 / x2 dmg),-6|Arm (-3 / saves),-3|Leg (-3 / saves),-3|Avoid Light Armor (-3),-3|Avoid Heavy Armor (-6),-6|Gear (-3 / break),-3|Dazzle (-6 / blind),-6}" : "0";
       updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";
       updates.pushhb_query = v.query_pushhb === "1" ? "?{Push/Hold Back|0}" : "0";
       updates.push_query = updates.pushhb_query;

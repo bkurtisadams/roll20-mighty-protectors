@@ -1,4 +1,21 @@
-/* Mighty Protectors Roll20 API Engine v2.90.0 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.90.1 - 2026-07-10
+ * v2.90.1: DAZZLE CALLED SHOT (chunk 3) + FIELD RINGS.
+ *   Dazzle called shot (Light Control A, Laser): "Dazzle" in the called
+ *   shot maps (engine + !mp atk + sheet v44.57 query) at -6 to hit. On a
+ *   hit: no damage (saveDamage forced 0), no knockback, protection ignored
+ *   (goggles block entirely - GM adjudicated); the victim rolls the row's
+ *   EN save (Save BC defaults to EN if blank) at the row's Init mod - set
+ *   Init from the Laser CP table's Dazzle column. Failure = dazzled 2
+ *   levels via the standard sense-loss condition; recovery each between-
+ *   rounds phase at the row's Rec (blank = 0, NOT Flash's -12 default);
+ *   fumbled saves are NOT permanent (that rule is Flash-only). Works on
+ *   any attack row, so improvised dazzle attacks are possible.
+ *   Field rings: !mp darkness/glare --circle N draws a persistent dashed
+ *   ring of diameter N" centered on the selected token or --target (a
+ *   generic point token works); --circle off removes all rings of that
+ *   kind. Darkness rings near-black, Glare rings yellow. Visual only - no
+ *   membership tracking; toggle victims with --ranks/--on/--off as they
+ *   move. drawAreaMarker gained optional color/width params.
  * v2.90.0: TARGET ACQUISITION (4.6) replaces flat vision penalties. An
  *   attacker with impaired vision now rolls a perception check (IN save,
  *   3.0.1 confirm rolls for nat 1/20) mapped through the 4.6 sense-level
@@ -732,7 +749,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.90.0 FILE STARTING");
+log("MP ENGINE v2.90.1 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1093,6 +1110,45 @@ MP.Engine = (function () {
   // Usage: !mp darkness --ranks N --on   (selected tokens or --target ID)
   //        !mp darkness --off
   function cmdSenseField(msg, args, kind) {
+    const marker = CONDITION_MARKERS[kind];
+    const label = kind.charAt(0).toUpperCase() + kind.slice(1);
+
+    // v2.90.1: --circle N draws a persistent dashed field ring of diameter
+    // N inches centered on the selected token (or --target); --circle off
+    // removes all rings of this kind. Visual only - no membership tracking;
+    // toggle victims with --on/--off as they enter/leave. A generic point
+    // token works as the center.
+    if (args.circle !== undefined) {
+      if (!state.MP_Engine.senseRings) state.MP_Engine.senseRings = { darkness: [], glare: [] };
+      if (!state.MP_Engine.senseRings[kind]) state.MP_Engine.senseRings[kind] = [];
+      const rings = state.MP_Engine.senseRings[kind];
+
+      if (String(args.circle).toLowerCase() === "off") {
+        let removed = 0;
+        rings.forEach(rec => { const p = getObj("path", rec.markerId); if (p) { p.remove(); removed++; } });
+        state.MP_Engine.senseRings[kind] = [];
+        return ch("MP", `/w gm <b>${label} Field:</b> removed ${removed} ring(s).`);
+      }
+
+      const diameter = num(args.circle, 0);
+      if (diameter <= 0) return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp ${kind} --circle DIAMETER</code> (inches) or <code>--circle off</code>.`);
+      let centerTok = args.target ? getObj("graphic", args.target) : null;
+      if (!centerTok && msg.selected && msg.selected.length) {
+        const s = msg.selected.find(x => x._type === "graphic");
+        if (s) centerTok = getObj("graphic", s._id);
+      }
+      if (!centerTok) return ch("MP", `/w gm <b>MP:</b> Select a token (or --target) as the field center.`);
+
+      const pageId = centerTok.get("_pageid");
+      const page = getObj("page", pageId);
+      const ppi = 70 * ((page && page.get("snapping_increment")) || 1);
+      const ringColor = (kind === "darkness") ? "#111111" : "#f4d03f";
+      const markerId = drawAreaMarker(pageId, centerTok.get("left"), centerTok.get("top"), diameter / 2, ppi, ringColor, 4);
+      if (!markerId) return ch("MP", `/w gm <b>MP:</b> Could not draw ring (AREA_MARKER disabled?).`);
+      rings.push({ markerId, pageId, created: Date.now() });
+      return ch("MP", `/w gm <b>${label} Field:</b> ${diameter}" ring drawn at <b>${esc(centerTok.get("name") || "point")}</b>. Toggle affected tokens with <code>!mp ${kind} --ranks N --on/--off</code>. <code>!mp ${kind} --circle off</code> removes ring(s).`);
+    }
+
     const ranks = Math.max(1, Math.min(3, num(args.ranks, 2)));
     const turnOff = ("off" in args); // bare --off parses as args.off = "1"
     const turnOn = !turnOff;         // default is ON (--on optional)
@@ -1106,8 +1162,6 @@ MP.Engine = (function () {
       return ch("MP", `/w gm <b>MP:</b> Select token(s) or use --target. Usage: <code>!mp ${kind} --ranks 1-3 --on|--off</code>`);
     }
 
-    const marker = CONDITION_MARKERS[kind];
-    const label = kind.charAt(0).toUpperCase() + kind.slice(1);
     const applied = [], removed = [];
 
     ids.forEach(tokId => {
@@ -2180,7 +2234,7 @@ function generateRowID() {
   }
   
   // Draw a dashed circle path marking the area effect (map layer, unmovable by players)
-  function drawAreaMarker(pageId, centerX, centerY, radiusInches, pixelsPerInch) {
+  function drawAreaMarker(pageId, centerX, centerY, radiusInches, pixelsPerInch, color, width) {
     if (!CFG.AREA_MARKER) return null;
     const r = radiusInches * pixelsPerInch;
     if (!(r > 0)) return null;
@@ -2197,8 +2251,8 @@ function generateRowID() {
     const path = createObj("path", {
       _pageid: pageId,
       layer: "map",
-      stroke: CFG.AREA_MARKER_COLOR,
-      stroke_width: CFG.AREA_MARKER_WIDTH,
+      stroke: color || CFG.AREA_MARKER_COLOR,
+      stroke_width: width || CFG.AREA_MARKER_WIDTH,
       fill: "transparent",
       left: centerX,
       top: centerY,
@@ -3182,7 +3236,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       "none": "None", "head": "Head", "arm": "Arm", "leg": "Leg",
       "avoid light armor": "Avoid Light Armor", "light": "Avoid Light Armor",
       "avoid heavy armor": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
-      "gear": "Gear"
+      "gear": "Gear", "dazzle": "Dazzle"
     };
     
     // Reverse map: penalty number -> type (for when sheet sends numeric value)
@@ -3196,7 +3250,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     // Get penalty: if input was numeric, use it directly; otherwise lookup by type
-    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3 };
+    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6 };
     let calledShotPenalty = calledShotPenalties[calledShotType];
     if (calledShotPenalty === undefined) {
       // Input might be raw number like "-6" or "-3"
@@ -3209,6 +3263,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isArmShot = calledShotType === "Arm";
     const isAvoidArmor = calledShotType === "Avoid Light Armor" || calledShotType === "Avoid Heavy Armor";
     const isGearShot = calledShotType === "Gear";
+    // v2.90.1: Laser dazzle called shot (Light Control A) - -6 to hit, no
+    // damage, ignores protection (goggles block entirely, GM-adjudicated).
+    // On hit the victim rolls the row's EN save vs the Laser CP table's
+    // Dazzle mod; recovery each between-rounds phase (no extra penalty).
+    const isDazzleShot = calledShotType === "Dazzle";
 
     const atkIsVehicle = isVehicleMode(atkCharId);
     // Vehicle weapons live in repeating_vehsystems, not repeating_attacks. Map the
@@ -3275,27 +3334,31 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const dmgTypeStr = resolveDmgType(getAtk("attack_dmgtype") || "Kin", fields.type);
     const dmgSubtype = (getAtk("attack_subtype") || fields.subtype || "").trim().toLowerCase();
     
-    const isSaveAttack = (getAtk("attack_is_save") === "1") || (atkType === "sav");
-    const saveBC = getAtk("attack_save_bc") || "";
+    const isSaveAttack = (getAtk("attack_is_save") === "1") || (atkType === "sav") || isDazzleShot;
+    const saveBC = getAtk("attack_save_bc") || (isDazzleShot ? "EN" : "");
     const saveMod = num(getAtk("attack_save_mod"), 0);
     // v2.89.1: Sense Loss (Flash) — levels of visible-light sense lost on a
     // failed save (1 Mild / 2 Flash / 3 Strong). Recovery each between-rounds
     // phase at -12 per the rules; used as the default when Rec is blank.
-    const senseLoss = isSaveAttack ? Math.max(0, Math.min(3, num(getAtk("attack_sense_loss"), 0))) : 0;
+    // v2.90.1: a Dazzle called shot forces senseLoss 2 (temporary blindness);
+    // its recovery has NO extra penalty (blank Rec = 0, not Flash's -12).
+    const senseLoss = isDazzleShot
+      ? Math.max(2, Math.min(3, num(getAtk("attack_sense_loss"), 0)))
+      : (isSaveAttack ? Math.max(0, Math.min(3, num(getAtk("attack_sense_loss"), 0))) : 0);
     const recRaw = getAtk("attack_save_rec") || getAtk("attack_recovery");
-    const recMod = (senseLoss > 0 && String(recRaw || "").trim() === "") ? -12 : num(recRaw, 0);
+    const recMod = (!isDazzleShot && senseLoss > 0 && String(recRaw || "").trim() === "") ? -12 : num(recRaw, 0);
     let recTime = getAtk("attack_save_rec_time") || "1 round";
-    const noDamage = (getAtk("attack_no_damage") === "1");
+    const noDamage = (getAtk("attack_no_damage") === "1") || isDazzleShot;
     
     const atkDamageExpr = getAtk("attack_damage") || "";
-    const saveDamage = isSaveAttack ? rollExpr(atkDamageExpr) : 0;
+    const saveDamage = (isSaveAttack && !isDazzleShot) ? rollExpr(atkDamageExpr) : 0;
     
     const atkNotes = getAtk("attack_notes") || "";
     const noDamageType = isSaveAttack && notesIndicateNoDamageType(atkNotes, atkName);
     const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
     const range = getAtk("attack_range") || fields.range || "-";
     const kbChecked = getAtk("attack_kb");
-    const causesKB = (getAtk("attack_is_siphon") !== "1") && ((kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes"));
+    const causesKB = !isDazzleShot && (getAtk("attack_is_siphon") !== "1") && ((kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes"));
 
     // Duration modifier (MP Modifiers, "Duration"): a durational attack repeats its
     // effect on each subsequent Phase 0 until it expires. 1 Round = Instant (no badge).
@@ -3554,7 +3617,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       outcome, isCrit, isFumble, critResult, fumbleResult,
       damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType,
       atkAP, isSaveAttack, saveBC, saveMod, recMod, recTime, noDamage, saveDamage,
-      senseLoss,
+      senseLoss, isDazzleShot,
       snBP, snMaxBP, snType, causesKB,
       isSiphon: isSiphonAttack, siphonDrain, siphonMode, siphonBC, siphonCat,
       isPushing, pushAmount, rangeData, created: Date.now(),
@@ -3787,7 +3850,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           "Head": "HEAD SHOT (-6) - Hits DOUBLED!", "Leg": "LEG SHOT (-3) - Saves required",
           "Arm": "ARM SHOT (-3) - Saves required", "Avoid Light Armor": "AVOID LIGHT ARMOR (-3)",
           "Avoid Heavy Armor": "AVOID HEAVY ARMOR (-6)", "Gear": "GEAR SHOT (-3)",
-          "Called": "CALLED SHOT (-3)"
+          "Called": "CALLED SHOT (-3)",
+          "Dazzle": "DAZZLE SHOT (-6) - no damage, ignores protection, EN save vs blind (goggles block)"
         };
         html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#e67e22;">${labels[calledShotType] || `CALLED SHOT: ${calledShotType}`}</div>`;
         if (isHeadShot) {
@@ -6707,8 +6771,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         : (isDamagingPoison ? "damaging_poison" : inferConditionType(rec.atkName, rec.saveBC, rec.dmgTypeStr, rawCondDamage));
       const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
       
-      // Check for fumble = permanent effect (Flash: fumbled initial save = permanently blinded)
-      const isPermanent = isFumble && (isSenseLossAttack || atkNameLower.includes("flash"));
+      // Check for fumble = permanent effect (Flash: fumbled initial save =
+      // permanently blinded). Laser DAZZLE shots have no permanence rule.
+      const isPermanent = isFumble && !rec.isDazzleShot && (isSenseLossAttack || atkNameLower.includes("flash"));
       
       // For Damaging Poison, use the damage value
       const hasDamage = conditionDealsDamage(condType);
@@ -9446,7 +9511,7 @@ function cmdStance(msg, args) {
       "none": "None", "head": "Head", "arm": "Arm", "leg": "Leg",
       "avoidlight": "Avoid Light Armor", "light": "Avoid Light Armor",
       "avoidheavy": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
-      "gear": "Gear"
+      "gear": "Gear", "dazzle": "Dazzle"
     };
     const calledType = calledMap[calledRaw.toLowerCase()] || calledRaw;
 
@@ -9985,7 +10050,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.90.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.90.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9995,6 +10060,7 @@ function cmdStance(msg, args) {
           <code>!mp bleed list | start | stop --target TOKID</code> - Bleeding 4.8.4.2 (1 Power/game min)<br/>
           <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Darkness field on selected tokens (GM)<br/>
           <code>!mp glare --ranks 1-3 [--off] [--target TOKID]</code> - Glare field (cancels Darkness ranks) (GM)<br/>
+          <code>!mp darkness|glare --circle N | --circle off</code> - Draw/remove a persistent N" field ring at selected token (GM)<br/>
           <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
           <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
@@ -11382,11 +11448,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.90.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.90.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.90.0 READY");
+  log("MP ENGINE v2.90.1 READY");
 });
