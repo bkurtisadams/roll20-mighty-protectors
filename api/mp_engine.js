@@ -1,4 +1,25 @@
-/* Mighty Protectors Roll20 API Engine v2.92.1 - 2026-07-11
+/* Mighty Protectors Roll20 API Engine v2.93.0 - 2026-07-11
+ * v2.93.0: WEAKNESS AUTOMATION (Unliving, Can't Feel Pain, Compulsion/
+ *   Phobia, Special Requirement). Trait tags on ability-row notes:
+ *   unliving:PCT and nopain (read via getWeaknessFlags, no new sheet UI).
+ *   UNLIVING healing gate in !mp dailyheal: 0% never self-heals ("must
+ *   be repaired by others" - !mp medical stays open per RAW); 50% heals
+ *   only below half max Hits. CAN'T FEEL PAIN: damage cards for flagged
+ *   defenders append an IN-save reminder/button for surprise attacks.
+ *   NEW !mp willcheck --mod -N [--present] [--phobia] [--stimulus "x"]
+ *   (GM): CL save vs compulsion/phobia/psychosis; failure = succumbed
+ *   condition (screaming marker) with per-round recovery at the initial
+ *   difficulty, -4 while the stimulus is present, riding !mp recover;
+ *   phobia successes still note "cannot directly confront" per RAW.
+ *   NEW !mp discomfort | --off: Special Requirement unmet = -3 on ALL
+ *   rolls to hit and saves - wired into the to-hit assembly, cmdSave
+ *   TN + recovery TN, acquisition modifier, and !mp perceive (drink-me
+ *   marker, environmental, cleared by --off). NEW !mp require (GM):
+ *   game-clock requirement registry - --interval 12h/3d/1w, --consequence,
+ *   --name; --met stamps the clock; overdue check runs on round advance
+ *   and !mp time advance, nagging ONCE per starvation period with Apply
+ *   Discomfort / Met buttons; !mp require list shows due times.
+ *   !mp restore clears drink-me/screaming markers.
  * v2.92.1: RANGED-SENSE REACH RULES (RAW, Heightened Senses). A Ranged
  *   sense whose stimulus RADIATES works at any range with +6 vs range
  *   penalties (IN+6); a Ranged NON-radiating sense (radar, motion) is
@@ -859,7 +880,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.92.1 FILE STARTING");
+log("MP ENGINE v2.93.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1070,6 +1091,8 @@ MP.Engine = (function () {
     glare: "aura",
     invisible: "half-haze",
     sneaking: "tread",
+    discomfort: "drink-me",
+    succumbed: "screaming",
     generic: "padlock"
   };
 
@@ -1575,7 +1598,8 @@ MP.Engine = (function () {
       rngMod = Math.min(0, num(rd.penalty, 0) + num(reach.bonus, 0));
       if (num(rd.penalty, 0) !== 0) rngNote = ` ${rngMod} range${reach.bonus ? ` (pen ${rd.penalty}, +${reach.bonus} ${s.rad ? "radiates" : ""}${s.tele ? "/tele" : ""})` : ""}`;
     }
-    const mod = num(args.mod, 0) + num(s.chk, 0) + oppMod + rngMod;
+    const discMod = (obsTok && hasDiscomfort(obsTok.id)) ? -3 : 0;
+    const mod = num(args.mod, 0) + num(s.chk, 0) + oppMod + rngMod + discMod;
     const sneakGate = !!oppNote && s.lvl === 1;
     const acq = rollAcquisition(obsChar.id, s.lvl, undefined, mod, sneakGate);
 
@@ -1593,6 +1617,7 @@ MP.Engine = (function () {
     if (num(s.chk, 0)) modBits.push(`${s.chk > 0 ? "+" : ""}${s.chk} chk`);
     if (oppNote) modBits.push(oppNote.trim());
     if (rngNote) modBits.push(rngNote.trim());
+    if (discMod) modBits.push(`${discMod} discomfort`);
 
     let out = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
     out += `<b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b> by ${esc(s.label || key)} (${lvlLabel})<br/>`;
@@ -1635,6 +1660,227 @@ MP.Engine = (function () {
     });
     out += `If vision blocked, acquires by: <b>${bestKey ? esc(sm[bestKey].label || bestKey) : "NO USABLE SENSE"}</b>`;
     ch("MP", `/w gm ` + out);
+  }
+
+  // -------------------------
+  // WEAKNESSES (v2.93.0)
+  // -------------------------
+  // Static trait tags on ability-row notes: unliving:PCT (self-repair %),
+  // nopain (Can't Feel Pain). Read like the sense rows - no new sheet UI.
+  function getWeaknessFlags(charId) {
+    const flags = { unliving: null, nopain: false };
+    if (!charId) return flags;
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    attrs.forEach(a => {
+      const n = a.get("name");
+      if (!/^repeating_abilities_.+_ability_notes$/.test(n)) return;
+      const notes = String(a.get("current") || "").toLowerCase();
+      const um = notes.match(/unliving:(\d+)/);
+      if (um) flags.unliving = num(um[1], 0);
+      if (/\bnopain\b/.test(notes)) flags.nopain = true;
+    });
+    return flags;
+  }
+
+  // Unliving healing gate (RAW): 50% self-repair heals only below half Hits;
+  // 0% never self-heals. External care (!mp medical) is always allowed.
+  function unlivingHealBlock(charId, tok) {
+    const flags = getWeaknessFlags(charId);
+    if (flags.unliving === null) return null;
+    if (flags.unliving <= 0) {
+      return `Unliving (0% self-repair) — cannot heal naturally; must be repaired by others (<code>!mp medical</code>).`;
+    }
+    if (flags.unliving <= 50) {
+      const hits0 = getResource(tok, charId, CFG.HITS_BAR, CFG.HITS_ATTR);
+      const hitsMax = getAttrNum(charId, CFG.HITS_MAX_ATTR, 0);
+      const half = Math.ceil(hitsMax / 2);
+      if (hitsMax > 0 && hits0 >= half) {
+        return `Unliving (50% self-repair) — only heals below half Hits (${half}); currently at ${hits0}/${hitsMax}.`;
+      }
+    }
+    return null;
+  }
+
+  function hasDiscomfort(tokId) {
+    const conds = (state.MP_Engine.conditions && state.MP_Engine.conditions[tokId]) || [];
+    return conds.some(c => c.type === "discomfort");
+  }
+
+  // !mp willcheck --mod -N [--present] [--phobia] [--stimulus "text"]
+  // (selected token or --target). Compulsion/Phobia/Psychosis: CL save vs
+  // acting on it; failure = succumbed condition with per-round recovery at
+  // the initial difficulty, -4 more while the stimulus is present. Phobia:
+  // even a SUCCESSFUL save can't directly confront the object (RAW).
+  function cmdWillCheck(msg, args) {
+    let tok = args.target ? getObj("graphic", args.target) : null;
+    if (!tok && msg.selected && msg.selected.length) {
+      const s = msg.selected.find(x => x._type === "graphic");
+      if (s) tok = getObj("graphic", s._id);
+    }
+    const char = tok ? getCharFromToken(tok) : null;
+    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Select a linked token. Usage: <code>!mp willcheck --mod -5 [--present] [--phobia] [--stimulus "spiders"]</code>`);
+    const name = char.get("name");
+    const mod = num(args.mod, 0);
+    const present = ("present" in args);
+    const isPhobia = ("phobia" in args);
+    const stim = args.stimulus || (isPhobia ? "the object of fear" : "the stimulus");
+    const clSave = getAttrNum(char.id, "cool_save", 10);
+    const tn = clSave + mod;
+    const d20 = randomInteger(20);
+    const pass = (d20 === 1) || (d20 !== 20 && d20 <= tn);
+
+    let out = `<div style="background:#1a1a2e; border:2px solid ${isPhobia ? "#e67e22" : "#8e44ad"}; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    out += `<b style="color:${isPhobia ? "#f0a35e" : "#c39bd3"};">${isPhobia ? "😱 Phobia" : "🌀 Will Check"}</b> — <b>${esc(name)}</b> vs ${esc(stim)}<br/>`;
+    out += `CL ${clSave}-${mod !== 0 ? ` ${mod} = ${tn}-` : ""} · rolled <b>${d20}</b> — `;
+    if (pass) {
+      out += `<b style="color:#2ecc71;">holds firm</b>`;
+      if (isPhobia) out += `<br/><span style="font-size:11px; color:#f4d03f;">Keeps composure, but still CANNOT directly confront ${esc(stim)} (RAW).</span>`;
+      out += `</div>`;
+      return chCombat("MP", `${wt(msg)}` + out, char.id);
+    }
+    // failure: succumbed condition, recovery per round at initial
+    // difficulty, -4 more if the stimulus is still present
+    if (!state.MP_Engine.conditions[tok.id]) state.MP_Engine.conditions[tok.id] = [];
+    const condList = state.MP_Engine.conditions[tok.id];
+    const recTN = clSave + mod + (present ? -4 : 0);
+    const marker = "screaming";
+    const condition = {
+      type: "succumbed", sourceAtk: isPhobia ? `Phobia (${stim})` : `Compulsion (${stim})`,
+      saveBC: "CL", saveTN: tn, recTN: recTN, recTime: "1 round",
+      startRound: state.MP_Engine.currentRound, marker: marker, created: Date.now(),
+      permanent: false, senseLevels: 0,
+      effectDesc: isPhobia ? `Panicked by ${stim} - must flee / cannot act against it` : `Acting on compulsion: ${stim}`
+    };
+    let idx = condList.findIndex(c => c.type === "succumbed");
+    if (idx >= 0) condList[idx] = condition; else { condList.push(condition); idx = condList.length - 1; }
+    tok.set("status_" + marker, true);
+    out += `<b style="color:#e94560;">SUCCUMBS</b> — ${esc(condition.effectDesc)}<br/>`;
+    out += `<span style="font-size:11px;">Recovery: CL <b>${recTN}-</b> each round${present ? " (-4: stimulus present)" : ""}</span> ${btn(`Recovery`, `!mp recover --target ${tok.id} --idx ${idx}`)}`;
+    out += `</div>`;
+    chCombat("MP", `${wt(msg)}` + out, char.id);
+  }
+
+  // !mp discomfort [--off] (selected tokens or --target). Special
+  // Requirement unmet: -3 on ALL saves and rolls to hit (attacks, saves,
+  // perception/acquisition) until the requirement is met.
+  function cmdDiscomfort(msg, args) {
+    const turnOff = ("off" in args);
+    const marker = CONDITION_MARKERS.discomfort;
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else if (msg.selected && msg.selected.length) msg.selected.forEach(s => { if (s._type === "graphic") ids.push(s._id); });
+    if (!ids.length) return ch("MP", `${wt(msg)}<b>MP:</b> Select token(s) or use --target. Usage: <code>!mp discomfort | --off</code>`);
+    const lines = [];
+    ids.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      if (!tok) return;
+      const tokChar = getCharFromToken(tok);
+      const tokName = tokChar ? tokChar.get("name") : (tok.get("name") || "token");
+      if (!state.MP_Engine.conditions[tokId]) state.MP_Engine.conditions[tokId] = [];
+      const conds = state.MP_Engine.conditions[tokId];
+      const idx = conds.findIndex(c => c.type === "discomfort");
+      if (turnOff) {
+        if (idx >= 0) {
+          conds.splice(idx, 1);
+          if (!conds.some(c => c.marker === marker)) tok.set("status_" + marker, false);
+          lines.push(`<b>${esc(tokName)}</b> — requirement met, discomfort ends.`);
+        } else lines.push(`<b>${esc(tokName)}</b> — wasn't in discomfort.`);
+        return;
+      }
+      const condition = {
+        type: "discomfort", sourceAtk: "Special Requirement unmet", marker: marker,
+        permanent: false, environmental: true,
+        effectDesc: "Discomfort: -3 on all saves and rolls to hit until the requirement is met",
+        startRound: state.MP_Engine.currentRound, created: Date.now()
+      };
+      if (idx >= 0) conds[idx] = condition; else conds.push(condition);
+      tok.set("status_" + marker, true);
+      lines.push(`<b>${esc(tokName)}</b> — DISCOMFORT (-3 attacks, saves, perception).`);
+    });
+    let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>🥀 Special Requirement</b>`;
+    lines.forEach(l => out += `<br/>` + l);
+    out += `</div>`;
+    ch("MP", `${wt(msg)}` + out);
+  }
+
+  // Requirement clock (Special Requirement frequency, game-clock enforced).
+  // !mp require --interval 7d --consequence discomfort [--name "Life Leech"]
+  //   (select the character's token once to register)
+  // !mp require --met | --off | list
+  function parseIntervalSec(s) {
+    const m = /^(\d+(?:\.\d+)?)([hdw])$/.exec(String(s || "").trim());
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    return Math.round(n * ({ h: 3600, d: 86400, w: 604800 })[m[2]]);
+  }
+
+  function cmdRequire(msg, args) {
+    if (!state.MP_Engine.requirements) state.MP_Engine.requirements = {};
+    const reqs = state.MP_Engine.requirements;
+    const sub = (msg.content.split(/\s+/)[2] || "").toLowerCase();
+    if (sub === "list") {
+      const keys = Object.keys(reqs);
+      if (!keys.length) return ch("MP", `/w gm <b>MP:</b> No requirements registered.`);
+      let out = `<b>Special Requirements</b>`;
+      keys.forEach(cid => {
+        const r = reqs[cid];
+        const dueIn = (r.lastMetMs + r.intervalSec * 1000) - state.MP_Engine.gameClock.ms;
+        out += `<br/><b>${esc(r.charName)}</b>: ${esc(r.name)} every ${esc(r.intervalLabel)} — ${dueIn >= 0 ? `due in ${Math.ceil(dueIn / 86400000)}d` : `<span style="color:#ff6b6b;">OVERDUE ${Math.ceil(-dueIn / 86400000)}d</span>`}`;
+      });
+      return ch("MP", `/w gm ` + out);
+    }
+    // resolve character
+    let char = null, tok = null;
+    if (args.charid) char = getObj("character", args.charid);
+    if (!char && msg.selected && msg.selected.length) {
+      const s = msg.selected.find(x => x._type === "graphic");
+      tok = s ? getObj("graphic", s._id) : null;
+      char = tok ? getCharFromToken(tok) : null;
+    }
+    if (!char) return ch("MP", `/w gm <b>MP:</b> Select the character's token (or --charid). Usage: <code>!mp require --interval 7d --consequence discomfort --name "Life Leech"</code> | <code>--met</code> | <code>--off</code> | <code>list</code>`);
+
+    if ("off" in args) {
+      delete reqs[char.id];
+      return ch("MP", `/w gm <b>MP:</b> Requirement cleared for <b>${esc(char.get("name"))}</b>.`);
+    }
+    if ("met" in args) {
+      const r = reqs[char.id];
+      if (!r) return ch("MP", `/w gm <b>MP:</b> No requirement registered for <b>${esc(char.get("name"))}</b>.`);
+      r.lastMetMs = state.MP_Engine.gameClock.ms;
+      r.nagged = false;
+      return ch("MP", `/w gm <b>MP:</b> ✔ <b>${esc(char.get("name"))}</b> — ${esc(r.name)} met at ${fmtGameClock()}. ${hasDiscomfort(r.tokId) ? btn(`Clear Discomfort`, `!mp discomfort --off --target ${r.tokId}`) : ""}`);
+    }
+    const intervalSec = parseIntervalSec(args.interval);
+    if (!intervalSec) return ch("MP", `/w gm <b>MP:</b> --interval must be like 12h, 3d, 1w.`);
+    reqs[char.id] = {
+      charName: char.get("name"),
+      tokId: tok ? tok.id : (args.target || null),
+      name: args.name || "Special Requirement",
+      intervalSec, intervalLabel: args.interval,
+      consequence: (args.consequence || "discomfort").toLowerCase(),
+      lastMetMs: state.MP_Engine.gameClock.ms,
+      nagged: false
+    };
+    return ch("MP", `/w gm <b>MP:</b> Registered: <b>${esc(char.get("name"))}</b> needs <b>${esc(reqs[char.id].name)}</b> every ${esc(args.interval)} (consequence: ${esc(reqs[char.id].consequence)}). Clock starts now (${fmtGameClock()}).`);
+  }
+
+  // Called after game-clock advances: nag once per starvation period.
+  function checkRequirementsDue() {
+    const reqs = state.MP_Engine.requirements || {};
+    Object.keys(reqs).forEach(cid => {
+      const r = reqs[cid];
+      const overdueMs = state.MP_Engine.gameClock.ms - (r.lastMetMs + r.intervalSec * 1000);
+      if (overdueMs <= 0 || r.nagged) return;
+      r.nagged = true;
+      const days = Math.max(1, Math.ceil(overdueMs / 86400000));
+      let card = `<div style="background:#1a1a2e; border:2px solid #b03a2e; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+      card += `<b style="color:#f1948a;">⏳ ${esc(r.charName)}</b> — <b>${esc(r.name)}</b> is ~${days} day(s) overdue.<br/>`;
+      if (r.consequence === "discomfort" && r.tokId) card += `${btn(`Apply Discomfort`, `!mp discomfort --target ${r.tokId}`)} `;
+      else card += `<span style="font-size:11px; color:#aab;">Consequence: ${esc(r.consequence)} (GM applies). </span>`;
+      card += `${btn(`Met — reset clock`, `!mp require --met --charid ${cid}`)}`;
+      card += `</div>`;
+      ch("MP", `/w gm ` + card);
+    });
   }
 
   // Round-advance upkeep: PR 1/round per invisible token; drops at 0 Power.
@@ -4223,13 +4469,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">🎯 Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)</div>`;
         ch("MP", `${wt(msg)}` + acqNote);
       } else {
-        const acqMod = num(obs.oppMod, 0) + num(obs.chkMod, 0) + num(obs.rngMod, 0);
+        const acqDisc = atkDiscomfortPenalty; // -3 on all checks incl. perception
+        const acqMod = num(obs.oppMod, 0) + num(obs.chkMod, 0) + num(obs.rngMod, 0) + acqDisc;
         const acq = rollAcquisition(atkCharId, obs.level, undefined, acqMod, obs.sneakGate);
         atkVisionPenalty = acq.toHitMod + num(obs.extraToHit, 0);
         const modParts = [];
         if (obs.oppMod) modParts.push(`${obs.oppMod} sneak`);
         if (obs.chkMod) modParts.push(`${obs.chkMod > 0 ? "+" : ""}${obs.chkMod} chk`);
         if (obs.rngMod) modParts.push(`${obs.rngMod} range`);
+        if (acqDisc) modParts.push(`${acqDisc} discomfort`);
         const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (${modParts.join(", ")}) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}`;
         const causeTxt = [
           atkVision.causes.length ? atkVision.causes.join(", ") : null,
@@ -4263,7 +4511,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty + atkVisionPenalty;
+    // v2.93.0: Discomfort (Special Requirement unmet): -3 to all rolls to hit
+    const atkDiscomfortPenalty = (atkTok && hasDiscomfort(atkTok.id)) ? -3 : 0;
+
+    const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty + atkVisionPenalty + atkDiscomfortPenalty;
 
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
@@ -4457,6 +4708,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
     if (acqHover) hoverBreakdown += acqHover;
     if (obs.extraToHit) hoverBreakdown += `&#10;Depth/weakness: ${obs.extraToHit}`;
+    if (atkDiscomfortPenalty) hoverBreakdown += `&#10;Discomfort: ${atkDiscomfortPenalty}`;
     if (defVisionPenalty !== 0) hoverBreakdown += `&#10;Tgt vision impaired: +3 (def ${defBase + defMod} → ${defValue})`;
     
     // Range penalty tooltip
@@ -7287,7 +7539,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     registerUndo(applyUndoId, esc(rec.defName) + " — " + esc(rec.atkName || "attack") + " damage", [undoSnap], null);
 
     // Damage result to GM + defender only (attacker doesn't see target stats)
-    chToChar("MP", msgLine + undoButton(applyUndoId), rec.defCharId);
+    // v2.93.0: Can't Feel Pain - IN save to notice damage from a surprise attack
+    let painNote = "";
+    if (toHits > 0 && getWeaknessFlags(rec.defCharId).nopain) {
+      painNote = `<br/><span style="font-size:11px; color:#f4d03f;">🩹 Can't Feel Pain — if this was a SURPRISE attack, roll IN to notice the damage: </span>${btn(`IN Save`, `!mp sv IN`)}`;
+    }
+    chToChar("MP", msgLine + painNote + undoButton(applyUndoId), rec.defCharId);
     
     // Store hits taken for limb shot saves (uses actual damage including head shot doubling)
     state.MP_Engine.pending[rollId].hitsTaken = toHits;
@@ -7514,7 +7771,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
 
     // Initial save TN = base + init mod + protection (if not damaging poison) + invuln + adapt + roll-with + crit mod + push mod + vulnerability
-    const tn = baseSave + num(rec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + rwPaid + critMod + pushMod + vulnSaveMod;
+    // v2.93.0: Discomfort - -3 on all saves
+    const saveDiscomfort = hasDiscomfort(rec.defTokenId) ? -3 : 0;
+    const tn = baseSave + num(rec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + rwPaid + critMod + pushMod + vulnSaveMod + saveDiscomfort;
 
     const d20 = randomInteger(20);
     const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
@@ -7522,7 +7781,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Recovery TN per 4.9: "same target number as their initial save but with an additional difficulty modifier"
     // Base + saveMod + recMod + protection + invuln + adapt + vulnerability (no roll-with/crit/push - those were for initial only)
-    const recTN = baseSave + num(rec.saveMod, 0) + num(rec.recMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod;
+    const recTN = baseSave + num(rec.saveMod, 0) + num(rec.recMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod + saveDiscomfort;
     const recTime = rec.recTime || "1 round";
 
     let statusLine = "";
@@ -7684,6 +7943,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       case "glare": return "In Glare field - vision overloaded";
       case "invisible": return "Invisible - undetectable by sight (PR 1/round)";
       case "sneaking": return "Sneaking - 1/2 move; Basic senses detect only on crit (3.1.5.1)";
+      case "discomfort": return "Discomfort - Special Requirement unmet: -3 all saves & to-hit";
+      case "succumbed": return "Succumbed to compulsion/phobia";
       default: return `Affected by ${atkName}`;
     }
   }
@@ -8928,6 +9189,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         tok.set("status_half-haze", false);
         tok.set("status_stopwatch", false);
         tok.set("status_tread", false);
+        tok.set("status_drink-me", false);
+        tok.set("status_screaming", false);
         tok.set(CFG.DEF_MOD_BAR, 0);
         
         // v2.89.2: clear conditions (darkness/glare etc.) - previously the
@@ -8969,6 +9232,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tok.set("status_half-haze", false);    // Invisible (v2.91.0)
       tok.set("status_stopwatch", false);    // Duration effect badge (v2.91.2)
       tok.set("status_tread", false);        // Sneaking (v2.91.3)
+      tok.set("status_drink-me", false);     // Discomfort (v2.93.0)
+      tok.set("status_screaming", false);    // Succumbed/Feared (v2.93.0)
       // v2.91.1: forget acquisitions involving this token
       if (state.MP_Engine.acquired) {
         Object.keys(state.MP_Engine.acquired).forEach(k => {
@@ -10678,6 +10943,13 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdSensePanel(msg, args);
       case "perceive": return cmdPerceive(msg, args);
+      case "willcheck":
+        if (gmOnly(msg)) return;
+        return cmdWillCheck(msg, args);
+      case "discomfort": return cmdDiscomfort(msg, args);
+      case "require":
+        if (gmOnly(msg)) return;
+        return cmdRequire(msg, args);
 
       case "kb": return cmdKnockback(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
@@ -10890,7 +11162,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.92.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.93.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10906,6 +11178,9 @@ function cmdStance(msg, args) {
           <code>!mp sneak | --off</code> - Stealth 3.1.5.1 on selected tokens (1/2 move; Basic senses detect on crit only)<br/>
           <code>!mp sensepanel</code> - GM control card for the whole senses subsystem (buttons act on selection)<br/>
           <code>!mp perceive [--sense KEY] [--mod N]</code> - 3.1.5 perception check (select observer; 2nd token = subject)<br/>
+          <code>!mp willcheck --mod -N [--present] [--phobia] [--stimulus "x"]</code> - Compulsion/Phobia CL save (GM)<br/>
+          <code>!mp discomfort | --off</code> - Special Requirement unmet: -3 all saves &amp; to-hit<br/>
+          <code>!mp require --interval 7d --consequence discomfort --name "x" | --met | --off | list</code> - Requirement clock (GM)<br/>
           <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
           <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
@@ -11974,6 +12249,10 @@ function cmdStance(msg, args) {
       const tok = getObj("graphic", tokId);
       const char = getCharFromToken(tok);
       if (!tok || !char) return;
+      const gateMsg = unlivingHealBlock(char.id, tok);
+      if (gateMsg) {
+        return ch("MP", `/w gm <b>${esc(char.get("name"))}</b>: ${gateMsg}`);
+      }
       const roll = rollHealingRate(char.id);
       if (roll.amount <= 0) {
         return ch("MP", `/w gm <b>${esc(char.get("name"))}</b>: Healing Rate 0 — no daily healing.`);
@@ -12121,6 +12400,7 @@ function cmdStance(msg, args) {
     const durFrag = tickDurationEffects(n);
     const recFrag = promptDueRecoveries(newRound);
     const invFrag = tickInvisibility(n);
+    checkRequirementsDue();
     // v2.91.1: prune stale acquisition cache entries
     if (state.MP_Engine.acquired) {
       Object.keys(state.MP_Engine.acquired).forEach(k => {
@@ -12152,6 +12432,7 @@ function cmdStance(msg, args) {
       }
       const mult = TIME_UNITS[unitKey] || CFG.SECONDS_PER_ROUND;
       advanceClock(Math.round(n * mult));
+      checkRequirementsDue();
       return ch("MP", `/w gm ${clockCard("Game Time", `<br/><span style="color:#8a84a8;">Advanced ${n} ${esc(unitKey)}</span>`)}`);
     }
     if (sub === "set") {
@@ -12301,11 +12582,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.92.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.93.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
-  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach };
+  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.92.1 READY");
+  log("MP ENGINE v2.93.0 READY");
 });
