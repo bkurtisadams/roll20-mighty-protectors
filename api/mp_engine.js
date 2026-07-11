@@ -1,4 +1,18 @@
-/* Mighty Protectors Roll20 API Engine v2.92.0 - 2026-07-11
+/* Mighty Protectors Roll20 API Engine v2.92.1 - 2026-07-11
+ * v2.92.1: RANGED-SENSE REACH RULES (RAW, Heightened Senses). A Ranged
+ *   sense whose stimulus RADIATES works at any range with +6 vs range
+ *   penalties (IN+6); a Ranged NON-radiating sense (radar, motion) is
+ *   hard-capped at IN/2 inches (intelligence_score/2) and is skipped as
+ *   an acquisition fallback beyond that; a non-Ranged sense (touch,
+ *   taste) only reaches contact range (1"). getCharacterSenses reads the
+ *   sheet's Radiates flag (derives from type for older rows); senseReach()
+ *   centralizes the rules for observationLevel and !mp perceive. The
+ *   acquisition range offset is now tele + (radiates ? 6 : 0), capped at
+ *   the penalty. Labels note the IN/2 cap when a non-radiating sense is
+ *   used; "no sense reaches this range" replaces "no usable sense" when
+ *   reach is the blocker. Acquire-once sig range-buckets whenever the
+ *   resolved sense is range-sensitive. !mp perceive with a subject token
+ *   applies the range penalty/bonus and refuses out-of-reach checks.
  * v2.92.0: CHARACTER SENSE ROWS (phase 2 of sheet v44.60/61).
  *   getCharacterSenses(charId): six-default baseline + repeating_abilities
  *   sense rows - overrides replace, Level=none removals are always-on,
@@ -845,7 +859,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.92.0 FILE STARTING");
+log("MP ENGINE v2.92.1 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1118,15 +1132,18 @@ MP.Engine = (function () {
   // Level=none removal rows are ALWAYS-ON (blindness doesn't toggle off);
   // other rows are skipped when State is Off/Held or Gear+Broken.
   const SENSE_LEVEL_NUM = { none: 0, minimum: 1, basic: 1, full: 2, analytical: 3 };
+  const SENSE_TYPE_RADIATES = { visible: 1, infrared: 1, ultraviolet: 1, audible: 1, subsonic: 1,
+    ultrasonic: 1, odors: 1, radio: 1, mental: 1, mood: 1, life: 1, magic: 1, magnetism: 1,
+    radiation: 1, danger: 1, xrays: 1 };
 
   function defaultSenses() {
     return {
-      visible: { lvl: 2, rng: 1, glob: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "vision" },
-      audible: { lvl: 1, rng: 1, glob: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "hearing" },
-      odors:   { lvl: 1, rng: 1, glob: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "scent" },
-      shapes:  { lvl: 1, rng: 0, glob: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "touch" },
-      flavors: { lvl: 1, rng: 0, glob: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "taste" },
-      time:    { lvl: 1, rng: 0, glob: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "time" }
+      visible: { lvl: 2, rng: 1, glob: 0, rad: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "vision" },
+      audible: { lvl: 1, rng: 1, glob: 1, rad: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "hearing" },
+      odors:   { lvl: 1, rng: 1, glob: 1, rad: 1, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "scent" },
+      shapes:  { lvl: 1, rng: 0, glob: 1, rad: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "touch" },
+      flavors: { lvl: 1, rng: 0, glob: 0, rad: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "taste" },
+      time:    { lvl: 1, rng: 0, glob: 0, rad: 0, chk: 0, tele: 0, amp: 0, prot: 0, weak: "", label: "time" }
     };
   }
 
@@ -1138,7 +1155,7 @@ MP.Engine = (function () {
     const rows = {};
     attrs.forEach(a => {
       const n = a.get("name");
-      const m = n.match(/^repeating_abilities_(.+)_ability_(sense_detects|sense_level|sense_weakness|sense_ranged|sense_global|sense_chkmod|sense_tele|sense_amp|sense_prot|state|gear|broken)$/);
+      const m = n.match(/^repeating_abilities_(.+)_ability_(sense_detects|sense_level|sense_weakness|sense_ranged|sense_global|sense_radiates|sense_chkmod|sense_tele|sense_amp|sense_prot|state|gear|broken)$/);
       if (!m) return;
       if (!rows[m[1]]) rows[m[1]] = {};
       rows[m[1]][m[2]] = a.get("current");
@@ -1160,6 +1177,8 @@ MP.Engine = (function () {
         lvl: SENSE_LEVEL_NUM[level] != null ? SENSE_LEVEL_NUM[level] : 1,
         rng: r.sense_ranged === "1" ? 1 : 0,
         glob: (r.sense_global === "full" || r.sense_global === "circle") ? 1 : 0,
+        // radiates: sheet flag if the attr exists, else derive from type
+        rad: (r.sense_radiates != null) ? (r.sense_radiates === "1" ? 1 : 0) : (SENSE_TYPE_RADIATES[detects] ? 1 : 0),
         chk: num(r.sense_chkmod, 0),
         tele: num(r.sense_tele, 0),
         amp: num(r.sense_amp, 0),
@@ -1300,6 +1319,18 @@ MP.Engine = (function () {
   //     character easily unless they're ALSO sneaking - a sneaking target
   //     opposes the check at -(AG save - 10) per 3.0.2.4.
   //   - Blur reduces the observer's effective vision by one level.
+  // v2.92.1: can this sense reach a target at this range, and what bonus
+  // does it get vs range penalties? RAW (Ranged Senses): a Ranged sense
+  // works to IN/2", OR at ANY range with IN+6 vs range penalties if the
+  // stimulus radiates. Non-Ranged senses only work in contact range (1").
+  function senseReach(s, rangeInches, inScore) {
+    if (rangeInches == null) return { usable: true, bonus: num(s.tele, 0), capped: false };
+    if (!s.rng) return { usable: rangeInches <= 1, bonus: 0, capped: rangeInches > 1 };
+    if (s.rad) return { usable: true, bonus: 6 + num(s.tele, 0), capped: false };
+    const cap = Math.max(1, Math.floor(num(inScore, 10) / 2));
+    return { usable: rangeInches <= cap, bonus: num(s.tele, 0), capped: rangeInches > cap, cap };
+  }
+
   function observationLevel(atkTokId, defTokId, defCharId, atkCharId, rangeInches, rangePenalty) {
     const atkVision = visionLossInfo(atkTokId, atkCharId);
     const senses = atkCharId ? getCharacterSenses(atkCharId) : defaultSenses();
@@ -1321,35 +1352,46 @@ MP.Engine = (function () {
     }
 
     const oppMod = sneaking ? -Math.max(0, getAttrNum(defCharId, "agility_save", 10) - 10) : 0;
+    const inScore = getAttrNum(atkCharId, "intelligence_score", 10);
     const needsRoll = atkVision.lost > 0 || !!inv || (rangeWeak && visLevel <= 1);
 
-    // Perception range penalty offset by Telescopic (3.1.5 / 4.7.3):
-    const acqRangeMod = (senseObj) => Math.min(0, num(rangePenalty, 0) + num(senseObj.tele, 0));
+    // v2.92.1: reach-aware. Perception range penalty offset by Telescopic
+    // plus the RAW +6 for a Ranged sense whose stimulus radiates.
+    const acqRangeMod = (senseObj, reach) => Math.min(0, num(rangePenalty, 0) + num(reach.bonus, 0));
 
-    if (visLevel > 0) {
+    // vision must also reach (a Ranged, radiating sense: always does)
+    const visReach = senseReach(vis, rangeInches, inScore);
+    if (visLevel > 0 && visReach.usable) {
       const lvlLabel = visLevel >= 3 ? "Analytical" : (visLevel === 2 ? "Full" : "Basic");
       const sneakGate = sneaking && visLevel === 1;
       return { level: visLevel, label: `vision (${lvlLabel}${inv && inv.blur ? ", blurred" : ""}${weakNote ? ", " + weakNote : ""})`,
-        oppMod, chkMod: num(vis.chk, 0), rngMod: acqRangeMod(vis), extraToHit, needsRoll, inv, sneaking, sneakGate, atkVision, senseKey: "visible" };
+        oppMod, chkMod: num(vis.chk, 0), rngMod: acqRangeMod(vis, visReach), extraToHit, needsRoll, inv, sneaking, sneakGate, atkVision,
+        senseKey: "visible", rangeSensitive: rangeWeak || !vis.rad };
     }
 
-    // Vision unusable: best remaining sense with reach (Ranged or Global),
-    // highest level first, then best check mod. No usable sense = None row.
-    let bestKey = null, best = null;
+    // Vision unusable: best remaining sense THAT REACHES this range -
+    // Ranged+radiating at any range; Ranged non-radiating to IN/2";
+    // non-Ranged (touch etc.) only in contact (1"). Highest level first,
+    // then best check mod. No usable sense = None row.
+    let bestKey = null, best = null, bestReach = null;
     Object.keys(senses).forEach(k => {
       if (k === "visible") return;
       const s = senses[k];
-      if (s.removed || s.lvl <= 0 || (!s.rng && !s.glob)) return;
-      if (!best || s.lvl > best.lvl || (s.lvl === best.lvl && num(s.chk, 0) > num(best.chk, 0))) { best = s; bestKey = k; }
+      if (s.removed || s.lvl <= 0) return;
+      const r = senseReach(s, rangeInches, inScore);
+      if (!r.usable) return;
+      if (!best || s.lvl > best.lvl || (s.lvl === best.lvl && num(s.chk, 0) > num(best.chk, 0))) { best = s; bestKey = k; bestReach = r; }
     });
     if (!best) {
-      return { level: 0, label: "no usable sense", oppMod, chkMod: 0, rngMod: 0, extraToHit: 0,
-        needsRoll: true, inv, sneaking, sneakGate: sneaking, atkVision, senseKey: null };
+      return { level: 0, label: "no sense reaches this range", oppMod, chkMod: 0, rngMod: 0, extraToHit: 0,
+        needsRoll: true, inv, sneaking, sneakGate: sneaking, atkVision, senseKey: null, rangeSensitive: true };
     }
     const bLabel = best.lvl >= 3 ? "Analytical" : (best.lvl === 2 ? "Full" : "Basic");
-    return { level: best.lvl, label: `${best.label} (${bLabel}${inv && !inv.blur ? " - target invisible" : ""})`,
-      oppMod, chkMod: num(best.chk, 0), rngMod: acqRangeMod(best), extraToHit: 0,
-      needsRoll: true, inv, sneaking, sneakGate: sneaking && best.lvl === 1, atkVision, senseKey: bestKey };
+    const capNote = (!best.rad && best.rng && bestReach.cap != null) ? `, IN/2=${bestReach.cap}"` : "";
+    return { level: best.lvl, label: `${best.label} (${bLabel}${inv && !inv.blur ? " - target invisible" : ""}${capNote})`,
+      oppMod, chkMod: num(best.chk, 0), rngMod: acqRangeMod(best, bestReach), extraToHit: 0,
+      needsRoll: true, inv, sneaking, sneakGate: sneaking && best.lvl === 1, atkVision, senseKey: bestKey,
+      rangeSensitive: !best.rad };
   }
 
   // !mp invis --on [--blur] [--sneaking] | --off  (selected tokens or --target)
@@ -1518,7 +1560,22 @@ MP.Engine = (function () {
       }
     }
 
-    const mod = num(args.mod, 0) + num(s.chk, 0) + oppMod;
+    // v2.92.1: subject range - penalty from the range table, offset by
+    // Telescopic and the RAW +6 for a radiating Ranged sense; hard reach
+    // limits (IN/2" non-radiating, 1" non-Ranged) refuse the check.
+    let rngNote = "", rngMod = 0;
+    if (subjTok && obsTok) {
+      const rd = calculateRangeWithProfile(obsTok, subjTok, obsChar.id, null);
+      const inScore = getAttrNum(obsChar.id, "intelligence_score", 10);
+      const reach = senseReach(s, rd.inches, inScore);
+      if (!reach.usable) {
+        const why = !s.rng ? "no range (contact only, 1\")" : `beyond IN/2 = ${reach.cap}\"`;
+        return ch("MP", `${wt(msg)}<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b>'s ${esc(s.label || key)} can't reach the subject at ${Math.round(rd.inches)}\" (${why}).</div>`);
+      }
+      rngMod = Math.min(0, num(rd.penalty, 0) + num(reach.bonus, 0));
+      if (num(rd.penalty, 0) !== 0) rngNote = ` ${rngMod} range${reach.bonus ? ` (pen ${rd.penalty}, +${reach.bonus} ${s.rad ? "radiates" : ""}${s.tele ? "/tele" : ""})` : ""}`;
+    }
+    const mod = num(args.mod, 0) + num(s.chk, 0) + oppMod + rngMod;
     const sneakGate = !!oppNote && s.lvl === 1;
     const acq = rollAcquisition(obsChar.id, s.lvl, undefined, mod, sneakGate);
 
@@ -1535,6 +1592,7 @@ MP.Engine = (function () {
     if (num(args.mod, 0)) modBits.push(`${num(args.mod, 0)} situational`);
     if (num(s.chk, 0)) modBits.push(`${s.chk > 0 ? "+" : ""}${s.chk} chk`);
     if (oppNote) modBits.push(oppNote.trim());
+    if (rngNote) modBits.push(rngNote.trim());
 
     let out = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
     out += `<b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b> by ${esc(s.label || key)} (${lvlLabel})<br/>`;
@@ -4155,7 +4213,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         `snk:${obs.sneaking ? 1 : 0}`,
         `atk:${atkVision.lost}:${atkVision.causes.join("|")}`,
         `lvl:${obs.level}:${obs.oppMod}:${obs.chkMod || 0}`,
-        (obs.extraToHit || /Nearsighted|Farsighted/.test(obs.label)) ? `rb:${Math.round(num(rangeData.inches, 0))}` : "rb:-"
+        (obs.extraToHit || obs.rangeSensitive) ? `rb:${Math.round(num(rangeData.inches, 0))}` : "rb:-"
       ].join(";");
       const cached = state.MP_Engine.acquired[acqKey];
 
@@ -10832,7 +10890,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.92.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.92.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -12243,11 +12301,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.92.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.92.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
-  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses };
+  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.92.0 READY");
+  log("MP ENGINE v2.92.1 READY");
 });
