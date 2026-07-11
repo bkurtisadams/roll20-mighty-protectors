@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.91.3 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.91.4 - 2026-07-10
+ * v2.91.4: SENSES PANEL. !mp sensepanel (GM) posts one whispered control
+ *   card for the whole subsystem: Darkness/Glare rank buttons (1/2/3,
+ *   one-click) + Off + ring draw/clear (diameter prompts once),
+ *   Invis / Invis+Sneak / Blur / Invis Off, Sneak on/off, Glow on/off,
+ *   Status, and a Refresh Panel button. Every button acts on the tokens
+ *   selected at click time. Suggested use: a GM macro-bar entry or
+ *   token action containing just "!mp sensepanel".
  * v2.91.3: STEALTH 3.1.5.1 (RAW-corrected). NEW !mp sneak | --off:
  *   standalone sneaking condition (tread marker, no PR, 1/2-move
  *   reminder). Correct scope: sneaking does NOT conceal from a Full
@@ -817,7 +824,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.91.3 FILE STARTING");
+log("MP ENGINE v2.91.4 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1531,6 +1538,40 @@ MP.Engine = (function () {
       }
       html += `<div style="margin-top:4px; font-size:10px; color:#aab;">Caster is immune to their own field. Darkness &amp; Glare ranks cancel. Toggle tokens as they enter/leave.</div>`;
     }
+    html += `</div></div>`;
+    ch("MP", `/w gm ` + html);
+  }
+
+  // v2.91.4: !mp sensepanel - one persistent GM card with the whole senses
+  // subsystem as buttons. Every button acts on whatever tokens are selected
+  // at click time. Rank buttons are one-click; diameters prompt once.
+  function cmdSensePanel(msg, args) {
+    const row = (label, buttons) =>
+      `<div style="margin-top:5px; padding-top:5px; border-top:1px solid #2a2a4a;"><span style="color:#8a84a8; font-size:10px;">${label}</span><br/>${buttons}</div>`;
+
+    let html = `<div style="background:#1a1a2e; border:2px solid #5a4fcf; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px; overflow:hidden;">`;
+    html += `<div style="background:#5a4fcf; padding:6px 10px; font-weight:bold; color:#fff;">🎛 Senses Panel</div>`;
+    html += `<div style="padding:4px 10px 8px 10px;">`;
+    html += `<span style="color:#8a84a8; font-size:10px;">All buttons act on the tokens selected when clicked.</span>`;
+
+    html += row(`🌑 DARKNESS (ranks)`,
+      `${btn(`1`, `!mp darkness --ranks 1`)} ${btn(`2`, `!mp darkness --ranks 2`)} ${btn(`3`, `!mp darkness --ranks 3`)} ${btnDanger(`Off`, `!mp darkness --off`)}<br/>` +
+      `${btn(`Ring`, `!mp darkness --circle ?{Diameter in inches|9}`)} ${btnDanger(`Clear Rings`, `!mp darkness --circle off`)}`);
+
+    html += row(`☀️ GLARE (ranks)`,
+      `${btn(`1`, `!mp glare --ranks 1`)} ${btn(`2`, `!mp glare --ranks 2`)} ${btn(`3`, `!mp glare --ranks 3`)} ${btnDanger(`Off`, `!mp glare --off`)}<br/>` +
+      `${btn(`Ring`, `!mp glare --circle ?{Diameter in inches|15}`)} ${btnDanger(`Clear Rings`, `!mp glare --circle off`)}`);
+
+    html += row(`🫥 CONCEALMENT`,
+      `${btn(`Invis`, `!mp invis`)} ${btn(`Invis+Sneak`, `!mp invis --sneaking`)} ${btn(`Blur`, `!mp invis --blur`)} ${btnDanger(`Invis Off`, `!mp invis --off`)}<br/>` +
+      `${btn(`Sneak`, `!mp sneak`)} ${btnDanger(`Sneak Off`, `!mp sneak --off`)}`);
+
+    html += row(`💡 LIGHT`,
+      `${btn(`Glow`, `!mp glow --diameter ?{Diameter in inches|15}`)} ${btnDanger(`Glow Off`, `!mp glow --off`)}`);
+
+    html += row(`🔎 INFO`,
+      `${btn(`Status`, `!mp status`)} ${btn(`Refresh Panel`, `!mp sensepanel`)}`);
+
     html += `</div></div>`;
     ch("MP", `/w gm ` + html);
   }
@@ -10309,6 +10350,9 @@ function cmdStance(msg, args) {
       case "invisible": return cmdInvis(msg, args);
       case "sneak":
       case "sneaking": return cmdSneak(msg, args);
+      case "sensepanel":
+        if (gmOnly(msg)) return;
+        return cmdSensePanel(msg, args);
 
       case "kb": return cmdKnockback(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
@@ -10521,7 +10565,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.91.3</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.91.4</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10535,6 +10579,7 @@ function cmdStance(msg, args) {
           <code>!mp glow --diameter N | --off</code> - Glow (Light Control D): aura light on selected token<br/>
           <code>!mp invis [--blur] [--sneaking] | --off</code> - Invisibility on selected tokens (PR 1/round auto-drains)<br/>
           <code>!mp sneak | --off</code> - Stealth 3.1.5.1 on selected tokens (1/2 move; Basic senses detect on crit only)<br/>
+          <code>!mp sensepanel</code> - GM control card for the whole senses subsystem (buttons act on selection)<br/>
           <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
           <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
@@ -11930,11 +11975,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.91.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.91.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.91.3 READY");
+  log("MP ENGINE v2.91.4 READY");
 });
