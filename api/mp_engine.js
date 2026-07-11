@@ -1,4 +1,22 @@
-/* Mighty Protectors Roll20 API Engine v2.89.4 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.90.0 - 2026-07-10
+ * v2.90.0: TARGET ACQUISITION (4.6) replaces flat vision penalties. An
+ *   attacker with impaired vision now rolls a perception check (IN save,
+ *   3.0.1 confirm rolls for nat 1/20) mapped through the 4.6 sense-level
+ *   table: "-" cannot attack (refusal card), "?" unlocated (attack at
+ *   blindpen, default -6), "-3" crude targeting, ID/+/++ clean. Vision at
+ *   Basic uses the Basic row; vision at None falls back to default human
+ *   HEARING (Basic row, labeled) - a blind attacker who succeeds is only
+ *   -3, per RAW, not the old flat -6. Full vision unimpaired: no roll
+ *   (a Full sense IDs even on a failed check). Acquisition roll + tier
+ *   posted as a card line and itemized in the hover breakdown.
+ *   NEW defender-side 4.6 penalty: a vision-impaired DEFENDER takes -3 to
+ *   Physical defense ("-" tier's -3/-6 per 4.7.2 left to GM); mental/
+ *   emotional attacks unaffected. Status card notes acquisition + defense
+ *   effects. visionAtkPenalty() retained for status summary only.
+ *   !mp test acquire: 9-check table self-test with forced rolls.
+ *   RAW note (GM-managed): re-roll acquisition when the target moves,
+ *   starts sneaking, or turns invisible; 4.6.1 interference = existing
+ *   darkness ranks 1/2/3.
  * v2.89.4: MOOK ATTACKERS - token-aware attacker resolution. Previously
  *   handleMpAttack found the attacker token by unique represents-lookup
  *   and refused when a character had 2+ tokens on the map ("Delete
@@ -714,7 +732,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.89.4 FILE STARTING");
+log("MP ENGINE v2.90.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1005,11 +1023,70 @@ MP.Engine = (function () {
   // sense - abstracted as a flat -3). Blind: config penalty, default -6
   // (target by hearing/rough location; normal Basic hearing prevents a
   // total inability to attack).
+  // v2.90.0: retained for the status-card summary; the attack pipeline now
+  // rolls full 4.6 target acquisition via rollAcquisition() instead.
   function visionAtkPenalty(lossInfo) {
     if (!lossInfo || lossInfo.lost <= 0) return 0;
     if (lossInfo.effective <= 0) return num(state.MP_Engine.blindPenalty, -6);
     if (lossInfo.effective === 1) return -3;
     return 0;
+  }
+
+  // -------------------------
+  // TARGET ACQUISITION (4.6) - v2.90.0
+  // -------------------------
+  // Acquiring a target is a perception check (IN save, 3.1.5) mapped
+  // through the sense-level table. Tiers:
+  //   "-"  perceives nothing: CANNOT attack; -3/-6 defense (4.7.2, GM)
+  //   "?"  senses something's around, can't locate/ID: may attack the
+  //        unlocated target at -6 (configurable via blindpen); -3 defense
+  //   "-3" crude perception: target at -3 to hit; -3 defense
+  //   "ID" clear: no penalties. "+"/"++" add detail (gear, dimensions).
+  // Rows indexed by sense level: 0 None, 1 Basic, 2 Full, 3 Analytical.
+  // Columns: critFumble, fail, succeed, critSuccess (3.0.1 confirm rolls).
+  const ACQ_TABLE = {
+    0: { critFumble: "-",  fail: "-",  succeed: "-",  critSuccess: "?"  },
+    1: { critFumble: "-",  fail: "?",  succeed: "-3", critSuccess: "ID" },
+    2: { critFumble: "-3", fail: "ID", succeed: "+",  critSuccess: "++" },
+    3: { critFumble: "ID", fail: "+",  succeed: "++", critSuccess: "++" }
+  };
+
+  function acqTierEffect(tier) {
+    switch (tier) {
+      case "-":  return { blocked: true,  toHitMod: 0,  label: "perceives nothing - cannot attack" };
+      case "?":  return { blocked: false, toHitMod: num(state.MP_Engine.blindPenalty, -6), label: "unlocated - attacking blind" };
+      case "-3": return { blocked: false, toHitMod: -3, label: "crude perception" };
+      case "ID": return { blocked: false, toHitMod: 0,  label: "identified" };
+      case "+":  return { blocked: false, toHitMod: 0,  label: "identified (+gear/systems)" };
+      case "++": return { blocked: false, toHitMod: 0,  label: "identified (++full detail)" };
+      default:   return { blocked: false, toHitMod: 0,  label: tier };
+    }
+  }
+
+  // Roll 4.6 target acquisition for an impaired attacker. senseLevel is the
+  // effective level of the best sense used (0-3). When vision is None, the
+  // caller falls back to default human hearing (Basic). forcedRolls =
+  // [first, confirm] for the test harness.
+  function rollAcquisition(charId, senseLevel, forcedRolls) {
+    const inSave = getAttrNum(charId, "intelligence_save", 10);
+    const d1 = (forcedRolls && forcedRolls[0] !== undefined) ? forcedRolls[0] : randomInteger(20);
+    let outcome, d2 = null;
+    if (d1 === 1) {
+      d2 = (forcedRolls && forcedRolls[1] !== undefined) ? forcedRolls[1] : randomInteger(20);
+      outcome = (d2 <= inSave) ? "critSuccess" : "succeed"; // a 1 always succeeds (3.0.1)
+    } else if (d1 === 20) {
+      d2 = (forcedRolls && forcedRolls[1] !== undefined) ? forcedRolls[1] : randomInteger(20);
+      outcome = (d2 > inSave) ? "critFumble" : "fail"; // a 20 always fails
+    } else {
+      outcome = (d1 <= inSave) ? "succeed" : "fail";
+    }
+    const row = ACQ_TABLE[Math.max(0, Math.min(3, senseLevel))] || ACQ_TABLE[1];
+    const tier = row[outcome];
+    const eff = acqTierEffect(tier);
+    return {
+      tier, outcome, blocked: eff.blocked, toHitMod: eff.toHitMod, label: eff.label,
+      inSave, d1, d2
+    };
   }
 
   // Shared handler for !mp darkness / !mp glare (GM).
@@ -1213,6 +1290,39 @@ MP.Engine = (function () {
 
     const passCount = results.filter(r => r.startsWith("✅")).length;
     ch("MP", `/w gm <b style="color:#c88fff;">TEST FLASH</b> (${levels} level(s)) — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
+  }
+
+  // Self-test: !mp test acquire (GM, 1 selected token). Exercises the 4.6
+  // acquisition table with forced rolls (deterministic: nat 1/20 + forced
+  // confirms). Assumes the token's IN save is between 2 and 19.
+  function testAcquire(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then run <code>!mp test acquire</code>.`);
+    const tok = getObj("graphic", sel[0]._id);
+    const char = getCharFromToken(tok);
+    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Token missing or unlinked.`);
+    const inSave = getAttrNum(char.id, "intelligence_save", 10);
+    if (inSave < 2 || inSave > 19) {
+      return ch("MP", `/w gm <b>MP:</b> Test needs an IN save between 2 and 19 (token has ${inSave}).`);
+    }
+
+    const blindPen = num(state.MP_Engine.blindPenalty, -6);
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "✅" : "❌"} ${name}`);
+    const acq = (lvl, r) => rollAcquisition(char.id, lvl, r);
+
+    let a = acq(1, [20, 20]); check(`Basic crit-fumble => "-" blocked`, a.tier === "-" && a.blocked);
+    a = acq(1, [20, 1]);  check(`Basic fail => "?" at ${blindPen}`, a.tier === "?" && a.toHitMod === blindPen && !a.blocked);
+    a = acq(1, [1, 20]);  check(`Basic success => "-3"`, a.tier === "-3" && a.toHitMod === -3);
+    a = acq(1, [1, 1]);   check(`Basic crit-success => ID`, a.tier === "ID" && a.toHitMod === 0);
+    a = acq(0, [1, 20]);  check(`None success => "-" blocked`, a.tier === "-" && a.blocked);
+    a = acq(0, [1, 1]);   check(`None crit-success => "?"`, a.tier === "?" && !a.blocked);
+    a = acq(2, [20, 1]);  check(`Full fail => still ID`, a.tier === "ID" && a.toHitMod === 0);
+    a = acq(2, [20, 20]); check(`Full crit-fumble => "-3"`, a.tier === "-3" && a.toHitMod === -3);
+    a = acq(3, [20, 20]); check(`Analytical crit-fumble => ID`, a.tier === "ID");
+
+    const passCount = results.filter(r => r.startsWith("✅")).length;
+    ch("MP", `/w gm <b style="color:#c88fff;">TEST ACQUIRE</b> (IN ${inSave}-) — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
   }
 
   // Apply / extend a durational attack effect on a target token (MP Modifiers, "Duration").
@@ -3298,13 +3408,31 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rangeData = calculateRangeWithProfile(atkTok, defTok, atkCharId, defChar.id);
     const rangePenalty = rangeData.penalty;
 
-    // v2.89.0: attacker vision penalty (dazzle/darkness/glare conditions).
-    // Basic vision: -3. Blind: config penalty (default -6), attack proceeds
-    // (rough location by hearing) but the GM sees a warning banner.
+    // v2.90.0: 4.6 TARGET ACQUISITION. An attacker with impaired vision
+    // rolls a perception check (IN save) mapped through the sense-level
+    // table. Vision at Basic rolls the Basic row; vision at None falls back
+    // to default human hearing (Basic row, labeled). Full vision needs no
+    // roll for ordinary targets (a Full sense IDs even on a failed check).
+    // RAW: re-roll acquisition if the target moves/sneaks/turns invisible.
     const atkVision = atkTok ? visionLossInfo(atkTok.id) : { lost: 0, effective: 2, effLabel: "Full", causes: [] };
-    const atkVisionPenalty = visionAtkPenalty(atkVision);
-    if (atkVision.effective <= 0) {
-      ch("MP", `${wt(msg)}<div style="background:#8e2b2b; border:2px solid #000; padding:4px 8px; color:#fff;">🕶 <b>${esc(atkChar.get("name"))}</b> is attacking <b>BLIND</b> (${esc(atkVision.causes.join(", "))}) — ${atkVisionPenalty} to hit. GM: confirm they can locate the target (hearing etc.).</div>`);
+    let atkVisionPenalty = 0;
+    let acqNote = "";
+    let acqHover = "";
+    if (atkVision.lost > 0 && atkTok) {
+      const usingFallback = (atkVision.effective <= 0);
+      const senseLevelUsed = usingFallback ? 1 : atkVision.effective; // blind -> Basic hearing
+      const senseLabel = usingFallback ? "hearing (Basic)" : `vision (${atkVision.effLabel})`;
+      const acq = rollAcquisition(atkCharId, senseLevelUsed);
+      atkVisionPenalty = acq.toHitMod;
+      const rollTxt = `IN ${acq.inSave}-, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}`;
+      acqHover = `&#10;Acquire [${acq.tier}]: ${acq.toHitMod} (${senseLabel}, ${rollTxt})`;
+      if (acq.blocked) {
+        ch("MP", `${wt(msg)}<div style="background:#8e2b2b; border:2px solid #000; padding:4px 8px; color:#fff;">🕶 <b>${esc(atkChar.get("name"))}</b> fails to acquire <b>${esc(defTok.get("name") || "the target")}</b> by ${senseLabel} (${rollTxt} — ${esc(acq.outcome)}) — <b>cannot attack</b> (4.6 tier "-"). ${esc(atkVision.causes.join(", "))}</div>`);
+        return;
+      }
+      const tierColor = acq.tier === "?" ? "#ff6b6b" : (acq.tier === "-3" ? "#f4d03f" : "#2ecc71");
+      acqNote = `<div style="background:#3a2f14; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">🎯 Acquire by ${senseLabel}: <b style="color:${tierColor};">[${acq.tier}] ${esc(acq.label)}</b>${acq.toHitMod !== 0 ? ` (${acq.toHitMod} to hit)` : ""} — ${rollTxt} (${esc(atkVision.causes.join(", "))})</div>`;
+      ch("MP", `${wt(msg)}` + acqNote);
     }
 
     const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty + atkVisionPenalty;
@@ -3312,7 +3440,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
     const defMod = num(defTok.get(CFG.DEF_MOD_BAR), 0);
-    const defValue = defBase + defMod;
+    // v2.90.0: 4.6 - a vision-impaired DEFENDER suffers -3 to defend against
+    // attacks they perceive poorly ("?" and "-3" tiers; "-" is -3/-6 per
+    // 4.7.2, GM-adjusted). Applied only to Physical defense - mental/
+    // emotional attacks aren't dodged by sight.
+    const defVision = visionLossInfo(defTokenId);
+    const defVisionPenalty = (atkTypeCode !== "M" && atkTypeCode !== "E" && defVision.lost > 0) ? -3 : 0;
+    const defValue = defBase + defMod + defVisionPenalty;
 
     let targetTotal;
     if (isAreaAttack) {
@@ -3493,7 +3627,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (defValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${defValue}`;
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
     if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
-    if (atkVisionPenalty !== 0) hoverBreakdown += `&#10;Vision: ${atkVisionPenalty} (${atkVision.effLabel}: ${atkVision.causes.join(", ")})`;
+    if (acqHover) hoverBreakdown += acqHover;
+    if (defVisionPenalty !== 0) hoverBreakdown += `&#10;Tgt vision impaired: +3 (def ${defBase + defMod} → ${defValue})`;
     
     // Range penalty tooltip
     if (rangeData && typeof rangeData.inches === "number") {
@@ -7802,6 +7937,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const visColor = vis.effective === 0 ? "#ff6b6b" : "#f4d03f";
       html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
       html += `<span style="color:${visColor};">👁 Vision: <b>${vis.effLabel}</b></span> <span style="color:#aab; font-size:11px;">(${esc(vis.causes.join(", "))})</span><br/>`;
+      html += `<span style="color:#aab; font-size:10px;">Attacks roll 4.6 acquisition (${vis.effective <= 0 ? "by hearing, Basic row" : "Basic row"}); -3 defense vs physical</span><br/>`;
       const tokConds = state.MP_Engine.conditions[tokId] || [];
       const dazIdx = tokConds.findIndex(c => (c.type === "dazzled" || c.type === "blinded") && !c.permanent);
       if (dazIdx >= 0) html += `${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${dazIdx}`)} `;
@@ -8459,6 +8595,8 @@ function cmdStance(msg, args) {
         return testSenseLoss(msg, args);
       case "flash":
         return testFlash(msg, args);
+      case "acquire":
+        return testAcquire(msg, args);
       case "heal":
         return testHeal(msg, args);
       case "reset":
@@ -8474,6 +8612,7 @@ function cmdStance(msg, args) {
           <code>!mp test snare BP [MAX]</code> - Apply snare to selected token<br/>
           <code>!mp test senseloss</code> - Vision-loss model self-test (select 1 token; non-destructive)<br/>
           <code>!mp test flash [LEVELS]</code> - Flash save/condition self-test (select 1 token; non-destructive)<br/>
+          <code>!mp test acquire</code> - 4.6 target-acquisition table self-test (select 1 token)<br/>
           <code>!mp test heal N</code> - Heal N hits to selected token<br/>
           <code>!mp test reset</code> - Reset selected token to full Hits/Power<br/>
           <code>!mp test status</code> - Show selected token's full status (shows Hardened/Invuln)`);
@@ -9846,7 +9985,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.89.4</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.90.0</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -11243,11 +11382,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.89.4:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.90.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
-  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty };
+  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.89.4 READY");
+  log("MP ENGINE v2.90.0 READY");
 });
