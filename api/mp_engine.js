@@ -1,4 +1,35 @@
-/* Mighty Protectors Roll20 API Engine v2.88.0 - 2026-07-05
+/* Mighty Protectors Roll20 API Engine v2.89.1 - 2026-07-10
+ * v2.89.1: FLASH AS SAVE ATTACK (chunk 2). Sheet v44.55 adds a Sense Loss
+ *   select (attack_sense_loss, 0-3 levels) to the save-attack row. Engine
+ *   reads it at attack time; when > 0 on a save attack: (1) single-target
+ *   saves force a dazzled condition carrying senseLevels from the row,
+ *   protection/invuln/adapt do NOT add to the save TN (Flash has no Damage
+ *   Type - only Protected Sense mitigates, GM adjudicated), fumbled initial
+ *   save = PERMANENT regardless of attack name; (2) area attacks route
+ *   per-target through resolveAreaSenseLoss: EN (or row BC) save per target
+ *   that failed/skipped escape, failure = dazzled + senseLevels + recovery
+ *   at recMod (defaults to -12 when the Rec field is blank, per Flash
+ *   rules), refresh-in-place (no stacking), Recovery button per victim,
+ *   roll-20 fumble = permanent blindness. Area cards relabel for Flash
+ *   (FLASH header, "Resolve All Saves"). !mp test flash [LEVELS] harness
+ *   with forced rolls (pass/fail/refresh/fumble; non-destructive).
+ * v2.89.0: SENSE-LOSS CORE (chunk 1 of Light Control/Darkness rollout).
+ *   Vision-loss model: conditions may carry senseLevels (levels of visible
+ *   light sense lost; normal human vision is Full = 2 levels). Effective
+ *   vision = Full - total levels lost: 1 lost = Basic, 2+ = blind.
+ *   NEW !mp darkness --ranks N --on/--off and !mp glare --ranks N --on/--off:
+ *   GM applies/removes an environmental sense-loss condition on selected
+ *   tokens (or --target). No zone geometry - GM toggles tokens as they
+ *   enter/leave the field. Darkness and Glare ranks CANCEL each other
+ *   (rules: "Levels of Glare and Darkness cancel each other out").
+ *   Environmental conditions have no recovery roll; !mp recover refuses
+ *   them and points at --off. Markers: ninja-mask (darkness), aura (glare).
+ *   NEW attacker vision penalty in attack pipeline: vision at Basic = -3
+ *   to-hit, blind = config penalty (default -6, !mp config blindpen N).
+ *   Itemized in hover breakdown; warning banner when firing blind.
+ *   Save-flow dazzled conditions now record senseLevels: 2 (Flash default)
+ *   and feed the same model. !mp status shows a Vision row with cause
+ *   breakdown and clear/recovery buttons. !mp test senseloss self-test.
  * v2.88.0: HEALING (4.13) + MEDICAL task check (4.13.1). Shared applyHealing
  *   restores Power first then Hits (4.13), capped at max. rollHealingRate
  *   reads healing_rate and rolls the d10 fractional-bonus. !mp dailyheal
@@ -649,7 +680,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.88.0 FILE STARTING");
+log("MP ENGINE v2.89.1 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -856,6 +887,8 @@ MP.Engine = (function () {
     damaging_poison: "skull",
     feared: "screaming",
     duration: "stopwatch",
+    darkness: "ninja-mask",
+    glare: "aura",
     generic: "padlock"
   };
 
@@ -893,6 +926,259 @@ MP.Engine = (function () {
   // Check if condition deals damage on failed recovery
   function conditionDealsDamage(condType) {
     return condType === "damaging_poison";
+  }
+
+  // -------------------------
+  // SENSE LOSS CORE (v2.89.0)
+  // -------------------------
+  // Model: normal human vision is a Full sense (2 levels). Conditions may
+  // carry senseLevels = levels of visible-light sense lost. Effective
+  // vision = 2 - total lost: 0 lost = Full, 1 = Basic, 2+ = blind (None).
+  // Sources:
+  //   - dazzled/blinded conditions (Flash, Laser dazzle) - senseLevels,
+  //     recoverable via the normal !mp recover flow.
+  //   - darkness / glare conditions (environmental, GM-toggled) - no
+  //     recovery roll; cleared with !mp darkness/glare --off. Darkness
+  //     and Glare ranks cancel each other out (rules, Darkness Control).
+
+  const SENSE_ENV_TYPES = ["darkness", "glare"];
+
+  function visionLossInfo(tokId) {
+    const conds = (state.MP_Engine.conditions && state.MP_Engine.conditions[tokId]) || [];
+    let dazzle = 0, darkness = 0, glare = 0;
+    conds.forEach(c => {
+      if (c.type === "darkness") darkness += num(c.senseLevels, 0);
+      else if (c.type === "glare") glare += num(c.senseLevels, 0);
+      else if (c.type === "dazzled" || c.type === "blinded") {
+        // Legacy dazzled conditions (pre-2.89) had no senseLevels; treat as 2.
+        dazzle += (c.senseLevels != null) ? num(c.senseLevels, 0) : 2;
+      }
+    });
+    const env = Math.abs(darkness - glare); // darkness & glare cancel
+    const lost = dazzle + env;
+    const effective = Math.max(0, 2 - lost); // 2 Full, 1 Basic, 0 None
+    const effLabel = effective === 2 ? "Full" : (effective === 1 ? "Basic" : "BLIND");
+    const causes = [];
+    if (dazzle) causes.push(`Dazzle ${dazzle}`);
+    if (darkness) causes.push(`Darkness ${darkness}`);
+    if (glare) causes.push(`Glare ${glare}`);
+    if (darkness && glare) causes.push(`net ${env} (cancel)`);
+    return { dazzle, darkness, glare, env, lost, effective, effLabel, causes };
+  }
+
+  // To-hit penalty for a vision-impaired attacker. Basic vision: -3
+  // (locating/distinguishing targets needs a perception check with a Basic
+  // sense - abstracted as a flat -3). Blind: config penalty, default -6
+  // (target by hearing/rough location; normal Basic hearing prevents a
+  // total inability to attack).
+  function visionAtkPenalty(lossInfo) {
+    if (!lossInfo || lossInfo.lost <= 0) return 0;
+    if (lossInfo.effective <= 0) return num(state.MP_Engine.blindPenalty, -6);
+    if (lossInfo.effective === 1) return -3;
+    return 0;
+  }
+
+  // Shared handler for !mp darkness / !mp glare (GM).
+  // Usage: !mp darkness --ranks N --on   (selected tokens or --target ID)
+  //        !mp darkness --off
+  function cmdSenseField(msg, args, kind) {
+    const ranks = Math.max(1, Math.min(3, num(args.ranks, 2)));
+    const turnOff = ("off" in args); // bare --off parses as args.off = "1"
+    const turnOn = !turnOff;         // default is ON (--on optional)
+
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else if (msg.selected && msg.selected.length) {
+      msg.selected.forEach(s => { if (s._type === "graphic") ids.push(s._id); });
+    }
+    if (!ids.length) {
+      return ch("MP", `/w gm <b>MP:</b> Select token(s) or use --target. Usage: <code>!mp ${kind} --ranks 1-3 --on|--off</code>`);
+    }
+
+    const marker = CONDITION_MARKERS[kind];
+    const label = kind.charAt(0).toUpperCase() + kind.slice(1);
+    const applied = [], removed = [];
+
+    ids.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      if (!tok) return;
+      const tokChar = getCharFromToken(tok);
+      const tokName = tokChar ? tokChar.get("name") : (tok.get("name") || "token");
+
+      if (!state.MP_Engine.conditions[tokId]) state.MP_Engine.conditions[tokId] = [];
+      const conds = state.MP_Engine.conditions[tokId];
+      const idx = conds.findIndex(c => c.type === kind);
+
+      if (turnOn) {
+        const condition = {
+          type: kind,
+          sourceAtk: `${label} field`,
+          senseLevels: ranks,
+          marker: marker,
+          permanent: false,
+          environmental: true, // no recovery roll; cleared by --off
+          effectDesc: getConditionDesc(kind, label),
+          startRound: state.MP_Engine.currentRound,
+          created: Date.now()
+        };
+        if (idx >= 0) conds[idx] = condition; // refresh in place, no stacking
+        else conds.push(condition);
+        tok.set("status_" + marker, true);
+        const info = visionLossInfo(tokId);
+        applied.push(`<b>${esc(tokName)}</b> — ${label} ${ranks} (vision now <b>${info.effLabel}</b>)`);
+      } else {
+        if (idx >= 0) {
+          conds.splice(idx, 1);
+          const markerStillUsed = conds.some(c => c.marker === marker);
+          if (!markerStillUsed) tok.set("status_" + marker, false);
+          const info = visionLossInfo(tokId);
+          removed.push(`<b>${esc(tokName)}</b> — ${label} cleared (vision now <b>${info.effLabel}</b>)`);
+        } else {
+          removed.push(`<b>${esc(tokName)}</b> — no ${label} to clear`);
+        }
+      }
+    });
+
+    let out = `<b>${label} Field</b> (${kind === "darkness" ? "🌑" : "☀️"})`;
+    applied.forEach(l => out += `<br/>${l}`);
+    removed.forEach(l => out += `<br/>${l}`);
+    if (turnOn) {
+      out += `<br/><span style="font-size:11px; color:#aab;">GM: pay caster PR per round manually (PR = senses affected); toggle tokens as they enter/leave. Darkness &amp; Glare ranks cancel.</span>`;
+    }
+    ch("MP", `/w gm ` + out);
+  }
+
+  // Self-test: !mp test senseloss (GM, 1 selected token). Non-destructive:
+  // snapshots the token's condition list and restores it afterward.
+  function testSenseLoss(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then run <code>!mp test senseloss</code>.`);
+    const tokId = sel[0]._id;
+    const tok = getObj("graphic", tokId);
+    if (!tok) return ch("MP", `/w gm <b>MP:</b> Token missing.`);
+
+    const snapshot = JSON.parse(JSON.stringify(state.MP_Engine.conditions[tokId] || []));
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "✅" : "❌"} ${name}`);
+
+    // Fresh slate for the test
+    state.MP_Engine.conditions[tokId] = [];
+
+    // 1. Baseline: full vision, no penalty
+    let info = visionLossInfo(tokId);
+    check(`baseline Full, no penalty (eff=${info.effective}, pen=${visionAtkPenalty(info)})`,
+      info.effective === 2 && visionAtkPenalty(info) === 0);
+
+    // 2. Darkness 1 => Basic, -3
+    state.MP_Engine.conditions[tokId].push({ type: "darkness", senseLevels: 1, marker: "ninja-mask", environmental: true });
+    info = visionLossInfo(tokId);
+    check(`darkness 1 => Basic, -3 (eff=${info.effective}, pen=${visionAtkPenalty(info)})`,
+      info.effective === 1 && visionAtkPenalty(info) === -3);
+
+    // 3. Darkness 2 (refresh to 2) => blind, blind penalty
+    state.MP_Engine.conditions[tokId][0].senseLevels = 2;
+    info = visionLossInfo(tokId);
+    const blindPen = num(state.MP_Engine.blindPenalty, -6);
+    check(`darkness 2 => BLIND, ${blindPen} (eff=${info.effective}, pen=${visionAtkPenalty(info)})`,
+      info.effective === 0 && visionAtkPenalty(info) === blindPen);
+
+    // 4. Glare 2 cancels Darkness 2 => Full
+    state.MP_Engine.conditions[tokId].push({ type: "glare", senseLevels: 2, marker: "aura", environmental: true });
+    info = visionLossInfo(tokId);
+    check(`glare 2 cancels darkness 2 => Full (eff=${info.effective})`, info.effective === 2);
+
+    // 5. Dazzle 2 on top => blind (dazzle unaffected by cancel)
+    state.MP_Engine.conditions[tokId].push({ type: "dazzled", senseLevels: 2, marker: "bleeding-eye" });
+    info = visionLossInfo(tokId);
+    check(`dazzle 2 stacks => BLIND (eff=${info.effective}, lost=${info.lost})`, info.effective === 0 && info.dazzle === 2);
+
+    // 6. Legacy dazzled condition (no senseLevels) counts as 2
+    state.MP_Engine.conditions[tokId] = [{ type: "dazzled", marker: "bleeding-eye" }];
+    info = visionLossInfo(tokId);
+    check(`legacy dazzled (no senseLevels) => 2 lost (lost=${info.lost})`, info.lost === 2);
+
+    // 7. Clear all => Full again
+    state.MP_Engine.conditions[tokId] = [];
+    info = visionLossInfo(tokId);
+    check(`cleared => Full (eff=${info.effective})`, info.effective === 2);
+
+    // Restore snapshot
+    state.MP_Engine.conditions[tokId] = snapshot;
+
+    const passCount = results.filter(r => r.startsWith("✅")).length;
+    ch("MP", `/w gm <b style="color:#c88fff;">TEST SENSELOSS</b> — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
+  }
+
+  // Self-test: !mp test flash [LEVELS] (GM, 1 selected token). Exercises
+  // resolveAreaSenseLoss with forced rolls: guaranteed pass, guaranteed
+  // fail, and fumble (permanent). Non-destructive (snapshot/restore).
+  function testFlash(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then run <code>!mp test flash [LEVELS]</code>.`);
+    const tokId = sel[0]._id;
+    const tok = getObj("graphic", tokId);
+    const char = getCharFromToken(tok);
+    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Token missing or unlinked.`);
+
+    const parts = msg.content.split(/\s+/);
+    const levels = Math.max(1, Math.min(3, num(parts[3], 2)));
+
+    const snapshot = JSON.parse(JSON.stringify(state.MP_Engine.conditions[tokId] || []));
+    const markerBefore = tok.get("status_" + CONDITION_MARKERS.dazzled);
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "✅" : "❌"} ${name}`);
+
+    const fakeArea = {
+      atkName: "Test Flash",
+      atkCharIdForCond: char.id,
+      saveBC: "EN",
+      saveMod: 0,
+      recMod: -12,
+      recTime: "1 round",
+      senseLoss: levels,
+      isSaveAttack: true,
+      tokens: {}
+    };
+    fakeArea.tokens[tokId] = { charId: char.id, name: char.get("name"), escaped: false };
+
+    const baseSave = getAttrNum(char.id, "endurance_save", 10);
+
+    // 1. Forced pass (roll 1): no condition
+    state.MP_Engine.conditions[tokId] = [];
+    resolveAreaSenseLoss(fakeArea, tokId, 1);
+    check(`forced pass (roll 1 vs ${baseSave}-) => no condition`, (state.MP_Engine.conditions[tokId] || []).length === 0);
+
+    // 2. Forced fail (roll 19 w/ -30 mod): dazzled condition with senseLevels
+    state.MP_Engine.conditions[tokId] = [];
+    fakeArea.saveMod = -30;
+    resolveAreaSenseLoss(fakeArea, tokId, 19);
+    let conds = state.MP_Engine.conditions[tokId] || [];
+    let c0 = conds.find(c => c.type === "dazzled");
+    check(`forced fail => dazzled, senseLevels ${levels}`, !!c0 && c0.senseLevels === levels && !c0.permanent);
+    check(`recTN = base ${baseSave} - 30 - 12 = ${baseSave - 42}`, !!c0 && c0.recTN === baseSave - 42);
+    let vis = visionLossInfo(tokId);
+    check(`vision reflects loss (eff=${vis.effective})`, vis.effective === Math.max(0, 2 - levels));
+
+    // 3. Refresh in place: second fail doesn't stack a duplicate
+    resolveAreaSenseLoss(fakeArea, tokId, 19);
+    conds = state.MP_Engine.conditions[tokId] || [];
+    check(`re-apply refreshes, no duplicate (count=${conds.filter(c => c.type === "dazzled").length})`,
+      conds.filter(c => c.type === "dazzled").length === 1);
+
+    // 4. Fumble (roll 20): permanent
+    state.MP_Engine.conditions[tokId] = [];
+    fakeArea.saveMod = 0;
+    resolveAreaSenseLoss(fakeArea, tokId, 20);
+    conds = state.MP_Engine.conditions[tokId] || [];
+    c0 = conds.find(c => c.type === "dazzled");
+    check(`fumble (roll 20) => PERMANENT`, !!c0 && c0.permanent === true);
+
+    // Restore
+    state.MP_Engine.conditions[tokId] = snapshot;
+    tok.set("status_" + CONDITION_MARKERS.dazzled, markerBefore === true);
+
+    const passCount = results.filter(r => r.startsWith("✅")).length;
+    ch("MP", `/w gm <b style="color:#c88fff;">TEST FLASH</b> (${levels} level(s)) — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
   }
 
   // Apply / extend a durational attack effect on a target token (MP Modifiers, "Duration").
@@ -2827,7 +3113,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isSaveAttack = (getAtk("attack_is_save") === "1") || (atkType === "sav");
     const saveBC = getAtk("attack_save_bc") || "";
     const saveMod = num(getAtk("attack_save_mod"), 0);
-    const recMod = num(getAtk("attack_save_rec") || getAtk("attack_recovery"), 0);
+    // v2.89.1: Sense Loss (Flash) — levels of visible-light sense lost on a
+    // failed save (1 Mild / 2 Flash / 3 Strong). Recovery each between-rounds
+    // phase at -12 per the rules; used as the default when Rec is blank.
+    const senseLoss = isSaveAttack ? Math.max(0, Math.min(3, num(getAtk("attack_sense_loss"), 0))) : 0;
+    const recRaw = getAtk("attack_save_rec") || getAtk("attack_recovery");
+    const recMod = (senseLoss > 0 && String(recRaw || "").trim() === "") ? -12 : num(recRaw, 0);
     let recTime = getAtk("attack_save_rec_time") || "1 round";
     const noDamage = (getAtk("attack_no_damage") === "1");
     
@@ -2934,8 +3225,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const rangeData = calculateRangeWithProfile(atkTok, defTok, atkCharId, defChar.id);
     const rangePenalty = rangeData.penalty;
-    
-    const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty;
+
+    // v2.89.0: attacker vision penalty (dazzle/darkness/glare conditions).
+    // Basic vision: -3. Blind: config penalty (default -6), attack proceeds
+    // (rough location by hearing) but the GM sees a warning banner.
+    const atkVision = atkTok ? visionLossInfo(atkTok.id) : { lost: 0, effective: 2, effLabel: "Full", causes: [] };
+    const atkVisionPenalty = visionAtkPenalty(atkVision);
+    if (atkVision.effective <= 0) {
+      ch("MP", `${wt(msg)}<div style="background:#8e2b2b; border:2px solid #000; padding:4px 8px; color:#fff;">🕶 <b>${esc(atkChar.get("name"))}</b> is attacking <b>BLIND</b> (${esc(atkVision.causes.join(", "))}) — ${atkVisionPenalty} to hit. GM: confirm they can locate the target (hearing etc.).</div>`);
+    }
+
+    const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty + atkVisionPenalty;
 
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
@@ -3048,6 +3348,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       outcome, isCrit, isFumble, critResult, fumbleResult,
       damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType,
       atkAP, isSaveAttack, saveBC, saveMod, recMod, recTime, noDamage, saveDamage,
+      senseLoss,
       snBP, snMaxBP, snType, causesKB,
       isSiphon: isSiphonAttack, siphonDrain, siphonMode, siphonBC, siphonCat,
       isPushing, pushAmount, rangeData, created: Date.now(),
@@ -3120,6 +3421,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (defValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${defValue}`;
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
     if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
+    if (atkVisionPenalty !== 0) hoverBreakdown += `&#10;Vision: ${atkVisionPenalty} (${atkVision.effLabel}: ${atkVision.causes.join(", ")})`;
     
     // Range penalty tooltip
     if (rangeData && typeof rangeData.inches === "number") {
@@ -3441,7 +3743,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       siphonDrain: rec.siphonDrain,
       siphonMode: rec.siphonMode,
       siphonBC: rec.siphonBC,
-      siphonCat: rec.siphonCat
+      siphonCat: rec.siphonCat,
+      // v2.89.1: sense-loss save attacks (Flash) resolve per-target saves
+      isSaveAttack: !!rec.isSaveAttack,
+      saveBC: rec.saveBC || "",
+      saveMod: num(rec.saveMod, 0),
+      recMod: num(rec.recMod, 0),
+      recTime: rec.recTime || "1 round",
+      senseLoss: num(rec.senseLoss, 0),
+      atkCharIdForCond: rec.atkCharId
     };
     
     // Build output
@@ -3449,7 +3759,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden; margin-top:4px;">`;
     html += `<div style="background:${hdrBg}; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">💥 AREA ${outcome}</div>`;
     html += `<div style="padding:6px 10px; background:#16213e; border-bottom:1px solid #2a2a4a;">`;
-    html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; Damage: <b style="color:#fff;">${rec.damageTotal}</b> ${esc(rec.dmgTypeStr)}`;
+    if (num(rec.senseLoss, 0) > 0) {
+      html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; <b style="color:#f4d03f;">FLASH</b> — ${esc(rec.saveBC || "EN")} save or lose <b style="color:#fff;">${rec.senseLoss}</b> vision level(s)`;
+    } else {
+      html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; Damage: <b style="color:#fff;">${rec.damageTotal}</b> ${esc(rec.dmgTypeStr)}`;
+    }
     html += `<br/>To-Hit: <b style="color:#fff;">${rec.targetTotal}-</b> <span style="color:#aab; font-size:11px;">(+6 immobile, no def)</span> &middot; Roll: <b style="color:#fff;">${rec.roll}</b>`;
     if (scatterNote) html += `<br/><span style="color:#f1c40f; font-weight:bold;">${scatterNote.trim()}</span>`;
     html += `</div>`;
@@ -3487,9 +3801,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       });
       
       // GM buttons
+      const applyLabel = (num(rec.senseLoss, 0) > 0) ? "Resolve All Saves" : "Apply All Damage";
       html += `<div style="margin-top:6px;">${btn(`Auto-Roll NPCs`, `!mp arearollnpcs --id ${rollId}`)}`;
       html += ` ${btn(`Force All Escapes`, `!mp areaforceall --id ${rollId}`)}`;
-      html += ` ${btnDanger(`Apply All Damage`, `!mp areadamageall --id ${rollId}`)}</div>`;
+      html += ` ${btnDanger(applyLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
       html += `</div>`;
     }
     
@@ -3707,6 +4022,67 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
   // Resolve one area target with a chosen roll-with divert. Returns an html result line.
+  // v2.89.1: per-target save for a sense-loss area attack (Flash, Light
+  // Control B). Failed save: dazzled condition, senseLevels from the attack
+  // row, recovery each between-rounds phase at recMod (default -12).
+  // Fumbled INITIAL save: permanently blinded (rules). Optional forcedRoll
+  // for the test harness.
+  function resolveAreaSenseLoss(areaRec, tokId, forcedRoll) {
+    const tokData = areaRec.tokens[tokId];
+    const tok = getObj("graphic", tokId);
+    const char = getObj("character", tokData.charId);
+    if (!tok || !char) {
+      return `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b> - token missing</span>`;
+    }
+
+    const saveAttr = bcToSaveAttr(areaRec.saveBC || "EN") || "endurance_save";
+    const baseSave = getAttrNum(tokData.charId, saveAttr, 10);
+    const tn = baseSave + num(areaRec.saveMod, 0);
+    const d20 = (forcedRoll !== undefined) ? forcedRoll : randomInteger(20);
+    const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
+    const pass = !isFumble && (d20 <= tn);
+
+    if (pass) {
+      return `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> saves (${tn}-, rolled ${d20}) — vision unaffected</span>`;
+    }
+
+    const levels = Math.max(1, Math.min(3, num(areaRec.senseLoss, 2)));
+    const recTN = baseSave + num(areaRec.saveMod, 0) + num(areaRec.recMod, -12);
+    const marker = CONDITION_MARKERS.dazzled;
+
+    if (!state.MP_Engine.conditions[tokId]) state.MP_Engine.conditions[tokId] = [];
+    const condList = state.MP_Engine.conditions[tokId];
+    const condition = {
+      type: "dazzled",
+      sourceAtk: areaRec.atkName,
+      atkCharId: areaRec.atkCharIdForCond,
+      saveBC: areaRec.saveBC || "EN",
+      saveTN: tn,
+      recTN: recTN,
+      recTime: areaRec.recTime || "1 round",
+      startRound: state.MP_Engine.currentRound,
+      marker: marker,
+      created: Date.now(),
+      permanent: isFumble,
+      senseLevels: levels,
+      effectDesc: getConditionDesc("dazzled", areaRec.atkName),
+      damage: 0, dmgType: null, protKey: null
+    };
+    let condIdx = condList.findIndex(c => c.type === "dazzled");
+    if (condIdx >= 0) condList[condIdx] = condition; // refresh in place
+    else { condList.push(condition); condIdx = condList.length - 1; }
+    tok.set("status_" + marker, true);
+
+    const visNow = visionLossInfo(tokId);
+    let out = `<br/><span style="color:#e94560;">\u2717 <b>${esc(tokData.name)}</b> FAILS (${tn}-, rolled ${d20}${isFumble ? " FUMBLE" : ""}) — loses ${levels} vision level(s), now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
+    if (isFumble) {
+      out += `<br/><span style="color:#ff0000; font-weight:bold; font-size:11px;">\ud83d\udc80 FUMBLE — blindness is PERMANENT!</span>`;
+    } else {
+      out += `<br/><span style="font-size:11px;">Rec: ${esc(areaRec.saveBC || "EN")} at <b>${recTN}-</b> every ${esc(areaRec.recTime || "1 round")}</span> ${btn(`Recovery`, `!mp recover --target ${tokId} --idx ${condIdx}`)}`;
+    }
+    return out;
+  }
+
   function resolveAreaTarget(areaRec, tokId, divertWanted) {
     const tokData = areaRec.tokens[tokId];
     const tok = getObj("graphic", tokId);
@@ -3714,6 +4090,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     tokData.applied = true;
     if (!tok || !char) {
       return `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b> - token missing</span>`;
+    }
+    // v2.89.1: sense-loss area attacks (Flash) roll a per-target save
+    // instead of applying damage. No protection to the save (no Damage
+    // Type; only the Protected Sense Modifier mitigates - GM adjudicated).
+    if (areaRec.isSaveAttack && num(areaRec.senseLoss, 0) > 0) {
+      return resolveAreaSenseLoss(areaRec, tokId);
     }
     const c = computeAreaPen(areaRec, tokData);
     const tokIsVehicle = c.tokIsVehicle;
@@ -3821,8 +4203,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
     
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden;">`;
-    html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">AREA DAMAGE RESULTS</div>`;
-    html += `<div style="padding:6px 10px;"><b style="color:#fff;">${areaRec.damage}</b> ${esc(areaRec.damageType)}`;
+    const isSenseArea = num(areaRec.senseLoss, 0) > 0;
+    html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">${isSenseArea ? "AREA FLASH RESULTS" : "AREA DAMAGE RESULTS"}</div>`;
+    html += `<div style="padding:6px 10px;">`;
+    if (isSenseArea) {
+      html += `${esc(areaRec.saveBC || "EN")} save or lose <b style="color:#fff;">${areaRec.senseLoss}</b> vision level(s)`;
+    } else {
+      html += `<b style="color:#fff;">${areaRec.damage}</b> ${esc(areaRec.damageType)}`;
+    }
     
     let deferred = 0;
     Object.keys(areaRec.tokens).forEach(tokId => {
@@ -3941,7 +4329,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const allResolved = Object.values(areaRec.tokens).every(t => t.escaped !== null);
     if (allResolved) {
-      const resolvedHtml = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. ${btnDanger(`Apply All Damage`, `!mp areadamageall --id ${rollId}`)}</div>`;
+      const doneLabel = (num(areaRec.senseLoss, 0) > 0) ? "Resolve All Saves" : "Apply All Damage";
+      const resolvedHtml = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. ${btnDanger(doneLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
       if (CFG.GM_ONLY_BUTTONS) {
         chToChar("MP", resolvedHtml, areaRec.atkCharId);
       } else {
@@ -6053,9 +6442,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // For Damaging Poison: protection does NOT apply to save TN
     // For Paralytic Poison/other saves: protection DOES apply to save TN
-    const protForSave = isDamagingPoison ? 0 : Math.floor(prot);
-    const invulnForSave = isDamagingPoison ? 0 : invulnBonus;
-    const adaptForSave = isDamagingPoison ? 0 : adaptBonus;
+    // v2.89.1: Sense-loss (Flash) attacks have no Damage Type and "can only
+    // be mitigated by the Protected Sense Modifier" — no protection to save.
+    const isSenseLossAttack = num(rec.senseLoss, 0) > 0;
+    const protForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : Math.floor(prot);
+    const invulnForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : invulnBonus;
+    const adaptForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : adaptBonus;
 
     // Roll-with for saves: spend Power to add to save TN (4.8.3.1)
     // Cost is 1 Power per +1 bonus to save TN
@@ -6103,11 +6495,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!pass) {
       // Determine condition type and marker
       // We already calculated isDamagingPoison and rawCondDamage above
-      const condType = isDamagingPoison ? "damaging_poison" : inferConditionType(rec.atkName, rec.saveBC, rec.dmgTypeStr, rawCondDamage);
+      // v2.89.1: sense-loss attacks (Flash) always produce a dazzled condition
+      const condType = isSenseLossAttack ? "dazzled"
+        : (isDamagingPoison ? "damaging_poison" : inferConditionType(rec.atkName, rec.saveBC, rec.dmgTypeStr, rawCondDamage));
       const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
       
-      // Check for fumble = permanent effect (Flash)
-      const isPermanent = isFumble && atkNameLower.includes("flash");
+      // Check for fumble = permanent effect (Flash: fumbled initial save = permanently blinded)
+      const isPermanent = isFumble && (isSenseLossAttack || atkNameLower.includes("flash"));
       
       // For Damaging Poison, use the damage value
       const hasDamage = conditionDealsDamage(condType);
@@ -6127,6 +6521,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         created: Date.now(),
         permanent: isPermanent,
         effectDesc: getConditionDesc(condType, rec.atkName),
+        // v2.89.1: levels of visible-light sense lost — from the attack row's
+        // Sense Loss field (Flash 1/2/3); legacy save attacks default to 2.
+        senseLevels: isSenseLossAttack ? num(rec.senseLoss, 0)
+          : ((condType === "dazzled" || condType === "blinded") ? 2 : 0),
         // For damaging conditions (Damaging Poison)
         damage: condDamage,
         dmgType: hasDamage ? rec.dmgTypeStr : null,
@@ -6156,6 +6554,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Build status line
       const condLabel = condType.replace(/_/g, " ").toUpperCase();
       statusLine = `<br/><span style="color:#e94560; font-weight:bold;">⚠️ ${condLabel}!</span>`;
+      if (isSenseLossAttack) {
+        const visNow = visionLossInfo(rec.defTokenId);
+        statusLine += `<br/><span style="font-size:11px;">Loses <b>${num(rec.senseLoss, 0)}</b> level(s) of vision — now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
+      }
       
       // For Damaging Poison: apply damage immediately on failed save
       // Protection applies to DAMAGE (not save TN) for damaging poison
@@ -6240,6 +6642,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       case "poisoned": return "Poisoned - paralytic effect";
       case "damaging_poison": return "Damaging Poison/Venom - takes damage each failed save";
       case "feared": return "Feared - strong fear imposed";
+      case "darkness": return "In Darkness field - vision dampened";
+      case "glare": return "In Glare field - vision overloaded";
       default: return `Affected by ${atkName}`;
     }
   }
@@ -6272,6 +6676,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       log(`MP cmdRecover: Found cond type="${cond.type}", marker="${cond.marker}", recTN=${cond.recTN}`);
       if (cond.permanent) {
         return ch("MP", `/w gm <b>MP:</b> This condition is <b>PERMANENT</b> and cannot be recovered from naturally.`);
+      }
+      if (cond.environmental || SENSE_ENV_TYPES.indexOf(cond.type) >= 0) {
+        return ch("MP", `/w gm <b>MP:</b> <b>${esc(cond.type)}</b> is environmental — no recovery roll. Clear it with <code>!mp ${cond.type} --off --target ${tokId}</code> (or move the token out of the field).`);
       }
       tn = cond.recTN;
       bc = cond.saveBC;
@@ -7317,6 +7724,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `</div>`;
     });
 
+    // --- Vision (v2.89.0: dazzle/darkness/glare sense loss) ---
+    const vis = visionLossInfo(tokId);
+    if (vis.lost > 0) {
+      const visColor = vis.effective === 0 ? "#ff6b6b" : "#f4d03f";
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="color:${visColor};">👁 Vision: <b>${vis.effLabel}</b></span> <span style="color:#aab; font-size:11px;">(${esc(vis.causes.join(", "))})</span><br/>`;
+      const tokConds = state.MP_Engine.conditions[tokId] || [];
+      const dazIdx = tokConds.findIndex(c => (c.type === "dazzled" || c.type === "blinded") && !c.permanent);
+      if (dazIdx >= 0) html += `${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${dazIdx}`)} `;
+      if (tokConds.some(c => c.type === "dazzled" && c.permanent)) html += `<span style="color:#ff6b6b; font-size:11px;">PERMANENT dazzle </span>`;
+      if (vis.darkness > 0) html += `${btnDanger(`Clear Darkness`, `!mp darkness --off --target ${tokId}`)} `;
+      if (vis.glare > 0) html += `${btnDanger(`Clear Glare`, `!mp glare --off --target ${tokId}`)}`;
+      html += `</div>`;
+    }
+
     // --- Bleeding ---
     if (state.MP_Engine.bleeds && state.MP_Engine.bleeds[tokId]) {
       html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
@@ -7945,6 +8367,10 @@ function cmdStance(msg, args) {
         return testSnare(msg, args);
       case "status":
         return testStatus(msg, args);
+      case "senseloss":
+        return testSenseLoss(msg, args);
+      case "flash":
+        return testFlash(msg, args);
       case "heal":
         return testHeal(msg, args);
       case "reset":
@@ -7958,6 +8384,8 @@ function cmdStance(msg, args) {
           <code>!mp test damage N [type] [--ap:N] [--headshot]</code> - Apply N damage (AP tests vs target's Hardened)<br/>
           <code>!mp test save BC MOD REC [dtype]</code> - Test save attack (dtype tests target's Invuln +8)<br/>
           <code>!mp test snare BP [MAX]</code> - Apply snare to selected token<br/>
+          <code>!mp test senseloss</code> - Vision-loss model self-test (select 1 token; non-destructive)<br/>
+          <code>!mp test flash [LEVELS]</code> - Flash save/condition self-test (select 1 token; non-destructive)<br/>
           <code>!mp test heal N</code> - Heal N hits to selected token<br/>
           <code>!mp test reset</code> - Reset selected token to full Hits/Power<br/>
           <code>!mp test status</code> - Show selected token's full status (shows Hardened/Invuln)`);
@@ -8991,8 +9419,13 @@ function cmdStance(msg, args) {
     } else if (setting === "autoroll") {
       state.MP_Engine.autoroll = (value === "on" || value === "true" || value === "1");
       ch("MP", "/w gm Auto-roll damage: " + (state.MP_Engine.autoroll ? "ON" : "OFF"));
+    } else if (setting === "blindpen") {
+      // Blind-attack to-hit penalty (v2.89.0). Stored negative; accepts "6" or "-6".
+      const p = -Math.abs(num(value, 6));
+      state.MP_Engine.blindPenalty = p;
+      ch("MP", "/w gm Blind attack penalty: " + p);
     } else {
-      ch("MP", "/w gm Config options: enabled (on/off), autoroll (on/off)");
+      ch("MP", "/w gm Config options: enabled (on/off), autoroll (on/off), blindpen (N, default 6)");
     }
   }
 
@@ -9099,6 +9532,14 @@ function cmdStance(msg, args) {
       case "snareclear":
         if (gmOnly(msg)) return;
         return cmdSnareClear(msg, args);
+      // Sense-loss fields (v2.89.0)
+      case "darkness":
+        if (gmOnly(msg)) return;
+        return cmdSenseField(msg, args, "darkness");
+      case "glare":
+        if (gmOnly(msg)) return;
+        return cmdSenseField(msg, args, "glare");
+
       case "kb": return cmdKnockback(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
       case "grapple": return cmdGrapple(msg, args);
@@ -9310,7 +9751,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.88.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.89.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -9318,6 +9759,8 @@ function cmdStance(msg, args) {
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt -N]</code> - Siphon pools<br/>
           <code>!mp time [advance N unit | set YYYY-MM-DD HH:MM]</code> - Game clock (Turn Tracker auto-advances rounds)<br/>
           <code>!mp bleed list | start | stop --target TOKID</code> - Bleeding 4.8.4.2 (1 Power/game min)<br/>
+          <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Darkness field on selected tokens (GM)<br/>
+          <code>!mp glare --ranks 1-3 [--off] [--target TOKID]</code> - Glare field (cancels Darkness ranks) (GM)<br/>
           <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
           <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
@@ -10705,11 +11148,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.88.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.89.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
-  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr };
+  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.88.0 READY");
+  log("MP ENGINE v2.89.1 READY");
 });

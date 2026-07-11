@@ -1,4 +1,9 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.54 - Immunity flag on attack cog panel
+<!-- Mighty Protectors Roll20 Character Sheet v44.55 - Sense Loss field on save-attack row (Flash)
+     Requires MP Engine v2.89.1+ for sense-loss save resolution.
+        v44.55: Sense Loss select (attr_attack_sense_loss) on the save-attack row — Flash /
+          dazzle attacks reduce the target's visible-light sense by 1-3 levels on a failed
+          save (engine v2.89.1 applies the dazzled condition; fumble = permanent per rules)
+        v44.54: Immunity flag on attack cog panel
         - Row 2: Immune checkbox (attr_attack_immunity) beside Area — Immunity (+2.5) excludes
           the attacker's own character from their Area Effect (engine v2.78.0)
         v44.53: Siphon Attack rows on the attack cog panel
@@ -923,6 +928,15 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_attack_no_damage" value="1" title="No damage - save effect only (e.g., Fear, Flash, Paralysis)" />
             <label title="No damage - save effect only (e.g., Fear, Flash, Paralysis)">No Dmg</label>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Sense Loss (Flash): levels of visible-light sense lost on a failed save. 1 = Mild Flash, 2 = Flash, 3 = Strong Flash. Fumbled initial save = permanent. Recovery defaults to -12 if Rec is blank.">👁−:</label>
+            <select name="attr_attack_sense_loss" title="Sense Loss (Flash): levels of visible-light sense lost on a failed save. 1 = Mild Flash, 2 = Flash, 3 = Strong Flash. Fumbled initial save = permanent. Recovery defaults to -12 if Rec is blank." style="width:52px !important;">
+              <option value="0" selected>--</option>
+              <option value="1">1 lvl</option>
+              <option value="2">2 lvls</option>
+              <option value="3">3 lvls</option>
+            </select>
           </div>
         </div>
 
