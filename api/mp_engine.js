@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.89.1 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.89.2 - 2026-07-10
+ * v2.89.2: !mp restore now clears sense-loss state. Player branch clears
+ *   the four sense markers (bleeding-eye dazzle, interdiction blind,
+ *   ninja-mask darkness, aura glare); condition records were already
+ *   wiped but markers lingered. Vehicle branch previously returned early
+ *   without touching the conditions map at all - it now clears the same
+ *   markers AND deletes conditions for the token, so a vehicle left in a
+ *   Darkness/Glare field restores clean.
  * v2.89.1: FLASH AS SAVE ATTACK (chunk 2). Sheet v44.55 adds a Sense Loss
  *   select (attack_sense_loss, 0-3 levels) to the save-attack row. Engine
  *   reads it at attack time; when > 0 on a save attack: (1) single-target
@@ -680,7 +687,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.89.1 FILE STARTING");
+log("MP ENGINE v2.89.2 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -7835,7 +7842,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         
         // Clear status markers
         tok.set("status_dead", false);
+        // v2.89.2: vehicles can sit in Darkness/Glare fields too
+        tok.set("status_bleeding-eye", false);
+        tok.set("status_interdiction", false);
+        tok.set("status_ninja-mask", false);
+        tok.set("status_aura", false);
         tok.set(CFG.DEF_MOD_BAR, 0);
+        
+        // v2.89.2: clear conditions (darkness/glare etc.) - previously the
+        // vehicle branch returned early without touching the conditions map
+        if (state.MP_Engine.conditions && state.MP_Engine.conditions[tok.id]) {
+          delete state.MP_Engine.conditions[tok.id];
+        }
         
         restored.push((getAttr(char.id, "vehicle_name") || char.get("name")) + ` 🚗 (H:${vHitsMax} P:${vPowMax})`);
         return;
@@ -7862,6 +7880,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tok.set("status_purple", false);      // Absorption effect active
       tok.set("status_blue", false);        // Defensive stance
       tok.set("status_white-tower", false); // Full defense
+      // v2.89.2: sense-loss markers (Flash dazzle, blindness, Darkness, Glare)
+      tok.set("status_bleeding-eye", false); // Dazzled (Flash / Laser dazzle)
+      tok.set("status_interdiction", false); // Blinded
+      tok.set("status_ninja-mask", false);   // Darkness field
+      tok.set("status_aura", false);         // Glare field
       
       // Reset defense modifier (bar3)
       tok.set(CFG.DEF_MOD_BAR, 0);
@@ -9751,7 +9774,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.89.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.89.2</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -11148,11 +11171,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.89.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.89.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.89.1 READY");
+  log("MP ENGINE v2.89.2 READY");
 });
