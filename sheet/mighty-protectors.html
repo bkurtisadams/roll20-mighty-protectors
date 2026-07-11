@@ -1,5 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.58 - Sense Field row on abilities cog panel
+<!-- Mighty Protectors Roll20 Character Sheet v44.59 - Importer tags for sense abilities
      Requires MP Engine v2.89.1+ for sense-loss save resolution.
+        v44.59: Notes-tag recognition for sense abilities (chunk 6). Attack notes:
+          flash:LEVELS[:SAVEMOD] populates Flash save rows (is_save, no_damage, EN,
+          sense_loss); dazzle:SAVEMOD populates Laser dazzle save fields. Ability notes:
+          field:darkness|glare:RANKS:SENSES:DIAM and field:glow:DIAM populate the Sense
+          Field row. Match-only - manual entries are never reset.
         v44.58: Sense Field row (Row 1.75) on the abilities cog panel - Field type
           (Darkness/Glare/Glow), Ranks, Senses (=PR/round), Diameter, and a Field Card
           button posting the engine's GM control card (!mp fieldcard, engine v2.90.2)
@@ -1737,7 +1742,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Row 4: Codes -->
         <div style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
           <label style="color:#888; font-size:9px; display:block; margin-bottom:2px;" title="Effect Codes for API automation">Codes:</label>
-          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, absorb:Fire:25..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR" />
+          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, field:darkness:2:1:9..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR | field:darkness|glare:RANKS:SENSES:DIAM | field:glow:DIAM" />
         </div>
 
         <!-- Info button -->
@@ -4521,6 +4526,23 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         updates[rowPrefix + "_attack_ap"] = apMatch[1] || "ALL";
       }
       
+      // flash:LEVELS[:SAVEMOD] - Flash save attack (Light Control B), v44.59
+      var flashMatch = notes.match(/flash:([1-3])(?::([+-]?\d+))?/);
+      if (flashMatch) {
+        updates[rowPrefix + "_attack_is_save"] = "1";
+        updates[rowPrefix + "_attack_no_damage"] = "1";
+        updates[rowPrefix + "_attack_save_bc"] = "EN";
+        updates[rowPrefix + "_attack_sense_loss"] = flashMatch[1];
+        if (flashMatch[2]) updates[rowPrefix + "_attack_save_mod"] = flashMatch[2];
+      }
+      
+      // dazzle:SAVEMOD - Laser dazzle called-shot save (Light Control A), v44.59
+      var dazzleMatch = notes.match(/dazzle:([+-]?\d+)/);
+      if (dazzleMatch) {
+        updates[rowPrefix + "_attack_save_bc"] = "EN";
+        updates[rowPrefix + "_attack_save_mod"] = dazzleMatch[1];
+      }
+      
       if (Object.keys(updates).length > 0) {
         setAttrs(updates);
       }
@@ -4567,6 +4589,21 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           var apMatch = notes.match(/ap:?(\d+)?/);
           if (apMatch) {
             updates[prefix + "_attack_ap"] = apMatch[1] || "ALL";
+          }
+          
+          var flashMatch = notes.match(/flash:([1-3])(?::([+-]?\d+))?/);
+          if (flashMatch) {
+            updates[prefix + "_attack_is_save"] = "1";
+            updates[prefix + "_attack_no_damage"] = "1";
+            updates[prefix + "_attack_save_bc"] = "EN";
+            updates[prefix + "_attack_sense_loss"] = flashMatch[1];
+            if (flashMatch[2]) updates[prefix + "_attack_save_mod"] = flashMatch[2];
+          }
+          
+          var dazzleMatch = notes.match(/dazzle:([+-]?\d+)/);
+          if (dazzleMatch) {
+            updates[prefix + "_attack_save_bc"] = "EN";
+            updates[prefix + "_attack_save_mod"] = dazzleMatch[1];
           }
         });
         if (Object.keys(updates).length > 0) {
@@ -4797,6 +4834,21 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           if (autofireMatch) {
             updates[prefix + "_ability_mod_type"] = "autofire";
             updates[prefix + "_ability_autofire_rof"] = autofireMatch[1];
+          }
+          
+          // field:darkness|glare:RANKS:SENSES:DIAM or field:glow:DIAM (v44.59)
+          // Match-only: never resets, so manual Sense Field entries survive.
+          var fieldMatch = notesLower.match(/field:(darkness|glare):([1-3]):(\d+):(\d+)/);
+          if (fieldMatch) {
+            updates[prefix + "_ability_sense_field"] = fieldMatch[1];
+            updates[prefix + "_ability_sf_ranks"] = fieldMatch[2];
+            updates[prefix + "_ability_sf_senses"] = fieldMatch[3];
+            updates[prefix + "_ability_sf_diameter"] = fieldMatch[4];
+          }
+          var glowMatch = notesLower.match(/field:glow:(\d+)/);
+          if (glowMatch) {
+            updates[prefix + "_ability_sense_field"] = "glow";
+            updates[prefix + "_ability_sf_diameter"] = glowMatch[1];
           }
           
           if (notesLower.indexOf("conductive") !== -1) {

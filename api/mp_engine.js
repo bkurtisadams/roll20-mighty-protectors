@@ -1,4 +1,46 @@
-/* Mighty Protectors Roll20 API Engine v2.90.2 - 2026-07-10
+/* Mighty Protectors Roll20 API Engine v2.91.2 - 2026-07-10
+ * v2.91.2: SENSE CARD CONTRAST + STOPWATCH RESTORE FIX. The Invisibility,
+ *   Darkness/Glare apply-remove, and Glow chat cards emitted bare text
+ *   with #aab gray annotations - unreadable on Roll20's light chat
+ *   bubbles. All three now use the standard dark card container
+ *   (#1a1a2e, color #eee, muted notes #8a84a8) like the status/area
+ *   cards, which control their own contrast. !mp restore now also clears
+ *   the status_stopwatch duration badge in both branches (records were
+ *   already wiped via the conditions map; the marker lingered - same bug
+ *   class as the v2.89.2 sense markers).
+ * v2.91.1: ACQUIRE-ONCE PERSISTENCE + IMPORTER TAGS (chunk 6).
+ *   Acquisition results now persist per attacker/defender pair (RAW 4.6:
+ *   re-roll only when the target "has moved, started sneaking, become
+ *   invisible, etc."). A signature covering defender position, defender
+ *   concealment (invisible/blur/sneaking), the attacker's own vision
+ *   impairment, and the sense level/opposition invalidates automatically
+ *   when any of it changes - no manual re-arm needed. Held acquisitions
+ *   show a green "Already acquired [tier], held from round N" card;
+ *   blocked ("-") results are never cached so the attacker may retry.
+ *   Cache pruned on round advance (>50 rounds old); !mp restore forgets
+ *   acquisitions involving restored tokens.
+ *   Sheet v44.59 importer tags (match-only, never resets manual entries):
+ *   attack notes flash:LEVELS[:SAVEMOD] -> Flash save row (is_save,
+ *   no_damage, EN, sense_loss); dazzle:SAVEMOD -> Laser dazzle save
+ *   fields; ability notes field:darkness|glare:RANKS:SENSES:DIAM and
+ *   field:glow:DIAM -> Sense Field row.
+ * v2.91.0: INVISIBILITY (chunk 5). !mp invis [--blur] [--sneaking] |
+ *   --off on selected tokens (or --target): half-haze marker, condition
+ *   {type:"invisible", blur, sneaking}, voluntary (no recovery roll -
+ *   drop with --off, free per RAW). PR 1/round auto-drains on Turn
+ *   Tracker round advance (tickInvisibility in advanceRound); at 0 Power
+ *   invisibility DROPS with a report line. TARGETING: observationLevel()
+ *   combines attacker vision impairment with defender concealment - full
+ *   Invisibility blocks vision entirely (acquisition falls back to Basic
+ *   hearing, per RAW "Basic senses still detect... unless sneaking");
+ *   Blur reduces the observer's effective vision one level; a sneaking
+ *   invisible target opposes the perception check at -(AG save - 10)
+ *   per 3.0.2.4, shown in the roll text. rollAcquisition gained a
+ *   modifier param (nat 1/20 confirms roll vs the modified TN). An
+ *   INVISIBLE ATTACKER gets a Surprise-bonus reminder card (4.6) - GM
+ *   applies via --mod. !mp status shows an Invisibility row with Drop
+ *   button; !mp restore clears the marker; !mp recover refuses (points
+ *   at !mp invis --off). !mp test invis: 6-check self-test (2 tokens).
  * v2.90.2: GLOW + ABILITIES-PANEL FIELD UI (chunk 4). !mp glow --diameter
  *   N sets the selected/target token's aura1 to the field radius (light
  *   yellow, player-visible); --off clears it. PR 1 + 1/hour is a card
@@ -759,7 +801,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.90.2 FILE STARTING");
+log("MP ENGINE v2.91.2 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -968,6 +1010,7 @@ MP.Engine = (function () {
     duration: "stopwatch",
     darkness: "ninja-mask",
     glare: "aura",
+    invisible: "half-haze",
     generic: "padlock"
   };
 
@@ -1094,26 +1137,148 @@ MP.Engine = (function () {
   // effective level of the best sense used (0-3). When vision is None, the
   // caller falls back to default human hearing (Basic). forcedRolls =
   // [first, confirm] for the test harness.
-  function rollAcquisition(charId, senseLevel, forcedRolls) {
+  // v2.91.0: optional modifier adjusts the perception TN (e.g. opposition
+  // from a sneaking target per 3.0.2.4: -(target AG save - 10)).
+  function rollAcquisition(charId, senseLevel, forcedRolls, modifier) {
     const inSave = getAttrNum(charId, "intelligence_save", 10);
+    const mod = num(modifier, 0);
+    const tn = inSave + mod;
     const d1 = (forcedRolls && forcedRolls[0] !== undefined) ? forcedRolls[0] : randomInteger(20);
     let outcome, d2 = null;
     if (d1 === 1) {
       d2 = (forcedRolls && forcedRolls[1] !== undefined) ? forcedRolls[1] : randomInteger(20);
-      outcome = (d2 <= inSave) ? "critSuccess" : "succeed"; // a 1 always succeeds (3.0.1)
+      outcome = (d2 <= tn) ? "critSuccess" : "succeed"; // a 1 always succeeds (3.0.1)
     } else if (d1 === 20) {
       d2 = (forcedRolls && forcedRolls[1] !== undefined) ? forcedRolls[1] : randomInteger(20);
-      outcome = (d2 > inSave) ? "critFumble" : "fail"; // a 20 always fails
+      outcome = (d2 > tn) ? "critFumble" : "fail"; // a 20 always fails
     } else {
-      outcome = (d1 <= inSave) ? "succeed" : "fail";
+      outcome = (d1 <= tn) ? "succeed" : "fail";
     }
     const row = ACQ_TABLE[Math.max(0, Math.min(3, senseLevel))] || ACQ_TABLE[1];
     const tier = row[outcome];
     const eff = acqTierEffect(tier);
     return {
       tier, outcome, blocked: eff.blocked, toHitMod: eff.toHitMod, label: eff.label,
-      inSave, d1, d2
+      inSave, mod, tn, d1, d2
     };
+  }
+
+  // -------------------------
+  // INVISIBILITY (v2.91.0)
+  // -------------------------
+  // How well can this attacker observe this defender? Combines the
+  // attacker's own vision impairment (darkness/dazzle) with the defender's
+  // Invisibility/Blur condition:
+  //   - full Invisibility blocks vision entirely -> fall back to default
+  //     human hearing (Basic). RAW: Basic senses still detect an invisible
+  //     character easily unless they're ALSO sneaking - a sneaking target
+  //     opposes the check at -(AG save - 10) per 3.0.2.4.
+  //   - Blur reduces the observer's effective vision by one level.
+  function observationLevel(atkTokId, defTokId, defCharId) {
+    const atkVision = visionLossInfo(atkTokId);
+    const defConds = (state.MP_Engine.conditions && state.MP_Engine.conditions[defTokId]) || [];
+    const inv = defConds.find(c => c.type === "invisible");
+    let visLevel = atkVision.effective;
+    if (inv) visLevel = inv.blur ? Math.max(0, visLevel - 1) : 0;
+    const oppMod = (inv && inv.sneaking) ? -Math.max(0, getAttrNum(defCharId, "agility_save", 10) - 10) : 0;
+    const needsRoll = atkVision.lost > 0 || !!inv;
+    if (visLevel > 0) {
+      const lvlLabel = visLevel === 2 ? "Full" : "Basic";
+      return { level: visLevel, label: `vision (${lvlLabel}${inv && inv.blur ? ", blurred" : ""})`, oppMod, needsRoll, inv, atkVision };
+    }
+    return { level: 1, label: `hearing (Basic${inv && !inv.blur ? " - target invisible" : ""})`, oppMod, needsRoll, inv, atkVision };
+  }
+
+  // !mp invis --on [--blur] [--sneaking] | --off  (selected tokens or --target)
+  // Voluntary: an action to activate, PR 1/round (auto-drained on round
+  // advance; drops at 0 Power). Free to drop. Not GM-gated - players may
+  // toggle their own ability, like Glow.
+  function cmdInvis(msg, args) {
+    const turnOff = ("off" in args);
+    const isBlur = ("blur" in args);
+    const isSneaking = ("sneaking" in args) || ("sneak" in args);
+    const marker = CONDITION_MARKERS.invisible;
+
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else if (msg.selected && msg.selected.length) {
+      msg.selected.forEach(s => { if (s._type === "graphic") ids.push(s._id); });
+    }
+    if (!ids.length) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Select token(s) or use --target. Usage: <code>!mp invis [--blur] [--sneaking] | --off</code>`);
+    }
+
+    const lines = [];
+    ids.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      if (!tok) return;
+      const tokChar = getCharFromToken(tok);
+      const tokName = tokChar ? tokChar.get("name") : (tok.get("name") || "token");
+      if (!state.MP_Engine.conditions[tokId]) state.MP_Engine.conditions[tokId] = [];
+      const conds = state.MP_Engine.conditions[tokId];
+      const idx = conds.findIndex(c => c.type === "invisible");
+
+      if (turnOff) {
+        if (idx >= 0) {
+          conds.splice(idx, 1);
+          if (!conds.some(c => c.marker === marker)) tok.set("status_" + marker, false);
+          lines.push(`<b>${esc(tokName)}</b> — visible again (no action or Power to drop).`);
+        } else {
+          lines.push(`<b>${esc(tokName)}</b> — wasn't invisible.`);
+        }
+        return;
+      }
+
+      const condition = {
+        type: "invisible",
+        sourceAtk: isBlur ? "Blur" : "Invisibility",
+        blur: isBlur,
+        sneaking: isSneaking,
+        marker: marker,
+        permanent: false,
+        environmental: true, // voluntary - no recovery roll
+        effectDesc: getConditionDesc("invisible", "Invisibility"),
+        startRound: state.MP_Engine.currentRound,
+        created: Date.now()
+      };
+      if (idx >= 0) conds[idx] = condition; else conds.push(condition);
+      tok.set("status_" + marker, true);
+      lines.push(`<b>${esc(tokName)}</b> — ${isBlur ? "BLURRED (observers -1 sense level)" : "INVISIBLE (vision blocked)"}${isSneaking ? ", sneaking (opposed AG)" : ""}. <span style="font-size:11px; color:#8a84a8;">Takes an action; PR 1/round auto-drains on round advance. Gear carried turns invisible too; drops become visible.</span>`);
+    });
+
+    let out = `<div style="background:#1a1a2e; border:2px solid #5a4fcf; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    out += `<b style="color:#c8b8ff;">🫥 Invisibility</b>`;
+    lines.forEach(l => out += `<br/>` + l);
+    if (!turnOff) out += `<br/><span style="font-size:11px; color:#8a84a8;">Undetected characters get the Surprise bonus (4.6). Basic senses (hearing) still detect a non-sneaking invisible character.</span>`;
+    out += `</div>`;
+    ch("MP", `${wt(msg)}` + out);
+  }
+
+  // Round-advance upkeep: PR 1/round per invisible token; drops at 0 Power.
+  function tickInvisibility(n) {
+    let frag = "";
+    const condMap = state.MP_Engine.conditions || {};
+    Object.keys(condMap).forEach(tokId => {
+      const conds = condMap[tokId];
+      const idx = (conds || []).findIndex(c => c.type === "invisible");
+      if (idx < 0) return;
+      const tok = getObj("graphic", tokId);
+      if (!tok) { conds.splice(idx, 1); return; } // token gone - clean up
+      const char = getCharFromToken(tok);
+      const name = char ? char.get("name") : (tok.get("name") || "token");
+      const pow0 = getResource(tok, char ? char.id : null, CFG.POWER_BAR, CFG.POWER_ATTR);
+      const cost = Math.min(n, pow0);
+      const pow1 = Math.max(0, pow0 - n);
+      setResource(tok, char ? char.id : null, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+      if (pow1 <= 0) {
+        conds.splice(idx, 1);
+        if (!conds.some(c => c.marker === CONDITION_MARKERS.invisible)) tok.set("status_" + CONDITION_MARKERS.invisible, false);
+        frag += `<br/><span style="color:#ff6b6b;">🫥 <b>${esc(name)}</b> can't pay PR (Power ${pow0}→${pow1}) — <b>invisibility DROPS</b></span>`;
+      } else {
+        frag += `<br/><span style="color:#8a84a8; font-size:11px;">🫥 ${esc(name)} invisible: -${cost} Power (${pow0}→${pow1})</span>`;
+      }
+    });
+    return frag;
   }
 
   // Shared handler for !mp darkness / !mp glare (GM).
@@ -1214,12 +1379,14 @@ MP.Engine = (function () {
       }
     });
 
-    let out = `<b>${label} Field</b> (${kind === "darkness" ? "🌑" : "☀️"})`;
+    let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    out += `<b>${kind === "darkness" ? "🌑" : "☀️"} ${label} Field</b>`;
     applied.forEach(l => out += `<br/>${l}`);
     removed.forEach(l => out += `<br/>${l}`);
     if (turnOn) {
-      out += `<br/><span style="font-size:11px; color:#aab;">GM: pay caster PR per round manually (PR = senses affected); toggle tokens as they enter/leave. Darkness &amp; Glare ranks cancel.</span>`;
+      out += `<br/><span style="font-size:11px; color:#8a84a8;">GM: pay caster PR per round manually (PR = senses affected); toggle tokens as they enter/leave. Darkness &amp; Glare ranks cancel.</span>`;
     }
+    out += `</div>`;
     ch("MP", `/w gm ` + out);
   }
 
@@ -1238,14 +1405,14 @@ MP.Engine = (function () {
 
     if ("off" in args) {
       tok.set("aura1_radius", "");
-      return ch("MP", `${wt(msg)}<b>Glow</b> ☀️ <b>${esc(name)}</b> — light out.`);
+      return ch("MP", `${wt(msg)}<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>☀️ Glow</b> — <b>${esc(name)}</b> light out.</div>`);
     }
     const diameter = num(args.diameter, 0);
     if (diameter <= 0) return ch("MP", `${wt(msg)}<b>MP:</b> Usage: <code>!mp glow --diameter N</code> (inches, from the Glow CP table) or <code>--off</code>.`);
     tok.set("aura1_radius", diameter / 2);
     tok.set("aura1_color", "#f7e463");
     tok.set("showplayers_aura1", true);
-    return ch("MP", `${wt(msg)}<b>Glow</b> ☀️ <b>${esc(name)}</b> lights a <b>${diameter}"</b> area. <span style="font-size:11px; color:#aab;">PR 1 to activate, 1/hour to maintain (GM).</span> ${btn(`Glow Off`, `!mp glow --off --target ${tok.id}`)}`);
+    return ch("MP", `${wt(msg)}<div style="background:#1a1a2e; border:2px solid #f7e463; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#f7e463;">☀️ Glow</b> — <b>${esc(name)}</b> lights a <b>${diameter}"</b> area.<br/><span style="font-size:11px; color:#8a84a8;">PR 1 to activate, 1/hour to maintain (GM).</span><br/>${btn(`Glow Off`, `!mp glow --off --target ${tok.id}`)}</div>`);
   }
 
   // v2.90.2: GM control card for a Darkness/Glare/Glow field, posted by the
@@ -1445,6 +1612,66 @@ MP.Engine = (function () {
 
     const passCount = results.filter(r => r.startsWith("✅")).length;
     ch("MP", `/w gm <b style="color:#c88fff;">TEST ACQUIRE</b> (IN ${inSave}-) — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
+  }
+
+  // Self-test: !mp test invis (GM, select 2 tokens: observer first, target
+  // second). Exercises observationLevel + opposed acquisition with stubbed
+  // conditions. Non-destructive (snapshots/restores both tokens).
+  function testInvis(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (sel.length < 2) return ch("MP", `/w gm <b>MP:</b> Select <b>2</b> tokens (observer, target), then run <code>!mp test invis</code>.`);
+    const obsTokId = sel[0]._id, tgtTokId = sel[1]._id;
+    const tgtTok = getObj("graphic", tgtTokId);
+    const tgtChar = getCharFromToken(tgtTok);
+    if (!tgtChar) return ch("MP", `/w gm <b>MP:</b> Target token must be linked to a character (needs an AG save).`);
+    const agSave = getAttrNum(tgtChar.id, "agility_save", 10);
+
+    const snapObs = JSON.parse(JSON.stringify(state.MP_Engine.conditions[obsTokId] || []));
+    const snapTgt = JSON.parse(JSON.stringify(state.MP_Engine.conditions[tgtTokId] || []));
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "✅" : "❌"} ${name}`);
+
+    // 1. baseline: no roll needed
+    state.MP_Engine.conditions[obsTokId] = [];
+    state.MP_Engine.conditions[tgtTokId] = [];
+    let o = observationLevel(obsTokId, tgtTokId, tgtChar.id);
+    check(`baseline: no roll, vision Full`, !o.needsRoll && o.level === 2);
+
+    // 2. target invisible: roll needed, fallback hearing Basic, no opposition
+    state.MP_Engine.conditions[tgtTokId] = [{ type: "invisible", blur: false, sneaking: false }];
+    o = observationLevel(obsTokId, tgtTokId, tgtChar.id);
+    check(`invisible target => hearing Basic, no opp (lvl=${o.level}, opp=${o.oppMod})`, o.needsRoll && o.level === 1 && o.oppMod === 0 && o.label.indexOf("hearing") === 0);
+
+    // 3. invisible + sneaking: opposition -(AG-10)
+    state.MP_Engine.conditions[tgtTokId] = [{ type: "invisible", blur: false, sneaking: true }];
+    o = observationLevel(obsTokId, tgtTokId, tgtChar.id);
+    check(`sneaking opposes at ${-Math.max(0, agSave - 10)} (AG ${agSave})`, o.oppMod === -Math.max(0, agSave - 10));
+
+    // 4. blur vs Full observer: vision Basic
+    state.MP_Engine.conditions[tgtTokId] = [{ type: "invisible", blur: true, sneaking: false }];
+    o = observationLevel(obsTokId, tgtTokId, tgtChar.id);
+    check(`blur vs Full => vision Basic (lvl=${o.level})`, o.needsRoll && o.level === 1 && o.label.indexOf("vision") === 0);
+
+    // 5. blur + observer darkness 1: vision gone => hearing fallback
+    state.MP_Engine.conditions[obsTokId] = [{ type: "darkness", senseLevels: 1 }];
+    o = observationLevel(obsTokId, tgtTokId, tgtChar.id);
+    check(`blur + darkness 1 => hearing fallback`, o.level === 1 && o.label.indexOf("hearing") === 0);
+
+    // 6. opposed acquisition math: forced mid-roll vs modified TN
+    state.MP_Engine.conditions[obsTokId] = [];
+    const obsChar = getCharFromToken(getObj("graphic", obsTokId));
+    if (obsChar) {
+      const inSave = getAttrNum(obsChar.id, "intelligence_save", 10);
+      const a = rollAcquisition(obsChar.id, 1, [inSave], -Math.max(0, agSave - 10));
+      const expectFail = inSave > inSave - Math.max(0, agSave - 10);
+      check(`opposed TN = ${inSave}${-Math.max(0, agSave - 10)} => roll ${inSave} ${expectFail && agSave > 10 ? "fails" : "passes"}`,
+        agSave > 10 ? (a.outcome === "fail") : (a.outcome === "succeed"));
+    }
+
+    state.MP_Engine.conditions[obsTokId] = snapObs;
+    state.MP_Engine.conditions[tgtTokId] = snapTgt;
+    const passCount = results.filter(r => r.startsWith("✅")).length;
+    ch("MP", `/w gm <b style="color:#c88fff;">TEST INVIS</b> — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
   }
 
   // Apply / extend a durational attack effect on a target token (MP Modifiers, "Duration").
@@ -3544,26 +3771,68 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // table. Vision at Basic rolls the Basic row; vision at None falls back
     // to default human hearing (Basic row, labeled). Full vision needs no
     // roll for ordinary targets (a Full sense IDs even on a failed check).
+    // v2.91.0: the defender's Invisibility/Blur also forces the roll -
+    // observationLevel() combines attacker impairment with defender
+    // concealment, and a sneaking invisible target opposes at -(AG-10).
     // RAW: re-roll acquisition if the target moves/sneaks/turns invisible.
     const atkVision = atkTok ? visionLossInfo(atkTok.id) : { lost: 0, effective: 2, effLabel: "Full", causes: [] };
+    const obs = atkTok ? observationLevel(atkTok.id, defTokenId, defChar.id)
+      : { level: 2, label: "vision (Full)", oppMod: 0, needsRoll: false, inv: null, atkVision };
     let atkVisionPenalty = 0;
     let acqNote = "";
     let acqHover = "";
-    if (atkVision.lost > 0 && atkTok) {
-      const usingFallback = (atkVision.effective <= 0);
-      const senseLevelUsed = usingFallback ? 1 : atkVision.effective; // blind -> Basic hearing
-      const senseLabel = usingFallback ? "hearing (Basic)" : `vision (${atkVision.effLabel})`;
-      const acq = rollAcquisition(atkCharId, senseLevelUsed);
-      atkVisionPenalty = acq.toHitMod;
-      const rollTxt = `IN ${acq.inSave}-, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}`;
-      acqHover = `&#10;Acquire [${acq.tier}]: ${acq.toHitMod} (${senseLabel}, ${rollTxt})`;
-      if (acq.blocked) {
-        ch("MP", `${wt(msg)}<div style="background:#8e2b2b; border:2px solid #000; padding:4px 8px; color:#fff;">🕶 <b>${esc(atkChar.get("name"))}</b> fails to acquire <b>${esc(defTok.get("name") || "the target")}</b> by ${senseLabel} (${rollTxt} — ${esc(acq.outcome)}) — <b>cannot attack</b> (4.6 tier "-"). ${esc(atkVision.causes.join(", "))}</div>`);
-        return;
+    if (obs.needsRoll && atkTok) {
+      // v2.91.1: ACQUIRE ONCE (4.6 RAW: "re-roll to acquire any target which
+      // has moved, started sneaking, become invisible, etc."). A successful
+      // acquisition persists for this attacker/defender pair until the
+      // signature changes: defender position, defender concealment state
+      // (invisible/blur/sneaking), or the attacker's own vision impairment.
+      // Blocked ("-") results are never cached - the attacker may retry.
+      if (!state.MP_Engine.acquired) state.MP_Engine.acquired = {};
+      const acqKey = atkTok.id + "|" + defTokenId;
+      const acqSig = [
+        Math.round(num(defTok.get("left"), 0)), Math.round(num(defTok.get("top"), 0)),
+        obs.inv ? `inv:${obs.inv.blur ? 1 : 0}:${obs.inv.sneaking ? 1 : 0}` : "vis",
+        `atk:${atkVision.lost}:${atkVision.causes.join("|")}`,
+        `lvl:${obs.level}:${obs.oppMod}`
+      ].join(";");
+      const cached = state.MP_Engine.acquired[acqKey];
+
+      if (cached && cached.sig === acqSig) {
+        atkVisionPenalty = cached.toHitMod;
+        acqHover = `&#10;Acquired [${cached.tier}]: ${cached.toHitMod} (${obs.label}, held from round ${cached.round})`;
+        acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">🎯 Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)</div>`;
+        ch("MP", `${wt(msg)}` + acqNote);
+      } else {
+        const acq = rollAcquisition(atkCharId, obs.level, undefined, obs.oppMod);
+        atkVisionPenalty = acq.toHitMod;
+        const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (sneaking) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}`;
+        const causeTxt = [
+          atkVision.causes.length ? atkVision.causes.join(", ") : null,
+          obs.inv ? (obs.inv.blur ? "target Blurred" : "target Invisible") : null,
+          obs.inv && obs.inv.sneaking ? "sneaking" : null
+        ].filter(Boolean).join("; ");
+        acqHover = `&#10;Acquire [${acq.tier}]: ${acq.toHitMod} (${obs.label}, ${rollTxt})`;
+        if (acq.blocked) {
+          delete state.MP_Engine.acquired[acqKey];
+          ch("MP", `${wt(msg)}<div style="background:#8e2b2b; border:2px solid #000; padding:4px 8px; color:#fff;">🕶 <b>${esc(atkChar.get("name"))}</b> fails to acquire <b>${esc(defTok.get("name") || "the target")}</b> by ${obs.label} (${rollTxt} — ${esc(acq.outcome)}) — <b>cannot attack</b> (4.6 tier "-"). ${esc(causeTxt)}</div>`);
+          return;
+        }
+        state.MP_Engine.acquired[acqKey] = { sig: acqSig, tier: acq.tier, toHitMod: acq.toHitMod, label: acq.label, round: state.MP_Engine.currentRound };
+        const tierColor = acq.tier === "?" ? "#ff6b6b" : (acq.tier === "-3" ? "#f4d03f" : "#2ecc71");
+        acqNote = `<div style="background:#3a2f14; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">🎯 Acquire by ${obs.label}: <b style="color:${tierColor};">[${acq.tier}] ${esc(acq.label)}</b>${acq.toHitMod !== 0 ? ` (${acq.toHitMod} to hit)` : ""} — ${rollTxt} (${esc(causeTxt)})</div>`;
+        ch("MP", `${wt(msg)}` + acqNote);
       }
-      const tierColor = acq.tier === "?" ? "#ff6b6b" : (acq.tier === "-3" ? "#f4d03f" : "#2ecc71");
-      acqNote = `<div style="background:#3a2f14; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">🎯 Acquire by ${senseLabel}: <b style="color:${tierColor};">[${acq.tier}] ${esc(acq.label)}</b>${acq.toHitMod !== 0 ? ` (${acq.toHitMod} to hit)` : ""} — ${rollTxt} (${esc(atkVision.causes.join(", "))})</div>`;
-      ch("MP", `${wt(msg)}` + acqNote);
+    }
+
+    // v2.91.0: an INVISIBLE attacker may qualify for the Surprise bonus
+    // (4.6) if the defender hasn't detected them - GM applies via --mod.
+    if (atkTok) {
+      const atkConds = (state.MP_Engine.conditions && state.MP_Engine.conditions[atkTok.id]) || [];
+      const atkInv = atkConds.find(c => c.type === "invisible");
+      if (atkInv) {
+        ch("MP", `${wt(msg)}<div style="background:#2a2a4a; border:1px solid #5a4fcf; padding:3px 8px; font-size:11px; color:#eee;">🫥 <b>${esc(atkChar.get("name"))}</b> is ${atkInv.blur ? "Blurred" : "INVISIBLE"} — if undetected by the target, the <b>Surprise bonus (4.6)</b> applies (GM: add via --mod / Other).</div>`);
+      }
     }
 
     const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty + atkVisionPenalty;
@@ -6984,6 +7253,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       case "feared": return "Feared - strong fear imposed";
       case "darkness": return "In Darkness field - vision dampened";
       case "glare": return "In Glare field - vision overloaded";
+      case "invisible": return "Invisible - undetectable by sight (PR 1/round)";
       default: return `Affected by ${atkName}`;
     }
   }
@@ -7017,8 +7287,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (cond.permanent) {
         return ch("MP", `/w gm <b>MP:</b> This condition is <b>PERMANENT</b> and cannot be recovered from naturally.`);
       }
-      if (cond.environmental || SENSE_ENV_TYPES.indexOf(cond.type) >= 0) {
-        return ch("MP", `/w gm <b>MP:</b> <b>${esc(cond.type)}</b> is environmental — no recovery roll. Clear it with <code>!mp ${cond.type} --off --target ${tokId}</code> (or move the token out of the field).`);
+      if (cond.environmental || SENSE_ENV_TYPES.indexOf(cond.type) >= 0 || cond.type === "invisible") {
+        const offCmd = (cond.type === "invisible") ? "invis" : cond.type;
+        return ch("MP", `/w gm <b>MP:</b> <b>${esc(cond.type)}</b> has no recovery roll. Clear it with <code>!mp ${offCmd} --off --target ${tokId}</code>.`);
       }
       tn = cond.recTN;
       bc = cond.saveBC;
@@ -8080,6 +8351,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `</div>`;
     }
 
+    // --- Invisibility (v2.91.0) ---
+    const invCond = (state.MP_Engine.conditions[tokId] || []).find(c => c.type === "invisible");
+    if (invCond) {
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="color:#c8b8ff;">🫥 ${invCond.blur ? "Blurred" : "Invisible"}${invCond.sneaking ? " (sneaking)" : ""}</span> <span style="color:#aab; font-size:11px;">PR 1/round auto-drains</span><br/>`;
+      html += `${btnDanger(`Drop Invisibility`, `!mp invis --off --target ${tokId}`)}`;
+      html += `</div>`;
+    }
+
     // --- Bleeding ---
     if (state.MP_Engine.bleeds && state.MP_Engine.bleeds[tokId]) {
       html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
@@ -8181,6 +8461,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         tok.set("status_interdiction", false);
         tok.set("status_ninja-mask", false);
         tok.set("status_aura", false);
+        tok.set("status_half-haze", false);
+        tok.set("status_stopwatch", false);
         tok.set(CFG.DEF_MOD_BAR, 0);
         
         // v2.89.2: clear conditions (darkness/glare etc.) - previously the
@@ -8219,6 +8501,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tok.set("status_interdiction", false); // Blinded
       tok.set("status_ninja-mask", false);   // Darkness field
       tok.set("status_aura", false);         // Glare field
+      tok.set("status_half-haze", false);    // Invisible (v2.91.0)
+      tok.set("status_stopwatch", false);    // Duration effect badge (v2.91.2)
+      // v2.91.1: forget acquisitions involving this token
+      if (state.MP_Engine.acquired) {
+        Object.keys(state.MP_Engine.acquired).forEach(k => {
+          if (k.indexOf(tok.id) >= 0) delete state.MP_Engine.acquired[k];
+        });
+      }
       
       // Reset defense modifier (bar3)
       tok.set(CFG.DEF_MOD_BAR, 0);
@@ -8730,6 +9020,8 @@ function cmdStance(msg, args) {
         return testFlash(msg, args);
       case "acquire":
         return testAcquire(msg, args);
+      case "invis":
+        return testInvis(msg, args);
       case "heal":
         return testHeal(msg, args);
       case "reset":
@@ -8746,6 +9038,7 @@ function cmdStance(msg, args) {
           <code>!mp test senseloss</code> - Vision-loss model self-test (select 1 token; non-destructive)<br/>
           <code>!mp test flash [LEVELS]</code> - Flash save/condition self-test (select 1 token; non-destructive)<br/>
           <code>!mp test acquire</code> - 4.6 target-acquisition table self-test (select 1 token)<br/>
+          <code>!mp test invis</code> - Invisibility/observation self-test (select 2 tokens: observer, target)<br/>
           <code>!mp test heal N</code> - Heal N hits to selected token<br/>
           <code>!mp test reset</code> - Reset selected token to full Hits/Power<br/>
           <code>!mp test status</code> - Show selected token's full status (shows Hardened/Invuln)`);
@@ -9908,6 +10201,8 @@ function cmdStance(msg, args) {
         return cmdSenseField(msg, args, "glare");
       case "glow": return cmdGlow(msg, args);
       case "fieldcard": return cmdFieldCard(msg, args);
+      case "invis":
+      case "invisible": return cmdInvis(msg, args);
 
       case "kb": return cmdKnockback(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
@@ -10120,7 +10415,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.90.2</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.91.2</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -10132,6 +10427,7 @@ function cmdStance(msg, args) {
           <code>!mp glare --ranks 1-3 [--off] [--target TOKID]</code> - Glare field (cancels Darkness ranks) (GM)<br/>
           <code>!mp darkness|glare --circle N | --circle off</code> - Draw/remove a persistent N" field ring at selected token (GM)<br/>
           <code>!mp glow --diameter N | --off</code> - Glow (Light Control D): aura light on selected token<br/>
+          <code>!mp invis [--blur] [--sneaking] | --off</code> - Invisibility on selected tokens (PR 1/round auto-drains)<br/>
           <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
           <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
           <b>Combat:</b><br/>
@@ -11346,11 +11642,19 @@ function cmdStance(msg, args) {
     advanceClock(n * CFG.SECONDS_PER_ROUND);
     const durFrag = tickDurationEffects(n);
     const recFrag = promptDueRecoveries(newRound);
+    const invFrag = tickInvisibility(n);
+    // v2.91.1: prune stale acquisition cache entries
+    if (state.MP_Engine.acquired) {
+      Object.keys(state.MP_Engine.acquired).forEach(k => {
+        if (num(state.MP_Engine.acquired[k].round, 0) < newRound - 50) delete state.MP_Engine.acquired[k];
+      });
+    }
     let report = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">`;
     report += `<b>\u2694\ufe0f Round ${newRound}</b> <span style="color:#8a84a8; font-size:11px;">${fmtGameClock()}</span><br/>`;
     report += `<span style="color:#f4d03f;">\u23f1\ufe0f Check active durations - deduct PR/charges as needed</span>`;
     report += durFrag;
     report += recFrag;
+    report += invFrag;
     report += `</div>`;
     return report;
   }
@@ -11519,11 +11823,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.90.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.91.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
-  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition };
+  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.90.2 READY");
+  log("MP ENGINE v2.91.2 READY");
 });
