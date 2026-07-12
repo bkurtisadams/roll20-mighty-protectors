@@ -1,4 +1,16 @@
-/* Mighty Protectors Roll20 API Engine v2.93.0 - 2026-07-11
+/* Mighty Protectors Roll20 API Engine v2.93.1 - 2026-07-11
+ * v2.93.1: SUBTYPE-AWARE VULNERABILITY/ATTRACT + compact grammar.
+ *   getVulnerabilityMods takes the attack's subtype: a form-specific
+ *   weakness line (RAW half-cost, e.g. "electrical Energy") applies only
+ *   when the incoming attack's subtype matches; type-only lines apply
+ *   type-wide as before. NEW compact notes grammar matching the sheet
+ *   placeholder (which previously parsed to NOTHING - word grammar was
+ *   required): vuln:Energy/electricity:+4, vuln:electricity:+4 (bare
+ *   subtype implies parent), vuln:Kinetic:+2, attract:Entropy/cold:-2.
+ *   Word grammar also gains subtype detection ("Vulnerable to
+ *   electricity +4", "electrical", "fire/flame" -> heat). Rows named
+ *   "Attract..." without "vulner" now scanned too. Both call sites
+ *   (damage apply + save TN) pass rec.dmgSubtype.
  * v2.93.0: WEAKNESS AUTOMATION (Unliving, Can't Feel Pain, Compulsion/
  *   Phobia, Special Requirement). Trait tags on ability-row notes:
  *   unliving:PCT and nopain (read via getWeaknessFlags, no new sheet UI).
@@ -880,7 +892,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.93.0 FILE STARTING");
+log("MP ENGINE v2.93.1 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -3720,13 +3732,54 @@ function generateRowID() {
     return Object.values(byRow);
   }
 
-  function getVulnerabilityMods(charId, damageType) {
+  // v2.93.1: subtype-aware. atkSubtype = the incoming attack's form (e.g.
+  // "electricity"); a form-specific weakness line applies ONLY when the
+  // attack's subtype matches (RAW half-cost specific-form Vulnerability /
+  // Attract, e.g. "electrical Energy"). Type-only lines apply to the whole
+  // type as before. Grammars accepted per line:
+  //   word style:    "Vulnerable to Energy +4", "Attract cold Entropy -2",
+  //                  "Vulnerable to electricity +4" (bare subtype implies type)
+  //   compact style: "vuln:Energy/electricity:+4", "vuln:Energy:+2",
+  //                  "attract:Entropy/cold:-2"  (matches the sheet placeholder)
+  const _DT_ABBREVS = { k:1, kin:1, kinetic:1, e:1, eng:1, energy:1, b:1, bio:1,
+    biochemical:1, ent:1, entropy:1, p:1, psy:1, psychic:1, o:1, oth:1, other:1 };
+
+  function _subtypeToParent(sub) {
+    const s = String(sub || "").toLowerCase().trim();
+    if (!s) return null;
+    if (_DT_ABBREVS[s]) return null; // parent/abbrev, not a subtype
+    return DMG_TYPE_MAP[s] || null;
+  }
+
+  function getVulnerabilityMods(charId, damageType, atkSubtype) {
     const dt = (damageType || "").trim();
     if (!dt) return { protMod: 0, dmgMod: 0, notes: [] };
+    const atkSub = String(atkSubtype || "").trim().toLowerCase();
 
     let protMod = 0; // negative reduces protection
     let dmgMod = 0;  // positive adds to penetrating damage
     const notes = [];
+
+    // does this line's subtype requirement (if any) match the attack?
+    const subMatches = (lineSub) => {
+      if (!lineSub) return true;             // type-wide line
+      if (!atkSub) return false;             // form-specific line, generic attack
+      return atkSub === lineSub || atkSub.indexOf(lineSub) >= 0 || lineSub.indexOf(atkSub) >= 0;
+    };
+    const applyLine = (kind, lineDt, lineSub, numRaw) => {
+      if (String(lineDt || "").toLowerCase() !== dt.toLowerCase()) return;
+      if (!subMatches(lineSub)) return;
+      const formTag = lineSub ? `/${lineSub}` : "";
+      if (kind === "attract") {
+        const delta = -Math.abs(numRaw);
+        protMod += delta;
+        notes.push(`Attract: ${dt}${formTag} ${delta}`);
+      } else {
+        const delta = Math.abs(numRaw);
+        dmgMod += delta;
+        notes.push(`Vulnerable: ${dt}${formTag} +${delta}`);
+      }
+    };
 
     const rows = getRepeatingAbilityRows(charId);
     rows.forEach(r => {
@@ -3734,8 +3787,7 @@ function generateRowID() {
 
       // Don't misread "Invulnerability" as "Vulnerability"
       if (nm.includes("invulner")) return;
-      if (!nm.includes("vulner")) return;
-
+      if (!nm.includes("vulner") && !nm.includes("attract")) return;
 
       const rawNotes = String(r.ability_notes || "");
       const lines = rawNotes.split(/\r?\n|;/).map(s => s.trim()).filter(Boolean);
@@ -3745,34 +3797,44 @@ function generateRowID() {
 
       scanLines.forEach(line => {
         const low = line.toLowerCase();
+
+        // compact grammar: vuln:TYPE[/SUBTYPE]:+N | attract:TYPE[/SUBTYPE]:-N
+        // (also accepts a bare subtype in the TYPE slot: vuln:electricity:+4)
+        const cm = low.match(/\b(vuln|attract):([a-z][a-z ]*?)(?:\/([a-z][a-z ]*?))?:([+-]?\d+)/);
+        if (cm) {
+          const t2 = cm[2].trim();
+          const parentFromSub = _subtypeToParent(t2);
+          const lineDt = parentFromSub || (DMG_TYPE_MAP[t2] || t2);
+          const lineSub = cm[3] ? cm[3].trim() : (parentFromSub ? t2 : "");
+          applyLine(cm[1] === "attract" ? "attract" : "vulnerable", lineDt, lineSub, num(cm[4], 0));
+          return;
+        }
+
+        // word grammar
         const kinds = [];
         if (/\battract\b/.test(low)) kinds.push("attract");
-
-        // Require the actual word "vulnerable" and avoid matching "invulnerable"
         if (/\binvulner/.test(low)) return;
         if (/\bvulnerable\b/.test(low)) kinds.push("vulnerable");
-
         if (!kinds.length) return;
-
-        const dts = _extractDamageTypes(line);
-        if (!dts.length) return;
 
         const numRaw = _extractSignedNumber(line);
         if (numRaw === null) return;
 
-        // Apply only if this line mentions the current damage type
-        if (!dts.some(x => x.toLowerCase() === dt.toLowerCase())) return;
+        // known subtype word in the line? (skip parent/abbrev map keys)
+        let lineSub = "";
+        Object.keys(DMG_TYPE_MAP).forEach(k => {
+          if (_DT_ABBREVS[k] || lineSub) return;
+          if (new RegExp("\\b" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(low)) lineSub = k;
+        });
+        // common adjectival forms
+        if (!lineSub && /\belectric(al)?\b/.test(low)) lineSub = "electricity";
+        if (!lineSub && /\b(fire|flame)\b/.test(low)) lineSub = "heat";
 
-        if (kinds.includes("attract")) {
-          const delta = -Math.abs(numRaw);
-          protMod += delta;
-          notes.push(`Attract: ${dt} ${delta}`);
-        }
-        if (kinds.includes("vulnerable")) {
-          const delta = Math.abs(numRaw);
-          dmgMod += delta;
-          notes.push(`Vulnerable: ${dt} +${delta}`);
-        }
+        let dts = _extractDamageTypes(line);
+        if (!dts.length && lineSub) dts = [_subtypeToParent(lineSub)].filter(Boolean);
+        if (!dts.length) return;
+
+        kinds.forEach(kind => dts.forEach(lineDt => applyLine(kind, lineDt, lineSub, numRaw)));
       });
     });
 
@@ -7178,7 +7240,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     // Vulnerability (opt-in via repeating abilities notes)
-    const vuln = getVulnerabilityMods(defChar.id, damageType);
+    const vuln = getVulnerabilityMods(defChar.id, damageType, rec.dmgSubtype);
     if (vuln.protMod) effectiveProt = Math.max(0, effectiveProt + vuln.protMod);
     
     // Apply armor to damage after FF
@@ -7766,7 +7828,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Vulnerability: for save attacks, "Vulnerable to <Type>" applies as a penalty to the save TN vs that damage type.
     // We reuse getVulnerabilityMods() which encodes vulnerability as +N damage taken; for saves we apply -N.
-    const vulnData = (!rec.noDamageType && rec.dmgTypeStr) ? getVulnerabilityMods(defChar.id, rec.dmgTypeStr) : { protMod: 0, dmgMod: 0, notes: [] };
+    const vulnData = (!rec.noDamageType && rec.dmgTypeStr) ? getVulnerabilityMods(defChar.id, rec.dmgTypeStr, rec.dmgSubtype) : { protMod: 0, dmgMod: 0, notes: [] };
     const vulnSaveMod = (vulnData && vulnData.dmgMod) ? -Math.abs(num(vulnData.dmgMod, 0)) : 0;
 
 
@@ -11162,7 +11224,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.93.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.93.1</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -12582,11 +12644,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.93.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.93.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.93.0 READY");
+  log("MP ENGINE v2.93.1 READY");
 });
