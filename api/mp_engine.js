@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.93.1 - 2026-07-11
+/* Mighty Protectors Roll20 API Engine v2.93.2 - 2026-07-11
+ * v2.93.2: Can't Feel Pain reminder wrapped in its own dark container -
+ *   it was appended after the damage card's closing div, so the yellow
+ *   text rendered on Roll20's light chat bubble (same class of bug as
+ *   the v2.91.2 card contrast fixes).
  * v2.93.1: SUBTYPE-AWARE VULNERABILITY/ATTRACT + compact grammar.
  *   getVulnerabilityMods takes the attack's subtype: a form-specific
  *   weakness line (RAW half-cost, e.g. "electrical Energy") applies only
@@ -892,7 +896,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.93.1 FILE STARTING");
+log("MP ENGINE v2.93.2 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -7604,7 +7608,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // v2.93.0: Can't Feel Pain - IN save to notice damage from a surprise attack
     let painNote = "";
     if (toHits > 0 && getWeaknessFlags(rec.defCharId).nopain) {
-      painNote = `<br/><span style="font-size:11px; color:#f4d03f;">🩹 Can't Feel Pain — if this was a SURPRISE attack, roll IN to notice the damage: </span>${btn(`IN Save`, `!mp sv IN`)}`;
+      painNote = `<div style="background:#1a1a2e; border:1px solid #6b5a1e; border-radius:6px; padding:4px 8px; margin-top:3px; font-family:Arial,sans-serif; font-size:11px; color:#f4d03f; max-width:280px;">🩹 Can't Feel Pain — if this was a SURPRISE attack, roll IN to notice the damage: ${btn(`IN Save`, `!mp sv IN`)}</div>`;
     }
     chToChar("MP", msgLine + painNote + undoButton(applyUndoId), rec.defCharId);
     
@@ -11224,7 +11228,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.93.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.93.2</b> Commands:<br/>
           <b>Quick Macros:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
@@ -12644,11 +12648,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.93.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.93.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.93.1 READY");
+  log("MP ENGINE v2.93.2 READY");
 });
