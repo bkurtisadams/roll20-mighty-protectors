@@ -1,5 +1,7 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.61 - Perceive button on the sense block
+<!-- Mighty Protectors Roll20 Character Sheet v44.62 - Light mode toggle
      Requires MP Engine v2.89.1+ for sense-loss save resolution.
+        v44.62: Light mode checkbox (attr_light_mode) beside the vehicle toggle - CSS-only
+          recolor block (v44.52) scoped to sheet-light-toggle:checked; no worker changes
         v44.61: Perceive roll button on the sense block - !mp perceive with the row's
           sense (engine v2.92.0); select your token before clicking
         v44.60: Heightened/Diminished Sense block (Rows 1.8-1.9) on the abilities cog
@@ -210,6 +212,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   <input type="checkbox" name="attr_compact_mode" class="sheet-compact-toggle" title="Toggle compact mode - hides title and character info" />
   <input type="checkbox" name="attr_color_classic" class="sheet-color-toggle" title="Toggle classic colors (yellow Power, red Hits)" />
   <input type="checkbox" name="attr_vehicle_mode" class="sheet-vehicle-toggle" title="Toggle Vehicle sheet" />
+  <input type="checkbox" name="attr_light_mode" class="sheet-light-toggle" title="Toggle light mode" />
   <label class="sheet-compact-label">Compact</label>
 
   <!-- HEADER SECTION (hidden when compact) -->

@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.51 - Add Vehicle Layout color palette and keyed cell color flags */
+/* Mighty Protectors Character Sheet CSS v44.52 - Light mode toggle (sheet-light-toggle) */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -1376,3 +1376,241 @@
 .charsheet .sheet-panel-field.sheet-arc-field .sheet-arc-controls > .sheet-af[value="F"] {
   margin-left: 0 !important;
 }
+
+/* ========================================
+   LIGHT MODE (v44.52) - sheet-light-toggle
+   Toggle-scoped recolor; appended last so equal-specificity ties win.
+   Tokens: page #e9e7f0 | panel #f7f6fb | input #fff | readonly #eeecf6
+   border #c9c4d8 | ro-border #a89fc6 | ink #26243a | label #6b6880
+   dim #8a8798 | gold #8f6400 | cyan #0b7285 | red #c22636
+   green #1a8a3e | purple #6d3fc0 | vehicle #dfe8f5/#eef3fa/#b8c8de
+   ======================================== */
+.charsheet input.sheet-light-toggle {
+  width: 10px !important;
+  height: 10px !important;
+  opacity: 0.25 !important;
+  cursor: pointer !important;
+}
+.charsheet input.sheet-light-toggle:hover { opacity: 1 !important; }
+
+/* Page wrapper is the toggle's PARENT: needs :has(). If the client strips
+   :has(), only the 4px outer gutter stays dark (cosmetic). */
+.charsheet div[style*="background:#1a1428"]:has(> input.sheet-light-toggle:checked) {
+  background: #e9e7f0 !important;
+  color: #26243a !important;
+}
+.charsheet:has(input.sheet-light-toggle:checked) {
+  scrollbar-color: #b9b3cc #e9e7f0;
+}
+
+/* ---------- inline-style remaps: backgrounds ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div [style*="background:#1a1428"] { background: #e9e7f0 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="background:#1e1e38"] { background: #f7f6fb !important; }
+.charsheet input.sheet-light-toggle:checked ~ div input[style*="background:#1e1e38"] {
+  background: #eeecf6 !important;
+  border-color: #a89fc6 !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div [style*="background:#0d0d1a"] {
+  background: #ffffff !important;
+  border-color: #c9c4d8 !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div [style*="background:#2b2b3d"] { background: #fbfaff !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="background:#444"] { background: #dcd9e6 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="background:#333"] { background: #dcd9e6 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="background:#555"] { background: #cfcadd !important; }
+
+/* ---------- inline-style remaps: borders ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div [style*="solid #2a2040"] { border-color: #c9c4d8 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="solid #4a4070"] { border-color: #a89fc6 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="solid #555"] { border-color: #b9b3cc !important; }
+
+/* ---------- inline-style remaps: text ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#eaeaea"] { color: #26243a !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#aaa"] { color: #6b6880 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#888"] { color: #8a8798 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#f4d03f"] { color: #8f6400 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#8be9fd"] { color: #0b7285 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#50fa7b"] { color: #1a8a3e !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#bd93f9"] { color: #6d3fc0 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#ff6b6b"] { color: #b83232 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#e94560"] { color: #c22636 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#f8caca"] { color: #a3222f !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#ff8a8a"] { color: #a3222f !important; }
+/* white text flips to ink on non-buttons only (roll buttons keep white) */
+.charsheet input.sheet-light-toggle:checked ~ div span[style*="color:#fff"],
+.charsheet input.sheet-light-toggle:checked ~ div div[style*="color:#fff"],
+.charsheet input.sheet-light-toggle:checked ~ div td[style*="color:#fff"],
+.charsheet input.sheet-light-toggle:checked ~ div th[style*="color:#fff"],
+.charsheet input.sheet-light-toggle:checked ~ div label[style*="color:#fff"] { color: #26243a !important; }
+
+/* ---------- state / act dropdowns ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-attack-state-sel,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-prot-state-sel,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-attack-dmgtype-sel,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-ability-state-sel {
+  background: #ffffff !important;
+  color: #26243a !important;
+  border-color: #c9c4d8 !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-atk-act-sel,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-prot-act-sel,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-ability-act-sel {
+  background: #eeecf6 !important;
+  color: #6b6880 !important;
+  border-color: #b9b3cc !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div input.sheet-act-indicator {
+  background: #e2dfec !important;
+  color: #9a96ac !important;
+  border-color: #c9c4d8 !important;
+}
+
+/* ---------- cog + options panel ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-cog-icon { color: #9a96ac !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-cog-icon:hover { color: #55506a !important; }
+.charsheet input.sheet-light-toggle:checked ~ div input.sheet-options-flag:checked ~ * .sheet-cog-icon,
+.charsheet input.sheet-light-toggle:checked ~ div input.sheet-options-flag:checked ~ table .sheet-cog-icon { color: #8f6400 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-options-panel {
+  background: #f1eff8 !important;
+  border-color: #a89fc6 !important;
+  border-top-color: #8f6400 !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-options-panel label { color: #55506a !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-options-panel select,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-options-panel input[type="text"] {
+  background: #ffffff !important;
+  color: #0b7285 !important;
+  border-color: #c9c4d8 !important;
+}
+
+/* ---------- panel fields ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-field label { color: #8a8798 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-field input[type="text"],
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-field input[type="number"],
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-field select,
+.charsheet input.sheet-light-toggle:checked ~ div input.sheet-mod-input {
+  background: #ffffff !important;
+  color: #0b7285 !important;
+  border-color: #c9c4d8 !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-btn {
+  background: #dcd9e6 !important;
+  color: #0b7285 !important;
+  border-color: #b9b3cc !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-btn:hover {
+  background: #cfcadd !important;
+  color: #8f6400 !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-desc {
+  background: #ffffff !important;
+  color: #55506a !important;
+  border-color: #c9c4d8 !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-help { color: #8a8798 !important; border-top-color: #c9c4d8 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-help code { background: #e9e7f0 !important; color: #0b7285 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-panel-divider { background: #b9b3cc !important; }
+
+/* ---------- activation indicators: base (Off) ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div input.sheet-atk-activation-ind,
+.charsheet input.sheet-light-toggle:checked ~ div input.sheet-prot-activation-ind,
+.charsheet input.sheet-light-toggle:checked ~ div input.sheet-ability-type-ind {
+  background: #e2dfec !important;
+  color: #9a96ac !important;
+  border-color: #c9c4d8 !important;
+}
+/* On (P/V) - green chip */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-atk-state-on-flag:checked ~ input.sheet-atk-activation-ind,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-prot-state-on-flag:checked ~ input.sheet-prot-activation-ind,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-state-active-flag:checked ~ input.sheet-ability-type-ind {
+  background: #d9edd9 !important;
+  color: #1f6b1f !important;
+  border-color: #7fb87f !important;
+  box-shadow: 0 0 4px rgba(31, 107, 31, 0.35) !important;
+}
+/* Continual (C) - orange chip */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-atk-state-on-flag:checked ~ input.sheet-atk-activation-c-flag:checked ~ input.sheet-atk-activation-ind,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-prot-state-on-flag:checked ~ input.sheet-prot-activation-c-flag:checked ~ input.sheet-prot-activation-ind,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-state-active-flag:checked ~ input.sheet-ability-type-c-flag:checked ~ input.sheet-ability-type-ind {
+  background: #f6e4cd !important;
+  color: #b25000 !important;
+  border-color: #d98a3d !important;
+  box-shadow: 0 0 4px rgba(178, 80, 0, 0.3) !important;
+}
+/* Siphoned (S) - purple chip */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-atk-activation-s-flag:checked ~ input.sheet-atk-activation-ind,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-prot-activation-s-flag:checked ~ input.sheet-prot-activation-ind,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-ability-type-s-flag:checked ~ input.sheet-ability-type-ind {
+  background: #e8ddf7 !important;
+  color: #6d3fc0 !important;
+  border-color: #a683d9 !important;
+  box-shadow: 0 0 4px rgba(109, 63, 192, 0.3) !important;
+}
+/* Ability Held - yellow chip */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-state-held-flag:checked ~ input.sheet-ability-type-ind {
+  background: #f6efce !important;
+  color: #8a6200 !important;
+  border-color: #caa93d !important;
+  box-shadow: 0 0 4px rgba(138, 98, 0, 0.3) !important;
+}
+
+/* ---------- misc controls ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div button.sheet-prot-roll-btn {
+  background: #dcd9e6 !important;
+  color: #9a96ac !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-prot-afield-flag:checked ~ button.sheet-prot-roll-btn {
+  background: #3498db !important;
+  color: #fff !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-tohit-input {
+  background: #eeecf6 !important;
+  color: #8f6400 !important;
+  border-color: #a89fc6 !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-tohit-tooltip,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-dot-tooltip {
+  background: #fbfaff !important;
+  color: #26243a !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-vatk-tip {
+  background: #fbfaff !important;
+  color: #26243a !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-vatk-tip-val { color: #a3222f !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .career-scroll { scrollbar-color: #b9b3cc #f7f6fb; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-vsys-mod,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-vsys-grant { color: #26243a !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-vsys-gbar { background: #c9c4d8 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-arc-hex {
+  background: #dfe6f2 !important;
+  box-shadow: inset 0 0 0 1px rgba(11, 114, 133, 0.5) !important;
+}
+
+/* ---------- POWER/HITS labels (default + classic-toggle combos) ---------- */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-power-label,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-power-input { color: #c22636 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-hits-label,
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-hits-input { color: #1a8a3e !important; }
+.charsheet input.sheet-color-toggle:checked ~ input.sheet-light-toggle:checked ~ div .sheet-power-label,
+.charsheet input.sheet-color-toggle:checked ~ input.sheet-light-toggle:checked ~ div .sheet-power-input { color: #8f6400 !important; }
+.charsheet input.sheet-color-toggle:checked ~ input.sheet-light-toggle:checked ~ div .sheet-hits-label,
+.charsheet input.sheet-color-toggle:checked ~ input.sheet-light-toggle:checked ~ div .sheet-hits-input { color: #c22636 !important; }
+
+/* ---------- VEHICLE TAB (blue-shifted light) ---------- */
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content { background: #dfe8f5 !important; }
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content div[style*="background:#1e1e38"] { background: #eef3fa !important; }
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content [style*="background:#152035"] { background: #ffffff !important; }
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content input[type="text"],
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content input[type="number"],
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content select,
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content textarea {
+  background: #ffffff !important;
+  color: #26243a !important;
+  border-color: #b8c8de !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content input[readonly] { background: #e4ecf7 !important; }
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content table,
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content td { border-color: #b8c8de !important; }
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content details > div { background: #f2f6fb !important; }
+.charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content .repcontainer > .repitem { border-bottom-color: #c5d3e6 !important; }
