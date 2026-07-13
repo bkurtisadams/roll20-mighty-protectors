@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.93.2 - 2026-07-11
+/* Mighty Protectors Roll20 API Engine v2.93.3 - 2026-07-12
+ * v2.93.3: HELP COMMAND AUDIT. Reorganized !mp help so every manually useful
+ *   command is documented, including Siphon, sense-field powers, grapple
+ *   Squeeze/Release, Restore, token-bar controls, config, GW spawning, and
+ *   aliases. Flash is explicitly documented as attack-row automation rather
+ *   than a nonexistent standalone !mp flash command; !mp test flash is shown.
+ *   Generated chat-button callbacks are listed separately so the dispatcher
+ *   can be audited without presenting them as normal macros.
  * v2.93.2: Can't Feel Pain reminder wrapped in its own dark container -
  *   it was appended after the damage card's closing div, so the yellow
  *   text rendered on Roll20's light chat bubble (same class of bug as
@@ -896,7 +903,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.93.2 FILE STARTING");
+log("MP ENGINE v2.93.3 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -11228,72 +11235,78 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.93.2</b> Commands:<br/>
-          <b>Quick Macros:</b><br/>
-          <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code><br/>
+        return ch("MP", `/w gm <b>MP Engine v2.93.3</b> Commands:<br/>
+          <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/>
+          <b>Attacks and Saves:</b><br/>
+          <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code> - Attack row N<br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
-          <code>!mp sv BC [mod]</code> - Save (EN/AG/IN/CL)<br/>
-          <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt -N]</code> - Siphon pools<br/>
-          <code>!mp time [advance N unit | set YYYY-MM-DD HH:MM]</code> - Game clock (Turn Tracker auto-advances rounds)<br/>
-          <code>!mp bleed list | start | stop --target TOKID</code> - Bleeding 4.8.4.2 (1 Power/game min)<br/>
-          <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Darkness field on selected tokens (GM)<br/>
-          <code>!mp glare --ranks 1-3 [--off] [--target TOKID]</code> - Glare field (cancels Darkness ranks) (GM)<br/>
-          <code>!mp darkness|glare --circle N | --circle off</code> - Draw/remove a persistent N" field ring at selected token (GM)<br/>
-          <code>!mp glow --diameter N | --off</code> - Glow (Light Control D): aura light on selected token<br/>
-          <code>!mp invis [--blur] [--sneaking] | --off</code> - Invisibility on selected tokens (PR 1/round auto-drains)<br/>
-          <code>!mp sneak | --off</code> - Stealth 3.1.5.1 on selected tokens (1/2 move; Basic senses detect on crit only)<br/>
-          <code>!mp sensepanel</code> - GM control card for the whole senses subsystem (buttons act on selection)<br/>
-          <code>!mp perceive [--sense KEY] [--mod N]</code> - 3.1.5 perception check (select observer; 2nd token = subject)<br/>
-          <code>!mp willcheck --mod -N [--present] [--phobia] [--stimulus "x"]</code> - Compulsion/Phobia CL save (GM)<br/>
-          <code>!mp discomfort | --off</code> - Special Requirement unmet: -3 all saves &amp; to-hit<br/>
-          <code>!mp require --interval 7d --consequence discomfort --name "x" | --met | --off | list</code> - Requirement clock (GM)<br/>
-          <code>!mp medical success|crit|fumble</code> (select patient - applies Medical result 4.13.1, once/day)<br/>
-          <code>!mp dailyheal</code> (select token - applies a day's rest healing to bars 4.13)<br/>
-          <b>Combat:</b><br/>
-          <code>!mp apply --id ID --mode MODE --amt N</code><br/>
-          <code>!mp limbsave --id ID --limb leg|arm</code><br/>
-          <code>!mp save --id ID --rollwith N --critmod N</code><br/>
-          <code>!mp recover --target TOKID --idx N</code> - Recovery for condition #N<br/>
+          <code>!mp sv BC [mod]</code> - Save using EN, AG, IN, or CL<br/>
+          <code>!mp atkinfo --row ROWID</code> - Show a selected character's attack-row details<br/>
+          <b>Powers and Senses:</b><br/>
+          <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>)<br/>
+          <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Darkness (<b>GM</b>)<br/>
+          <code>!mp glare --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Glare (<b>GM</b>)<br/>
+          <code>!mp darkness|glare --circle N | --circle off</code> - Draw/remove a field ring (<b>GM</b>)<br/>
+          <code>!mp glow --diameter N | --off</code> - Apply/remove Glow<br/>
+          <code>!mp fieldcard --kind darkness|glare|glow ...</code> - Build the sheet's field control card<br/>
+          <code>!mp invis [--blur] [--sneaking] | --off</code> - Invisibility on selected tokens<br/>
+          <code>!mp sneak | --off</code> - Sneaking on selected tokens<br/>
+          <code>!mp sensepanel</code> - Senses control panel (<b>GM</b>)<br/>
+          <code>!mp perceive [--sense KEY] [--mod N]</code> - Perception check; second selected token is the subject<br/>
+          <code>!mp willcheck --mod N [--present] [--phobia] [--stimulus "x"]</code> - Compulsion/Phobia save (<b>GM</b>)<br/>
+          <code>!mp discomfort | --off</code> - Special Requirement penalty<br/>
+          <code>!mp require --interval 7d --consequence discomfort --name "x" | --met | --off | list</code> - Requirement clock (<b>GM</b>)<br/>
+          <b>Flash:</b> Flash is not a standalone command. Configure the attack row as a save attack with Sense Loss, then use <code>!mp atk</code>. Test it with <code>!mp test flash [LEVELS]</code>.<br/>
+          <b>Conditions, Damage, and Healing:</b><br/>
           <code>!mp conditions --target TOKID</code> - List active conditions<br/>
-          <code>!mp clearcondition --target TOKID --idx N</code> - Clear condition #N<br/>
-          <code>!mp snare --id ID --bonus N</code><br/>
-          <code>!mp break --target TOKID --push 0|1</code><br/>
-          <code>!mp kb --id ID</code><br/>
-          <code>!mp kbsave --target TOKID --penalty N</code><br/>
+          <code>!mp clearcondition --target TOKID --idx N</code> - Clear condition N<br/>
+          <code>!mp recover --target TOKID --idx N</code> - Roll recovery for condition N<br/>
+          <code>!mp checkexpiry [--target TOKID]</code> - Check Absorption expiry<br/>
+          <code>!mp bleed list | start | stop --target TOKID</code> - Bleeding controls (<b>GM</b>)<br/>
+          <code>!mp medical success|crit|fumble</code> - Apply Medical result to selected patient (<b>GM</b>)<br/>
+          <code>!mp dailyheal</code> - Apply daily rest healing to selected token (<b>GM</b>)<br/>
+          <code>!mp wakeup --target TOKID</code> - Attempt to wake an unconscious target<br/>
+          <code>!mp restore</code> - Restore selected token(s) and clear conditions (<b>GM</b>)<br/>
+          <b>Snare and Grapple:</b><br/>
           <code>!mp grapple --atk TOKID --def TOKID</code><br/>
-          <code>!mp grapplelock --target TOKID</code><br/>
-          <code>!mp escape --target TOKID</code><br/>
-          <code>!mp grapplebreak --target TOKID --pushdef 0|1 --pushatk 0|1</code><br/>
-          <code>!mp countergrapple --target TOKID --wrestle 0|1</code><br/>
-          <b>Force Field:</b><br/>
-          <code>!mp ff --target TOKID</code> - Toggle FF on/off (spends PR on activate, toggles aura)<br/>
-          <code>!mp ffreset --target TOKID</code> - Renew FF (zero accum, PR cost)<br/>
-          <code>!mp ffreinforce --id ID</code> - Reinforce FF with saved action at collapse<br/>
-          <code>!mp wakeup --target TOKID</code><br/>
-          <code>!mp status</code> (select token — live control card: grapple/snare/bleed/siphon buttons)<br/>
-          <code>!mp snareclear</code> (select token — GM force-clear any snare/grapple, no roll)<br/>          <code>!mp stat</code> (select token - detailed status with protections)<br/>          <code>!mp info --name &lt;Ability/Weakness&gt;</code><br/>
-          <b>Vehicle:</b><br/>
-          <code>!mp vehicle [--on|--off]</code> - Toggle vehicle mode on dedicated vehicle token<br/>
-
-          <b>Stances (Bar3):</b><br/>
+          <code>!mp squeeze --target TOKID</code> - Damage a grappled target<br/>
+          <code>!mp grapplelock --target TOKID</code> - Lock the grapple<br/>
+          <code>!mp grapplerelease --target TOKID</code> - Release the grapple<br/>
+          <code>!mp grapplebreak --target TOKID [--pushdef 0|1] [--pushatk 0|1]</code><br/>
+          <code>!mp countergrapple --target TOKID [--wrestle 0|1]</code><br/>
+          <code>!mp escape --target TOKID</code> - Escape a lock/counter-grapple<br/>
+          <code>!mp snareclear</code> - Force-clear snare or grapple on selected token (<b>GM</b>)<br/>
+          <b>Force Fields:</b><br/>
+          <code>!mp ff --target TOKID</code> - Toggle Force Field<br/>
+          <code>!mp ffreset --target TOKID</code> - Renew Force Field<br/>
+          <code>!mp ffreinforce --id ID</code> - Reinforce a collapsing Force Field<br/>
+          <b>Stances, Range, and Time:</b><br/>
           <code>!mp stance normal|def|full|offbal|N</code><br/>
-          <code>!mp clearstances</code> - Clear all on page<br/>
-          <code>!mp offbal</code> - Apply Off Balance to selected<br/>
-          <b>Range:</b><br/>
-          <code>!mp range</code> - Check range between 2 selected tokens<br/>
-          <b>Round Tracking:</b><br/>
-          <code>!mp round</code> - Advance to next round<br/>
-          <code>!mp round +N</code> - Advance N rounds<br/>
-          <code>!mp round set N</code> - Set to round N<br/>
-          <code>!mp round show</code> - Show current round<br/>
-          <b>Undo:</b><br/>
-          <code>!mp undo --id ID</code> - Undo a combat card (use the card's ↩ Undo button)<br/>
-          <b>MP Builder Sync:</b><br/>
-          <code>!mp export</code> - Export selected token to handout JSON (for MP Builder)<br/>
-          <code>!mp import --name HandoutName</code> - Import MP Builder JSON from handout<br/>
-          <b>Test Commands:</b><br/>
-          <code>!mp test</code> - Show all test commands<br/>
-          <code>!mp test grapple [TOHIT] [lock]</code> - Grapple harness (select 2 tokens: grappler, target)
+          <code>!mp clearstances</code> - Clear page stances (<b>GM</b>)<br/>
+          <code>!mp offbal</code> - Apply Off Balance to selected token (<b>GM</b>)<br/>
+          <code>!mp range</code> - Check range between two selected tokens<br/>
+          <code>!mp round | +N | set N | show</code> - Round controls (<b>GM</b>)<br/>
+          <code>!mp time show | advance N sec|min|hour|day|week|round | set YYYY-MM-DD HH:MM</code> - Game clock (<b>GM</b>)<br/>
+          <b>Status and Setup:</b><br/>
+          <code>!mp status</code> - Live selected-token control card<br/>
+          <code>!mp stat</code> - Detailed selected-token status<br/>
+          <code>!mp showbars [--bars 1,2,3] [--off]</code> - Show/hide selected token bars (<b>GM</b>)<br/>
+          <code>!mp vehicle [--on|--off]</code> - Toggle selected sheet/token vehicle mode (<b>GM</b>)<br/>
+          <code>!mp config enabled|autoroll|blindpen VALUE</code> - Engine settings<br/>
+          <code>!mp info --name &lt;Ability/Weakness&gt;</code> - Stored rules text<br/>
+          <code>!mp undo --id ID</code> - Undo a combat card (<b>GM</b>)<br/>
+          <b>Import, Export, and Gamma World:</b><br/>
+          <code>!mp export</code> - Export selected token to handout JSON (<b>GM</b>)<br/>
+          <code>!mp import --name HandoutName</code> - Import MP Builder JSON (<b>GM</b>)<br/>
+          <code>!mp gwspawn --name NAME [--form FORM]</code> - Spawn embedded GW bestiary entry (<b>GM</b>)<br/>
+          <b>Tests and Diagnostics:</b><br/>
+          <code>!mp test</code> - Show all test commands (<b>GM</b>)<br/>
+          <code>!mp debug tokens|deltoken X,Y|absorb</code> - Diagnostics (<b>GM</b>)<br/>
+          <code>!mp buttondemo</code> - Inert button-color samples (<b>GM</b>)<br/>
+          <b>Aliases:</b> <code>invisible</code>=<code>invis</code>, <code>sneaking</code>=<code>sneak</code>, <code>veh</code>=<code>vehicle</code>, <code>clearstance</code>=<code>clearstances</code>, <code>offbalance</code>=<code>offbal</code>.<br/>
+          <b>Generated Button Callbacks:</b> These are implemented commands, but normally come from engine-generated chat buttons rather than typed macros:<br/>
+          <code>apply limbsave save snare break kb kbsave areaescape areashield arearollnpcs areaforceall areadamageall arearw arearwrest absorb reflect reflecthit afield afresume afcancel afcounter</code><br/>
+          <code>!mp help</code> - Show this list.
    `);
     }
   }
@@ -12648,11 +12661,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.93.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.93.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.93.2 READY");
+  log("MP ENGINE v2.93.3 READY");
 });
