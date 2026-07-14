@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.93.3 - 2026-07-12
+/* Mighty Protectors Roll20 API Engine v2.96.0 - 2026-07-14
+ * v2.96.0: TRANSMUTATION (p.77). Transmutation-subtype save attacks now bypass
+ *   blanket Other protection and Adaptation entirely; only a protection row
+ *   whose subtype explicitly names "transmutation" and carries the Invuln flag
+ *   grants the +8. sumProtectionWithHardened() gains a dedicatedOnly mode.
+ *   cmdSave gains --weight <lbs> (Alternate Targets: objects resist by physical
+ *   weight via WEIGHT_SAVE_TABLE, 2.1.7.2) and --basesave <n> as a direct
+ *   override. WEIGHT_SAVE_TABLE ships empty and must be populated.
  * v2.93.3: HELP COMMAND AUDIT. Reorganized !mp help so every manually useful
  *   command is documented, including Siphon, sense-field powers, grapple
  *   Squeeze/Release, Restore, token-bar controls, config, GW spawning, and
@@ -2973,7 +2980,11 @@ function generateRowID() {
   // NOTE: Absorption, Reflection, and Ability Field rows are SKIPPED - not passive protection
   // NOTE: Force Field rows are SKIPPED - handled separately with deflection pool
   // NOTE: Hardened is read from separate prot_hard_* fields (not parsed from protection value)
-  function sumProtectionWithHardened(charId, protKey, atkSubtype) {
+  // dedicatedOnly: a protection row only counts if its prot_subtype EXPLICITLY
+  // lists the attack subtype. Used by Transmutation (p.77): "only dedicated
+  // Invulnerability vs. Transmutation works against it" — blanket Other
+  // protection does not cover it.
+  function sumProtectionWithHardened(charId, protKey, atkSubtype, dedicatedOnly) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
     
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
@@ -3039,8 +3050,9 @@ function generateRowID() {
       // 3. If both have subtypes, they must match (protection can be comma-separated list)
       let subtypeMatches = false;
       if (protSubtype === "") {
-        // Protection covers full type - always matches
-        subtypeMatches = true;
+        // Protection covers full type - matches unless the attack demands a
+        // dedicated (subtype-named) defense.
+        subtypeMatches = !dedicatedOnly;
       } else if (atkSub === "") {
         // Attack has no subtype, but protection is subtype-specific - no match
         subtypeMatches = false;
@@ -7766,6 +7778,22 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
   }
 
+  // Transmutation (p.77): non-character targets resist with physical weight.
+  // Fill from the basic characteristics table (2.1.7.2): Carry (Pounds) column
+  // read across to the Saves column. Ascending by maxPounds; last entry wins.
+  const WEIGHT_SAVE_TABLE = [
+    // [maxPounds, baseSave]
+  ];
+  function weightToBaseSave(lbs) {
+    const w = num(lbs, 0);
+    if (w <= 0 || !WEIGHT_SAVE_TABLE.length) return null;
+    let out = WEIGHT_SAVE_TABLE[0][1];
+    for (let i = 0; i < WEIGHT_SAVE_TABLE.length; i++) {
+      if (w >= WEIGHT_SAVE_TABLE[i][0]) out = WEIGHT_SAVE_TABLE[i][1];
+    }
+    return out;
+  }
+
   function cmdSave(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
@@ -7785,20 +7813,41 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const saveDefIsVeh = isVehicleMode(defChar.id);
 
+    // Object/non-character targets (Transmutation Alternate Targets): resist by
+    // physical weight. --weight <lbs> maps through WEIGHT_SAVE_TABLE; --basesave
+    // <n> overrides directly.
+    const weightSave = weightToBaseSave(args.weight);
+    const manualBase = num(args.basesave, 0);
+    let baseSaveNote = "";
+    if (num(args.weight, 0) > 0 && weightSave === null) {
+      return ch("MP", `/w gm <b>MP:</b> WEIGHT_SAVE_TABLE is empty — fill it from 2.1.7.2 or pass <code>--basesave &lt;n&gt;</code>.`);
+    }
+
     // For vehicles, use vehicle EN save attr if save BC is EN
-    const baseSave = saveDefIsVeh
+    let baseSave = saveDefIsVeh
       ? getAttrNum(defChar.id, "vehicle_" + saveAttr, 10)
       : getAttrNum(defChar.id, saveAttr, 10);
+    if (manualBase > 0) {
+      baseSave = manualBase;
+      baseSaveNote = ` <span style="font-size:11px;color:#aaa;">(manual base)</span>`;
+    } else if (weightSave !== null) {
+      baseSave = weightSave;
+      baseSaveNote = ` <span style="font-size:11px;color:#aaa;">(by weight: ${esc(String(args.weight))} lb)</span>`;
+    }
 
     // Protection adds to save (makes it easier) per 4.9
     // EXCEPTION: Damaging Poison - protection only applies to damage, NOT to save TN
     // Also check for invulnerability (+8 bonus) and adaptation (+5 bonus)
+    // Transmutation: Other damage type, but ONLY dedicated Invulnerability vs.
+    // Transmutation defends. Blanket Other protection/Adaptation do nothing.
+    const isTransmutation = String(rec.dmgSubtype || "").trim().toLowerCase() === "transmutation";
+
     const protData = saveDefIsVeh
       ? getVehicleProtection(defChar.id, rec.protKey)
-      : sumProtectionWithHardened(defChar.id, rec.protKey, rec.dmgSubtype);
-    const prot = protData.prot;
+      : sumProtectionWithHardened(defChar.id, rec.protKey, rec.dmgSubtype, isTransmutation);
+    const prot = isTransmutation ? 0 : protData.prot;
     const invulnBonus = protData.invuln ? 8 : 0;
-    const adaptBonus = protData.adapt ? 5 : 0;
+    const adaptBonus = (!isTransmutation && protData.adapt) ? 5 : 0;
     
     // Determine if this is Damaging Poison (protection applies to damage only, not save)
     // Check early so we know whether to apply protection to save TN
@@ -7812,9 +7861,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // v2.89.1: Sense-loss (Flash) attacks have no Damage Type and "can only
     // be mitigated by the Protected Sense Modifier" — no protection to save.
     const isSenseLossAttack = num(rec.senseLoss, 0) > 0;
-    const protForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : Math.floor(prot);
+    const protForSave = (isDamagingPoison || isSenseLossAttack || isTransmutation) ? 0 : Math.floor(prot);
     const invulnForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : invulnBonus;
-    const adaptForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : adaptBonus;
+    const adaptForSave = (isDamagingPoison || isSenseLossAttack || isTransmutation) ? 0 : adaptBonus;
 
     // Roll-with for saves: spend Power to add to save TN (4.8.3.1)
     // Cost is 1 Power per +1 bonus to save TN
