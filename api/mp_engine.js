@@ -5,7 +5,8 @@
  *   grants the +8. sumProtectionWithHardened() gains a dedicatedOnly mode.
  *   cmdSave gains --weight <lbs> (Alternate Targets: objects resist by physical
  *   weight via WEIGHT_SAVE_TABLE, 2.1.7.2) and --basesave <n> as a direct
- *   override. WEIGHT_SAVE_TABLE ships empty and must be populated.
+ *   override. Table populated from the Basic Characteristic Table; lookup is
+ *   closest-match on the Carry (Pounds) column.
  * v2.93.3: HELP COMMAND AUDIT. Reorganized !mp help so every manually useful
  *   command is documented, including Siphon, sense-field powers, grapple
  *   Squeeze/Release, Restore, token-bar controls, config, GW spawning, and
@@ -7781,17 +7782,30 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // Transmutation (p.77): non-character targets resist with physical weight.
   // Fill from the basic characteristics table (2.1.7.2): Carry (Pounds) column
   // read across to the Saves column. Ascending by maxPounds; last entry wins.
+  // [carryPounds, saveNumber] from the Basic Characteristic Table (2.1.7.2).
+  // Objects find the CLOSEST match for their weight in the Carry column and
+  // read across to Saves.
   const WEIGHT_SAVE_TABLE = [
-    // [maxPounds, baseSave]
+    [8, 6], [10, 7], [12, 7], [15, 8], [30, 9], [60, 10],
+    [120, 11], [240, 11], [480, 12], [960, 12],
+    [1920, 13], [3840, 13], [7680, 14], [15360, 14],
+    [30720, 15], [61440, 15], [122880, 16], [245760, 16],
+    [491520, 17], [983040, 17], [1966080, 18], [3932160, 18],
+    [7864320, 19], [15728640, 19], [31457280, 20], [62914560, 20],
+    [125829120, 21], [251658240, 21], [503316480, 22], [1006632960, 22],
+    [2013265920, 23], [4026531840, 23], [8053063680, 24], [16106127360, 24],
+    [32212254720, 25]
   ];
   function weightToBaseSave(lbs) {
     const w = num(lbs, 0);
     if (w <= 0 || !WEIGHT_SAVE_TABLE.length) return null;
-    let out = WEIGHT_SAVE_TABLE[0][1];
-    for (let i = 0; i < WEIGHT_SAVE_TABLE.length; i++) {
-      if (w >= WEIGHT_SAVE_TABLE[i][0]) out = WEIGHT_SAVE_TABLE[i][1];
+    let best = WEIGHT_SAVE_TABLE[0];
+    let bestDist = Math.abs(w - best[0]);
+    for (let i = 1; i < WEIGHT_SAVE_TABLE.length; i++) {
+      const d = Math.abs(w - WEIGHT_SAVE_TABLE[i][0]);
+      if (d < bestDist) { best = WEIGHT_SAVE_TABLE[i]; bestDist = d; }
     }
-    return out;
+    return best[1];
   }
 
   function cmdSave(msg, args) {
@@ -7819,9 +7833,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const weightSave = weightToBaseSave(args.weight);
     const manualBase = num(args.basesave, 0);
     let baseSaveNote = "";
-    if (num(args.weight, 0) > 0 && weightSave === null) {
-      return ch("MP", `/w gm <b>MP:</b> WEIGHT_SAVE_TABLE is empty — fill it from 2.1.7.2 or pass <code>--basesave &lt;n&gt;</code>.`);
-    }
 
     // For vehicles, use vehicle EN save attr if save BC is EN
     let baseSave = saveDefIsVeh
