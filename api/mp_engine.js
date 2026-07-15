@@ -5633,7 +5633,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
     
-    const rangeData = calculateRangeWithProfile(atkTok, defTok, atkCharId, defChar.id);
+    // v2.93.0: Discomfort applies -3 to attacks and perception checks.
+    // Declare it before the target-acquisition code uses it.
+    const atkDiscomfortPenalty =
+      (atkTok && hasDiscomfort(atkTok.id)) ? -3 : 0;
+
+    const rangeData = calculateRangeWithProfile(
+      atkTok,
+      defTok,
+      atkCharId,
+      defChar.id
+    );
     const rangePenalty = rangeData.penalty;
 
     // v2.90.0: 4.6 TARGET ACQUISITION. An attacker with impaired vision
@@ -5668,7 +5678,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (cached && cached.sig === acqSig) {
         atkVisionPenalty = cached.toHitMod + num(obs.extraToHit, 0);
         acqHover = `&#10;Acquired [${cached.tier}]: ${cached.toHitMod} (${obs.label}, held from round ${cached.round})`;
-        acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">🎯 Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)</div>`;
+        acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)</div>`;
         ch("MP", `${wt(msg)}` + acqNote);
       } else {
         const acqDisc = atkDiscomfortPenalty; // -3 on all checks incl. perception
@@ -5713,10 +5723,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    // v2.93.0: Discomfort (Special Requirement unmet): -3 to all rolls to hit
-    const atkDiscomfortPenalty = (atkTok && hasDiscomfort(atkTok.id)) ? -3 : 0;
-
-    const baseToHit = atkSave + 3 + atkMod + abilityTohitBonus + macroMod + atkStancePenalty + rangePenalty + atkRestraintPenalty + atkVisionPenalty + atkDiscomfortPenalty;
+    const baseToHit =
+      atkSave +
+      3 +
+      atkMod +
+      abilityTohitBonus +
+      macroMod +
+      atkStancePenalty +
+      rangePenalty +
+      atkRestraintPenalty +
+      atkVisionPenalty +
+      atkDiscomfortPenalty;
 
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
