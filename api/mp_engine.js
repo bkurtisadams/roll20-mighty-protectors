@@ -1,4 +1,16 @@
-/* Mighty Protectors Roll20 API Engine v2.102.0 - 2026-07-15
+/* Mighty Protectors Roll20 API Engine v2.103.1 - 2026-07-15
+ * v2.103.1: ORDINARY VISION ARC FIX. Visible-light vision now defaults to a
+ *   full 360-degree field instead of silently imposing the MP 90-degree sense
+ *   arc. When Roll20 Limit Field of Vision is enabled on the observer token,
+ *   the engine honors that configured cone and center offset exactly. Other
+ *   non-Global senses retain their normal 90-degree forward arc.
+ * v2.103.0: CHAT BUTTON AUTHORIZATION. Attack-resolution and combat-control callbacks
+ *   now verify the clicking player controls the character whose decision it
+ *   represents; the GM always passes. Pending attacks track per-phase
+ *   resolution so stale/repeated buttons cannot apply damage, saves, snares,
+ *   knockback, limb effects, Ability Field choices, Absorption, or Reflection
+ *   more than once. Save/knockback/snare callbacks derive consequential values
+ *   from the pending record instead of trusting editable chat arguments.
  * v2.102.0: SCAN LOCATE UX. Scan results now number located contacts and put
  *   a Locate button before Attack. !mp locate revalidates current visibility
  *   or the acquire-once signature before issuing a Roll20 sendPing restricted
@@ -966,7 +978,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.93.3 FILE STARTING");
+log("MP ENGINE v2.103.1 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1540,21 +1552,27 @@ MP.Engine = (function () {
     if (!sourceTok || !targetTok) return false;
     if (senseObj && senseObj.glob) return true;
 
-    // MP senses normally cover a 90-degree forward arc. If Roll20 has a
-    // narrower directional-vision cone configured, honor the narrower cone.
-    let total = 90;
-    let center = 0;
-    if (
-      senseKey === "visible" &&
-      mpBool(sourceTok.get("has_limit_field_of_vision"))
-    ) {
-      total = Math.min(
-        total,
-        Math.max(0, num(sourceTok.get("limit_field_of_vision_total"), 90))
+    // Ordinary visible-light vision is omnidirectional unless Roll20's
+    // Limit Field of Vision option is enabled for the observer token. When
+    // enabled, honor the configured cone exactly, including cones wider than
+    // the normal MP 90-degree arc used by other non-Global senses.
+    if (senseKey === "visible") {
+      if (!mpBool(sourceTok.get("has_limit_field_of_vision"))) return true;
+
+      const total = Math.max(
+        0,
+        Math.min(
+          360,
+          num(sourceTok.get("limit_field_of_vision_total"), 90)
+        )
       );
-      center = num(sourceTok.get("limit_field_of_vision_center"), 0);
+      const center = num(sourceTok.get("limit_field_of_vision_center"), 0);
+      return pointInArc(sourceTok, targetTok, total, center);
     }
-    return pointInArc(sourceTok, targetTok, total, center);
+
+    // Non-visual MP senses retain their normal 90-degree forward arc unless
+    // the sense itself is Global (handled above).
+    return pointInArc(sourceTok, targetTok, 90, 0);
   }
 
   function rotateLocalPoint(x, y, degrees) {
@@ -3647,6 +3665,19 @@ MP.Engine = (function () {
       if (ex.voidPending && state.MP_Engine.pending[ex.voidPending]) {
         delete state.MP_Engine.pending[ex.voidPending];
       }
+      // Re-open an individually resolved phase when the GM undoes it.
+      if (ex.reopenPending && state.MP_Engine.pending[ex.reopenPending]) {
+        const pendingRec = state.MP_Engine.pending[ex.reopenPending];
+        if (pendingRec.resolvedPhases && ex.reopenPhase) {
+          delete pendingRec.resolvedPhases[ex.reopenPhase];
+        }
+        if (ex.reopenPhase === "damage") {
+          delete pendingRec.hitsTaken;
+          delete pendingRec.hitsForKB;
+          delete pendingRec.knockback;
+          delete pendingRec.ffOverflow;
+        }
+      }
     }
 
     // Reverse time effects: restore the clock/round and drop any bleed that
@@ -3840,13 +3871,83 @@ function generateRowID() {
     return true;
   }
 
-  // Check if player controls a character (GM always passes)
+  // Check if player controls a character (GM always passes).
+  // Parse controller IDs exactly; substring matching can accidentally authorize
+  // a player whose ID merely appears inside another controller ID.
   function canControl(msg, charId) {
     if (playerIsGM(msg.playerid)) return true;
+    if (!charId) return false;
     const char = getObj("character", charId);
     if (!char) return false;
-    const controlledBy = char.get("controlledby") || "";
-    return controlledBy.includes(msg.playerid) || controlledBy.includes("all");
+    const controllers = String(char.get("controlledby") || "")
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean);
+    return controllers.includes(msg.playerid) || controllers.includes("all");
+  }
+
+  // Require control of a character for a state-changing action.
+  function requireControl(msg, charId, actionLabel) {
+    if (canControl(msg, charId)) return true;
+    const char = charId ? getObj("character", charId) : null;
+    const name = char ? char.get("name") : "that character";
+    ch("MP", `${wt(msg)}<b>MP:</b> You can only ${esc(actionLabel || "use that button")} for a character you control (${esc(name)}).`);
+    return false;
+  }
+
+  // Require the role represented by a pending attack callback.
+  // role: "attacker" or "defender". The GM always passes via requireControl.
+  function requirePendingRole(msg, rec, role, actionLabel) {
+    if (!rec) return false;
+    const charId = role === "attacker" ? rec.atkCharId : rec.defCharId;
+    return requireControl(msg, charId, actionLabel);
+  }
+
+  // Lazy per-phase resolution tracking. Pending records must remain available
+  // after damage for knockback/limb follow-ups, so each phase closes separately.
+  function resolutionDone(rec, phase) {
+    return !!(rec && rec.resolvedPhases && rec.resolvedPhases[phase]);
+  }
+
+  function requireOpenResolution(msg, rec, phase, label) {
+    if (!resolutionDone(rec, phase)) return true;
+    ch("MP", `${wt(msg)}<b>MP:</b> ${esc(label || "That action")} has already been resolved.`);
+    return false;
+  }
+
+  function markResolution(rec, phase, msg) {
+    if (!rec.resolvedPhases) rec.resolvedPhases = {};
+    rec.resolvedPhases[phase] = { by: msg.playerid, at: Date.now() };
+  }
+
+  function allowedApplyModes(rec) {
+    if (!rec) return [];
+    if (rec.isDeathTouch && !isVehicleMode(rec.defCharId)) return ["noroll"];
+    if (rec.isSqueeze) return isVehicleMode(rec.defCharId) ? ["noroll"] : ["noroll", "rwmax", "rw"];
+
+    // Damage generated by a failed recovery save has already had protection
+    // applied before the pending record is created.
+    if (!rec.atkCharId && !rec.critResult && rec.protKey === null) {
+      return ["straight", "noroll", "rollwithmax", "rollwithcustom"];
+    }
+
+    const critType = rec.critResult ? rec.critResult.type : null;
+    const defIsVeh = rec.defCharId && isVehicleMode(rec.defCharId);
+    const hasProtectedBrain = !defIsVeh && rec.defCharId &&
+      num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1;
+    const headShot = (critType === CRIT_TYPES.HEAD_SHOT || rec.isHeadShot) && !hasProtectedBrain;
+    const avoidArmor = rec.isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR;
+
+    if (defIsVeh) {
+      if (avoidArmor) return ["noprot"];
+      if (critType === CRIT_TYPES.SOLID_HIT) return ["solid"];
+      return ["noroll"];
+    }
+    if (headShot) return ["headshot", "headshot_rw"];
+    if (avoidArmor) return ["noprot", "noprot_rwmax", "noprot_rw"];
+    if (critType === CRIT_TYPES.SOLID_HIT) return ["solid", "solid_rwmax", "solid_rw"];
+    if (critType === CRIT_TYPES.PRECISE_HIT) return ["noroll", "precise_rwmax", "precise_rw"];
+    return ["noroll", "rollwithmax", "rollwithcustom"];
   }
 
   // Get the first controlling player ID for a character (or null)
@@ -3870,6 +3971,20 @@ function generateRowID() {
       return;
     }
     chToChars(who, content, [defCharId, atkCharId]);
+  }
+
+  // Send a shared pending-action card, but whisper each button group only to
+  // the character whose controller is authorized to make that choice.
+  function chPendingCard(who, content, rec, groups) {
+    const attackerButtons = groups && groups.attacker ? groups.attacker : "";
+    const defenderButtons = groups && groups.defender ? groups.defender : "";
+    if (!CFG.GM_ONLY_BUTTONS) {
+      ch(who, content + attackerButtons + defenderButtons);
+      return;
+    }
+    chToChars(who, content, [rec && rec.atkCharId, rec && rec.defCharId]);
+    if (attackerButtons && rec && rec.atkCharId) chToChar(who, attackerButtons, rec.atkCharId);
+    if (defenderButtons && rec && rec.defCharId) chToChar(who, defenderButtons, rec.defCharId);
   }
 
   function parseTemplateFields(content) {
@@ -6116,13 +6231,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     let buttons = "";
+    let buttonGroups = { attacker: "", defender: "" };
     if (outcome === "HIT" || outcome === "CRIT") {
       if (isSaveAttack) {
         buttons = buildSaveAttackButtons(uniqueRollId, critResult, pushAmount, noDamage);
+        buttonGroups.defender = buttons;
       } else if (isSnareAttack) {
         buttons = buildSnareAttackButtons(uniqueRollId, critResult, pushAmount);
+        buttonGroups.attacker = buttons;
       } else {
-        buttons = buildStandardAttackButtons(uniqueRollId, critResult, causesKB, state.MP_Engine.pending[uniqueRollId]);
+        const pendingRec = state.MP_Engine.pending[uniqueRollId];
+        buttons = buildStandardAttackButtons(uniqueRollId, critResult, causesKB, pendingRec);
+        buttonGroups = pendingRec.buttonGroups || { attacker: "", defender: buttons };
       }
     }
 
@@ -6139,16 +6259,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       chgBefore: chgDeducted ? atkChgRaw : undefined,
       voidPending: uniqueRollId
     });
-    html += undoButton(atkUndoId);
-
-    if (CFG.GM_ONLY_BUTTONS) {
-      const charTargets = [atkCharId, defChar.id];
-      chToChars("MP", html, charTargets);
-      // Buttons only to defender player (they decide roll-with); helpers CC /w gm
-      if (buttons) chToChar("MP", buttons, defChar.id);
-    } else {
-      ch("MP", html + buttons);
-    }
+    chPendingCard("MP", html, state.MP_Engine.pending[uniqueRollId], buttonGroups);
+    ch("MP", "/w gm " + undoButton(atkUndoId));
   }
 
   // -------------------------
@@ -6265,6 +6377,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Build output
     const hdrBg = (outcome === "HIT" || outcome === "CRIT") ? "#e67e22" : "#c0392b";
+    let gmButtons = "";
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden; margin-top:4px;">`;
     html += `<div style="background:${hdrBg}; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">💥 AREA ${outcome}</div>`;
     html += `<div style="padding:6px 10px; background:#16213e; border-bottom:1px solid #2a2a4a;">`;
@@ -6311,17 +6424,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       // GM buttons
       const applyLabel = (num(rec.senseLoss, 0) > 0) ? "Resolve All Saves" : "Apply All Damage";
-      html += `<div style="margin-top:6px;">${btn(`Auto-Roll NPCs`, `!mp arearollnpcs --id ${rollId}`)}`;
-      html += ` ${btn(`Force All Escapes`, `!mp areaforceall --id ${rollId}`)}`;
-      html += ` ${btnDanger(applyLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
+      gmButtons = `<div style="margin-top:6px;">${btn(`Auto-Roll NPCs`, `!mp arearollnpcs --id ${rollId}`)}` +
+        ` ${btn(`Force All Escapes`, `!mp areaforceall --id ${rollId}`)}` +
+        ` ${btnDanger(applyLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
       html += `</div>`;
     }
     
     html += `</div>`;
     if (CFG.GM_ONLY_BUTTONS) {
       chToChar("MP", html, rec.atkCharId);
+      if (gmButtons) ch("MP", "/w gm " + gmButtons);
     } else {
-      ch("MP", html);
+      ch("MP", html + gmButtons);
     }
   }
 
@@ -6335,7 +6449,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!areaRec) return ch("MP", `${wt(msg)}<b>MP:</b> Area effect expired or not found.`);
     
     const tokData = areaRec.tokens[targetId];
-    if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
+    if (!tokData) return ch("MP", `${wt(msg)}<b>MP:</b> Token not in area effect.`);
+    if (!requireControl(msg, tokData.charId, "make this area escape roll")) return;
     
     if (tokData.escaped !== null) {
       return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} already resolved escape.`);
@@ -6351,7 +6466,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let escapeTN = baseDef + 9 - (3 * distToEdge);
     if (isProne) escapeTN += 6;
     
-    const roll = (args.roll !== undefined && args.roll !== null && String(args.roll).trim() !== "") ? num(args.roll, 0) : randomInteger(20);
+    const hasForcedRoll = playerIsGM(msg.playerid) && args.roll !== undefined && args.roll !== null && String(args.roll).trim() !== "";
+    const roll = hasForcedRoll ? num(args.roll, 0) : randomInteger(20);
     const success = (roll !== 20) && (roll <= escapeTN);
     
     tokData.escaped = success;
@@ -6388,7 +6504,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!areaRec) return ch("MP", `${wt(msg)}<b>MP:</b> Area effect expired or not found.`);
     
     const tokData = areaRec.tokens[targetId];
-    if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
+    if (!tokData) return ch("MP", `${wt(msg)}<b>MP:</b> Token not in area effect.`);
+    if (!requireControl(msg, tokData.charId, "use this shield block")) return;
     
     if (tokData.escaped !== null) {
       return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} already resolved.`);
@@ -6798,8 +6915,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const areaRec = state.MP_Engine.pendingArea[rollId];
     if (!areaRec) return ch("MP", `${wt(msg)}<b>MP:</b> Area effect expired or not found.`);
     const tokData = areaRec.tokens[tokId];
-    if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
-    if (tokData.applied) return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} already resolved.`);
+    if (!tokData) return ch("MP", `${wt(msg)}<b>MP:</b> Token not in area effect.`);
+    if (!requireControl(msg, tokData.charId, "choose Roll-With for this area damage")) return;
+    if (tokData.applied) return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(tokData.name)} already resolved.`);
     
     const line = resolveAreaTarget(areaRec, tokId, Math.max(0, num(args.amt, 0)));
     const resultHtml = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>AREA DAMAGE</b>${line}</div>`;
@@ -6839,11 +6957,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const allResolved = Object.values(areaRec.tokens).every(t => t.escaped !== null);
     if (allResolved) {
       const doneLabel = (num(areaRec.senseLoss, 0) > 0) ? "Resolve All Saves" : "Apply All Damage";
-      const resolvedHtml = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. ${btnDanger(doneLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
+      const resolvedNote = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved.</div>`;
+      const resolvedGM = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. ${btnDanger(doneLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
       if (CFG.GM_ONLY_BUTTONS) {
-        chToChar("MP", resolvedHtml, areaRec.atkCharId);
+        chToChar("MP", resolvedNote, areaRec.atkCharId);
+        ch("MP", "/w gm " + resolvedGM);
       } else {
-        ch("MP", resolvedHtml);
+        ch("MP", resolvedGM);
       }
     }
   }
@@ -7079,7 +7199,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   function cmdAbsorb(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired or not found.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Attack record expired or not found.`);
+    if (!requirePendingRole(msg, rec, "defender", "use Absorption")) return;
+    if (!requireOpenResolution(msg, rec, "damage", "This attack's damage")) return;
     
     const defTok = getObj("graphic", rec.defTokenId);
     const defChar = getObj("character", rec.defCharId);
@@ -7089,8 +7211,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Verify character has Absorption for this damage type
     const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
     if (!absRef || absRef.mode !== "absorption") {
-      return ch("MP", `/w gm <b>MP:</b> ${esc(rec.defName)} doesn't have Absorption for this damage type.`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(rec.defName)} doesn't have Absorption for this damage type.`);
     }
+    markResolution(rec, "damage", msg);
     
     const rawDamage = rec.damageTotal;
     const quarterDamage = Math.floor(rawDamage / 4);  // 1/4 damage, rounded down
@@ -7237,7 +7360,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   function cmdReflect(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired or not found.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Attack record expired or not found.`);
+    if (!requirePendingRole(msg, rec, "defender", "use Reflection")) return;
+    if (!requireOpenResolution(msg, rec, "damage", "This attack's damage")) return;
     
     const defTok = getObj("graphic", rec.defTokenId);
     const defChar = getObj("character", rec.defCharId);
@@ -7247,8 +7372,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Verify character has Reflection for this damage type
     const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
     if (!absRef || absRef.mode !== "reflection") {
-      return ch("MP", `/w gm <b>MP:</b> ${esc(rec.defName)} doesn't have Reflection for this damage type.`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(rec.defName)} doesn't have Reflection for this damage type.`);
     }
+    markResolution(rec, "damage", msg);
     
     const rawDamage = rec.damageTotal;
     const quarterDamage = Math.floor(rawDamage / 4);  // 1/4 damage, rounded down
@@ -7321,7 +7447,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let buttons = `<br/>${btn(`Reflect at Original Attacker`, `!mp reflecthit --id ${reflectRollId} --target original`)}`;
     buttons += ` ${btn(`Reflect at Target...`, `!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id}`)}`;
     
-    chCombat("MP", html + buttons, rec.defCharId, rec.atkCharId);
+    if (CFG.GM_ONLY_BUTTONS) {
+      chToChars("MP", html, [rec.defCharId, rec.atkCharId]);
+      chToChar("MP", buttons, rec.defCharId);
+    } else {
+      ch("MP", html + buttons);
+    }
     
     // Clean up original pending record
     delete state.MP_Engine.pending[rollId];
@@ -7333,7 +7464,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const targetArg = args.target;
     
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Reflection record expired or not found.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Reflection record expired or not found.`);
+    if (!requirePendingRole(msg, rec, "attacker", "direct this reflected attack")) return;
+    if (!requireOpenResolution(msg, rec, "reflectionHit", "This reflected attack")) return;
     
     // Determine target
     let targetTokId;
@@ -7360,6 +7493,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!targetChar) return ch("MP", `/w gm <b>MP:</b> Target character not found.`);
     
     const targetName = targetChar.get("name");
+    markResolution(rec, "reflectionHit", msg);
     
     // Get target's protection
     const rhTargetIsVeh = isVehicleMode(targetCharId);
@@ -7452,7 +7586,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const charId = tok.get("represents");
     if (!charId) return ch("MP", `/w gm <b>MP:</b> Token not linked to character.`);
     const defChar = getObj("character", charId);
-    if (!defChar) return ch("MP", `/w gm <b>MP:</b> Character not found.`);
+    if (!defChar) return ch("MP", `${wt(msg)}<b>MP:</b> Character not found.`);
+    if (!requireControl(msg, charId, "renew this Force Field")) return;
     
     // Find the FF row (use --row if provided, otherwise auto-find)
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
@@ -7538,7 +7673,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   function cmdFFReinforce(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired or not found.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Attack record expired or not found.`);
+    if (!requirePendingRole(msg, rec, "defender", "reinforce this Force Field")) return;
+    if (!requireOpenResolution(msg, rec, "ffReinforce", "Force Field reinforcement")) return;
     
     const defTok = getObj("graphic", rec.defTokenId);
     const defChar = getObj("character", rec.defCharId);
@@ -7569,14 +7706,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         break;
       }
     }
-    if (!ffRowId) return ch("MP", `/w gm <b>MP:</b> No Force Field found on ${esc(defChar.get("name"))}.`);
+    if (!ffRowId) return ch("MP", `${wt(msg)}<b>MP:</b> No Force Field found on ${esc(defChar.get("name"))}.`);
     
     // Spend PR
     const ffReinIsVeh = isVehicleMode(rec.defCharId);
     const pow0 = ffReinIsVeh ? getVehiclePower(defTok, rec.defCharId) : getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
     if (pow0 < ffPR) {
-      return ch("MP", `/w gm <b>MP:</b> Not enough Power (${pow0}/${ffPR}) to reinforce.`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> Not enough Power (${pow0}/${ffPR}) to reinforce.`);
     }
+    markResolution(rec, "ffReinforce", msg);
     if (ffReinIsVeh) {
       setVehiclePower(defTok, rec.defCharId, pow0 - ffPR);
     } else {
@@ -7627,7 +7765,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const charId = tok.get("represents");
     if (!charId) return ch("MP", `/w gm <b>MP:</b> Token not linked to character.`);
     const defChar = getObj("character", charId);
-    if (!defChar) return ch("MP", `/w gm <b>MP:</b> Character not found.`);
+    if (!defChar) return ch("MP", `${wt(msg)}<b>MP:</b> Character not found.`);
+    if (!requireControl(msg, charId, "toggle this Force Field")) return;
     
     // Find the FF protection row
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
@@ -7725,7 +7864,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const attackType = (args.type || "").toLowerCase();
     
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired or not found.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Attack record expired or not found.`);
+    if (!requirePendingRole(msg, rec, "attacker", "classify this attack against the Ability Field")) return;
+    if (!requireOpenResolution(msg, rec, "abilityField", "This Ability Field interaction")) return;
+    if (!["projectile", "nonproject", "melee", "unarmed"].includes(attackType)) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Invalid Ability Field attack type.`);
+    }
     
     const afData = rec.afData;
     if (!afData) return ch("MP", `/w gm <b>MP:</b> No Ability Field data in record.`);
@@ -7735,6 +7879,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Defender not found.`);
     
     const defName = defChar.get("name");
+    markResolution(rec, "abilityField", msg);
     const afName = afData.name;
     const afDmgType = afData.dmgType;
     
@@ -7841,24 +7986,34 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
     }
     
-    chCombat("MP", html + buttons, rec.defCharId, rec.atkCharId);
+    const afGroups = (attackType === "projectile" || attackType === "nonproject")
+      ? (rec.buttonGroups || { attacker: "", defender: buttons })
+      : { attacker: buttons, defender: "" };
+    chPendingCard("MP", html, rec, afGroups);
   }
   
   // Resume damage application after AF melee weapon check (weapon survived)
   function cmdAFResume(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Attack record expired.`);
+    if (!requirePendingRole(msg, rec, "attacker", "resolve the weapon's Ability Field result")) return;
+    if (!requireOpenResolution(msg, rec, "afWeaponDecision", "This weapon result")) return;
+    markResolution(rec, "afWeaponDecision", msg);
     
     const buttons = buildStandardAttackButtonsAfterAF(rollId, rec.critResult, rec.causesKB, rec);
-    chCombat("MP", `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">Weapon survived - proceeding with damage</div>` + buttons, rec.defCharId, rec.atkCharId);
+    chPendingCard("MP", `<div style="background:#27ae60; border:2px solid #000; padding:4px 8px;">Weapon survived - proceeding with damage</div>`, rec,
+      rec.buttonGroups || { attacker: "", defender: buttons });
   }
   
   // Cancel damage after AF (weapon destroyed or attacker KO'd)
   function cmdAFCancel(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Attack record expired.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Attack record expired.`);
+    if (!requirePendingRole(msg, rec, "attacker", "resolve the weapon's Ability Field result")) return;
+    if (!requireOpenResolution(msg, rec, "afWeaponDecision", "This weapon result")) return;
+    markResolution(rec, "afWeaponDecision", msg);
     
     const defChar = getObj("character", rec.defCharId);
     const defName = defChar ? defChar.get("name") : "Target";
@@ -7873,7 +8028,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rwAmt = num(args.rw, 0);
     
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Counter-damage record expired.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Counter-damage record expired.`);
+    if (!requirePendingRole(msg, rec, "attacker", "resolve this counter-damage")) return;
+    if (!requireOpenResolution(msg, rec, "afCounter", "This counter-damage")) return;
     
     // Find attacker token
     let atkTok = rec.atkTokenId ? getObj("graphic", rec.atkTokenId) : null;
@@ -7885,6 +8042,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!atkTok || !atkChar) return ch("MP", `/w gm <b>MP:</b> Attacker token not found.`);
     
     const atkName = atkChar.get("name");
+    markResolution(rec, "afCounter", msg);
     
     // Get attacker's protection
     const afcAtkIsVeh = isVehicleMode(rec.atkCharId);
@@ -7955,15 +8113,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     html += `</div>`;
     
-    // Attacker survived - proceed with original attack
+    // Attacker survived - report the counter-damage, then route the original
+    // attack's offensive and defensive buttons to their proper controllers.
+    chCombat("MP", html, atkChar.id);
     const origRec = state.MP_Engine.pending[rec.originalRollId];
     if (origRec) {
-      html += `<div style="margin-top:4px;"><b>Attacker survives - resolve original attack:</b></div>`;
       const buttons = buildStandardAttackButtonsAfterAF(rec.originalRollId, origRec.critResult, origRec.causesKB, origRec);
-      html += buttons;
+      chPendingCard("MP", `<div style="margin-top:4px;"><b>Attacker survives - resolve original attack:</b></div>`, origRec,
+        origRec.buttonGroups || { attacker: "", defender: buttons });
     }
-    
-    chCombat("MP", html, atkChar.id);
     delete state.MP_Engine.pending[rollId];
   }
   
@@ -7972,6 +8130,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   function buildStandardAttackButtonsAfterAF(rollId, critResult, causesKB, rec) {
     const critType = critResult ? critResult.type : null;
     let buttons = "";
+    let kbButton = "";
+    if (rec) rec.buttonGroups = null;
     
     // Vehicle targets: no roll-with, no head shot, no limb shots
     const defIsVeh = rec && rec.defCharId && isVehicleMode(rec.defCharId);
@@ -8027,7 +8187,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     if (causesKB) {
-      buttons += ` ${btn(`KB`, `!mp kb --id ${rollId}`)}`;
+      kbButton = ` ${btn(`KB`, `!mp kb --id ${rollId}`)}`;
+      buttons += kbButton;
     }
     
     // Check for Absorption or Reflection
@@ -8059,6 +8220,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isGearShot) {
       buttons += `<br/><i>(Compare damage to Gear breakpoint)</i>`;
     }
+    if (rec && kbButton) rec.buttonGroups = { attacker: kbButton, defender: buttons.replace(kbButton, "") };
     
     return buttons;
   }
@@ -8070,6 +8232,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   function buildStandardAttackButtons(rollId, critResult, causesKB, rec) {
     const critType = critResult ? critResult.type : null;
     let buttons = "";
+    let kbButton = "";
+    if (rec) rec.buttonGroups = null;
     
     // Vehicle target detection
     const defIsVeh = rec && rec.defCharId && isVehicleMode(rec.defCharId);
@@ -8090,6 +8254,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         state.MP_Engine.pending[rollId].afData = afData;
         state.MP_Engine.pending[rollId].critResult = critResult;
         state.MP_Engine.pending[rollId].causesKB = causesKB;
+        rec.buttonGroups = { attacker: buttons, defender: "" };
         
         return buttons;
       }
@@ -8153,7 +8318,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     if (causesKB) {
-      buttons += ` ${btn(`KB`, `!mp kb --id ${rollId}`)}`;
+      kbButton = ` ${btn(`KB`, `!mp kb --id ${rollId}`)}`;
+      buttons += kbButton;
     }
     
     // Check for Absorption or Reflection (requires saved action)
@@ -8187,6 +8353,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isGearShot) {
       buttons += `<br/><i>(Compare damage to Gear breakpoint)</i>`;
     }
+    if (rec && kbButton) rec.buttonGroups = { attacker: kbButton, defender: buttons.replace(kbButton, "") };
     
     return buttons;
   }
@@ -8249,7 +8416,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rollId = args.id;
     const mode = args.mode || "noroll";
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Unknown roll id.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Unknown or expired roll id.`);
+    if (!requirePendingRole(msg, rec, "defender", "resolve damage")) return;
+    if (!requireOpenResolution(msg, rec, "damage", "This attack's damage")) return;
+
+    const validModes = allowedApplyModes(rec);
+    if (!validModes.includes(mode)) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> That damage option is not valid for this attack.`);
+    }
 
     const defTok = getObj("graphic", rec.defTokenId);
     const defChar = getObj("character", rec.defCharId);
@@ -8302,6 +8476,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let apVsFF = 0;
     let apAfterFF = origAP;
     
+    // Claim the damage phase immediately before the first possible mutation.
+    markResolution(rec, "damage", msg);
+
     if (ffData && !bypassProt) {
       const atkSub = (rec.dmgSubtype || "").trim().toLowerCase();
       
@@ -8574,7 +8751,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         // Death Touch (p.53): reduced to 0 Hits → EN save or die instantly.
         // A pass leaves the normal 0-Hits dying/bleeding state (already set above).
         if (rec.isDeathTouch) {
-          statusLine += `<div style="background:#2a0a0a; border:1px solid #8b0000; border-radius:6px; padding:4px 8px; margin-top:3px; font-family:Arial,sans-serif; font-size:11px; color:#ff9999; max-width:280px;">💀 <b>Death Touch</b> — reduced to 0 Hits. Make an EN save or die instantly: ${btn(`EN Save vs Death`, `!mp dtsave --target ${rec.defTokenId}`)}</div>`;
+          statusLine += `<div style="background:#2a0a0a; border:1px solid #8b0000; border-radius:6px; padding:4px 8px; margin-top:3px; font-family:Arial,sans-serif; font-size:11px; color:#ff9999; max-width:280px;">💀 <b>Death Touch</b> — reduced to 0 Hits. Make an EN save or die instantly: ${btn(`EN Save vs Death`, `!mp dtsave --id ${rollId}`)}</div>`;
         }
       }
       defTok.set("status_dead", true);
@@ -8777,7 +8954,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Undo: register the pre-mutation snapshot and append a button to the card.
     const applyUndoId = "apply_" + rollId + "_" + randomInteger(999999);
-    registerUndo(applyUndoId, esc(rec.defName) + " — " + esc(rec.atkName || "attack") + " damage", [undoSnap], null);
+    registerUndo(applyUndoId, esc(rec.defName) + " — " + esc(rec.atkName || "attack") + " damage", [undoSnap],
+      { reopenPending: rollId, reopenPhase: "damage" });
 
     // Damage result to GM + defender only (attacker doesn't see target stats)
     // v2.93.0: Can't Feel Pain - IN save to notice damage from a surprise attack
@@ -8785,7 +8963,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (toHits > 0 && getWeaknessFlags(rec.defCharId).nopain) {
       painNote = `<div style="background:#1a1a2e; border:1px solid #6b5a1e; border-radius:6px; padding:4px 8px; margin-top:3px; font-family:Arial,sans-serif; font-size:11px; color:#f4d03f; max-width:280px;">🩹 Can't Feel Pain — if this was a SURPRISE attack, roll IN to notice the damage: ${btn(`IN Save`, `!mp sv IN`)}</div>`;
     }
-    chToChar("MP", msgLine + painNote + undoButton(applyUndoId), rec.defCharId);
+    chToChar("MP", msgLine + painNote, rec.defCharId);
+    ch("MP", "/w gm " + undoButton(applyUndoId));
     
     // Store hits taken for limb shot saves (uses actual damage including head shot doubling)
     state.MP_Engine.pending[rollId].hitsTaken = toHits;
@@ -8805,13 +8984,22 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rollId = args.id;
     const limb = args.limb; // "leg" or "arm"
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Unknown roll id.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Unknown or expired roll id.`);
+    if (!requirePendingRole(msg, rec, "defender", `make the ${limb || "limb"} shot saves`)) return;
+    if (rec.hitsTaken === undefined) return ch("MP", `${wt(msg)}<b>MP:</b> Resolve this attack's damage before making limb-shot saves.`);
+    const critType = rec.critResult ? rec.critResult.type : null;
+    const validLimb = (limb === "leg" && (rec.isLegShot || critType === CRIT_TYPES.LEG_SHOT)) ||
+      (limb === "arm" && (rec.isArmShot || critType === CRIT_TYPES.ARM_SHOT));
+    if (!validLimb) return ch("MP", `${wt(msg)}<b>MP:</b> That limb save does not belong to this attack.`);
+    const phase = `limb_${limb}`;
+    if (!requireOpenResolution(msg, rec, phase, `${limb === "leg" ? "Leg" : "Arm"} shot saves`)) return;
 
     const defTok = getObj("graphic", rec.defTokenId);
     const defChar = getObj("character", rec.defCharId);
     if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
 
     const hitsTaken = rec.hitsTaken || 0;
+    markResolution(rec, phase, msg);
     
     // EN+7 save at -1 per Hit taken
     const enSave = getAttrNum(defChar.id, "endurance_save", 10);
@@ -8865,7 +9053,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   function cmdKnockback(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Unknown roll id.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Unknown or expired roll id.`);
+    if (!requirePendingRole(msg, rec, "attacker", "calculate knockback")) return;
+    if (!requireOpenResolution(msg, rec, "knockback", "Knockback")) return;
+    if (rec.hitsForKB === undefined && rec.hitsTaken === undefined) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Resolve this attack's damage before calculating knockback.`);
+    }
 
     const defTok = getObj("graphic", rec.defTokenId);
     const defChar = getObj("character", rec.defCharId);
@@ -8881,25 +9074,44 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const hitsForKB = rec.hitsForKB !== undefined ? rec.hitsForKB : (rec.hitsTaken || 0);
 
     const kb = Math.max(0, hitsForKB - massRoll);
+    rec.knockback = { targetId: rec.defTokenId, penalty: kb, distance: kb, saveResolved: false };
+    markResolution(rec, "knockback", msg);
 
     let msg_out = `<b>Knockback vs ${esc(rec.defName)}</b><br/>` +
       `Hits for KB: <b>${hitsForKB}</b> - Mass(${esc(massExpr)}): <b>${massRoll}</b> = <b>${kb}"</b> KB`;
 
+    let kbSaveButton = "";
     if (kb > 0) {
       msg_out += `<br/><i>Target pushed ${kb}" away from attacker. AG save at -${kb} or fall prone.</i>`;
-      msg_out += `<br/>${btn(`AG Save vs Knockdown`, `!mp kbsave --target ${rec.defTokenId} --penalty ${kb}`)}`;
+      kbSaveButton = `<br/>${btn(`AG Save vs Knockdown`, `!mp kbsave --id ${rollId}`)}`;
     }
 
-    chCombat("MP", msg_out, rec.defCharId, rec.atkCharId);
+    chPendingCard("MP", msg_out, rec, { attacker: "", defender: kbSaveButton });
   }
 
   function cmdKBSave(msg, args) {
-    const tokId = args.target;
-    const penalty = num(args.penalty, 0);
+    const rollId = args.id;
+    const rec = rollId ? state.MP_Engine.pending[rollId] : null;
+
+    // Secure path: target and penalty come from the stored knockback result.
+    // Legacy --target/--penalty remains GM-only for old cards already in chat.
+    let tokId;
+    let penalty;
+    if (rec && rec.knockback) {
+      if (!requirePendingRole(msg, rec, "defender", "make the knockdown save")) return;
+      if (!requireOpenResolution(msg, rec, "knockbackSave", "Knockdown save")) return;
+      tokId = rec.knockback.targetId;
+      penalty = rec.knockback.penalty;
+    } else {
+      if (!playerIsGM(msg.playerid)) return ch("MP", `${wt(msg)}<b>MP:</b> That old knockdown button can only be resolved by the GM.`);
+      tokId = args.target;
+      penalty = Math.max(0, num(args.penalty, 0));
+    }
 
     const tok = getObj("graphic", tokId);
     const char = getCharFromToken(tok);
-    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
+    if (rec) markResolution(rec, "knockbackSave", msg);
 
     const kbsIsVeh = isVehicleMode(char.id);
     const agSave = kbsIsVeh
@@ -8966,7 +9178,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   function cmdSave(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Unknown roll id.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Unknown or expired roll id.`);
+    if (!requirePendingRole(msg, rec, "defender", "make this save")) return;
+    if (!requireOpenResolution(msg, rec, "save", "This save")) return;
+    if (!playerIsGM(msg.playerid) && (args.weight !== undefined || args.basesave !== undefined)) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Manual weight/base-save overrides are GM-only.`);
+    }
 
     const defTok = getObj("graphic", rec.defTokenId);
     const defChar = getObj("character", rec.defCharId);
@@ -9040,17 +9257,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const rwPaid = Math.min(rwPowerRequested, maxBonus);
     const rwCost = rwPaid;
     const pow1 = pow0 - rwCost;
+    markResolution(rec, "save", msg);
     if (saveDefIsVeh) {
       // No power cost for vehicles (they can't roll-with)
     } else {
       setResource(defTok, defChar.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
     }
 
-    // Critical mod (Solid Hit = -3 to save TN for save attacks)
-    const critMod = num(args.critmod, 0);
-    
-    // Push mod (makes save harder)
-    const pushMod = num(args.pushmod, 0);
+    // Derive attack modifiers from the pending record; chat arguments are editable.
+    const critMod = (rec.critResult && rec.critResult.type === CRIT_TYPES.SOLID_HIT) ? -3 : 0;
+    const pushMod = num(rec.pushAmount, 0) > 0 ? -num(rec.pushAmount, 0) : 0;
 
     // Vulnerability: for save attacks, "Vulnerable to <Type>" applies as a penalty to the save TN vs that damage type.
     // We reuse getVulnerabilityMods() which encodes vulnerability as +N damage taken; for saves we apply -N.
@@ -9209,10 +9425,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Undo: register pre-save snapshot and append a button.
     const saveUndoId = "save_" + rollId + "_" + randomInteger(999999);
-    registerUndo(saveUndoId, esc(rec.defName) + " — " + esc(rec.atkName || "save") + " save", [undoSnap], null);
-    msg_out += undoButton(saveUndoId);
-
+    registerUndo(saveUndoId, esc(rec.defName) + " — " + esc(rec.atkName || "save") + " save", [undoSnap],
+      { reopenPending: rollId, reopenPhase: "save" });
     chCombat("MP", msg_out, rec.defCharId, rec.atkCharId);
+    ch("MP", "/w gm " + undoButton(saveUndoId));
   }
   
   // Get human-readable condition description
@@ -9249,7 +9465,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const tok = getObj("graphic", tokId);
     const char = getCharFromToken(tok);
-    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
+    if (!requireControl(msg, char.id, "make this recovery roll")) return;
+    if (!playerIsGM(msg.playerid) && (manualBC !== undefined || manualTN > 0) && condIdx < 0) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Manual recovery TN/BC overrides are GM-only.`);
+    }
 
     // Get condition if using indexed system
     const conditions = state.MP_Engine.conditions[tokId] || [];
@@ -9394,7 +9614,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         } else {
           msg_out += `<br/><span style="color:#e74c3c; font-size:11px;">⚠️ EXPIRED</span>`;
         }
-        msg_out += `<br/>${btn(`Clear Effect`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+        if (playerIsGM(msg.playerid)) {
+          msg_out += `<br/>${btn(`Clear Effect`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+        }
       } else if (cond.type === "duration") {
         // Durational ongoing effect
         msg_out += `<br/><br/><b>${idx + 1}. ⏱ DURATION</b>`;
@@ -9408,7 +9630,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           msg_out += `<br/><span style="font-size:11px;">Persists for ${esc(cond.unitLabel || "ongoing")} (manual)</span>`;
         }
         if (cond.escape) msg_out += `<br/><span style="font-size:11px; color:#9ad;">Escape: ${esc(cond.escape)}</span>`;
-        msg_out += `<br/>${btn(`End Effect`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+        if (playerIsGM(msg.playerid)) {
+          msg_out += `<br/>${btn(`End Effect`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+        }
       } else {
         // Standard condition
         const condLabel = cond.type.replace(/_/g, " ").toUpperCase();
@@ -9418,8 +9642,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         if (cond.permanent) {
           msg_out += `<br/><span style="color:#ff0000; font-size:11px;">⚠️ PERMANENT</span>`;
         } else {
-          msg_out += `<br/>${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${idx}`)} `;
-          msg_out += `${btn(`Remove`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+          msg_out += `<br/>${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${idx}`)}`;
+          if (playerIsGM(msg.playerid)) {
+            msg_out += ` ${btn(`Remove`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+          }
         }
       }
     });
@@ -9577,9 +9803,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
   function cmdSnare(msg, args) {
     const rollId = args.id;
-    const bonusBP = num(args.bonus, 0);
     const rec = state.MP_Engine.pending[rollId];
-    if (!rec) return ch("MP", `/w gm <b>MP:</b> Unknown roll id.`);
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Unknown or expired roll id.`);
+    if (!requirePendingRole(msg, rec, "attacker", "apply this Snare")) return;
+    if (!requireOpenResolution(msg, rec, "snare", "This Snare")) return;
+    const critType = rec.critResult ? rec.critResult.type : null;
+    const bonusBP = (critType === CRIT_TYPES.SOLID_HIT ? 2 : 0) + Math.max(0, num(rec.pushAmount, 0));
 
     const defTok = getObj("graphic", rec.defTokenId);
     if (!defTok) return ch("MP", `/w gm <b>MP:</b> Target token missing.`);
@@ -9587,6 +9816,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // snBP can be a dice formula (Ice: "2d8") or fixed number (Grapnel: "6")
     const bpFormula = String(rec.snBP || "0").trim();
     const maxBp = Math.max(1, num(rec.snMaxBP, 0));
+    markResolution(rec, "snare", msg);
     
     // Check for existing snare - stack bonus per 4.10
     const existing = state.MP_Engine.snares[defTok.id];
@@ -9640,7 +9870,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!sn) return ch("MP", `/w gm <b>MP:</b> No snare on that token.`);
 
     const char = getCharFromToken(tok);
-    if (!char) return ch("MP", `/w gm <b>MP:</b> Token not linked to character.`);
+    if (!char) return ch("MP", `${wt(msg)}<b>MP:</b> Token not linked to character.`);
+    if (!requireControl(msg, char.id, "break free from this Snare")) return;
 
     const hthExpr = String(getAttr(char.id, "hth_damage") || "1d4").trim();
     let roll = rollExpr(hthExpr);
@@ -9747,8 +9978,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getCharFromToken(defTok);
 
     if (!atkChar || !defChar) {
-      return ch("MP", `/w gm <b>MP:</b> Missing attacker or defender.`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> Missing attacker or defender.`);
     }
+    if (!requireControl(msg, atkChar.id, "make this grapple attack")) return;
 
     // Remote grapple (TK, Magnetism, etc.) - target can't counter-grapple
     const remote = (args.remote === "1");
@@ -9793,7 +10025,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (!hit) {
       msg_out += `Result: <b style="color:#e74c3c;">MISS</b>`;
-      chCombat("MP", msg_out, defChar.id);
+      chCombat("MP", msg_out, defChar.id, atkChar.id);
       return;
     }
 
@@ -9827,15 +10059,20 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Per 3.0.2.6: -3 restraint, -9 if fully restrained (locked)
     const restraintPenalty = lockAttempt ? -9 : -3;
     msg_out += `<i>Restraint: Both parties at <b>${restraintPenalty}</b> to physical tasks</i><br/>`;
-    msg_out += `${btn(`Squeeze`, `!mp squeeze --target ${defTokId}`)} ` +
+    const grappleAttackerButtons =
+      `${btn(`Squeeze`, `!mp squeeze --target ${defTokId}`)} ` +
       (lockAttempt ? "" : `${btn(`Lock`, `!mp grapplelock --target ${defTokId}`)} `) +
-      `${btn(`Release`, `!mp grapplerelease --target ${defTokId}`)}<br/>`;
-    msg_out += `<b>${esc(defChar.get("name"))}'s options:</b> `;
-    msg_out += `${btn(`Break Free`, `!mp grapplebreak --target ${defTokId}`)} ` +
+      `${btn(`Release`, `!mp grapplerelease --target ${defTokId}`)}`;
+    const grappleDefenderButtons =
+      `<b>${esc(defChar.get("name"))}'s options:</b> ` +
+      `${btn(`Break Free`, `!mp grapplebreak --target ${defTokId}`)} ` +
       `${btn(`Escape`, `!mp escape --target ${defTokId}`)} ` +
       (remote || lockAttempt ? "" : `${btn(`Counter`, `!mp countergrapple --target ${defTokId}`)}`);
 
-    chCombat("MP", msg_out, defChar.id);
+    chPendingCard("MP", msg_out, { atkCharId: atkChar.id, defCharId: defChar.id }, {
+      attacker: grappleAttackerButtons,
+      defender: grappleDefenderButtons
+    });
   }
 
   function cmdSqueeze(msg, args) {
@@ -9853,8 +10090,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getCharFromToken(defTok);
 
     if (!atkChar || !defChar) {
-      return ch("MP", `/w gm <b>MP:</b> Missing characters.`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> Missing characters.`);
     }
+    if (!requireControl(msg, atkChar.id, "squeeze this grappled target")) return;
 
     // Use grip dice if specified, otherwise use Base HTH Damage
     let hthExpr;
@@ -9918,7 +10156,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkTokId = args.atk || sn.grapplerTokenId;
 
     const pushDef = (args.pushdef === "1") || (args.push === "1"); // keep old --push working
-    const pushAtk = (args.pushatk === "1");
+    const pushAtk = playerIsGM(msg.playerid) && (args.pushatk === "1");
     const locked = !!sn.locked;
 
     const atkTok = getObj("graphic", atkTokId);
@@ -9926,8 +10164,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getCharFromToken(defTok);
 
     if (!atkChar || !defChar) {
-      return ch("MP", `/w gm <b>MP:</b> Missing characters.`);
+      return ch("MP", `${wt(msg)}<b>MP:</b> Missing characters.`);
     }
+    if (!requireControl(msg, defChar.id, "break free from this grapple")) return;
 
     // Grappler uses grip dice if power type, otherwise HTH
     let atkHTH;
@@ -10007,6 +10246,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkTok = getObj("graphic", atkTokId);
     const atkChar = getCharFromToken(atkTok);
     const defChar = getCharFromToken(defTok);
+    if (!atkChar || !requireControl(msg, atkChar.id, "release this grapple")) return;
 
     // Clear the grapple
     delete state.MP_Engine.snares[defTokId];
@@ -10043,6 +10283,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkTok = getObj("graphic", atkTokId);
     const atkChar = getCharFromToken(atkTok);
     const defChar = getCharFromToken(defTok);
+    if (!atkChar || !requireControl(msg, atkChar.id, "lock this grapple")) return;
 
     const baseChance = num(sn.chanceToHit, atkChar ? (num(getAttr(atkChar.id, "agility_save"), 6) + 3) : 10);
     const tn = baseChance - 3; // lock attempt is -3
@@ -10081,6 +10322,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const atkChar = getCharFromToken(atkTok);
 
     if (!defChar) return ch("MP", `${wt(msg)}<b>MP:</b> Missing defender character.`);
+    if (!requireControl(msg, defChar.id, "escape this grapple")) return;
 
     const defAg = num(getAttr(defChar.id, "agility_save"), 6);
 
@@ -10155,7 +10397,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defChar = getCharFromToken(defTok);
     const atkChar = getCharFromToken(atkTok);
 
-    if (!defChar || !atkTok) return ch("MP", `/w gm <b>MP:</b> Missing characters/tokens.`);
+    if (!defChar || !atkTok) return ch("MP", `${wt(msg)}<b>MP:</b> Missing characters/tokens.`);
+    if (!requireControl(msg, defChar.id, "counter-grapple")) return;
 
     const defAg = num(getAttr(defChar.id, "agility_save"), 6);
     // Wrestling: +3 bonus to base (4.11.4: "AG save (+3 if character has wrestling background)")
@@ -10196,7 +10439,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       msg_out += `<br/><i>Both parties now grappling each other (-3 restraint each)</i>`;
     }
 
-    chCombat("MP", msg_out, char.id);
+    chCombat("MP", msg_out, defChar.id, atkChar ? atkChar.id : null);
   }
 
   // -------------------------
@@ -10209,6 +10452,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const char = getCharFromToken(tok);
 
     if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
+    if (!requireControl(msg, char.id, "make this wake-up roll")) return;
 
     if (isVehicleMode(char.id)) {
       return ch("MP", `/w gm <b>MP:</b> Vehicles don't go unconscious. Use Repair to restore Hits.`);
@@ -12022,11 +12266,32 @@ function cmdStance(msg, args) {
   // remains in the normal 0-Hits dying/bleeding state.
   // Usage: !mp dtsave --target <tokenId>
   function cmdDeathTouchSave(msg, args) {
-    const tokId = args.target;
+    const rec = args.id ? state.MP_Engine.pending[args.id] : null;
+    let tokId;
+    if (rec) {
+      if (!requirePendingRole(msg, rec, "defender", "make the Death Touch save")) return;
+      if (!requireOpenResolution(msg, rec, "deathTouchSave", "Death Touch save")) return;
+      if (!rec.isDeathTouch || num(rec.hitsTaken, 0) <= 0) {
+        return ch("MP", `${wt(msg)}<b>MP:</b> This attack does not have a pending Death Touch save.`);
+      }
+      tokId = rec.defTokenId;
+    } else {
+      if (!playerIsGM(msg.playerid)) return ch("MP", `${wt(msg)}<b>MP:</b> That old Death Touch button can only be resolved by the GM.`);
+      tokId = args.target;
+    }
     const tok = getObj("graphic", tokId);
-    if (!tok) return ch("MP", `/w gm <b>MP:</b> Target token missing.`);
+    if (!tok) return ch("MP", `${wt(msg)}<b>MP:</b> Target token missing.`);
     const char = getCharFromToken(tok);
-    if (!char) return ch("MP", `/w gm <b>MP:</b> Token not linked to a character.`);
+    if (!char) return ch("MP", `${wt(msg)}<b>MP:</b> Token not linked to a character.`);
+    if (rec) {
+      const currentHits = isVehicleMode(char.id)
+        ? getVehicleHits(tok, char.id)
+        : getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+      if (currentHits > 0) {
+        return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(char.get("name"))} is no longer at 0 Hits, so no Death Touch save is pending.`);
+      }
+      markResolution(rec, "deathTouchSave", msg);
+    }
 
     const enSave = getAttrNum(char.id, "endurance_save", 10);
     const d20 = randomInteger(20);
@@ -12347,8 +12612,12 @@ function cmdStance(msg, args) {
         // Check for expired absorptions first
         if (args.target) checkAbsorptionExpiry(args.target);
         return cmdConditions(msg, args);
-      case "checkexpiry": return cmdCheckExpiry(msg, args);
-      case "clearcondition": return cmdClearCondition(msg, args);
+      case "checkexpiry":
+        if (gmOnly(msg)) return;
+        return cmdCheckExpiry(msg, args);
+      case "clearcondition":
+        if (gmOnly(msg)) return;
+        return cmdClearCondition(msg, args);
       case "snare": return cmdSnare(msg, args);
       case "break": return cmdBreak(msg, args);
       case "snareclear":
@@ -12595,7 +12864,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.102.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.103.1</b> Commands:<br/>
           <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/>
           <b>Attacks and Saves:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code> - Attack row N<br/>
@@ -14023,11 +14292,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.101.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.103.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.101.0 READY");
+  log("MP ENGINE v2.103.1 READY");
 });
