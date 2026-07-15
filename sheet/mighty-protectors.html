@@ -1,5 +1,13 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.62 - Light mode toggle
-     Requires MP Engine v2.89.1+ for sense-loss save resolution.
+<!-- Mighty Protectors Roll20 Character Sheet v44.64 - Scan button (target acquisition)
+     Requires MP Engine v2.100.0+ for !mp scan.
+        v44.64: Scan button on the Attacks query row - !mp scan perception sweep with
+          Attack buttons for targets the player can't see/click (engine v2.100.0);
+          select your token before clicking
+        v44.63: Base HTH roll button prompts for Push damage (default 0), added to the
+          damage inline roll and shown as a Push row on the card
+        - Dmg button on each repeating attack row (notes cell, beside the cog):
+          rolls just the row's damage (attack_damage + Push/HB query if enabled),
+          no to-hit, no API
         v44.62: Light mode checkbox (attr_light_mode) beside the vehicle toggle - CSS-only
           recolor block (v44.52) scoped to sheet-light-toggle:checked; no worker changes
         v44.61: Perceive roll button on the sense block - !mp perceive with the row's
@@ -462,7 +470,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <span style="color:#aaa; font-size:10px;">Base HTH:</span>
             <!-- <input type="text" name="attr_hth_damage" readonly style="width:80px; flex-shrink:1; min-width:70px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Hand-to-Hand damage dice" /> -->
              <input type="text" name="attr_hth_damage" readonly style="width:70px; flex-shrink:1; min-width:50px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Hand-to-Hand damage dice" />
-            <button type="roll" class="mp-labellink sheet-mp-rollbtn" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
+            <button type="roll" class="mp-labellink sheet-mp-rollbtn" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}+?{Push damage|0}]]}} {{Push=[[?{Push damage|0}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
             <span style="color:#aaa; font-size:10px;">Carry:</span>
             <input type="text" name="attr_carry_capacity" readonly style="width:120px; flex-shrink:1; min-width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="Carrying capacity in pounds" />
           </div>
@@ -652,6 +660,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     <div style="margin-bottom:3px; padding-bottom:6px; border-bottom:1px solid #2a2040; font-size:10px;">
       <span style="color:#888; margin-right:4px;">Query:</span>
       <button type="roll" name="roll_query_help" value="&{template:mpqueryhelp} {{help=1}}" style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px; margin-right:6px;" title="Show query help">?</button>
+      <button type="roll" name="roll_scan" value="!mp scan --charid @{character_id}" style="background:#3d5a80; color:#fff; border:1px solid #2a2040; padding:0 6px; cursor:pointer; font-size:9px; font-weight:bold; margin-right:6px;" title="3.1.5 perception sweep: one IN check vs every token on the page using your best sense per target. Located targets get Attack buttons - use this when darkness or invisibility means you can't click a target. Select your token first. Your first scan each round is the free check; repeats cost an Action.">Scan</button>
       <input type="checkbox" name="attr_use_api" value="1" title="Use API automation (auto-calculates range)" /><span style="color:#8be9fd; margin-right:10px;">Use API</span>
       <span class="sheet-query-auto">
       <input type="checkbox" name="attr_query_range" value="1" title="Prompt for range penalty" /><span style="color:#aaa; margin-right:8px;">Range</span>
@@ -788,6 +797,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <div style="display:flex; align-items:center; gap:2px;">
               <!-- <input type="text" name="attr_attack_notes" title="Notes and modifier codes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" placeholder="sav:EN:+3, snr:ice:2d8/18" /> -->
                <input type="text" name="attr_attack_notes" title="Notes and modifier codes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" />
+              <button type="roll" name="roll_attack_dmgonly" value="&{template:default} {{name=@{character_name} - @{attack_name} (Damage Only)}} {{Damage=[[0+@{attack_damage}+@{pushhb_query}]]}} {{Type=@{attack_dmgtype_full}}}" style="flex:0 0 auto; background:#e67e22; color:#fff; border:none; padding:2px 4px; cursor:pointer; border-radius:3px; font-size:8px; font-weight:bold;" title="Roll just this attack's damage (no to-hit, no API)">Dmg</button>
               <span class="sheet-cog-icon" title="Settings">y</span>
             </div>
           </td>

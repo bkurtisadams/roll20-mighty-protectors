@@ -1,4 +1,30 @@
-/* Mighty Protectors Roll20 API Engine v2.98.0 - 2026-07-14
+/* Mighty Protectors Roll20 API Engine v2.100.0 - 2026-07-15
+ * v2.100.0: SCAN (3.1.5 targeting console). New !mp scan [--mod N]: one IN
+ *   perception check (3.0.1 confirm on nat 1/20) evaluated at a per-target
+ *   TN against every character token on the observer's page, for acquiring
+ *   targets the player can't see or click (lightless rooms, invisibles).
+ *   Per RAW 3.1.5 the free check uses the best sense available - each
+ *   candidate goes through observationLevel(), exactly as the attack
+ *   pipeline would. Results by 4.6 tier: "-" omitted; "?" collapsed to one
+ *   anonymous presence line (no names/count/bearing; -3 defense noted,
+ *   blind-fire at blindpen is GM-adjudicated); "-3"/ID/+/++ named with
+ *   distance, compass bearing, and an Attack button carrying --target so
+ *   no map click is ever needed. Clearly visible targets (no roll) listed
+ *   for completeness. Located results SEED the v2.91.1 acquire-once cache
+ *   via the new shared acqSignature() helper, so the following attack
+ *   honors the scanned tier without re-rolling, and auto re-acquires when
+ *   the target moves/conceals ("-" and "?" clear any cached acquisition).
+ *   Free-check tracking: first scan per token per round is the 3.1.5 free
+ *   save; repeats banner "costs an Action" (GM enforces; out of combat the
+ *   round doesn't advance, so treat the banner advisorily). Sheet v44.64
+ *   adds a Scan button beside the Query row.
+ * v2.99.0: GM CHAT VISIBILITY FIX. API-sent whispers to players are NOT
+ *   visible to the GM in Roll20, so any card routed only to player
+ *   controllers (attack cards, hthmass, stance, area results, apply
+ *   results) never reached the GM. chToChar/chToChars/chBoth/chBothId/
+ *   chPlayers now always send an explicit /w gm copy in addition to the
+ *   player whispers. GM-controller ids are skipped in the player loops so
+ *   the GM never receives duplicates.
  * v2.98.0: HTH + MASS GROUP ROLL. New !mp hthmass command rolls a combined
  *   HTH + Mass total for every selected token. Optional --push 1 spends 2 PR
  *   per token for +2 to that token's combined total; tokens without 2 PR roll
@@ -1373,6 +1399,21 @@ MP.Engine = (function () {
     };
   }
 
+  // v2.100.0: shared acquire-once cache signature (attack pipeline + !mp
+  // scan). Invalidates on defender movement, concealment change, attacker
+  // vision change, or (for range-sensitive senses) range-band change.
+  function acqSignature(defTok, obs, rangeInches) {
+    const av = obs.atkVision || { lost: 0, causes: [] };
+    return [
+      Math.round(num(defTok.get("left"), 0)), Math.round(num(defTok.get("top"), 0)),
+      obs.inv ? `inv:${obs.inv.blur ? 1 : 0}` : "vis",
+      `snk:${obs.sneaking ? 1 : 0}`,
+      `atk:${av.lost}:${(av.causes || []).join("|")}`,
+      `lvl:${obs.level}:${obs.oppMod}:${obs.chkMod || 0}`,
+      (obs.extraToHit || obs.rangeSensitive) ? `rb:${Math.round(num(rangeInches, 0))}` : "rb:-"
+    ].join(";");
+  }
+
   // -------------------------
   // INVISIBILITY (v2.91.0)
   // -------------------------
@@ -1667,6 +1708,133 @@ MP.Engine = (function () {
     out += `<b>[${acq.tier}]</b> ${esc(detail)}${critNote}`;
     out += `</div>`;
     ch("MP", `${wt(msg)}` + out);
+  }
+
+  // 8-way compass bearing from one token to another (Roll20 screen coords:
+  // +x = East, +y = South).
+  function compassBearing(fromTok, toTok) {
+    const dx = num(toTok.get("left"), 0) - num(fromTok.get("left"), 0);
+    const dy = num(toTok.get("top"), 0) - num(fromTok.get("top"), 0);
+    if (!dx && !dy) return "";
+    const dirs = ["E", "SE", "S", "SW", "W", "NW", "N", "NE"];
+    const ang = Math.atan2(dy, dx);
+    return dirs[Math.round(((ang + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8];
+  }
+
+  // -------------------------
+  // SCAN (v2.100.0) - 3.1.5 perception sweep / targeting console
+  // -------------------------
+  // !mp scan [--mod N] [--charid ID]  (select your token; sheet button
+  // passes --charid). For acquiring targets the player can't see or click
+  // (lightless rooms, invisibles): ONE IN check (3.0.1 confirm pre-rolled
+  // and shared) evaluated at a per-target TN against every character token
+  // on the page. Per RAW 3.1.5 the free check uses the best sense
+  // available: observationLevel() auto-picks per target, exactly as the
+  // attack pipeline would, so located results seed the v2.91.1
+  // acquire-once cache (shared acqSignature) and the following !mp atk
+  // honors the scanned tier without re-rolling - until the target moves or
+  // changes concealment, when the sig invalidates and RAW re-acquire
+  // kicks in. "-" and "?" results clear any cached acquisition for that
+  // pair: the scan IS the character's current perception state.
+  // Card: "-" omitted; "?" collapsed to one anonymous presence line;
+  // "-3"/ID/+/++ named with distance, bearing, tier, and an Attack button
+  // carrying --target. Clearly visible targets (no roll needed) listed
+  // for completeness. First scan per token per round = the 3.1.5 free
+  // save; repeats banner "costs an Action" (advisory - GM enforces, and
+  // out of combat the round counter doesn't advance).
+  function cmdScan(msg, args) {
+    // resolve observer: --charid via selected/unique token, else 1st selected
+    let obsTok = null;
+    const sel = (msg.selected || []).filter(s => s._type === "graphic").map(s => getObj("graphic", s._id)).filter(Boolean);
+    if (args.charid) {
+      obsTok = sel.find(t => t.get("represents") === args.charid) || null;
+      if (!obsTok) {
+        const cands = findObjs({ _type: "graphic", represents: args.charid }).filter(t => t.get("_pageid") === (sel[0] ? sel[0].get("_pageid") : t.get("_pageid")));
+        if (cands.length === 1) obsTok = cands[0];
+      }
+    }
+    if (!obsTok && sel.length) obsTok = sel[0];
+    const obsChar = obsTok ? getCharFromToken(obsTok) : null;
+    if (!obsTok || !obsChar) return ch("MP", `${wt(msg)}<b>MP:</b> Select your token (linked), then <code>!mp scan [--mod N]</code>`);
+    if (!canControl(msg, obsChar.id)) return ch("MP", `${wt(msg)}You don't control ${esc(obsChar.get("name"))}.`);
+    const obsName = obsChar.get("name");
+
+    // 3.1.5: one free save per turn; additional checks cost an action
+    if (!state.MP_Engine.scanUsed) state.MP_Engine.scanUsed = {};
+    const round = state.MP_Engine.currentRound;
+    const isFree = state.MP_Engine.scanUsed[obsTok.id] !== round;
+    state.MP_Engine.scanUsed[obsTok.id] = round;
+
+    // one d20 for the whole sweep; confirm pre-rolled so nat 1/20 is
+    // shared, only the per-target TN varies
+    const d1 = randomInteger(20);
+    const d2 = (d1 === 1 || d1 === 20) ? randomInteger(20) : undefined;
+
+    const disc = hasDiscomfort(obsTok.id) ? -3 : 0;
+    const situational = num(args.mod, 0);
+    if (!state.MP_Engine.acquired) state.MP_Engine.acquired = {};
+
+    const toks = findObjs({ _type: "graphic", _pageid: obsTok.get("_pageid"), layer: "objects" });
+    const located = [], visible = [];
+    let anyUnlocated = false, candidates = 0;
+
+    toks.forEach(tok => {
+      if (tok.id === obsTok.id) return;
+      const tokChar = getCharFromToken(tok);
+      if (!tokChar || tokChar.id === obsChar.id) return;
+      candidates++;
+      const tokName = tok.get("name") || tokChar.get("name") || "Unknown";
+      const rangeData = calculateRangeWithProfile(obsTok, tok, obsChar.id, tokChar.id);
+      const obs = observationLevel(obsTok.id, tok.id, tokChar.id, obsChar.id, rangeData.inches, rangeData.penalty);
+      const dist = `${Math.round(num(rangeData.inches, 0))}"`;
+      const bearing = compassBearing(obsTok, tok);
+      const atkBtn = btn("Attack", `!mp atk ?{Attack row|1} --atk ${obsTok.id} --target ${tok.id}`);
+
+      if (!obs.needsRoll) {
+        // full unimpaired vision IDs without a roll (v2.90.0)
+        visible.push(`<b>${esc(tokName)}</b> — ${dist} ${bearing} · clearly visible ${atkBtn}`);
+        return;
+      }
+
+      const acqKey = obsTok.id + "|" + tok.id;
+      const acqMod = num(obs.oppMod, 0) + num(obs.chkMod, 0) + num(obs.rngMod, 0) + disc + situational;
+      const acq = rollAcquisition(obsChar.id, obs.level, [d1, d2], acqMod, obs.sneakGate);
+
+      if (acq.blocked) { delete state.MP_Engine.acquired[acqKey]; return; }
+      if (acq.tier === "?") { anyUnlocated = true; delete state.MP_Engine.acquired[acqKey]; return; }
+
+      // "-3" or better: located - seed the acquire-once cache so the
+      // following attack honors this tier instead of re-rolling
+      state.MP_Engine.acquired[acqKey] = {
+        sig: acqSignature(tok, obs, rangeData.inches), tier: acq.tier,
+        toHitMod: acq.toHitMod, label: acq.label, round: round
+      };
+      const tierColor = acq.tier === "-3" ? "#f4d03f" : "#2ecc71";
+      located.push(`<b>${esc(tokName)}</b> — ${dist} ${bearing} · <b style="color:${tierColor};">[${acq.tier}]</b> ${esc(acq.label)}${acq.toHitMod !== 0 ? ` (${acq.toHitMod} to hit)` : ""} <span style="color:#8a84a8; font-size:10px;">by ${esc(obs.label)}, TN ${acq.tn}-</span> ${atkBtn}`);
+    });
+
+    let out = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:340px;">`;
+    out += `<b style="color:#7fb3d5;">🔎 Scan</b> — <b>${esc(obsName)}</b> · d20: <b>${d1}${d2 != null ? `/${d2}` : ""}</b>`;
+    out += isFree
+      ? ` <span style="color:#2ecc71; font-size:10px;">FREE CHECK (1/turn, 3.1.5)</span>`
+      : ` <span style="color:#f39c12; font-size:10px;">⚠ ADDITIONAL CHECK — costs an Action (3.1.5)</span>`;
+    if (situational || disc) {
+      const bits = [];
+      if (situational) bits.push(`${situational} situational`);
+      if (disc) bits.push(`${disc} discomfort`);
+      out += `<div style="color:#8a84a8; font-size:10px;">${bits.join(", ")} applied to all TNs</div>`;
+    }
+    if (!candidates) {
+      out += `<div style="margin-top:4px; color:#aaa;">No other character tokens on this page.</div>`;
+    } else {
+      if (visible.length) out += `<div style="margin-top:4px;">${visible.join("<br/>")}</div>`;
+      if (located.length) out += `<div style="margin-top:4px;">${located.join("<br/>")}</div>`;
+      if (anyUnlocated) out += `<div style="margin-top:4px; color:#ff6b6b;">❓ You sense someone or something is around — you can't locate, identify, or target it (-3 to defend against it). You may blind-fire into a spot at ${num(state.MP_Engine.blindPenalty, -6)} (GM adjudicates where).</div>`;
+      if (!visible.length && !located.length && !anyUnlocated) out += `<div style="margin-top:4px; color:#aaa;">You perceive nothing you could target.</div>`;
+    }
+    out += `<div style="color:#8a84a8; font-size:10px; margin-top:4px;">Located targets stay acquired until they move or change concealment (4.6) — then re-scan.</div>`;
+    out += `</div>`;
+    chBoth("MP", out, msg);
   }
 
   // Report: !mp test senses - dump the selected token's resolved sense map
@@ -2660,18 +2828,33 @@ function generateRowID() {
     return cb.some(id => { const t = id.trim(); return t && t !== "all"; });
   }
 
-  // Whisper to character if it has a real player controller, otherwise /w gm
+  // Whisper to character's non-GM player controllers, then /w gm copy.
+  // API whispers to players are invisible to the GM, so the GM copy is
+  // always sent explicitly. GM controllers are skipped to avoid duplicates.
   function chToChar(who, content, charId) {
-    if (charId && hasPlayerController(charId)) {
+    if (charId) {
       const char = getObj("character", charId);
-      if (char) { ch(who, `/w "${char.get("name")}" ` + content); return; }
+      if (char) {
+        const cb = (char.get("controlledby") || "").split(",");
+        const sent = new Set();
+        for (const id of cb) {
+          const pid = id.trim();
+          if (!pid || pid === "all" || playerIsGM(pid) || sent.has(pid)) continue;
+          const player = getObj("player", pid);
+          if (player) {
+            ch(who, `/w "${player.get("_displayname")}" ` + content);
+            sent.add(pid);
+          }
+        }
+      }
     }
     ch(who, "/w gm " + content);
   }
 
-  // Whisper to unique player controllers across all given characters.
-  // Deduplicates by player ID so each player gets one copy.
-  // /w gm fallback only if no player controllers found.
+  // Whisper to unique non-GM player controllers across all given characters,
+  // then always send a /w gm copy (API whispers to players are invisible to
+  // the GM). Deduplicates by player ID; GM controllers skipped (they get
+  // the /w gm copy instead).
   function chToChars(who, content, charIds) {
     const sentPlayers = new Set();
     for (const cid of charIds) {
@@ -2681,7 +2864,7 @@ function generateRowID() {
       const cb = (char.get("controlledby") || "").split(",");
       for (const id of cb) {
         const pid = id.trim();
-        if (!pid || pid === "all" || sentPlayers.has(pid)) continue;
+        if (!pid || pid === "all" || playerIsGM(pid) || sentPlayers.has(pid)) continue;
         const player = getObj("player", pid);
         if (player) {
           ch(who, `/w "${player.get("_displayname")}" ` + content);
@@ -2689,23 +2872,25 @@ function generateRowID() {
         }
       }
     }
-    if (sentPlayers.size === 0) ch(who, "/w gm " + content);
+    ch(who, "/w gm " + content);
   }
 
-  // Send to player if non-GM (GM sees whispers), otherwise /w gm
+  // Send to player if non-GM, plus a /w gm copy (API whispers to players
+  // are invisible to the GM)
   function chBoth(who, content, msg) {
     if (msg && msg.playerid && !playerIsGM(msg.playerid)) {
       const target = wt(msg);
-      if (target !== "/w gm ") { ch(who, target + content); return; }
+      if (target !== "/w gm ") ch(who, target + content);
     }
     ch(who, "/w gm " + content);
   }
 
-  // Send to player if non-GM (GM sees whispers), otherwise /w gm
+  // Send to player if non-GM, plus a /w gm copy (API whispers to players
+  // are invisible to the GM)
   function chBothId(who, content, playerId) {
     if (playerId && !playerIsGM(playerId)) {
       const target = wtId(playerId);
-      if (target !== "/w gm ") { ch(who, target + content); return; }
+      if (target !== "/w gm ") ch(who, target + content);
     }
     ch(who, "/w gm " + content);
   }
@@ -2721,7 +2906,7 @@ function generateRowID() {
         sent.add(target);
       }
     }
-    if (sent.size === 0) ch(who, "/w gm " + content);
+    ch(who, "/w gm " + content);
   }
 
   // GM-only gate - returns true if not GM (caller should return)
@@ -4551,14 +4736,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Blocked ("-") results are never cached - the attacker may retry.
       if (!state.MP_Engine.acquired) state.MP_Engine.acquired = {};
       const acqKey = atkTok.id + "|" + defTokenId;
-      const acqSig = [
-        Math.round(num(defTok.get("left"), 0)), Math.round(num(defTok.get("top"), 0)),
-        obs.inv ? `inv:${obs.inv.blur ? 1 : 0}` : "vis",
-        `snk:${obs.sneaking ? 1 : 0}`,
-        `atk:${atkVision.lost}:${atkVision.causes.join("|")}`,
-        `lvl:${obs.level}:${obs.oppMod}:${obs.chkMod || 0}`,
-        (obs.extraToHit || obs.rangeSensitive) ? `rb:${Math.round(num(rangeData.inches, 0))}` : "rb:-"
-      ].join(";");
+      // v2.100.0: signature built by the shared helper so !mp scan seeds
+      // entries the attack pipeline recognizes.
+      const acqSig = acqSignature(defTok, obs, rangeData.inches);
       const cached = state.MP_Engine.acquired[acqKey];
 
       if (cached && cached.sig === acqSig) {
@@ -5023,7 +5203,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (CFG.GM_ONLY_BUTTONS) {
       const charTargets = [atkCharId, defChar.id];
       chToChars("MP", html, charTargets);
-      // Buttons only to defender (they decide roll-with); GM sees via whisper
+      // Buttons only to defender player (they decide roll-with); helpers CC /w gm
       if (buttons) chToChar("MP", buttons, defChar.id);
     } else {
       ch("MP", html + buttons);
@@ -11250,6 +11430,7 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdSensePanel(msg, args);
       case "perceive": return cmdPerceive(msg, args);
+      case "scan": return cmdScan(msg, args);
       case "willcheck":
         if (gmOnly(msg)) return;
         return cmdWillCheck(msg, args);
@@ -11491,6 +11672,7 @@ function cmdStance(msg, args) {
           <code>!mp sneak | --off</code> - Sneaking on selected tokens<br/>
           <code>!mp sensepanel</code> - Senses control panel (<b>GM</b>)<br/>
           <code>!mp perceive [--sense KEY] [--mod N]</code> - Perception check; second selected token is the subject<br/>
+          <code>!mp scan [--mod N]</code> - 3.1.5 sweep of the whole page (best sense per target); located targets get Attack buttons - for darkness/invisibles you can't click. First scan/round is the free check. GM tip: add a token action macro named Scan with body <code>!mp scan</code> (visible whenever a token is selected)<br/>
           <code>!mp willcheck --mod N [--present] [--phobia] [--stimulus "x"]</code> - Compulsion/Phobia save (<b>GM</b>)<br/>
           <code>!mp discomfort | --off</code> - Special Requirement penalty<br/>
           <code>!mp require --interval 7d --consequence discomfort --name "x" | --met | --off | list</code> - Requirement clock (<b>GM</b>)<br/>
@@ -12899,11 +13081,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.98.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.100.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.98.0 READY");
+  log("MP ENGINE v2.100.0 READY");
 });
