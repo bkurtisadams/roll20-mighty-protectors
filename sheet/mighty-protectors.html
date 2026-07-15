@@ -314,10 +314,17 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       </div>
     </div>
 
-    <!-- Bottom Row: Total (Right Justified) -->
+    <!-- Middle Row: Total (Right Justified) -->
     <div style="display:flex; align-items:center; justify-content:flex-end; gap:4px; font-size:11px;">
       <span style="color:#f4d03f; font-weight:bold; white-space:nowrap;">Remaining Inventing Points:</span>
       <input type="text" name="attr_ip_remaining" readonly title="🚫 Calculated: Base IPs + IP Mod - spent" value="" style="width:25px; background:#1e1e38; color:#50fa7b; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold; cursor:not-allowed;" />
+    </div>
+
+    <!-- Bottom Row: Invent button -->
+    <div style="display:flex; align-items:center; font-size:11px;">
+      <button type="roll" name="roll_inventing_task" title="3.1.3 Inventing Task: IN-based check. Default time 1 hour; rush -3/step, extra time +3/step (3.0.2.7). Skill/Background per 3.0.2.1. Facilities: extensive +3, basic +0, none -3 (3.1.3.1). IP cost is deducted whether or not the check succeeds; recovered after a night's sleep on a failure, or when the invention is dismantled on a success. Record the invented ability with its IP cost in the Abilities table to deduct it from Remaining IPs."
+        style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;"
+        value="&{template:default} {{name=@{character_name} attempts an Inventing Task}} {{Needs=[[@{intelligence_save} + ?{Required Skill/Background|Common Knowledge/Has Bkgd (+3),3|Common Knowledge/Lacks Bkgd (+0),0|Training Required/Has Bkgd (+0),0|Training Required/Lacks Bkgd (-3),-3|Specialized Training/Has Bkgd (+0),0|Specialized Training/Lacks Bkgd w/ Instr (-3),-3|Specialized Training / *NO Instr (d20 must = 1),0} + ?{Task Time (default 1 Hour)|1 Hour (+0),0|5 Minutes (-3),-3|3 Rounds (-6),-6|1 Round/Instant (-9),-9|10 Hours (+3),3|3.5 Days (+6),6|1 Month (+9),9|1 Year (+12),12|10 Years (+15),15|100 Years (+18),18} + ?{Facilities|Basic (+0),0|Extensive (+3),3|None (-3),-3} + ?{Other Modifier|0}]]-}} {{Rolls=[[1d20cs<[[@{intelligence_save} + ?{Required Skill/Background} + ?{Task Time (default 1 Hour)} + ?{Facilities} + ?{Other Modifier}]]cf>[[@{intelligence_save} + ?{Required Skill/Background} + ?{Task Time (default 1 Hour)} + ?{Facilities} + ?{Other Modifier}]]]]}} {{IPs Committed=[[?{IP Cost of Invention|0}]] of [[@{ip_remaining}]] remaining}} {{Note=IPs are spent win or lose. Fail: recovered after a night's sleep. Success: recovered when the invention is dismantled. Crits/fumbles have no extra effect.}}">Invent</button>
     </div>
 
   </div>
