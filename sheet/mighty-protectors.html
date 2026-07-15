@@ -1024,6 +1024,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <label title="Siphon Attack: drains points from the target (Touch range, Entropy, no KB)" style="color:#f4d03f;">Siphon Attack</label>
           </div>
           <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_is_deathtouch" value="1" class="sheet-atk-deathtouch-flag" title="Death Touch: penetrating damage cannot be rolled with; at 0 Hits, target makes an EN save or dies instantly (Physical Entropy, melee, no KB)" />
+            <label title="Death Touch: penetrating damage cannot be rolled with; at 0 Hits, target makes an EN save or dies instantly (Physical Entropy, melee, no KB)" style="color:#f4d03f;">Death Touch</label>
+          </div>
+          <div class="sheet-panel-field">
             <label title="What the siphon drains from the victim (capped at what the pool holds)">Drains:</label>
             <select name="attr_attack_siphon_drain" title="What the siphon drains from the victim (capped at what the pool holds)" style="width:110px !important;">
               <option value="hits" selected>Hits (1/pt)</option>

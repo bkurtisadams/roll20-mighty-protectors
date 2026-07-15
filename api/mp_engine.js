@@ -1,4 +1,15 @@
-/* Mighty Protectors Roll20 API Engine v2.96.0 - 2026-07-14
+/* Mighty Protectors Roll20 API Engine v2.98.0 - 2026-07-14
+ * v2.98.0: HTH + MASS GROUP ROLL. New !mp hthmass command rolls a combined
+ *   HTH + Mass total for every selected token. Optional --push 1 spends 2 PR
+ *   per token for +2 to that token's combined total; tokens without 2 PR roll
+ *   normally and are marked Push denied. Supports characters, vehicles, linked
+ *   and unlinked token Power bars, and player control permissions. Alias: !mp might.
+ * v2.97.0: DEATH TOUCH (p.53). New attack_is_deathtouch flag. Penetrating
+ *   damage cannot be rolled with (buttons omitted AND divert forced to 0 in
+ *   cmdApply if a roll-with mode is retyped). No Knockback. When Death Touch
+ *   damage reduces the target to 0 Hits, the damage card offers an EN save;
+ *   new !mp dtsave command kills instantly on failure (zeroes Power, stops
+ *   bleeding, sets dead) and leaves the normal dying state on success.
  * v2.96.0: TRANSMUTATION (p.77). Transmutation-subtype save attacks now bypass
  *   blanket Other protection and Adaptation entirely; only a protection row
  *   whose subtype explicitly names "transmutation" and carries the Invuln flag
@@ -4402,7 +4413,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
     const range = getAtk("attack_range") || fields.range || "-";
     const kbChecked = getAtk("attack_kb");
-    const causesKB = !isDazzleShot && (getAtk("attack_is_siphon") !== "1") && ((kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes"));
+    const causesKB = !isDazzleShot && (getAtk("attack_is_siphon") !== "1") && (getAtk("attack_is_deathtouch") !== "1") && ((kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes"));
 
     // Duration modifier (MP Modifiers, "Duration"): a durational attack repeats its
     // effect on each subsequent Phase 0 until it expires. 1 Round = Instant (no badge).
@@ -4431,6 +4442,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isSnareAttack = (getAtk("attack_is_snare") === "1") || (atkType === "snr");
     
     const isSiphonAttack = (getAtk("attack_is_siphon") === "1");
+    const isDeathTouch = (getAtk("attack_is_deathtouch") === "1");
     const siphonDrain = getAtk("attack_siphon_drain") || "hits";
     const siphonMode = getAtk("attack_siphon_mode") || "normal";
     const siphonBC = getAtk("attack_siphon_bc") || "";
@@ -4722,6 +4734,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       senseLoss, isDazzleShot,
       snBP, snMaxBP, snType, causesKB,
       isSiphon: isSiphonAttack, siphonDrain, siphonMode, siphonBC, siphonCat,
+      isDeathTouch,
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType,
       isAreaAttack, areaRadius, areaDiameter, hasImmunity,
@@ -6852,6 +6865,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isAvoidArmor = rec && rec.isAvoidArmor;
     const isGearShot = rec && rec.isGearShot;
     
+    // Death Touch (p.53): penetrating damage may NOT be rolled with. Apply only.
+    if (rec && rec.isDeathTouch && !defIsVeh) {
+      buttons = `${btnDanger(`Apply (Death Touch)`, `!mp apply --id ${rollId} --mode noroll`)}`;
+      return buttons;
+    }
+    
     if (defIsVeh) {
       // Vehicles: Apply only, no roll-with options
       if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
@@ -6965,6 +6984,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isArmShot = rec && rec.isArmShot;
     const isAvoidArmor = rec && rec.isAvoidArmor;
     const isGearShot = rec && rec.isGearShot;
+    
+    // Death Touch (p.53): penetrating damage may NOT be rolled with. Apply only.
+    if (rec && rec.isDeathTouch && !defIsVeh) {
+      buttons = `${btnDanger(`Apply (Death Touch)`, `!mp apply --id ${rollId} --mode noroll`)}`;
+      return buttons;
+    }
     
     if (defIsVeh) {
       // Vehicles: Apply only, no roll-with options
@@ -7327,8 +7352,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (mode.includes("precise")) maxDivert = Math.floor(maxDivert / 2);
     }
 
+    // Death Touch (p.53): victims may NOT roll with any penetrating damage,
+    // even if a roll-with mode is retyped manually.
+    const isDeathTouch = !!rec.isDeathTouch;
+
     let divert = 0;
-    if (!defIsVehicle) {
+    if (!defIsVehicle && !isDeathTouch) {
       if (mode.includes("rwmax") || mode === "rollwithmax") {
         divert = Math.min(maxDivert, penetrating);
       } else if (mode.includes("rw") || mode === "rollwithcustom") {
@@ -7421,6 +7450,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       } else {
         statusLine = `<div style="color:#ff6b6b; font-weight:bold; margin-top:4px;">INCAPACITATED!</div>`;
         statusLine += startBleed(rec.defTokenId, defChar.id);
+        // Death Touch (p.53): reduced to 0 Hits → EN save or die instantly.
+        // A pass leaves the normal 0-Hits dying/bleeding state (already set above).
+        if (rec.isDeathTouch) {
+          statusLine += `<div style="background:#2a0a0a; border:1px solid #8b0000; border-radius:6px; padding:4px 8px; margin-top:3px; font-family:Arial,sans-serif; font-size:11px; color:#ff9999; max-width:280px;">💀 <b>Death Touch</b> — reduced to 0 Hits. Make an EN save or die instantly: ${btn(`EN Save vs Death`, `!mp dtsave --target ${rec.defTokenId}`)}</div>`;
+        }
       }
       defTok.set("status_dead", true);
     } else if (unconscious) {
@@ -10622,6 +10656,113 @@ function cmdStance(msg, args) {
   }
 
   // -------------------------
+  // HTH + MASS GROUP ROLL
+  // -------------------------
+  // Usage: !mp hthmass [--push 1]
+  // Macro: !mp hthmass --push ?{Push 2 PR for +2?|No,0|Yes,1}
+  // Rolls one combined contest total per selected token:
+  // HTH roll + Mass roll (+ KBR for characters) + optional +2 push.
+  function cmdHTHMass(msg, args) {
+    const pushRaw = String(args.push || "0").trim().toLowerCase();
+    const pushRequested = ["1", "2", "yes", "true", "on"].includes(pushRaw);
+    const selected = (msg.selected || []).filter(s => s._type === "graphic");
+
+    if (!selected.length) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Select one or more tokens first.`);
+    }
+
+    const seen = new Set();
+    const rows = [];
+    let rolled = 0;
+
+    selected.forEach(sel => {
+      if (seen.has(sel._id)) return;
+      seen.add(sel._id);
+
+      const tok = getObj("graphic", sel._id);
+      if (!tok) return;
+
+      const char = getCharFromToken(tok);
+      const tokenName = tok.get("name") || "Unnamed Token";
+      if (!char) {
+        rows.push(`<tr style="background:#2a1b23;">` +
+          `<td style="padding:4px 6px; border-top:1px solid #3b304f;"><b>${esc(tokenName)}</b></td>` +
+          `<td colspan="5" style="padding:4px 6px; border-top:1px solid #3b304f; color:#ff8a8a;">No represented character</td></tr>`);
+        return;
+      }
+
+      const name = char.get("name") || tokenName;
+      if (!canControl(msg, char.id)) {
+        rows.push(`<tr style="background:#2a1b23;">` +
+          `<td style="padding:4px 6px; border-top:1px solid #3b304f;"><b>${esc(name)}</b></td>` +
+          `<td colspan="5" style="padding:4px 6px; border-top:1px solid #3b304f; color:#ff8a8a;">Not controlled by you</td></tr>`);
+        return;
+      }
+
+      const isVeh = isVehicleMode(char.id);
+      const hthExpr = String(isVeh
+        ? (getAttr(char.id, "vehicle_hth_roll") || getAttr(char.id, "vehicle_hth") || "1d4")
+        : (getAttr(char.id, "hth_damage") || "1d4")).trim();
+      const massExpr = String(isVeh
+        ? (getAttr(char.id, "vehicle_mass_roll") || getAttr(char.id, "vehicle_mass") || "1d4")
+        : (getAttr(char.id, "mass") || "1d4")).trim();
+      const kbr = isVeh ? 0 : getAttrNum(char.id, "kb_resistance", 0);
+
+      const hthRoll = rollExpr(hthExpr);
+      const massDiceRoll = rollExpr(massExpr);
+      const massRoll = massDiceRoll + kbr;
+
+      const pow0 = isVeh
+        ? getVehiclePower(tok, char.id)
+        : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+      let pow1 = pow0;
+      let pushBonus = 0;
+      let pushText = `<span style="color:#777;">—</span>`;
+
+      if (pushRequested) {
+        if (pow0 >= 2) {
+          pow1 = pow0 - 2;
+          pushBonus = 2;
+          if (isVeh) setVehiclePower(tok, char.id, pow1);
+          else setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+          pushText = `<span style="color:#f0c040;"><b>+2</b><br/><span style="font-size:10px;">-2 PR</span></span>`;
+        } else {
+          pushText = `<span style="color:#ff8a8a;"><b>Denied</b><br/><span style="font-size:10px;">${pow0} PR</span></span>`;
+        }
+      }
+
+      const total = hthRoll + massRoll + pushBonus;
+      const massBreakdown = `${massExpr}${kbr ? ` + ${kbr} KBR` : ""}`;
+      const powDisplay = pushRequested && pushBonus ? `${pow0}→${pow1}` : `${pow0}`;
+
+      rows.push(`<tr>` +
+        `<td style="padding:4px 6px; border-top:1px solid #3b304f;"><b style="color:#eee;">${esc(name)}</b>${isVeh ? ` <span style="color:#8be9fd; font-size:10px;">VEH</span>` : ""}</td>` +
+        `<td title="${esc(hthExpr)}" style="padding:4px 5px; text-align:center; border-top:1px solid #3b304f; color:#f39c12;"><b>${hthRoll}</b></td>` +
+        `<td title="${esc(massBreakdown)}" style="padding:4px 5px; text-align:center; border-top:1px solid #3b304f; color:#8be9fd;"><b>${massRoll}</b></td>` +
+        `<td style="padding:4px 5px; text-align:center; border-top:1px solid #3b304f;">${pushText}</td>` +
+        `<td style="padding:4px 6px; text-align:center; border-top:1px solid #3b304f; color:#5dde5d; font-size:17px;"><b>${total}</b></td>` +
+        `<td style="padding:4px 5px; text-align:center; border-top:1px solid #3b304f; color:#aaa;">${powDisplay}</td>` +
+        `</tr>`);
+      rolled++;
+    });
+
+    const title = pushRequested ? "HTH + MASS • PUSH" : "HTH + MASS";
+    const note = pushRequested
+      ? `Push costs <b>2 PR</b> and adds <b>+2 once</b> to the combined total.`
+      : `Combined total = HTH + Mass${rows.length ? " (Mass includes KBR)" : ""}.`;
+
+    const html = `<div style="background:#1a1a2e; border:2px solid #4a4070; border-radius:6px; color:#eee; max-width:430px; overflow:hidden;">` +
+      `<div style="background:#16213e; padding:6px 8px; border-bottom:2px solid #4a4070; color:#f0c040; font-size:14px;"><b>${title}</b></div>` +
+      `<table style="width:100%; border-collapse:collapse; font-size:12px;">` +
+      `<tr style="color:#aaa; background:#20203a;"><th style="padding:3px 6px; text-align:left;">Token</th><th>HTH</th><th>Mass</th><th>Push</th><th>Total</th><th>PR</th></tr>` +
+      rows.join("") + `</table>` +
+      `<div style="padding:5px 8px; border-top:1px solid #3b304f; color:#aaa; font-size:10px;">${note}${rolled ? "" : " No valid tokens were rolled."}</div>` +
+      `</div>`;
+
+    return ch("MP", html);
+  }
+
+  // -------------------------
   // COMMAND PARSING
   // -------------------------
 
@@ -10755,6 +10896,39 @@ function cmdStance(msg, args) {
   // -------------------------
   // QUICK SAVE COMMAND
   // -------------------------
+  // Death Touch (p.53): a target reduced to 0 Hits by Death Touch makes an EN
+  // save. Fail = dies instantly (hard kill, no dying state, no Restore). Pass =
+  // remains in the normal 0-Hits dying/bleeding state.
+  // Usage: !mp dtsave --target <tokenId>
+  function cmdDeathTouchSave(msg, args) {
+    const tokId = args.target;
+    const tok = getObj("graphic", tokId);
+    if (!tok) return ch("MP", `/w gm <b>MP:</b> Target token missing.`);
+    const char = getCharFromToken(tok);
+    if (!char) return ch("MP", `/w gm <b>MP:</b> Token not linked to a character.`);
+
+    const enSave = getAttrNum(char.id, "endurance_save", 10);
+    const d20 = randomInteger(20);
+    const pass = (d20 !== 20) && (d20 <= enSave);
+
+    let html = `<div style="background:#2a0a0a; border:2px solid #8b0000; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    html += `<div style="font-weight:bold; font-size:14px; color:#ff9999; margin-bottom:4px;">${esc(char.get("name"))} — Death Touch EN Save</div>`;
+    html += `<div style="color:#aaa; font-size:11px;">TN: <b>${enSave}-</b> | Roll: <b>${d20}</b></div>`;
+
+    if (pass) {
+      html += `<div style="font-size:15px; font-weight:bold; color:#27ae60; margin-top:3px;">✓ SURVIVES</div>`;
+      html += `<div style="color:#ccc; font-size:11px;">At 0 Hits — remains dying (bleeding 1 Power/min).</div>`;
+    } else {
+      // Hard kill: zero Power, stop the bleed, mark dead permanently.
+      setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, 0);
+      if (state.MP_Engine.bleeds[tokId]) delete state.MP_Engine.bleeds[tokId];
+      tok.set("status_dead", true);
+      html += `<div style="font-size:15px; font-weight:bold; color:#e94560; margin-top:3px;">💀 DIES INSTANTLY</div>`;
+    }
+    html += `</div>`;
+    chCombat("MP", html, char.id);
+  }
+
   // Usage: !mp sv BC [mod]
   // Example: !mp sv EN, !mp sv AG +2
 
@@ -11175,9 +11349,12 @@ function cmdStance(msg, args) {
         return cmdShowBars(msg, args);
       case "info": return cmdInfo(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
+      case "hthmass":
+      case "might": return cmdHTHMass(msg, args);
       case "atk": return cmdQuickAttack(msg, args);
       case "autofire": return cmdAutofire(msg, args);
       case "sv": return cmdQuickSave(msg, args);
+      case "dtsave": return cmdDeathTouchSave(msg, args);
       case "debug":
         if (gmOnly(msg)) return;
         const debugArg = msg.content.split(/\s+/)[2];
@@ -11295,12 +11472,13 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.93.3</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.98.0</b> Commands:<br/>
           <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/>
           <b>Attacks and Saves:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code> - Attack row N<br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
           <code>!mp sv BC [mod]</code> - Save using EN, AG, IN, or CL<br/>
+          <code>!mp hthmass [--push 1]</code> - Combined HTH + Mass roll for every selected token; push costs 2 PR for +2<br/>
           <code>!mp atkinfo --row ROWID</code> - Show a selected character's attack-row details<br/>
           <b>Powers and Senses:</b><br/>
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>)<br/>
@@ -11363,7 +11541,7 @@ function cmdStance(msg, args) {
           <code>!mp test</code> - Show all test commands (<b>GM</b>)<br/>
           <code>!mp debug tokens|deltoken X,Y|absorb</code> - Diagnostics (<b>GM</b>)<br/>
           <code>!mp buttondemo</code> - Inert button-color samples (<b>GM</b>)<br/>
-          <b>Aliases:</b> <code>invisible</code>=<code>invis</code>, <code>sneaking</code>=<code>sneak</code>, <code>veh</code>=<code>vehicle</code>, <code>clearstance</code>=<code>clearstances</code>, <code>offbalance</code>=<code>offbal</code>.<br/>
+          <b>Aliases:</b> <code>might</code>=<code>hthmass</code>, <code>invisible</code>=<code>invis</code>, <code>sneaking</code>=<code>sneak</code>, <code>veh</code>=<code>vehicle</code>, <code>clearstance</code>=<code>clearstances</code>, <code>offbalance</code>=<code>offbal</code>.<br/>
           <b>Generated Button Callbacks:</b> These are implemented commands, but normally come from engine-generated chat buttons rather than typed macros:<br/>
           <code>apply limbsave save snare break kb kbsave areaescape areashield arearollnpcs areaforceall areadamageall arearw arearwrest absorb reflect reflecthit afield afresume afcancel afcounter</code><br/>
           <code>!mp help</code> - Show this list.
@@ -12721,11 +12899,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.93.3:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.98.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.93.3 READY");
+  log("MP ENGINE v2.98.0 READY");
 });
