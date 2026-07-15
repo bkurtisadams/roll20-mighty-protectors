@@ -2745,7 +2745,7 @@ MP.Engine = (function () {
     contacts.sort((a, b) => a.distance - b.distance);
 
     let out = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:360px;">`;
-    out += `<b style="color:#7fb3d5;">🔎 Scan</b> — <b>${esc(obsName)}</b> · d20: <b>${d1}${d2 != null ? `/${d2}` : ""}</b>`;
+    out += `<b style="color:#7fb3d5;"> Scan</b> — <b>${esc(obsName)}</b> · d20: <b>${d1}${d2 != null ? `/${d2}` : ""}</b>`;
     out += isFree
       ? ` <span style="color:#2ecc71; font-size:10px;">FREE CHECK (1/turn, 3.1.5)</span>`
       : ` <span style="color:#f39c12; font-size:10px;">⚠ ADDITIONAL CHECK — costs an Action (3.1.5)</span>`;
