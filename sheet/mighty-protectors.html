@@ -217,7 +217,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 <div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
 
   <!-- COMPACT MODE TOGGLE -->
-  <input type="checkbox" name="attr_compact_mode" class="sheet-compact-toggle" title="Toggle compact mode - hides title and character info" />
+  <input type="checkbox" name="attr_compact_mode" class="sheet-compact-toggle"
+  title="Compact play mode: hides identity, career, legal, inventing, and CP bookkeeping sections" />
   <input type="checkbox" name="attr_color_classic" class="sheet-color-toggle" title="Toggle classic colors (yellow Power, red Hits)" />
   <input type="checkbox" name="attr_vehicle_mode" class="sheet-vehicle-toggle" title="Toggle Vehicle sheet" />
   <input type="checkbox" name="attr_light_mode" class="sheet-light-toggle" title="Toggle light mode" />
@@ -240,7 +241,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   <div class="sheet-header-section">
 
  <!-- CHARACTER INFO - Right-justified labels -->
-  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+  <div class="sheet-compact-profile-row"
+  style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
     <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
       <!-- Row 1: Name, True ID, Player -->
       <tr>
@@ -435,7 +437,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   <!-- BASIC CHARACTERISTICS with EP Header -->
   <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
     <!-- EP Header Row -->
-    <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #2a2040;">
+    <div class="sheet-compact-cp-row"
+  style="display:flex; align-items:center; gap:12px; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #2a2040;">
       <div style="display:flex; align-items:center; gap:4px;">
         <input type="text" name="attr_total_eps" readonly style="width:36px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Total CPs spent on BCs and Abilities" />
         <span style="color:#f4d03f; font-size:11px;">Total CPs</span>

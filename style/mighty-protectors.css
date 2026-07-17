@@ -440,19 +440,86 @@
 .mp-leaptip:empty { display: none; }
 
 /* ========================================
-   COMPACT MODE TOGGLE
+   COMPACT PLAY MODE
    ======================================== */
-.sheet-compact-toggle { 
+.charsheet .sheet-compact-toggle {
   cursor: pointer;
-  opacity: 0.3;
+  opacity: 0.35;
   width: 10px;
   height: 10px;
 }
 
-.sheet-compact-toggle:hover { opacity: 1; }
-.sheet-compact-label { display: none !important; }
-.sheet-header-section { display: block; }
-.sheet-compact-toggle:checked ~ .sheet-header-section { display: none; }
+.charsheet .sheet-compact-toggle:hover,
+.charsheet .sheet-compact-toggle:checked {
+  opacity: 1;
+}
+
+.charsheet .sheet-compact-label {
+  display: none !important;
+}
+
+.charsheet .sheet-header-section {
+  display: block;
+}
+
+/*
+ * Hide both header levels:
+ * 1. The title is a direct sibling of the compact checkbox.
+ * 2. Character identity, careers, inventing, and legal status
+ *    are nested inside .sheet-character-content.
+ */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-header-section,
+.charsheet .sheet-compact-toggle:checked
+  ~ .sheet-character-content
+  .sheet-header-section {
+  display: none !important;
+}
+
+/* Hide character-building bookkeeping during play. */
+.charsheet .sheet-compact-toggle:checked
+  ~ .sheet-character-content
+  .sheet-compact-cp-row {
+  display: none !important;
+}
+
+/* Remove the extra nested padding around Profile/Mass/Wealth/Luck. */
+.charsheet .sheet-compact-toggle:checked
+  ~ .sheet-character-content
+  .sheet-compact-profile-row {
+  padding: 2px !important;
+  margin-bottom: 2px !important;
+}
+
+.charsheet .sheet-compact-toggle:checked
+  ~ .sheet-character-content
+  .sheet-compact-profile-row > div {
+  padding: 2px !important;
+  margin-bottom: 0 !important;
+}
+
+/* Tighten Roll20 repeating-section Add/Modify controls. */
+.charsheet .sheet-compact-toggle:checked
+  ~ .sheet-character-content
+  .repcontrol {
+  min-height: 16px !important;
+  margin-top: 0 !important;
+}
+
+.charsheet .sheet-compact-toggle:checked
+  ~ .sheet-character-content
+  .repcontrol .btn {
+  padding: 0 3px !important;
+  line-height: 11px !important;
+  font-size: 9px !important;
+}
+
+/* Slightly tighten the main combat panels without shrinking inputs. */
+.charsheet .sheet-compact-toggle:checked
+  ~ .sheet-character-content
+  fieldset {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
 
 /* ========================================
    POWER/HITS COLOR TOGGLE
@@ -1426,9 +1493,17 @@
 
 /* ---------- inline-style remaps: text ---------- */
 .charsheet input.sheet-light-toggle:checked ~ div [style*="color:#eaeaea"] { color: #26243a !important; }
-.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#aaa"] { color: #6b6880 !important; }
-.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#888"] { color: #8a8798 !important; }
-.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#f4d03f"] { color: #8f6400 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#aaa"] {
+  color: #55515f !important;
+}
+
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#888"] {
+  color: #55515f !important;
+}
+.charsheet input.sheet-light-toggle:checked ~ div [style*="color:#f4d03f"] {
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
 .charsheet input.sheet-light-toggle:checked ~ div [style*="color:#8be9fd"] { color: #0b7285 !important; }
 .charsheet input.sheet-light-toggle:checked ~ div [style*="color:#50fa7b"] { color: #1a8a3e !important; }
 .charsheet input.sheet-light-toggle:checked ~ div [style*="color:#bd93f9"] { color: #6d3fc0 !important; }
@@ -1587,15 +1662,63 @@
   box-shadow: inset 0 0 0 1px rgba(11, 114, 133, 0.5) !important;
 }
 
-/* ---------- POWER/HITS labels (default + classic-toggle combos) ---------- */
+/* POWER/HITS labels: compact, high-contrast light-mode badges */
 .charsheet input.sheet-light-toggle:checked ~ div .sheet-power-label,
-.charsheet input.sheet-light-toggle:checked ~ div .sheet-power-input { color: #c22636 !important; }
-.charsheet input.sheet-light-toggle:checked ~ div .sheet-hits-label,
-.charsheet input.sheet-light-toggle:checked ~ div .sheet-hits-input { color: #1a8a3e !important; }
-.charsheet input.sheet-color-toggle:checked ~ input.sheet-light-toggle:checked ~ div .sheet-power-label,
-.charsheet input.sheet-color-toggle:checked ~ input.sheet-light-toggle:checked ~ div .sheet-power-input { color: #8f6400 !important; }
-.charsheet input.sheet-color-toggle:checked ~ input.sheet-light-toggle:checked ~ div .sheet-hits-label,
-.charsheet input.sheet-color-toggle:checked ~ input.sheet-light-toggle:checked ~ div .sheet-hits-input { color: #c22636 !important; }
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-hits-label {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: 19px;
+  margin-right: 4px;
+  padding: 0 5px;
+  border-radius: 3px;
+  box-sizing: border-box;
+
+  font-weight: 800 !important;
+  font-size: 11px;
+  line-height: 17px;
+  letter-spacing: 0.2px;
+
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+
+/* POWER: warm yellow with dark lettering */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-power-label {
+  color: #3b2a00 !important;
+  background: #ffe36a;
+  border: 1px solid #8a6800;
+}
+
+/* HITS: pale red with dark red lettering */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-hits-label {
+  color: #650d16 !important;
+  background: #ffb9c0;
+  border: 1px solid #a51f2c;
+}
+
+/* Preserve the normal light-mode field-value colors */
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-power-input {
+  color: #c22636 !important;
+}
+
+.charsheet input.sheet-light-toggle:checked ~ div .sheet-hits-input {
+  color: #1a8a3e !important;
+}
+
+/* Preserve classic-toggle behavior for the field values */
+.charsheet input.sheet-color-toggle:checked
+  ~ input.sheet-light-toggle:checked
+  ~ div .sheet-power-input {
+  color: #8f6400 !important;
+}
+
+.charsheet input.sheet-color-toggle:checked
+  ~ input.sheet-light-toggle:checked
+  ~ div .sheet-hits-input {
+  color: #c22636 !important;
+}
 
 /* ---------- VEHICLE TAB (blue-shifted light) ---------- */
 .charsheet input.sheet-light-toggle:checked ~ .sheet-vehicle-content { background: #dfe8f5 !important; }
