@@ -1,4 +1,24 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.70 - Compact default-value sync
+<!-- Mighty Protectors Roll20 Character Sheet v44.73 - Compact tooltips pinned to normal-mode width
+        v44.73: Fix (CSS only): compact tooltips were still narrower than normal mode.
+          The base tooltip rule sets no width, so normal mode inherits Roll20's default
+          text-input width (~210px), while the compact override's width:auto gave only
+          the browser intrinsic size (~177px). Compact To Hit/DoT tooltips now pinned
+          to width:210px (content-box) to match normal mode
+        v44.72: Fix (CSS only): compact-mode To Hit/DoT tooltips still clipped after
+          v44.71 for two reasons: (1) the exemption inherited box-sizing:border-box
+          from the td input rule, eating ~18px of text room vs normal mode's
+          content-box; (2) the tooltip was centered over its column (left:50%),
+          extending past the right edge of a narrow pop-out sheet window. Now forces
+          content-box and right-anchors the tooltip to the cell (left:auto; right:0;
+          transform:none) so it grows leftward into the sheet; arrow repositioned
+          (right:12px) to keep pointing at the cell
+        v44.71: Fix (CSS only): in Compact mode the To Hit and Damage hover breakdowns
+          showed fragments ("AG 12", "Avg 0..."). The breakdowns are absolutely
+          positioned tooltip inputs (sheet-tohit-tooltip / sheet-dot-tooltip) inside
+          the cell, and the compact attack-table "td input" sizing (width:100%,
+          height:20px) crushed them to the column width. New compact-scoped exemption
+          restores width:auto / height:auto / 4px 8px padding so the full breakdown
+          shows, matching normal mode
         v44.70: Fix: compact-strip Luck showed blank on characters whose luck attr was
           never explicitly set. Roll20 requires duplicated attribute fields to share
           identical HTML defaults; the compact duplicates had none while the main sheet

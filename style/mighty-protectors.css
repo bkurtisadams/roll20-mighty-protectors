@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.69 - Protection summary scoped to Compact mode */
+/* Mighty Protectors Character Sheet CSS v44.73 - Compact tooltips pinned to normal-mode width (210px) */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -862,6 +862,37 @@
   line-height: 18px !important;
   font-size: 10px !important;
   box-sizing: border-box !important;
+}
+
+/* v44.71-v44.73: the To-Hit and DoT hover breakdowns are absolutely
+   positioned tooltip INPUTS inside the cell; the td input sizing above
+   crushed them to the column width (showing "AG 12" / "Avg 0..."
+   fragments). Restore intrinsic tooltip geometry, force content-box
+   (the td rule's border-box ate ~18px of text room), and anchor the
+   tooltip's RIGHT edge to the cell so it grows leftward into the sheet
+   instead of clipping at the right edge of a narrow pop-out window. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table td input.sheet-tohit-tooltip,
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table td input.sheet-dot-tooltip {
+  width: 210px !important;
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  line-height: normal !important;
+  padding: 4px 8px !important;
+  font-size: 9px !important;
+  box-sizing: content-box !important;
+  left: auto !important;
+  right: 0 !important;
+  transform: none !important;
+}
+
+/* Keep the arrow pointing at the cell now that the tooltip is
+   right-anchored instead of centered. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table .sheet-tohit-tooltip::after,
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table .sheet-dot-tooltip::after {
+  left: auto !important;
+  right: 12px !important;
+  transform: none !important;
 }
 
 .charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table button[name="roll_attack"] {
