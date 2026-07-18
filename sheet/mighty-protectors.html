@@ -1215,6 +1215,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <label title="Death Touch: penetrating damage cannot be rolled with; at 0 Hits, target makes an EN save or dies instantly (Physical Entropy, melee, no KB)" style="color:#f4d03f;">Death Touch</label>
           </div>
           <div class="sheet-panel-field">
+            <input type="checkbox" name="attr_attack_is_repulsion" value="1" class="sheet-atk-repulsion-flag" title="Repulsion Blast (p.71): damage causes Knockback ONLY. Protection, roll-with, and Mass roll reduce the KB; no direct Hit damage. Range STx2, PR 1/use (set in Range/Cost fields)." />
+            <label title="Repulsion Blast (p.71): damage causes Knockback ONLY. Protection, roll-with, and Mass roll reduce the KB; no direct Hit damage. Range STx2, PR 1/use (set in Range/Cost fields)." style="color:#f4d03f;">Repulsion</label>
+          </div>
+          <div class="sheet-panel-field">
             <label title="What the siphon drains from the victim (capped at what the pool holds)">Drains:</label>
             <select name="attr_attack_siphon_drain" title="What the siphon drains from the victim (capped at what the pool holds)" style="width:110px !important;">
               <option value="hits" selected>Hits (1/pt)</option>
@@ -4834,6 +4838,21 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     });
   });
 
+  // Repulsion Blast (v2.104.0): checking Repulsion forces the KB checkbox on,
+  // keeping the row's KB display consistent with the engine (which always
+  // treats Repulsion as causing KB).
+  on("change:repeating_attacks:attack_is_repulsion", function(eventInfo) {
+    var rowPrefix = eventInfo.sourceAttribute.replace("_attack_is_repulsion", "");
+    getAttrs([eventInfo.sourceAttribute], function(v) {
+      if (v[eventInfo.sourceAttribute] === "1") {
+        var update = {};
+        update[rowPrefix + "_attack_kb"] = "1";
+        update[rowPrefix + "_attack_kb_display"] = "Yes";
+        setAttrs(update);
+      }
+    });
+  });
+
   function initAttackKBDisplays() {
     getSectionIDs("repeating_attacks", function(ids) {
       if (ids.length === 0) return;
@@ -4905,6 +4924,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         updates[rowPrefix + "_attack_save_mod"] = dazzleMatch[1];
       }
       
+      // repulsion / kb:only - Repulsion Blast (p.71): damage causes KB only, v2.104.0
+      if (/\brepulsion\b/.test(notes) || /\bkb:only\b/.test(notes)) {
+        updates[rowPrefix + "_attack_is_repulsion"] = "1";
+        updates[rowPrefix + "_attack_kb"] = "1";
+      }
+      
       if (Object.keys(updates).length > 0) {
         setAttrs(updates);
       }
@@ -4966,6 +4991,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           if (dazzleMatch) {
             updates[prefix + "_attack_save_bc"] = "EN";
             updates[prefix + "_attack_save_mod"] = dazzleMatch[1];
+          }
+          
+          // repulsion / kb:only - Repulsion Blast (p.71), v2.104.0
+          if (/\brepulsion\b/.test(notes) || /\bkb:only\b/.test(notes)) {
+            updates[prefix + "_attack_is_repulsion"] = "1";
+            updates[prefix + "_attack_kb"] = "1";
           }
         });
         if (Object.keys(updates).length > 0) {

@@ -1,4 +1,38 @@
-/* Mighty Protectors Roll20 API Engine v2.103.1 - 2026-07-15
+/* Mighty Protectors Roll20 API Engine v2.105.2 - 2026-07-18
+ * v2.105.2: KB IMPACT CARD READABILITY. Impact card now wrapped in the
+ *   engine's standard dark container (was light-on-light in Roll20 chat).
+ *   Hole depth shows the book's fractional notation (1/10080") instead of
+ *   scientific notation; "1 hits" pluralization fixed; defender button label
+ *   contrast fixed. No mechanics changes — Protonx test math verified correct.
+ * v2.105.1: KB IMPACT BOUNCE FIX. A negative post-impact remainder (SR exceeds
+ *   remaining KB) is now a dead stop with zero secondary knockback. Previously
+ *   bounced the absolute value, so 2" KB into an SR 6 wall wrongly produced a
+ *   4" bounce that grew with wall hardness and exceeded the incoming KB.
+ *   Secondary KB now only occurs on a positive remainder that fails to breach
+ *   (Hierophant example: 14" vs SR 6 still bounces 8").
+ * v2.105.0: KNOCKBACK IMPACTS (4.8.5.4 + 5.1). New Impact button on the KB
+ *   card: prompts for obstacle SR and thickness, then resolves a collision.
+ *   Target takes Blunt Kinetic damage = min(remaining KB, SR), presented as
+ *   a child pending attack so the defender resolves it through the normal
+ *   Apply / Roll-With pipeline (protection, unconscious, bleed all apply).
+ *   Obstacle takes remaining KB minus SR; the 5.1 Hits table reports the
+ *   hole's width/depth. If the hole breaches (depth >= thickness, man-sized
+ *   width at 7+ hits) and KB remains positive, the target carries onward;
+ *   otherwise it bounces for the leftover inches as secondary knockback.
+ *   Each impact updates remaining KB and offers a Next Impact button for
+ *   chained collisions. Repulsion Blast KB flows through this unchanged —
+ *   it's how Repulsion deals its indirect damage.
+ * v2.104.0: REPULSION BLAST (p.71). New attack_is_repulsion flag: the attack's
+ *   'damage' causes Knockback only. Protection reduces the KB amount, the
+ *   target may roll with (divert still costs Power per standard 4.8.2), and
+ *   the Mass roll applies in the KB step as usual — but Hits/Power take no
+ *   direct damage, and unconscious/incapacitated/bleed checks are skipped.
+ *   KB is forced on regardless of the KB checkbox. Result card shows X" KB
+ *   damage instead of Hits applied. Area-effect Repulsion reports per-target
+ *   KB damage (Mass roll left to the GM, matching existing area-KB handling).
+ *   Sheet: new Repulsion checkbox in the attack settings panel (Row 6);
+ *   'repulsion' or 'kb:only' in attack notes auto-sets the flag.
+ *   Counterblast use remains GM-adjudicated (declare as a defensive action).
  * v2.103.1: ORDINARY VISION ARC FIX. Visible-light vision now defaults to a
  *   full 360-degree field instead of silently imposing the MP 90-degree sense
  *   arc. When Roll20 Limit Field of Vision is enabled on the observer token,
@@ -5637,7 +5671,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
     const range = getAtk("attack_range") || fields.range || "-";
     const kbChecked = getAtk("attack_kb");
-    const causesKB = !isDazzleShot && (getAtk("attack_is_siphon") !== "1") && (getAtk("attack_is_deathtouch") !== "1") && ((kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes"));
+    // Repulsion Blast (p.71): a standard Kinetic knockback attack whose 'damage'
+    // causes KB only. Always causes KB regardless of the KB checkbox.
+    const isRepulsionAttack = (getAtk("attack_is_repulsion") === "1");
+    const causesKB = isRepulsionAttack || (!isDazzleShot && (getAtk("attack_is_siphon") !== "1") && (getAtk("attack_is_deathtouch") !== "1") && ((kbChecked === "1") || (fields.kb && fields.kb.toLowerCase() === "yes")));
 
     // Duration modifier (MP Modifiers, "Duration"): a durational attack repeats its
     // effect on each subsequent Phase 0 until it expires. 1 Round = Instant (no badge).
@@ -5971,6 +6008,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       snBP, snMaxBP, snType, causesKB,
       isSiphon: isSiphonAttack, siphonDrain, siphonMode, siphonBC, siphonCat,
       isDeathTouch,
+      isRepulsion: isRepulsionAttack,
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType,
       isAreaAttack, areaRadius, areaDiameter, hasImmunity,
@@ -6147,6 +6185,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isSiphonAttack) {
       const sipLabel = siphonDrain === "power" ? "Power" : (siphonDrain === "ability" ? `${esc(siphonCat || "Ability")} CPs` : (siphonDrain === "bc" ? `${esc(siphonBC || "BC")}` : "Hits"));
       html += ` · <span style="color:#c88fff; font-weight:bold;" title="Siphon Attack: drains ${sipLabel}${siphonMode !== "normal" ? " (" + siphonMode + ")" : ""}">SIPHON: ${sipLabel}</span>`;
+    }
+    if (isRepulsionAttack) {
+      html += ` · <span style="color:#8be9fd; font-weight:bold;" title="Repulsion Blast (p.71): damage causes Knockback only. Protection, roll-with, and the Mass roll all reduce the KB. No direct Hit damage.">💨 REPULSION: KB Only</span>`;
     }
     if (atkAP === Infinity) html += ` · AP: <span style="color:#bd93f9; font-weight:bold;" title="Armor Piercing: ignores all armor (not force fields)">ALL</span>`;
     else if (atkAP > 0) html += ` · AP: <span style="color:#bd93f9; font-weight:bold;" title="Armor Piercing: ignores this many points of armor (not force fields)">${atkAP}</span>`;
@@ -6361,6 +6402,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       causesKB: rec.causesKB,
       rowId: rec.rowId,
       isSiphon: !!rec.isSiphon,
+      isRepulsion: !!rec.isRepulsion,
       siphonDrain: rec.siphonDrain,
       siphonMode: rec.siphonMode,
       siphonBC: rec.siphonBC,
@@ -6752,6 +6794,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         toHits = 0;
       }
     }
+    // Repulsion Blast (p.71): post-protection/roll-with total is KB damage only.
+    // Area KB is GM-adjudicated (per-target Mass rolls), matching existing area-KB handling.
+    let repKB = 0;
+    if (areaRec.isRepulsion) { repKB = toHits; toHits = 0; }
     const hits1 = Math.max(0, hits0 - toHits);
     const overflow = (tokIsVehicle || areaRec.isSiphon) ? 0 : Math.max(0, toHits - hits0);
     const pow1 = tokIsVehicle
@@ -6770,7 +6816,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const hasPainResistance = tokIsVehicle ? true : (num(getAttr(tokData.charId, "willpower_pain_resistance"), 0) === 1);
     const unconscious = !tokIsVehicle && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
-    const incapacitated = (hits1 === 0);
+    const incapacitated = !areaRec.isRepulsion && (hits1 === 0);
     let statusNote = "";
     if (incapacitated) {
       statusNote = " <b>INCAPACITATED!</b>";
@@ -6801,6 +6847,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (areaRec.siphonDrain === "hits") line += ` \u2192 Hits: ${hits0}\u2192${hits1}${statusNote}`;
       else if (areaRec.siphonDrain === "power") line += ` \u2192 Pow: ${pow0}\u2192${pow1}`;
       line += `</span>`;
+    } else if (areaRec.isRepulsion) {
+      line += ` = <span style="color:#8be9fd;">\ud83d\udca8 ${repKB}" KB dmg</span> <span style="font-size:11px; color:#889;">(GM: roll Mass to reduce; no Hit dmg)</span></span>`;
     } else {
       line += ` = ${c.penetrating} pen${divert > 0 ? ` (RW\u2192${toHits})` : ""} \u2192 Hits: ${hits0}\u2192${hits1}${statusNote}</span>`;
     }
@@ -8653,6 +8701,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Death Touch (p.53): victims may NOT roll with any penetrating damage,
     // even if a roll-with mode is retyped manually.
     const isDeathTouch = !!rec.isDeathTouch;
+    // Repulsion Blast (p.71): 'damage' becomes Knockback only. Rolling with IS
+    // allowed and further reduces the KB (the divert still costs Power, per the
+    // standard 4.8.2 roll-with mechanic).
+    const isRepulsion = !!rec.isRepulsion;
 
     let divert = 0;
     if (!defIsVehicle && !isDeathTouch) {
@@ -8695,6 +8747,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Store pre-doubled value for knockback (MP 4.14.2.1: KB is NOT doubled on head shots)
     const hitsForKB = toHits;
     
+    // Repulsion Blast (p.71): the post-protection, post-roll-with total is pure
+    // Knockback damage (carried forward in hitsForKB for cmdKnockback, where the
+    // Mass roll reduces it). Hits and Power take NO direct damage; only the
+    // roll-with divert (deducted below) touches Power.
+    if (isRepulsion) toHits = 0;
+    
     // Head Shot: DOUBLE Hits after protection and roll-with (not applicable to vehicles or siphon drain)
     const isHeadShot = mode.includes("headshot");
     const hasProtectedBrain = defIsVehicle ? false : (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
@@ -8734,7 +8792,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Characters: unconscious if > half hits in one blow, incapacitated at 0.
     const hasPainResistance = defIsVehicle ? true : (num(getAttr(defChar.id, "willpower_pain_resistance"), 0) === 1);
     const unconscious = !defIsVehicle && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
-    const incapacitated = (hits1 === 0);
+    // Repulsion: no direct damage, so never trigger incap/bleed here (target may
+    // still take real damage from the KB impact via cmdKnockback → collisions).
+    const incapacitated = !isRepulsion && (hits1 === 0);
     const vehicleBelowZero = defIsVehicle && (hits0 - toHits) < 0;
 
     let statusLine = "";
@@ -8923,14 +8983,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
-    // --- Full result card (GM + defender): includes Hits/Power stats ---
-    const msgLine =
-      `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
-      `<div style="font-weight:bold; font-size:15px; color:#fff; margin-bottom:6px;">${esc(rec.defName)}${effectNotes}</div>` +
-      `<div style="color:#ccc; margin-bottom:4px; font-size:13px;">${dmgLine}</div>` +
-      ffLine +
-      siphonLine +
-      (divert > 0 ? `<div style="color:#ccc; margin-bottom:6px; font-size:13px;">RW <span title="Roll-with (max ${maxDivert})">${divert}</span>` +
+    // --- Damage-applied line: Repulsion shows KB damage instead of Hits ---
+    let applyLine;
+    if (isRepulsion) {
+      applyLine = `<div style="color:#8be9fd; margin-bottom:6px; font-size:13px;">💨 ` +
+        (divert > 0 ? `RW <span title="Roll-with (max ${maxDivert})">${divert}</span> → ` : "") +
+        `<b>${hitsForKB}"</b> Knockback damage <span style="color:#889; font-size:11px;">(no Hit damage — Mass roll applies in KB step)</span></div>`;
+    } else {
+      applyLine = (divert > 0 ? `<div style="color:#ccc; margin-bottom:6px; font-size:13px;">RW <span title="Roll-with (max ${maxDivert})">${divert}</span>` +
         (isHeadShot ? ` → ${penetrating - divert} x2` : "") +
         ` → <b style="color:#ff6b6b;">${toHits}</b> to Hits` +
         (overflow > 0 ? ` <span style="color:#e67e22;" title="Overflow to Power">(+${overflow} ovf)</span>` : "") +
@@ -8939,7 +8999,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         (isHeadShot ? `${penetrating} x2 = ` : "") +
         `<b style="color:#ff6b6b;">${toHits}</b> to Hits` +
         (overflow > 0 ? ` <span style="color:#e67e22;" title="Overflow to Power">(+${overflow} ovf)</span>` : "") +
-        `</div>`) +
+        `</div>`);
+    }
+
+    // --- Full result card (GM + defender): includes Hits/Power stats ---
+    const msgLine =
+      `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
+      `<div style="font-weight:bold; font-size:15px; color:#fff; margin-bottom:6px;">${esc(rec.defName)}${effectNotes}</div>` +
+      `<div style="color:#ccc; margin-bottom:4px; font-size:13px;">${dmgLine}</div>` +
+      ffLine +
+      siphonLine +
+      applyLine +
       `<table style="border-collapse:collapse; margin-top:2px;"><tr>` +
       `<td style="padding-right:20px;">` +
       `<div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#889; margin-bottom:2px;">Hits</div>` +
@@ -9074,19 +9144,167 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const hitsForKB = rec.hitsForKB !== undefined ? rec.hitsForKB : (rec.hitsTaken || 0);
 
     const kb = Math.max(0, hitsForKB - massRoll);
-    rec.knockback = { targetId: rec.defTokenId, penalty: kb, distance: kb, saveResolved: false };
+    rec.knockback = { targetId: rec.defTokenId, penalty: kb, distance: kb, remaining: kb, impactCount: 0, saveResolved: false };
     markResolution(rec, "knockback", msg);
 
+    const kbSrcLabel = rec.isRepulsion ? `💨 KB Damage` : `Hits for KB`;
     let msg_out = `<b>Knockback vs ${esc(rec.defName)}</b><br/>` +
-      `Hits for KB: <b>${hitsForKB}</b> - Mass(${esc(massExpr)}): <b>${massRoll}</b> = <b>${kb}"</b> KB`;
+      `${kbSrcLabel}: <b>${hitsForKB}</b> - Mass(${esc(massExpr)}): <b>${massRoll}</b> = <b>${kb}"</b> KB`;
 
     let kbSaveButton = "";
+    let kbImpactButton = "";
     if (kb > 0) {
       msg_out += `<br/><i>Target pushed ${kb}" away from attacker. AG save at -${kb} or fall prone.</i>`;
       kbSaveButton = `<br/>${btn(`AG Save vs Knockdown`, `!mp kbsave --id ${rollId}`)}`;
+      kbImpactButton = `<br/>${btn(`Impact (4.8.5.4)`, `!mp kbimpact --id ${rollId} --n 1 --sr ?{Obstacle SR - see 5.1: wood 2-3, glass 4, brick 5, concrete/granite 6, iron 10, steel 11|6} --thick ?{Obstacle thickness in map inches - 1&#34; = 5 ft, e.g. 1-ft wall = 0.2|0.2}`)}`;
     }
 
-    chPendingCard("MP", msg_out, rec, { attacker: "", defender: kbSaveButton });
+    chPendingCard("MP", msg_out, rec, { attacker: kbImpactButton, defender: kbSaveButton });
+  }
+
+  // Structural Rating hole table (5.1): index = hits inflicted on the object (1-20).
+  // widthFt = numeric width in feet, widthTxt = book display, depthIn = depth in
+  // map inches (1" = 5 feet). Profile omitted; man-sized pass-through needs 7+ hits.
+  const SR_HOLE_TABLE = [
+    null,
+    { widthFt: 0.00083, widthTxt: ".01 inch", depthIn: 1/10080, depthTxt: "1/10080\"" },
+    { widthFt: 0.0083,  widthTxt: ".1 inches", depthIn: 1/1440, depthTxt: "1/1440\"" },
+    { widthFt: 0.05,    widthTxt: ".6 inches", depthIn: 1/240, depthTxt: "1/240\"" },
+    { widthFt: 0.25,    widthTxt: "3 inches", depthIn: 1/48, depthTxt: "1/48\"" },
+    { widthFt: 1,       widthTxt: "1 foot", depthIn: 1/12, depthTxt: "1/12\"" },
+    { widthFt: 3,       widthTxt: "3 feet", depthIn: 0.25, depthTxt: ".25\"" },
+    { widthFt: 5,       widthTxt: "5 feet", depthIn: 0.5, depthTxt: ".5\"" },
+    { widthFt: 6.5,     widthTxt: "6.5 feet", depthIn: 0.6, depthTxt: ".6\"" },
+    { widthFt: 8,       widthTxt: "8 feet", depthIn: 0.8, depthTxt: ".8\"" },
+    { widthFt: 10,      widthTxt: "10 feet", depthIn: 1, depthTxt: "1\"" },
+    { widthFt: 12.5,    widthTxt: "12.5 feet", depthIn: 1.2, depthTxt: "1.2\"" },
+    { widthFt: 16,      widthTxt: "16 feet", depthIn: 1.6, depthTxt: "1.6\"" },
+    { widthFt: 20,      widthTxt: "20 feet", depthIn: 2, depthTxt: "2\"" },
+    { widthFt: 25,      widthTxt: "25 feet", depthIn: 2.5, depthTxt: "2.5\"" },
+    { widthFt: 32,      widthTxt: "32 feet", depthIn: 3.2, depthTxt: "3.2\"" },
+    { widthFt: 40,      widthTxt: "40 feet", depthIn: 4, depthTxt: "4\"" },
+    { widthFt: 50.5,    widthTxt: "50.5 feet", depthIn: 5, depthTxt: "5\"" },
+    { widthFt: 63.5,    widthTxt: "63.5 feet", depthIn: 6.3, depthTxt: "6.3\"" },
+    { widthFt: 80,      widthTxt: "80 feet", depthIn: 8, depthTxt: "8\"" },
+    { widthFt: 101,     widthTxt: "101 feet", depthIn: 10.1, depthTxt: "10.1\"" }
+  ];
+
+  function srHoleLookup(hits) {
+    if (hits <= 0) return null;
+    const capped = Math.min(20, hits);
+    const row = SR_HOLE_TABLE[capped];
+    return { widthFt: row.widthFt, widthTxt: row.widthTxt, depthIn: row.depthIn, depthTxt: row.depthTxt, capped: hits > 20 };
+  }
+
+  // KNOCKBACK IMPACT (4.8.5.4): target collides with an inanimate obstacle.
+  // Target damage = min(remaining KB, SR), Blunt Kinetic, resolved via a child
+  // pending record through the normal Apply/Roll-With pipeline. Obstacle takes
+  // remaining KB vs its SR (5.1 hole table). Remaining KB is then reduced by
+  // SR: positive + breached hole carries the target onward; otherwise the
+  // leftover is secondary knockback (bounce). Character/vehicle obstacles
+  // (4.8.5.3 aimed KB collisions) remain GM-adjudicated.
+  function cmdKnockbackImpact(msg, args) {
+    const rollId = args.id;
+    const rec = state.MP_Engine.pending[rollId];
+    if (!rec) return ch("MP", `${wt(msg)}<b>MP:</b> Unknown or expired roll id.`);
+    if (!requirePendingRole(msg, rec, "attacker", "resolve the knockback impact")) return;
+    if (!rec.knockback) return ch("MP", `${wt(msg)}<b>MP:</b> Calculate knockback before resolving an impact.`);
+
+    const n = Math.max(1, num(args.n, 1));
+    if (!requireOpenResolution(msg, rec, `kbImpact${n}`, "This impact")) return;
+
+    const remaining = num(rec.knockback.remaining, rec.knockback.distance);
+    if (remaining <= 0) return ch("MP", `${wt(msg)}<b>MP:</b> No knockback remaining — nothing to impact.`);
+
+    const sr = Math.max(0, num(args.sr, 6));
+    const thick = Math.max(0, num(args.thick, 0));
+
+    const defTok = getObj("graphic", rec.defTokenId);
+    const defChar = getObj("character", rec.defCharId);
+    if (!defTok || !defChar) return ch("MP", `/w gm <b>MP:</b> Target missing.`);
+
+    markResolution(rec, `kbImpact${n}`, msg);
+    rec.knockback.impactCount = n;
+
+    // --- Target impact damage: min(remaining, SR), Blunt Kinetic (4.8.5.4) ---
+    const impactDmg = Math.min(remaining, sr);
+
+    // --- Obstacle damage: remaining KB, its SR applies (5.1) ---
+    const objHits = Math.max(0, remaining - sr);
+    const hole = srHoleLookup(objHits);
+
+    // --- Remaining KB after impact ---
+    const after = remaining - sr;
+    // Breach: hole at least as deep as the obstacle's thickness AND wide enough
+    // for a man-sized target (7+ hits = 5-foot width). GM overrides at the table.
+    const breached = !!hole && thick > 0 && hole.depthIn >= thick && objHits >= 7;
+
+    let newRemaining = 0;
+    let outcomeLine = "";
+    if (after > 0 && breached) {
+      newRemaining = after;
+      outcomeLine = `<div style="color:#8be9fd; margin-top:3px;">➡ Hole breaches! Target carries onward <b>${after}"</b> in the same direction.</div>`;
+    } else if (after > 0) {
+      newRemaining = after;
+      outcomeLine = `<div style="color:#e67e22; margin-top:3px;">↩ No breach — target bounces off for <b>${after}"</b> of secondary knockback.</div>`;
+    } else {
+      // Remainder <= 0: dead stop, zero secondary knockback (Kurt ruling
+      // 2026-07-18). The 4.8.5.4 "negative value... bounces for that many
+      // inches" clause is NOT read as |remainder|: the obstacle absorbed all
+      // momentum, and bounce distance must never exceed incoming KB. The
+      // target still takes their capped impact damage above.
+      outcomeLine = `<div style="color:#889; margin-top:3px;">■ Obstacle absorbs the impact — knockback fully expended, dead stop.</div>`;
+    }
+    rec.knockback.remaining = newRemaining;
+
+    // --- Build the impact card (dark container: engine house style, readable on Roll20's light chat) ---
+    let out = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:8px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    out += `<div style="font-weight:bold; font-size:14px; color:#fff; margin-bottom:4px;">💥 KB Impact #${n}: ${esc(rec.defName)} <span style="color:#aab; font-weight:normal;">vs SR ${sr} obstacle</span></div>`;
+    out += `<div style="color:#ccc;">Remaining KB: <b>${remaining}"</b></div>`;
+    out += `<div style="color:#ff6b6b;">Target takes <b>${impactDmg}</b> Blunt Kinetic</div>`;
+    out += `<div style="font-size:10px; color:#889;">(min of KB ${remaining}, SR ${sr}; protection &amp; roll-with apply via the buttons)</div>`;
+    if (objHits > 0 && hole) {
+      out += `<div style="color:#f4d03f; margin-top:3px;">Obstacle takes <b>${objHits}</b> hit${objHits === 1 ? "" : "s"} → hole <b>${hole.widthTxt}</b> wide, <b>${hole.depthTxt}</b> deep</div>`;
+      if (hole.capped) out += `<div style="font-size:10px; color:#889;">(table caps at 20 — GM extrapolate)</div>`;
+      if (thick > 0) out += `<div style="font-size:10px; color:#889;">(thickness ${thick}": ${hole.depthIn >= thick ? "penetrated" : "not penetrated"})</div>`;
+    } else {
+      out += `<div style="color:#aab; margin-top:3px;">Obstacle undamaged (SR ${sr} stops all ${remaining} hits).</div>`;
+    }
+    out += outcomeLine;
+    out += `</div>`;
+
+    // --- Child pending record: target's impact damage via the normal pipeline ---
+    let defenderButtons = "";
+    if (impactDmg > 0) {
+      const impRollId = "kbimp_" + rollId + "_" + n;
+      state.MP_Engine.pending[impRollId] = {
+        rollId: impRollId,
+        playerid: rec.playerid,
+        atkCharId: rec.atkCharId,
+        atkName: `KB Impact (${rec.atkName || "knockback"})`,
+        defTokenId: rec.defTokenId,
+        defCharId: rec.defCharId,
+        defName: rec.defName,
+        damageTotal: impactDmg,
+        dmgTypeStr: "Kinetic",
+        dmgSubtype: "blunt",
+        protKey: "kinetic",
+        atkAP: 0,
+        causesKB: false,
+        created: Date.now()
+      };
+      const impRec = state.MP_Engine.pending[impRollId];
+      defenderButtons = `<br/><b>Resolve impact damage:</b><br/>` +
+        buildStandardAttackButtonsAfterAF(impRollId, null, false, impRec);
+    }
+
+    // --- Next impact button if KB continues ---
+    let attackerButtons = "";
+    if (newRemaining > 0) {
+      attackerButtons = `<br/>${btn(`Next Impact (${newRemaining}" left)`, `!mp kbimpact --id ${rollId} --n ${n + 1} --sr ?{Obstacle SR - see 5.1: wood 2-3, glass 4, brick 5, concrete/granite 6, iron 10, steel 11|6} --thick ?{Obstacle thickness in map inches - 1&#34; = 5 ft, e.g. 1-ft wall = 0.2|0.2}`)}`;
+    }
+
+    chPendingCard("MP", out, rec, { attacker: attackerButtons, defender: defenderButtons });
   }
 
   function cmdKBSave(msg, args) {
@@ -10986,7 +11204,8 @@ function cmdAttackInfo(msg, args) {
   const range = getAtk("attack_range") || "";
   const prCost = getAtk("attack_cost") || "";
   const charges = getAtk("attack_charges") || "";
-  const kb = getAtk("attack_kb") === "1" ? "Yes" : "No";
+  const isRepulsionInfo = getAtk("attack_is_repulsion") === "1";
+  const kb = (isRepulsionInfo || getAtk("attack_kb") === "1") ? "Yes" : "No";
   const apRaw = getAtk("attack_ap") || "";
   const tohit = getAtk("attack_tohit") || "";
   const mod = getAtk("attack_mod") || "0";
@@ -11072,6 +11291,17 @@ function cmdAttackInfo(msg, args) {
     out += `<div><span style="color:#aaa;">Damage:</span> <span style="color:#8be9fd;">${esc(damage) || "—"}</span></div>`;
     out += `<div><span style="color:#aaa;">Type:</span> ${esc(dmgTypeFull)}</div>`;
     out += `<div><span style="color:#aaa;">Knockback:</span> ${kb}</div>`;
+    if (isRepulsionInfo) {
+      out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;">`;
+      out += `<div style="color:#8be9fd; font-weight:bold;">💨 REPULSION BLAST</div>`;
+      out += `<div style="color:#666; font-size:11px; margin-top:4px;">• Damage causes Knockback ONLY (no Hits)</div>`;
+      out += `<div style="color:#666; font-size:11px;">• Protection reduces the KB amount</div>`;
+      out += `<div style="color:#666; font-size:11px;">• Target may roll with (divert costs Power)</div>`;
+      out += `<div style="color:#666; font-size:11px;">• Mass roll subtracts in the KB step</div>`;
+      out += `<div style="color:#666; font-size:11px;">• KB collisions deal damage normally (4.8.5.4)</div>`;
+      out += `<div style="color:#666; font-size:11px;">• May Counterblast physical projectiles (GM adjudicated)</div>`;
+      out += `</div>`;
+    }
     out += `</div>`;
   }
 
@@ -12651,6 +12881,7 @@ function cmdStance(msg, args) {
         return cmdRequire(msg, args);
 
       case "kb": return cmdKnockback(msg, args);
+      case "kbimpact": return cmdKnockbackImpact(msg, args);
       case "kbsave": return cmdKBSave(msg, args);
       case "grapple": return cmdGrapple(msg, args);
       case "squeeze": return cmdSqueeze(msg, args);
