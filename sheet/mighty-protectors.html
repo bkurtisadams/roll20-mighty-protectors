@@ -1,4 +1,9 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.74 - Compact dashboard light-mode palette + Notes field fix
+<!-- Mighty Protectors Roll20 Character Sheet v44.75 - Correct RAW Mass and Carry calculations
+        v44.75: Fix: Mass and Carry calculations now use the printed BC table exactly.
+          Carrying Capacity repeats across each three-score BC band instead of using
+          invented intermediate values. Mass compares half of effective Weight
+          (Weight x multiplier) against the distinct printed Carrying Capacity rows,
+          and the same shared calculation now runs both on weight changes and sheet open.
         v44.74: Fix (CSS only): Compact + Light mode now recolors the three
           compact dashboard strips, fields, readonly values, separators, and
           character-name title instead of leaving the dashboard dark. The
@@ -3722,29 +3727,31 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // ==================== COMPLETE BC LOOKUP TABLES (0-98) ====================
   
   var carryValues = [
-    8,10,12,15,20,24,30,40,48,60,80,96,120,160,192,240,320,384,480,640,768,
-    960,1280,1536,1920,2560,3072,3840,5120,6144,7680,10240,12288,15360,20480,24576,
-    30720,40960,49152,61440,81920,98304,122880,163840,196608,245760,327680,393216,
-    491520,655360,786432,983040,1310720,1572864,1966080,2621440,3145728,3932160,
-    5242880,6291456,7864320,10485760,12582912,15728640,20971520,25165824,31457280,
-    41943040,50331648,62914560,83886080,100663296,125829120,167772160,201326592,
-    251658240,335544320,402653184,503316480,671088640,805306368,1006632960,
-    1342177280,1610612736,2013265920,2684354560,3221225472,4026531840,
-    5368709120,6442450944,8053063680,10737418240,12884901888,16106127360,
-    21474836480,25769803776,32212254720,42949672960,51539607552
+    8,10,12,15,15,15,30,30,30,
+    60,60,60,120,120,120,240,240,240,
+    480,480,480,960,960,960,1920,1920,1920,
+    3840,3840,3840,7680,7680,7680,15360,15360,15360,
+    30720,30720,30720,61440,61440,61440,122880,122880,122880,
+    245760,245760,245760,491520,491520,491520,983040,983040,983040,
+    1966080,1966080,1966080,3932160,3932160,3932160,7864320,7864320,7864320,
+    15728640,15728640,15728640,31457280,31457280,31457280,62914560,62914560,62914560,
+    125829120,125829120,125829120,251658240,251658240,251658240,503316480,503316480,503316480,
+    1006632960,1006632960,1006632960,2013265920,2013265920,2013265920,4026531840,4026531840,4026531840,
+    8053063680,8053063680,8053063680,16106127360,16106127360,16106127360,32212254720,32212254720,32212254720
   ];
 
   var carryDisplay = [
-    "8","10","12","15","20","24","30","40","48","60","80","96","120","160","192","240","320","384","480","640","768",
-    "960","1,280","1,536","1,920","2,560","3,072","3,840","5,120","6,144","7,680","10,240","12,288","15,360","20,480","24,576",
-    "30,720","40,960","49,152","61,440","81,920","98,304","122,880","163,840","196,608","245,760","327,680","393,216",
-    "491,520","655,360","786,432","983,040","1,310,720","1,572,864","1,966,080","2,621,440","3,145,728","3,932,160",
-    "5,242,880","6,291,456","7,864,320","10,485,760","12,582,912","15,728,640","20,971,520","25,165,824","31,457,280",
-    "41,943,040","50,331,648","62,914,560","83,886,080","100,663,296","125,829,120","167,772,160","201,326,592",
-    "251,658,240","335,544,320","402,653,184","503,316,480","671,088,640","805,306,368","1,006,632,960",
-    "1,342,177,280","1,610,612,736","2,013,265,920","2,684,354,560","3,221,225,472","4,026,531,840",
-    "5,368,709,120","6,442,450,944","8,053,063,680","10,737,418,240","12,884,901,888","16,106,127,360",
-    "21,474,836,480","25,769,803,776","32,212,254,720","42,949,672,960","51,539,607,552"
+    "8","10","12","15","15","15","30","30","30",
+    "60","60","60","120","120","120","240","240","240",
+    "480","480","480","960","960","960","1,920","1,920","1,920",
+    "3,840","3,840","3,840","7,680","7,680","7,680","15,360","15,360","15,360",
+    "30,720","30,720","30,720","61,440","61,440","61,440","122,880","122,880","122,880",
+    "245,760","245,760","245,760","491,520","491,520","491,520","983,040","983,040","983,040",
+    "1,966,080","1,966,080","1,966,080","3,932,160","3,932,160","3,932,160","7,864,320","7,864,320","7,864,320",
+    "15,728,640","15,728,640","15,728,640","31,457,280","31,457,280","31,457,280","62,914,560","62,914,560","62,914,560",
+    "125,829,120","125,829,120","125,829,120","251,658,240","251,658,240","251,658,240","503,316,480","503,316,480","503,316,480",
+    "1,006,632,960","1,006,632,960","1,006,632,960","2,013,265,920","2,013,265,920","2,013,265,920","4,026,531,840","4,026,531,840","4,026,531,840",
+    "8,053,063,680","8,053,063,680","8,053,063,680","16,106,127,360","16,106,127,360","16,106,127,360","32,212,254,720","32,212,254,720","32,212,254,720"
   ];
   
   var hthTable = [
@@ -3820,17 +3827,63 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     return Math.max(0, Math.min(98, v));
   }
   
-  function findClosestCarryIndex(targetWeight) {
+  // Distinct rows from the printed BC table, used only for Mass.
+  // Mass compares half of effective body weight to these Carrying Capacity values.
+  var massCarryValues = [
+    8,10,12,15,30,60,120,240,480,960,1920,3840,7680,15360,30720,
+    61440,122880,245760,491520,983040,1966080,3932160,7864320,
+    15728640,31457280,62914560,125829120,251658240,503316480,
+    1006632960,2013265920,4026531840,8053063680,16106127360,32212254720
+  ];
+
+  var massRollTable = [
+    "1d2-1","1d2-1","1d2-1","1d2","1d3","1d4","1d6","1d6+1",
+    "1d8+1","1d10+1","2d6","1d6+1d8","2d8","1d8+1d10","2d10",
+    "1d10+1d12","2d12","3d8","2d8+1d10","1d8+2d10","3d10",
+    "2d10+1d12","1d10+2d12","3d12","3d12+1","3d12+2","4d10",
+    "3d10+1d12","2d10+2d12","1d10+3d12","4d12","4d12+1",
+    "5d10","4d10+1d12","3d10+2d12"
+  ];
+
+  function getMassRoll(effectiveWeight) {
+    var halfWeight = Math.max(0, Number(effectiveWeight) || 0) / 2;
     var closestIdx = 0;
-    var closestDiff = Math.abs(carryValues[0] - targetWeight);
-    for (var i = 1; i < carryValues.length; i++) {
-      var diff = Math.abs(carryValues[i] - targetWeight);
+    var closestDiff = Math.abs(massCarryValues[0] - halfWeight);
+
+    for (var i = 1; i < massCarryValues.length; i++) {
+      var diff = Math.abs(massCarryValues[i] - halfWeight);
+      // On an exact tie, retain the lower printed tier.
       if (diff < closestDiff) {
         closestDiff = diff;
         closestIdx = i;
       }
     }
-    return closestIdx;
+
+    return massRollTable[closestIdx];
+  }
+
+  function recalcMassFromWeight() {
+    getAttrs(["weight", "weight_mult"], function(values) {
+      var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
+      var weight = parseFloat(weightRaw);
+      var mult = parseFloat(values.weight_mult);
+
+      if (!isFinite(weight) || weight < 0) weight = 0;
+      if (!isFinite(mult) || mult <= 0) mult = 1;
+
+      var effectiveWeight = Math.round(weight * mult);
+      var formattedWeight = formatNumber(weight);
+      var updates = {
+        effective_weight: formatNumber(effectiveWeight),
+        mass: getMassRoll(effectiveWeight)
+      };
+
+      if (values.weight !== formattedWeight) {
+        updates.weight = formattedWeight;
+      }
+
+      setAttrs(updates);
+    });
   }
 
   function formatNumber(num) {
@@ -4381,23 +4434,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   });
 
   on("change:weight change:weight_mult", function() {
-    getAttrs(["weight", "weight_mult"], function(values) {
-      var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
-      var weight = parseInt(weightRaw) || 1;
-      var mult = parseFloat(values.weight_mult) || 1;
-      
-      var effectiveWeight = Math.round(weight * mult);
-      var weightFormatted = formatNumber(weight);
-      var effectiveFormatted = formatNumber(effectiveWeight);
-      
-      var halfWeight = effectiveWeight / 2;
-      var idx = findClosestCarryIndex(halfWeight);
-      setAttrs({ 
-        weight: weightFormatted,
-        effective_weight: effectiveFormatted,
-        mass: hthTable[idx] 
-      });
-    });
+    recalcMassFromWeight();
     recalcAll();
   });
 
@@ -5530,6 +5567,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   on("sheet:opened", function() {
     recalcAbilityBonuses();
+    recalcMassFromWeight();
     initAbilityNotes();
     initSenseReadouts();
     recalcAll();
@@ -5569,25 +5607,19 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       }
     });
 
-    getAttrs(["weight", "power_score", "power_score_max", "hits_score", "hits_score_max"], function(values) {
-      var weightRaw = (values.weight || "0").toString().replace(/,/g, '');
-      var weight = parseInt(weightRaw) || 1;
-      var halfWeight = weight / 2;
-      var idx = findClosestCarryIndex(halfWeight);
-      var updates = { mass: hthTable[idx] };
-      
-      if (values.weight !== formatNumber(weight)) {
-        updates.weight = formatNumber(weight);
-      }
-      
+    getAttrs(["power_score", "power_score_max", "hits_score", "hits_score_max"], function(values) {
+      var updates = {};
+
       if (values.power_score === "" || values.power_score === undefined) {
         updates.power_score = values.power_score_max;
       }
       if (values.hits_score === "" || values.hits_score === undefined) {
         updates.hits_score = values.hits_score_max;
       }
-      
-      setAttrs(updates);
+
+      if (Object.keys(updates).length) {
+        setAttrs(updates);
+      }
     });
 
     // Sync protection Type and State on sheet open
