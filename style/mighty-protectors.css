@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.73 - Compact tooltips pinned to normal-mode width (210px) */
+/* Mighty Protectors Character Sheet CSS v44.74 - Compact dashboard light-mode palette + Notes field fix */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -2209,6 +2209,82 @@
   ~ input.sheet-light-toggle:checked
   ~ div .sheet-hits-input {
   color: #c22636 !important;
+}
+
+/* ---------- COMPACT DASHBOARD IN LIGHT MODE (v44.74) ----------
+   Compact mode uses class-based dark colors rather than the inline styles
+   handled by the general light-mode remaps above. Give the dashboard its
+   own light palette so Compact + Light behaves like the rest of the sheet. */
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-strip {
+  background: #f7f6fb !important;
+  color: #26243a !important;
+  box-shadow: inset 0 0 0 1px #d8d4e3 !important;
+}
+
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-strip input[type="text"] {
+  background: #ffffff !important;
+  color: #0b7285 !important;
+  border-color: #c9c4d8 !important;
+}
+
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-strip input[type="text"][readonly] {
+  background: #eeecf6 !important;
+  border-color: #a89fc6 !important;
+}
+
+/* Character name remains an unboxed title, but switches from gold-on-navy
+   to dark ink on the light dashboard. */
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-strip input.sheet-compact-name[readonly] {
+  background: transparent !important;
+  color: #26243a !important;
+  border: none !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-bc {
+  border-right-color: #c9c4d8 !important;
+}
+
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-bc > input:not(.sheet-compact-save) {
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+/* Keep the same Hits/Power value semantics used by normal light mode. */
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-strip input.sheet-power-input {
+  color: #c22636 !important;
+}
+
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-strip input.sheet-hits-input {
+  color: #1a8a3e !important;
+}
+
+.charsheet input.sheet-color-toggle:checked
+  ~ input.sheet-light-toggle:checked
+  ~ .sheet-character-content .sheet-compact-strip input.sheet-power-input {
+  color: #8f6400 !important;
+}
+
+.charsheet input.sheet-color-toggle:checked
+  ~ input.sheet-light-toggle:checked
+  ~ .sheet-character-content .sheet-compact-strip input.sheet-hits-input {
+  color: #c22636 !important;
+}
+
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-bc .sheet-compact-save,
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-readout strong,
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-slash {
+  color: #55515f !important;
+}
+
+/* In compact mode the Notes column displays attr_prot_summary instead of
+   attr_prot_notes. Its compact rule supplied an explicit dark background,
+   so the normal inline-style light remap could not reach it. */
+.charsheet input.sheet-light-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table .sheet-prot-summary {
+  background: #eeecf6 !important;
+  color: #26243a !important;
+  border-color: #a89fc6 !important;
 }
 
 /* ---------- VEHICLE TAB (blue-shifted light) ---------- */
