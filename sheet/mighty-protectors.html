@@ -1,4 +1,19 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.64 - Scan button (target acquisition)
+<!-- Mighty Protectors Roll20 Character Sheet v44.68 - Compact dashboard polish
+        v44.68: Compact dashboard: removed Heal readout; utility row order is now
+          HTH, Mass, Wealth, Luck; careers strip lays entries out inline on one row
+          with shortened Career buttons and narrower name/bonus fields
+        v44.67: Compact dashboard: removed Abilities button and KBR readout (engine reads
+          kb_resistance directly for knockback); Phys/Ment readouts use stacked "Phys Def"/
+          "Ment Def" labels; added Wealth roll; careers strip now actually visible in
+          compact mode (info-wrapper moved out of the compact-hidden char-info section)
+        v44.66: Compact mode rebuilt as a play dashboard (uses existing attr_compact_mode toggle):
+          - New sheet-compact-block with three strips: name/Hits/Power/Wake, BC scores
+            with save rolls + Init, and Move/Phys/Ment/KBR/Heal + HTH/Luck/Mass/Abilities
+          - Attacks and Protection stay visible in compact mode as full-width grid rows
+            (sheet-compact-attack-table / sheet-compact-protection-table); query row trimmed
+          - Identity/careers/legal/inventing, PMWL, BC build section, Abilities list, and
+            footer hidden via sheet-compact-hide; options panels, cogs, and repcontrols hidden
+          - New readonly attr_prot_summary field in Protection notes cell (engine-populated)
      Requires MP Engine v2.100.0+ for !mp scan.
         v44.64: Scan button on the Attacks query row - !mp scan perception sweep with
           Attack buttons for targets the player can't see/click (engine v2.100.0);
@@ -225,7 +240,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   <label class="sheet-compact-label">Compact</label>
 
   <!-- HEADER SECTION (hidden when compact) -->
-  <div class="sheet-header-section">
+  <div class="sheet-header-section sheet-title-section sheet-compact-hide">
 
     <!-- TITLE -->
     <div class="mp-title" style="text-align:center;">
@@ -237,8 +252,123 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   <!-- CHARACTER CONTENT (hidden when vehicle tab selected) -->
   <div class="sheet-character-content">
 
+  <!-- ==================== COMPACT PLAY DASHBOARD (visible only in Compact mode) ==================== -->
+  <div class="sheet-compact-block">
+
+    <!-- Row 1: identity, live resources, wake-up roll -->
+    <div class="sheet-compact-strip sheet-compact-primary">
+      <input type="text" name="attr_character_name" readonly class="sheet-compact-name" title="Character name" />
+
+      <span class="sheet-compact-vital">
+        <strong class="sheet-hits-label">HITS</strong>
+        <input type="text" name="attr_hits_score" class="sheet-hits-input sheet-compact-current" title="Current Hits" />
+        <span class="sheet-compact-slash">/</span>
+        <input type="text" name="attr_hits_score_max" class="sheet-hits-input sheet-compact-max" readonly title="Maximum Hits" />
+      </span>
+
+      <span class="sheet-compact-vital">
+        <strong class="sheet-power-label">POWER</strong>
+        <input type="text" name="attr_power_score" class="sheet-power-input sheet-compact-current" title="Current Power" />
+        <span class="sheet-compact-slash">/</span>
+        <input type="text" name="attr_power_score_max" class="sheet-power-input sheet-compact-max" readonly title="Maximum Power" />
+      </span>
+
+      <button type="roll" class="mp-labellink sheet-compact-roll sheet-compact-wake" name="roll_wakeup"
+        value="&{template:default} {{name=@{character_name} rolls Wakeup}} {{Roll=[[1d20cs<@{hits_score}cf>@{hits_score}]]}} {{Target=[[@{hits_score}]]-}}"
+        title="Roll current Hits or less to wake">Wake</button>
+    </div>
+
+    <!-- Row 2: BC scores, save rolls, initiative, HTH -->
+    <div class="sheet-compact-strip sheet-compact-combat">
+      <span class="sheet-compact-bc sheet-compact-bc-st" title="Strength">
+        <strong>ST</strong>
+        <input type="text" name="attr_strength_score" readonly title="Strength score" />
+      </span>
+
+      <span class="sheet-compact-bc" title="Endurance score and save">
+        <strong>EN</strong>
+        <input type="text" name="attr_endurance_score" readonly title="Endurance score" />
+        <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_endurance_save"
+          value="&{template:default} {{name=@{character_name} rolls EN Save}} {{Roll=[[1d20cs<[[@{endurance_save} + ?{Modifier|0}]]cf>[[@{endurance_save} + ?{Modifier|0}]]]]}} {{Target=[[@{endurance_save} + ?{Modifier|0}]]-}}"
+          title="Roll EN Save">EN</button>
+        <input type="text" name="attr_endurance_save" readonly class="sheet-compact-save" title="EN Save target" />
+      </span>
+
+      <span class="sheet-compact-bc" title="Agility score and save">
+        <strong>AG</strong>
+        <input type="text" name="attr_agility_score" readonly title="Agility score" />
+        <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_agility_save"
+          value="&{template:default} {{name=@{character_name} rolls AG Save}} {{Roll=[[1d20cs<[[@{agility_save} + ?{Modifier|0}]]cf>[[@{agility_save} + ?{Modifier|0}]]]]}} {{Target=[[@{agility_save} + ?{Modifier|0}]]-}}"
+          title="Roll AG Save">AG</button>
+        <input type="text" name="attr_agility_save" readonly class="sheet-compact-save" title="AG Save target" />
+      </span>
+
+      <span class="sheet-compact-bc" title="Intelligence score and save">
+        <strong>IN</strong>
+        <input type="text" name="attr_intelligence_score" readonly title="Intelligence score" />
+        <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_intelligence_save"
+          value="&{template:default} {{name=@{character_name} rolls IN Save}} {{Roll=[[1d20cs<[[@{intelligence_save} + ?{Modifier|0}]]cf>[[@{intelligence_save} + ?{Modifier|0}]]]]}} {{Target=[[@{intelligence_save} + ?{Modifier|0}]]-}}"
+          title="Roll IN Save">IN</button>
+        <input type="text" name="attr_intelligence_save" readonly class="sheet-compact-save" title="IN Save target" />
+      </span>
+
+      <span class="sheet-compact-bc" title="Cool score and save">
+        <strong>CL</strong>
+        <input type="text" name="attr_cool_score" readonly title="Cool score" />
+        <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_cool_save"
+          value="&{template:default} {{name=@{character_name} rolls CL Save}} {{Roll=[[1d20cs<[[@{cool_save} + ?{Modifier|0}]]cf>[[@{cool_save} + ?{Modifier|0}]]]]}} {{Target=[[@{cool_save} + ?{Modifier|0}]]-}}"
+          title="Roll CL Save">CL</button>
+        <input type="text" name="attr_cool_save" readonly class="sheet-compact-save" title="CL Save target" />
+      </span>
+
+      <span class="sheet-compact-action">
+        <button type="roll" class="mp-labellink sheet-compact-roll sheet-compact-init" name="roll_initiative"
+          value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} + @{initiative_mod} + (@{agility_score} / 100) &{tracker}]]}}"
+          title="Roll initiative for combat order">Init</button>
+        <input type="text" name="attr_initiative_score" readonly title="Initiative dice" />
+      </span>
+
+    </div>
+
+    <!-- Row 3: movement, defenses, and utility rolls -->
+    <div class="sheet-compact-strip sheet-compact-utility">
+      <span class="sheet-compact-readout"><strong>Move</strong><input type="text" name="attr_move" readonly title="Ground movement in inches" /></span>
+      <span class="sheet-compact-readout"><strong class="sheet-compact-2line">Phys<br />Def</strong><input type="text" name="attr_physical_def" readonly title="Physical Defense" /></span>
+      <span class="sheet-compact-readout"><strong class="sheet-compact-2line">Ment<br />Def</strong><input type="text" name="attr_mental_def" readonly title="Mental Defense" /></span>
+
+      <span class="sheet-compact-action sheet-compact-hth">
+        <button type="roll" class="mp-labellink sheet-mp-rollbtn sheet-compact-roll" name="roll_hth"
+          value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}+?{Push damage|0}]]}} {{Push=[[?{Push damage|0}]]}}"
+          title="Roll HTH damage">HTH</button>
+        <input type="text" name="attr_hth_damage" readonly title="HTH damage dice" />
+      </span>
+
+      <span class="sheet-compact-action sheet-compact-mass">
+        <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_mass"
+          value="&{template:default} {{name=@{character_name} rolls Mass}} {{Mass=[[@{mass} + @{kb_resistance}]]}} {{KBR=@{kb_resistance}}}"
+          title="Roll Mass plus Knockback Resistance">Mass</button>
+        <input type="text" name="attr_mass" readonly title="Mass dice" />
+      </span>
+
+      <span class="sheet-compact-action sheet-compact-wealth">
+        <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_wealth"
+          value="&{template:default} {{name=@{character_name} rolls Wealth}} {{Roll=[[@{wealth}]]}}"
+          title="Roll Wealth">Wealth</button>
+        <input type="text" name="attr_wealth" readonly title="Wealth dice" />
+      </span>
+
+      <span class="sheet-compact-action">
+        <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_luck"
+          value="&{template:default} {{name=@{character_name} rolls Luck}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}"
+          title="Roll Luck">Luck</button>
+        <input type="text" name="attr_luck" readonly title="Luck target" />
+      </span>
+    </div>
+
+  </div><!-- END COMPACT PLAY DASHBOARD -->
+
   <!-- CHARACTER INFO (hidden when compact) -->
-  <div class="sheet-header-section">
+  <div class="sheet-header-section sheet-compact-hide">
 
  <!-- CHARACTER INFO - Right-justified labels -->
   <div class="sheet-compact-profile-row"
@@ -282,13 +412,13 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       </tr>
     </table>
   </div>
+</div><!-- END sheet-header-section for char info -->
 
-  <!-- WRAPPER -->
-  <div style="display:flex; gap:4px; font-family:Arial,sans-serif; font-size:12px; align-items:stretch; margin-top:3px; margin-bottom:3px;">
+  <!-- WRAPPER (careers stay visible in compact; inventing/legal columns hide themselves) -->
+  <div class="sheet-info-wrapper" style="display:flex; gap:4px; font-family:Arial,sans-serif; font-size:12px; align-items:stretch; margin-top:3px; margin-bottom:3px;">
 
     <!-- COLUMN 1: CAREERS -->
     <!-- justify-content:flex-start ensures top alignment -->
-    <!-- <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;"> -->
     <div class="career-scroll" style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;">
       <fieldset class="repeating_careers" style="border:none; padding:0; margin:0; width:100%;">
         <div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
@@ -302,7 +432,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   </div>
 
   <!-- COLUMN 2: INVENTING PTS -->
-  <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; gap:4px;">
+  <div class="sheet-col-inventing sheet-compact-hide" style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; gap:4px;">
     
     <!-- Top Row: Base and Mod -->
     <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px;">
@@ -332,7 +462,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   </div>
 
   <!-- COLUMN 3: LEGAL STATUS -->
-  <div style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; font-size:11px;">
+  <div class="sheet-col-legal sheet-compact-hide" style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; font-size:11px;">
     
     <!-- Row 1: Status Input -->
     <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
@@ -370,12 +500,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
     </div>
   </div>
-  </div>
-</div>
-  </div><!-- END sheet-header-section for char info -->
+  </div><!-- END sheet-info-wrapper -->
 
 <!-- PROFILE / WEIGHT / MASS / WEALTH / LUCK ROW -->
-  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+  <div class="sheet-sec-pmwl sheet-compact-hide" style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
 
   <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
     <div style="display:flex; align-items:center; flex-wrap:wrap; gap:2px;">
@@ -432,10 +560,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
     </div>
   </div>
+  </div><!-- END sheet-sec-pmwl -->
 
 
   <!-- BASIC CHARACTERISTICS with EP Header -->
-  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+  <div class="sheet-sec-bc sheet-compact-hide" style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
     <!-- EP Header Row -->
     <div class="sheet-compact-cp-row"
   style="display:flex; align-items:center; gap:12px; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #2a2040;">
@@ -478,7 +607,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <td>
           <div style="display:flex; align-items:center; gap:2px; padding-left:8px;">
             <span style="color:#aaa; font-size:10px;">Base HTH:</span>
-            <!-- <input type="text" name="attr_hth_damage" readonly style="width:80px; flex-shrink:1; min-width:70px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Hand-to-Hand damage dice" /> -->
              <input type="text" name="attr_hth_damage" readonly style="width:70px; flex-shrink:1; min-width:50px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Hand-to-Hand damage dice" />
             <button type="roll" class="mp-labellink sheet-mp-rollbtn" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}+?{Push damage|0}]]}} {{Push=[[?{Push damage|0}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
             <span style="color:#aaa; font-size:10px;">Carry:</span>
@@ -498,7 +626,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         </td>
         <td style="white-space:nowrap;">
           <span style="color:#aaa; font-size:10px; padding-left:8px;"title="Characters heal their Healing Rate in points per day of rest">Heal Rate:</span>
-            <!-- <input type="text" name="attr_healing_rate" readonly style="width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" /> -->
              <input type="text" name="attr_healing_rate" readonly style="width:70px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" />
             <input type="hidden" name="attr_heal_base" value="0" />
             <input type="hidden" name="attr_heal_decimal" value="0" />
@@ -538,7 +665,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Physical Defense (AG row) -->
         <td style="white-space:nowrap;">
           <div style="display:flex; align-items:center; gap:6px; padding-left:8px;">
-            <!-- <span style="color:#aaa; font-size:10px; display:inline-block; width:138px;">Physical Defense Modifier:</span> -->
              <span style="color:#aaa; font-size:10px; display:inline-block; width:118px;">Physical Defense Modifier:</span>
             <input type="text" name="attr_physical_def_bonus" value="0"
               style="width:34px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
@@ -581,7 +707,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Mental Defense (IN row) -->
         <td style="white-space:nowrap;">
           <div style="display:flex; align-items:center; gap:6px; padding-left:8px;">
-            <!-- <span style="color:#aaa; font-size:10px; display:inline-block; width:138px;">Mental Defense Modifier:</span> -->
              <span style="color:#aaa; font-size:10px; display:inline-block; width:118px;">Mental Defense Modifier:</span>
             <input type="text" name="attr_mental_def_bonus" value="0"
               style="width:34px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
@@ -664,13 +789,14 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   </div>
 
   <!-- ==================== ATTACKS SECTION ==================== -->
-  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+  <div class="sheet-sec-attacks" style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
 
     <!-- Combat Query Settings -->
-    <div style="margin-bottom:3px; padding-bottom:6px; border-bottom:1px solid #2a2040; font-size:10px;">
-      <span style="color:#888; margin-right:4px;">Query:</span>
+    <div class="sheet-attack-tools" style="margin-bottom:3px; padding-bottom:6px; border-bottom:1px solid #2a2040; font-size:10px;">
+      <span class="sheet-query-lbl" style="color:#888; margin-right:4px;">Query:</span>
       <button type="roll" name="roll_query_help" value="&{template:mpqueryhelp} {{help=1}}" style="background:#444; color:#8be9fd; border:1px solid #555; padding:0 4px; cursor:pointer; font-size:9px; margin-right:6px;" title="Show query help">?</button>
       <button type="roll" name="roll_scan" value="!mp scan --charid @{character_id}" style="background:#3d5a80; color:#fff; border:1px solid #2a2040; padding:0 6px; cursor:pointer; font-size:9px; font-weight:bold; margin-right:6px;" title="3.1.5 perception sweep: one IN check vs every token on the page using your best sense per target. Located targets get Attack buttons - use this when darkness or invisibility means you can't click a target. Select your token first. Your first scan each round is the free check; repeats cost an Action.">Scan</button>
+      <span class="sheet-queryopts">
       <input type="checkbox" name="attr_use_api" value="1" title="Use API automation (auto-calculates range)" /><span style="color:#8be9fd; margin-right:10px;">Use API</span>
       <span class="sheet-query-auto">
       <input type="checkbox" name="attr_query_range" value="1" title="Prompt for range penalty" /><span style="color:#aaa; margin-right:8px;">Range</span>
@@ -680,10 +806,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       <input type="checkbox" name="attr_query_pushhb" value="1" title="Push: adds damage - Hold Back: reduces damage" /><span style="color:#aaa; margin-right:8px;">Push/HB</span>
       <input type="checkbox" name="attr_query_multi" value="1" title="Prompt for multiple action penalty" /><span style="color:#aaa; margin-right:8px;">Multi</span>
       <input type="checkbox" name="attr_query_other" value="1" title="Prompt for other modifiers" /><span style="color:#aaa;">Other</span>
+      </span>
     </div>
 
     <!-- Attacks Header -->
-    <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
+    <table class="sheet-compact-attack-table" style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
       <colgroup>
         <col style="width:130px;" /><!-- Name -->
         <col style="width:22px;" /><!-- Type indicator -->
@@ -704,7 +831,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <th style="text-align:left; padding:2px; color:#f4d03f;">Attacks</th>
           <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
-          <th style="padding:2px;"></th>
+          <th style="text-align:center; padding:2px;" title="Roll this attack">Roll</th>
           <th style="text-align:center; padding:2px;" title="Modifier to hit roll">Mod</th>
           <th style="text-align:center; padding:2px;" title="Target number to hit (roll under)">To Hit</th>
           <th style="text-align:center; padding:2px;" title="Damage dice/formula">Damage</th>
@@ -724,7 +851,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
       <!-- Hidden checkboxes moved inside indicator cell for CSS styling -->
 
-      <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
+      <table class="sheet-compact-attack-table" style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
         <colgroup>
           <col style="width:130px;" />
           <col style="width:22px;" />
@@ -805,7 +932,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </td>
           <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
-              <!-- <input type="text" name="attr_attack_notes" title="Notes and modifier codes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" placeholder="sav:EN:+3, snr:ice:2d8/18" /> -->
                <input type="text" name="attr_attack_notes" title="Notes and modifier codes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" />
               
               <span class="sheet-cog-icon" title="Settings">y</span>
@@ -1141,9 +1267,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
 
   <!-- ==================== PROTECTION SECTION ==================== -->
-  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+  <div class="sheet-sec-protection" style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
 
-    <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
+    <table class="sheet-compact-protection-table" style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
       <colgroup>
         <col style="width:130px;" /><!-- Name -->
         <col style="width:22px;" /><!-- Type indicator -->
@@ -1164,7 +1290,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <th style="text-align:left; padding:2px; color:#f4d03f;">Protection</th>
           <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Off=Inactive">Use</th>
-          <th style="padding:2px;"></th>
+          <th style="text-align:center; padding:2px;" title="Roll Ability Field damage when present">Roll</th>
           <th style="text-align:center; padding:2px;" title="Damage dice for Ability Field">Dmg</th>
           <th style="text-align:center; padding:2px;" title="Kinetic protection (Unarmed, Magnetism, Sonic)">Kin</th>
           <th style="text-align:center; padding:2px;" title="Energy protection (Flame Ability, Light Control, Lightning)">Eng</th>
@@ -1185,7 +1311,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
       <!-- Hidden checkboxes moved inside indicator cell for CSS styling -->
 
-      <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
+      <table class="sheet-compact-protection-table" style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:10px;">
         <colgroup>
           <col style="width:130px;" />
           <col style="width:22px;" />
@@ -1248,8 +1374,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </td>
           <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
-              <!-- <input type="text" name="attr_prot_notes" title="Notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" placeholder="Notes..." /> -->
                <input type="text" name="attr_prot_notes" title="Notes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" />
+              <input type="text" name="attr_prot_summary" readonly class="sheet-prot-summary" title="Protection summary (K/E/B/En/P/O)" />
               <span class="sheet-cog-icon" title="Settings">y</span>
             </div>
           </td>
@@ -1493,7 +1619,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
 
   <!-- ==================== ABILITIES / WEAKNESSES ==================== -->
-  <div style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
+  <div class="sheet-sec-abilities sheet-compact-hide" style="background:#1e1e38; padding:4px; margin-bottom:3px; border-radius:4px;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
       <span style="color:#f4d03f; font-weight:bold; font-size:11px;">Abilities / Weaknesses <span style="color:#555; font-size:9px;">(neg CPs = weakness)</span></span>
       <div style="display:flex; gap:4px; align-items:center;">
@@ -1517,7 +1643,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <th style="text-align:center; padding:2px;" title="Inventing Points">IP</th>
           <th style="text-align:center; padding:2px;" title="Activation Type: C=Continual, P=Persistent, V=Voluntary"></th>
           <th style="text-align:center; padding:2px;" title="Active=On, Held=Withheld, Off=Inactive">Use</th>
-          <!-- <th style="text-align:left; padding:2px;">Name / Description <span style="color:#555; font-size:9px;">(click to send to chat)</span></th> -->
            <th style="text-align:left; padding:2px;">Name / Description <span style="color:#555; font-size:9px;"></span></th>
         </tr>
       </thead>
@@ -1935,21 +2060,21 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   </div>
   
   <!-- CAPS & COMBAT FOOTER -->
-  <div style="background:#1e1e38; padding:6px 8px; border-radius:4px;">
+  <div class="sheet-sec-footer sheet-compact-hide" style="background:#1e1e38; padding:6px 8px; border-radius:4px;">
     <div style="display:flex; flex-wrap:wrap; gap:4px 12px; font-size:11px; align-items:center;">
-      <div style="display:flex; align-items:center; gap:4px;">
+      <div class="sheet-cap-build" style="display:flex; align-items:center; gap:4px;">
         <span style="color:#888;">BC Cap</span>
         <input type="text" name="attr_bc_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Max BC score = Total EPs / 5 + 10" />
       </div>
-      <div style="display:flex; align-items:center; gap:4px;">
+      <div class="sheet-cap-build" style="display:flex; align-items:center; gap:4px;">
         <span style="color:#888;">Ability Cap</span>
         <input type="text" name="attr_ability_cap" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Max Ability EP cost = Total EPs / 5" />
       </div>
-      <div style="display:flex; align-items:center; gap:4px;">
+      <div class="sheet-cap-build" style="display:flex; align-items:center; gap:4px;">
         <span style="color:#888;">DoT Cap</span>
         <input type="text" name="attr_dot_cap" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Damage over Time Cap" />
       </div>
-      <span style="color:#444;">│</span>
+      <span class="sheet-cap-sep" style="color:#444;">│</span>
       <div style="display:flex; align-items:center; gap:4px;">
         <span style="color:#888;">Break</span>
         <input type="text" name="attr_break_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Target opponent must beat to break your gear" />
@@ -1962,11 +2087,13 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <span style="color:#888;">Disarm</span>
         <input type="text" name="attr_disarm_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Target opponent must beat to tear away worn gear" />
       </div>
-      <span style="color:#444;">│</span>
-      <div style="display:flex; align-items:center; gap:4px;">
+      <span class="sheet-cap-sep" style="color:#444;">│</span>
+      <div class="sheet-cap-build" style="display:flex; align-items:center; gap:4px;">
         <span style="color:#888;">Gear BC</span>
         <input type="text" name="attr_gbc_score" readonly style="width:28px; background:#0d0d1a; color:#aaa; border:1px solid #2a2040; padding:2px; text-align:center;" title="Gear Basic Characteristic = floor(Total EPs / 15) + 6. Used for gear ability traits like range." />
       </div>
+      <span class="sheet-compact-only" style="flex:1;"></span>
+      <button type="roll" class="sheet-compact-only sheet-preview-hidden" name="roll_abw_summary" value="&{template:mpabw} {{name=@{character_name}}} {{body=@{abw_summary}}}" style="background:#333; color:#f4d03f; border:1px solid #444; padding:0 4px; font-size:9px; height:16px;" title="Send all abilities to chat">All Abl.</button>
     </div>
   </div>
 

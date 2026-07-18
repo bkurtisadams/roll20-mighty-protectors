@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.52 - Light mode toggle (sheet-light-toggle) */
+/* Mighty Protectors Character Sheet CSS v44.68 - Compact dashboard polish (inline careers row, Heal readout removed) */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -440,7 +440,7 @@
 .mp-leaptip:empty { display: none; }
 
 /* ========================================
-   COMPACT PLAY MODE
+   COMPACT COMBAT DASHBOARD
    ======================================== */
 .charsheet .sheet-compact-toggle {
   cursor: pointer;
@@ -458,67 +458,510 @@
   display: none !important;
 }
 
-.charsheet .sheet-header-section {
-  display: block;
+.charsheet .sheet-compact-block {
+  display: none;
 }
 
-/*
- * Hide both header levels:
- * 1. The title is a direct sibling of the compact checkbox.
- * 2. Character identity, careers, inventing, and legal status
- *    are nested inside .sheet-character-content.
- */
-.charsheet .sheet-compact-toggle:checked ~ .sheet-header-section,
-.charsheet .sheet-compact-toggle:checked
-  ~ .sheet-character-content
-  .sheet-header-section {
+/* Keep these as short, separate rules. Roll20's CSS pipeline can discard long selector lists. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-block {
+  display: block !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-compact-hide {
   display: none !important;
 }
 
-/* Hide character-building bookkeeping during play. */
-.charsheet .sheet-compact-toggle:checked
-  ~ .sheet-character-content
-  .sheet-compact-cp-row {
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-hide {
   display: none !important;
 }
 
-/* Remove the extra nested padding around Profile/Mass/Wealth/Luck. */
-.charsheet .sheet-compact-toggle:checked
-  ~ .sheet-character-content
-  .sheet-compact-profile-row {
-  padding: 2px !important;
-  margin-bottom: 2px !important;
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-options-panel {
+  display: none !important;
 }
 
-.charsheet .sheet-compact-toggle:checked
-  ~ .sheet-character-content
-  .sheet-compact-profile-row > div {
-  padding: 2px !important;
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-options-flag {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-cog-icon {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .repcontrol {
+  display: none !important;
+}
+
+/* Compact dashboard frame. */
+.charsheet .sheet-compact-block {
+  margin: 0 0 3px 0;
+}
+
+.charsheet .sheet-compact-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #1e1e38;
+  border-radius: 4px;
+  padding: 3px 4px;
+  margin-bottom: 2px;
+}
+
+.charsheet .sheet-compact-strip input[type="text"] {
+  height: 20px !important;
+  min-height: 20px !important;
+  line-height: 18px !important;
+  padding: 1px 3px !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+  background: #151528;
+  color: #8be9fd;
+  border: 1px solid #4a4070;
+  font-size: 10px !important;
+}
+
+.charsheet .sheet-compact-primary {
+  flex-wrap: nowrap;
+}
+
+.charsheet .sheet-compact-strip input.sheet-compact-name {
+  flex: 1 1 150px;
+  min-width: 100px !important;
+  width: auto !important;
+  font-family: Impact, 'Arial Black', sans-serif !important;
+  font-size: 16px !important;
+  line-height: 20px !important;
+  text-align: left !important;
+  color: #ffd700 !important;
+  -webkit-text-stroke: 0.45px #d35400;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  background: transparent !important;
+  border: none !important;
+  padding-left: 1px !important;
+}
+
+.charsheet .sheet-compact-vital,
+.charsheet .sheet-compact-bc,
+.charsheet .sheet-compact-action,
+.charsheet .sheet-compact-readout {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.charsheet .sheet-compact-vital strong {
+  font-size: 10px;
+  line-height: 18px;
+}
+
+.charsheet .sheet-compact-vital input {
+  width: 30px !important;
+  font-weight: bold !important;
+}
+
+.charsheet .sheet-compact-current {
+  background: #0d0d1a !important;
+}
+
+.charsheet .sheet-compact-slash {
+  color: #666;
+  font-size: 9px;
+}
+
+.charsheet .sheet-compact-combat {
+  flex-wrap: wrap;
+  gap: 3px 4px;
+}
+
+.charsheet .sheet-compact-bc {
+  padding-right: 3px;
+  border-right: 1px solid #2a2040;
+}
+
+.charsheet .sheet-compact-bc > strong {
+  width: 18px;
+  color: #e63946;
+  font-size: 10px;
+  text-align: center;
+}
+
+.charsheet .sheet-compact-bc > input:not(.sheet-compact-save) {
+  width: 27px !important;
+  color: #f4d03f !important;
+  font-weight: bold !important;
+}
+
+.charsheet .sheet-compact-bc .sheet-compact-save {
+  width: 25px !important;
+  color: #aaa !important;
+}
+
+.charsheet .sheet-compact-bc-st {
+  padding-right: 5px;
+}
+
+.charsheet .sheet-compact-action input {
+  width: 50px !important;
+  font-weight: bold !important;
+}
+
+.charsheet .sheet-compact-action input[name="attr_initiative_score"] {
+  width: 57px !important;
+}
+
+.charsheet .sheet-compact-utility {
+  gap: 3px 7px;
+  margin-bottom: 0;
+}
+
+.charsheet .sheet-compact-readout strong {
+  color: #888;
+  font-size: 9px;
+  font-weight: bold;
+}
+
+.charsheet .sheet-compact-readout input {
+  width: 31px !important;
+}
+
+.charsheet .sheet-compact-readout input[name="attr_move"] {
+  width: 54px !important;
+}
+
+.charsheet .sheet-compact-action input[name="attr_luck"] {
+  width: 27px !important;
+}
+
+.charsheet .sheet-compact-mass input[name="attr_mass"] {
+  width: 58px !important;
+}
+
+.charsheet .sheet-compact-hth input[name="attr_hth_damage"] {
+  width: 50px !important;
+}
+
+/* Two-line readout labels (Phys Def / Ment Def). */
+.charsheet .sheet-compact-readout strong.sheet-compact-2line {
+  display: inline-block;
+  font-size: 8px;
+  line-height: 8px;
+  text-align: center;
+}
+
+.charsheet .sheet-preview-hidden {
+  display: none !important;
+}
+
+.charsheet button.sheet-compact-roll,
+.charsheet .sheet-compact-block button.sheet-mp-rollbtn {
+  width: auto !important;
+  min-width: 25px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  line-height: 18px !important;
+  margin: 0 !important;
+  padding: 0 4px !important;
+  border-radius: 3px !important;
+  font-size: 9px !important;
+  font-weight: bold !important;
+  box-sizing: border-box !important;
+  background: #e63946 !important;
+  color: #fff !important;
+  border: 1px solid #a82531 !important;
+}
+
+.charsheet button.sheet-compact-init {
+  background: #8be9fd !important;
+  color: #000 !important;
+}
+
+/* Careers become one shallow task strip. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-info-wrapper {
+  display: block !important;
+  margin: 0 0 3px 0 !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .career-scroll {
+  display: block !important;
+  width: 100% !important;
+  max-height: 46px !important;
+  overflow-y: auto !important;
+  padding: 3px !important;
+  box-sizing: border-box !important;
+}
+
+/* Career entries flow inline, one after the other, on a single row. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .career-scroll .repcontainer {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .career-scroll .repitem {
+  flex: 0 0 auto !important;
+  border: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .career-scroll .repitem > div {
+  margin-bottom: 0 !important;
+  gap: 2px !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .career-scroll button[name="roll_career_task"] {
+  height: 16px !important;
+  line-height: 14px !important;
+  font-size: 9px !important;
+  padding: 0 3px !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .career-scroll input[name="attr_career_name"] {
+  flex: 0 1 auto !important;
+  width: 64px !important;
+  min-width: 40px !important;
+  height: 16px !important;
+  padding: 1px 2px !important;
+  font-size: 9px !important;
+  box-sizing: border-box !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .career-scroll input[name="attr_career_bonus"] {
+  width: 16px !important;
+  height: 16px !important;
+  padding: 1px !important;
+  font-size: 9px !important;
+  box-sizing: border-box !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content fieldset {
+  margin-top: 0 !important;
   margin-bottom: 0 !important;
 }
 
-/* Tighten Roll20 repeating-section Add/Modify controls. */
-.charsheet .sheet-compact-toggle:checked
-  ~ .sheet-character-content
-  .repcontrol {
-  min-height: 16px !important;
-  margin-top: 0 !important;
+/* Attack query controls stay available but use a shallow wrapped strip. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-sec-attacks {
+  width: 100% !important;
+  padding: 3px !important;
+  margin-bottom: 3px !important;
+  box-sizing: border-box !important;
 }
 
-.charsheet .sheet-compact-toggle:checked
-  ~ .sheet-character-content
-  .repcontrol .btn {
-  padding: 0 3px !important;
-  line-height: 11px !important;
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-attack-tools {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 2px 4px !important;
+  margin: 0 0 3px 0 !important;
+  padding: 0 0 3px 0 !important;
+  line-height: 14px !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-query-lbl {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-queryopts {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 1px 2px !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-attack-tools input[type="checkbox"] {
+  width: 11px !important;
+  height: 11px !important;
+  margin: 0 1px 0 0 !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-attack-tools span {
+  margin-right: 2px !important;
   font-size: 9px !important;
 }
 
-/* Slightly tighten the main combat panels without shrinking inputs. */
-.charsheet .sheet-compact-toggle:checked
-  ~ .sheet-character-content
-  fieldset {
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-attack-tools button {
+  height: 18px !important;
+  line-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 5px !important;
+}
+
+/* Full-width Attack rows. The table becomes a grid only in compact mode. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table {
+  display: block !important;
+  width: 100% !important;
+  table-layout: auto !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table colgroup {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table thead {
+  display: block !important;
+  width: 100% !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table tbody {
+  display: block !important;
+  width: 100% !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table tr {
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: minmax(118px, 1fr) 42px 46px 48px 82px 34px 50px 24px 30px 34px !important;
+  column-gap: 2px !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+}
+
+/* Hide activation badge, modifier and notes. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table tr > :nth-child(2) {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table tr > :nth-child(5) {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table tr > :nth-child(13) {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table th {
+  display: block !important;
+  min-width: 0 !important;
+  padding: 1px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: clip !important;
+  box-sizing: border-box !important;
+  font-size: 9px !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table td {
+  display: block !important;
+  min-width: 0 !important;
+  padding: 1px !important;
+  box-sizing: border-box !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table td input,
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table td select {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  line-height: 18px !important;
+  font-size: 10px !important;
+  box-sizing: border-box !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table button[name="roll_attack"] {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  line-height: 18px !important;
+  margin: 0 !important;
+  padding: 0 2px !important;
+  font-size: 9px !important;
+  box-sizing: border-box !important;
+}
+
+/* Full-width Protection rows. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-sec-protection {
+  width: 100% !important;
+  padding: 3px !important;
+  margin-bottom: 3px !important;
+  box-sizing: border-box !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table {
+  display: block !important;
+  width: 100% !important;
+  table-layout: auto !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table colgroup {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table thead {
+  display: block !important;
+  width: 100% !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table tbody {
+  display: block !important;
+  width: 100% !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table tr {
+  display: grid !important;
+  width: 100% !important;
+  grid-template-columns: minmax(118px, 1fr) 42px 46px 56px repeat(6, 34px) 30px !important;
+  column-gap: 2px !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+}
+
+/* Hide activation badge and Notes. */
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table tr > :nth-child(2) {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table tr > :nth-child(13) {
+  display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table th {
+  display: block !important;
+  min-width: 0 !important;
+  padding: 1px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  font-size: 9px !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table td {
+  display: block !important;
+  min-width: 0 !important;
+  padding: 1px !important;
+  box-sizing: border-box !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table td input,
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table td select {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  line-height: 18px !important;
+  font-size: 10px !important;
+  box-sizing: border-box !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table button.sheet-prot-roll-btn {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  line-height: 18px !important;
+  margin: 0 !important;
+  padding: 0 2px !important;
+  font-size: 9px !important;
+  box-sizing: border-box !important;
 }
 
 /* ========================================
