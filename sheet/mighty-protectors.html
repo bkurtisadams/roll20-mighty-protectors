@@ -1,4 +1,15 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.68 - Compact dashboard polish
+<!-- Mighty Protectors Roll20 Character Sheet v44.70 - Compact default-value sync
+        v44.70: Fix: compact-strip Luck showed blank on characters whose luck attr was
+          never explicitly set. Roll20 requires duplicated attribute fields to share
+          identical HTML defaults; the compact duplicates had none while the main sheet
+          declared them. Compact attr_luck now value="10", attr_wealth value="d4",
+          attr_mass value="1d4" to match the main sheet (Wealth/Mass had the same
+          latent bug). No CSS changes.
+        v44.69: Fix: attr_prot_summary had no CSS and rendered as an unstyled default
+          input in the Protection notes cell in ALL modes, breaking normal-mode layout.
+          Now hidden by default; in Compact mode the notes cell stays visible but swaps
+          the notes input for the summary (cog already compact-hidden), with a new
+          minmax(64px, 0.8fr) grid track added to the compact protection row
         v44.68: Compact dashboard: removed Heal readout; utility row order is now
           HTH, Mass, Wealth, Luck; careers strip lays entries out inline on one row
           with shortened Career buttons and narrower name/bonus fields
@@ -347,21 +358,21 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_mass"
           value="&{template:default} {{name=@{character_name} rolls Mass}} {{Mass=[[@{mass} + @{kb_resistance}]]}} {{KBR=@{kb_resistance}}}"
           title="Roll Mass plus Knockback Resistance">Mass</button>
-        <input type="text" name="attr_mass" readonly title="Mass dice" />
+        <input type="text" name="attr_mass" value="1d4" readonly title="Mass dice" />
       </span>
 
       <span class="sheet-compact-action sheet-compact-wealth">
         <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_wealth"
           value="&{template:default} {{name=@{character_name} rolls Wealth}} {{Roll=[[@{wealth}]]}}"
           title="Roll Wealth">Wealth</button>
-        <input type="text" name="attr_wealth" readonly title="Wealth dice" />
+        <input type="text" name="attr_wealth" value="d4" readonly title="Wealth dice" />
       </span>
 
       <span class="sheet-compact-action">
         <button type="roll" class="mp-labellink sheet-compact-roll" name="roll_luck"
           value="&{template:default} {{name=@{character_name} rolls Luck}} {{Roll=[[1d20cs<@{luck}cf>@{luck}]]}} {{Target=[[@{luck}]]-}}"
           title="Roll Luck">Luck</button>
-        <input type="text" name="attr_luck" readonly title="Luck target" />
+        <input type="text" name="attr_luck" value="10" readonly title="Luck target" />
       </span>
     </div>
 

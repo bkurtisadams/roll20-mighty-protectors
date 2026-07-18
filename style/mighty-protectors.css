@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.68 - Compact dashboard polish (inline careers row, Heal readout removed) */
+/* Mighty Protectors Character Sheet CSS v44.69 - Protection summary scoped to Compact mode */
 
 /* ========================================
    SHEET TABS - Vehicle toggle
@@ -908,19 +908,36 @@
 .charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table tr {
   display: grid !important;
   width: 100% !important;
-  grid-template-columns: minmax(118px, 1fr) 42px 46px 56px repeat(6, 34px) 30px !important;
+  grid-template-columns: minmax(118px, 1fr) 42px 46px 56px repeat(6, 34px) 30px minmax(64px, 0.8fr) !important;
   column-gap: 2px !important;
   align-items: center !important;
   box-sizing: border-box !important;
 }
 
-/* Hide activation badge and Notes. */
+/* Hide activation badge in compact; the Notes cell stays but swaps the
+   notes input for the engine-populated protection summary (v44.69).
+   Normal mode never shows the summary. */
+.charsheet .sheet-prot-summary {
+  display: none !important;
+}
+
 .charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table tr > :nth-child(2) {
   display: none !important;
 }
 
-.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table tr > :nth-child(13) {
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table td input[name="attr_prot_notes"] {
   display: none !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table .sheet-prot-summary {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  background: #0d0d1a !important;
+  color: #9ecbff !important;
+  border: 1px solid #2a2040 !important;
+  text-align: center !important;
+  font-size: 9px !important;
 }
 
 .charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table th {
