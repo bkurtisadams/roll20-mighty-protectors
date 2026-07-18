@@ -1,4 +1,16 @@
-/* Mighty Protectors Roll20 API Engine v2.105.2 - 2026-07-18
+/* Mighty Protectors Roll20 API Engine v2.106.0 - 2026-07-18
+ * v2.106.0: SURPRISED & IMMOBILE TARGETS (4.7.2). Standard attacks now
+ *   auto-detect the defender's status: prone (back-pain marker, e.g. from a
+ *   failed knockdown save) grants the attacker +3; snared or grappled
+ *   (engine snare records / cobweb / grab markers) grants +6; unconscious,
+ *   incapacitated, or paralyzed grants +6 AND negates defenses entirely
+ *   (no effort to defend). Physical attacks only — mental/emotional defense
+ *   is not hindered by posture or restraint. Area attacks unchanged (already
+ *   +6/no-def at the blast point). Attack card shows the bonus as a Tgt badge
+ *   in the Modifiers row and itemizes it in the to-hit hover; when defenses
+ *   are negated the PDef display shows 0 (was N). States the engine cannot
+ *   see (unaware, off balance, oblivious, willing) remain GM-applied via
+ *   --mod / Other, matching the existing surprise-bonus pattern.
  * v2.105.2: KB IMPACT CARD READABILITY. Impact card now wrapped in the
  *   engine's standard dark container (was light-on-light in Roll20 chat).
  *   Hole depth shows the book's fractional notation (1/10080") instead of
@@ -5898,13 +5910,45 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defVisionPenalty = (atkTypeCode !== "M" && atkTypeCode !== "E" && defVision.lost > 0) ? -3 : 0;
     const defValue = defBase + defMod + defVisionPenalty;
 
+    // 4.7.2 Surprised & Immobile Targets (v2.106.0): the defender's own status
+    // grants the attacker a bonus and may negate defenses. Auto-detected from
+    // engine state: prone (back-pain marker) = +3; snared/grappled = +6;
+    // unconscious/incapacitated/paralyzed = +6 AND no defenses (no effort to
+    // defend). Physical attacks only — prone/restraint don't hinder mental or
+    // emotional defense. Area attacks skip this (already +6/no-def at the
+    // blast point). States the engine can't see (unaware, off balance,
+    // oblivious, willing targets) remain GM-applied via --mod / Other.
+    let defStatusBonus = 0;
+    let defStatusLabel = "";
+    let defStatusNoDef = false;
+    if (!isAreaAttack && atkTypeCode !== "M" && atkTypeCode !== "E") {
+      const defConds = (state.MP_Engine.conditions && state.MP_Engine.conditions[defTokenId]) || [];
+      const defParalyzed = defConds.some(c => c.type === "paralyzed");
+      const defOut = defTok.get("status_sleepy") === true || defTok.get("status_dead") === true;
+      const defSnRec = state.MP_Engine.snares[defTokenId];
+      const defRestrained = !!defSnRec || defTok.get("status_cobweb") === true || defTok.get("status_grab") === true;
+      const defProne = defTok.get("status_back-pain") === true;
+      if (defOut || defParalyzed) {
+        defStatusBonus = 6;
+        defStatusNoDef = true;
+        defStatusLabel = defParalyzed ? "paralyzed (+6, no def)" : "unconscious/incap (+6, no def)";
+      } else if (defRestrained) {
+        defStatusBonus = 6;
+        defStatusLabel = (defSnRec && defSnRec.type === "Grapple") ? "grappled (+6)" : "snared (+6)";
+      } else if (defProne) {
+        defStatusBonus = 3;
+        defStatusLabel = "prone (+3)";
+      }
+    }
+    const effDefValue = defStatusNoDef ? 0 : defValue;
+
     let targetTotal;
     if (isAreaAttack) {
       targetTotal = baseToHit + 6;
     } else {
       // Note: calledShotPenalty is already included in macroMod (from sheet's hitmod field)
       // Do NOT add it again here - it's extracted separately only for hover display
-      targetTotal = baseToHit - defValue;
+      targetTotal = baseToHit + defStatusBonus - effDefValue;
     }
 
     if (atkChgCost > 0 && num(atkChgRaw, 0) <= 0) {
@@ -6076,7 +6120,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Subtotal: ${subtotal}-`;
     
-    if (defValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${defValue}`;
+    if (effDefValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${effDefValue}`;
+    if (defStatusBonus !== 0) hoverBreakdown += `&#10;Target ${defStatusLabel} [4.7.2]${defStatusNoDef && defValue !== 0 ? ` (def ${defValue} → 0)` : ""}`;
     if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
     if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
     if (acqHover) hoverBreakdown += acqHover;
@@ -6198,7 +6243,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // --- Modifiers Section ---
     html += `<div style="padding:5px 10px; font-size:11px; color:#889; background:#1a1a2e;">`;
     html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#997; margin-bottom:3px;">Modifiers</div>`;
-    html += `<span style="color:#aaa;">${defTypeLabel}: <b style="color:#ddd;">${defValue}</b></span> `;
+    html += `<span style="color:#aaa;">${defTypeLabel}: <b style="color:#ddd;">${effDefValue}</b>${defStatusNoDef && defValue !== 0 ? `<span style="color:#e94560;" title="4.7.2: target makes no effort to defend — defenses do not apply"> (was ${defValue})</span>` : ""}</span> `;
+    if (defStatusBonus !== 0) {
+      html += `<span style="color:#e94560; font-weight:bold; cursor:help;" title="4.7.2 Surprised &amp; Immobile Targets: +3 prone/unaware/off-balance, +6 completely immobile (no defenses if making no effort to defend)">Tgt ${esc(defStatusLabel)}</span> `;
+    }
     html += `<span style="color:#aaa; cursor:help;" title="Change stance: !mp stance [def | full | offbal | normal]&#10;A = attacker's to-hit penalty, D = defender's bonus to defense">Stance: A:<b style="color:${modColor(atkStancePenalty)};">${atkStancePenalty}</b> D:<b style="color:${modColor(defMod)};">${defMod > 0 ? '+' : ''}${defMod}</b></span> `;
     html += `<span style="color:#aaa;">Rng: <b style="color:${modColor(rangePenalty)};">${rangePenalty}</b></span> `;
     html += `<span style="color:#aaa;">Aim: <b style="color:${modColor(aimVal)};">${aimVal}</b></span> `;
