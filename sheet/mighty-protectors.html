@@ -1,4 +1,9 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.75 - Correct RAW Mass and Carry calculations
+<!-- Mighty Protectors Roll20 Character Sheet v44.76 - Disintegration subtype plumbing
+        v44.76: Vehicle attacks and protection rows now carry an explicit damage
+          subtype into MP Engine v2.107.0. This lets vehicle Disintegration attacks
+          use the same RAW defense rule as character attacks and lets a vehicle list
+          dedicated Invulnerability to Disintegration. No PR, range, damage, or KB
+          values are set automatically.
         v44.75: Fix: Mass and Carry calculations now use the printed BC table exactly.
           Carrying Capacity repeats across each three-score BC band instead of using
           invented intermediate values. Mass compares half of effective Weight
@@ -2268,6 +2273,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
               </select>
             </div>
             <div class="sheet-panel-field">
+              <label title="Optional damage subtype. For Disintegration, enter Disintegration and mark Other protection as Invulnerability (1/4).">Subtype:</label>
+              <input type="text" name="attr_vprot_subtype" placeholder="e.g. Disintegration" style="width:104px !important;" />
+            </div>
+            <div class="sheet-panel-field">
               <label style="color:#3498db;" title="Damage deflected so far this fight (resets on renewal)">Deflected:</label>
               <input type="text" name="attr_vprot_ff_accum" value="0" maxlength="5" style="width:40px !important; color:#3498db;" />
             </div>
@@ -2355,7 +2364,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <input type="text" name="attr_vsys_hits" style="width:26px; background:#0d0d1a; color:#50fa7b; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Current hits (— = integral, can't be attacked)" />
           <input type="text" name="attr_vsys_hits_max" readonly style="width:26px; background:#0d0d1a; color:#888; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box; font-size:11px;" title="Max hits" />
           <input type="checkbox" class="sheet-atk-flag" name="attr_vsys_is_attack" value="1" style="display:none;" />
-          <span class="sheet-vatk-cell"><button type="roll" class="sheet-mp-rollbtn sheet-vatk-btn" name="roll_vsys_dmg" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{vsys_rowid}}} {{atype=@{vsys_atype}}} {{name=@{vsys_notes}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{hitmod=[[0+@{vsys_tohit}+@{vehicle_targeting_bonus}]]}} {{wpnmod=@{vsys_tohit}}} {{targbonus=@{vehicle_targeting_bonus}}} {{target=[[0+@{vsys_tohit_num}-((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))-@{target|Target|bar3|0}]]}} {{damage=[[@{vsys_dmg}]]}} {{dmgexpr=@{vsys_dmg}}} {{type=@{vsys_dmgtype}}} {{deftype=@{vsys_atk_full}}} {{pr=@{vsys_pr}}} {{ch=@{vsys_charges}}} {{range=@{vsys_range}}} {{ap=@{vsys_ap}}} {{kb=@{vsys_kb}}} {{area=@{vsys_area}}} {{is_save=@{vsys_is_save}}} {{savebc=@{vsys_save_bc}}} {{savemod=@{vsys_save_mod}}} {{recovery=@{vsys_save_rec}}} {{rectime=@{vsys_save_rec_time}}} {{no_damage=@{vsys_no_damage}}} {{autofire=@{vsys_autofire}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3|0}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's attack (to-hit + damage)"></button><span class="sheet-vatk-tip">Dmg <input type="text" name="attr_vsys_dmg" readonly class="sheet-vatk-tip-val" /></span></span>
+          <span class="sheet-vatk-cell"><button type="roll" class="sheet-mp-rollbtn sheet-vatk-btn" name="roll_vsys_dmg" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{vsys_rowid}}} {{atype=@{vsys_atype}}} {{name=@{vsys_notes}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{hitmod=[[0+@{vsys_tohit}+@{vehicle_targeting_bonus}]]}} {{wpnmod=@{vsys_tohit}}} {{targbonus=@{vehicle_targeting_bonus}}} {{target=[[0+@{vsys_tohit_num}-((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))-@{target|Target|bar3|0}]]}} {{damage=[[@{vsys_dmg}]]}} {{dmgexpr=@{vsys_dmg}}} {{type=@{vsys_dmgtype}}} {{subtype=@{vsys_subtype}}} {{deftype=@{vsys_atk_full}}} {{pr=@{vsys_pr}}} {{ch=@{vsys_charges}}} {{range=@{vsys_range}}} {{ap=@{vsys_ap}}} {{kb=@{vsys_kb}}} {{area=@{vsys_area}}} {{is_save=@{vsys_is_save}}} {{savebc=@{vsys_save_bc}}} {{savemod=@{vsys_save_mod}}} {{recovery=@{vsys_save_rec}}} {{rectime=@{vsys_save_rec_time}}} {{no_damage=@{vsys_no_damage}}} {{autofire=@{vsys_autofire}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def|0}*@{vsys_is_physical})+(@{target|Target|mental_def|0}*@{vsys_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3|0}]]}}" style="font-size:10px; font-weight:bold; width:24px; height:18px; line-height:16px; padding:0; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; box-sizing:border-box; cursor:pointer;" title="Roll this system's attack (to-hit + damage)"></button><span class="sheet-vatk-tip">Dmg <input type="text" name="attr_vsys_dmg" readonly class="sheet-vatk-tip-val" /></span></span>
           <input type="hidden" name="attr_vsys_atype" value="P" />
           <input type="hidden" name="attr_vsys_is_physical" value="1" />
           <input type="hidden" name="attr_vsys_is_mental" value="0" />
@@ -2436,6 +2445,34 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
                 <option value="Entropy">Entropy</option>
                 <option value="Psychic">Psychic</option>
                 <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Optional damage subtype. Set Disintegration here so the engine applies its special defense rule.">Subtype:</label>
+              <select name="attr_vsys_subtype" style="width:104px !important;">
+                <option value="">&mdash;</option>
+                <option value="Blunt">Blunt</option>
+                <option value="Sharp">Sharp</option>
+                <option value="Sonics">Sonics</option>
+                <option value="Vibration">Vibration</option>
+                <option value="High Pressure">High Pressure</option>
+                <option value="Low Pressure">Low Pressure</option>
+                <option value="Heat">Heat</option>
+                <option value="Electricity">Electricity</option>
+                <option value="Radiation">Radiation</option>
+                <option value="Light">Light</option>
+                <option value="Electromagnetics">Electromagnetics</option>
+                <option value="Disease">Disease</option>
+                <option value="Poison">Poison</option>
+                <option value="Cold">Cold</option>
+                <option value="Gas">Gas</option>
+                <option value="Gravity">Gravity</option>
+                <option value="Disintegration">Disintegration</option>
+                <option value="Transmutation">Transmutation</option>
+                <option value="Healing">Healing</option>
+                <option value="Asphyxiation">Asphyxiation</option>
+                <option value="Drowning">Drowning</option>
+                <option value="Time">Time</option>
               </select>
             </div>
           </div>

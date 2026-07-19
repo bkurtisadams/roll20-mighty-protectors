@@ -1,4 +1,13 @@
-/* Mighty Protectors Roll20 API Engine v2.106.0 - 2026-07-18
+/* Mighty Protectors Roll20 API Engine v2.107.0 - 2026-07-18
+ * v2.107.0: DISINTEGRATION DEFENSE (p.36). Disintegration damage now ignores
+ *   ordinary Other protection, subtype-specific numeric protection, Hardened,
+ *   Adaptation, Force Fields, Absorption, Reflection, and vehicle armor. Only
+ *   an active protection row explicitly tagged Disintegration and carrying
+ *   Invulnerability reduces the damage. The rule is shared by standard, area,
+ *   reflected, save, vehicle, and Ability Field counter-damage paths. PR,
+ *   range, damage dice, Knockback, object effects, and Counterblast remain
+ *   manually entered/adjudicated. Vehicle attack/protection subtype plumbing
+ *   is supported by sheet v44.76.
  * v2.106.0: SURPRISED & IMMOBILE TARGETS (4.7.2). Standard attacks now
  *   auto-detect the defender's status: prone (back-pain marker, e.g. from a
  *   failed knockdown save) grants the attacker +3; snared or grappled
@@ -1024,7 +1033,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.103.1 FILE STARTING");
+log("MP ENGINE v2.107.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -1105,8 +1114,15 @@ MP.Engine = (function () {
     setResource(tok, charId, CFG.POWER_BAR, "vehicle_power", val);
   }
 
-  // Vehicle base armor + repeating_vehprotection rows
-  function getVehicleProtection(charId, protKey) {
+  // Vehicle base armor + repeating_vehprotection rows.
+  // Disintegration (p.36) is a strict exception: vehicle armor, numeric Other
+  // protection, Hardened, and Adaptation do nothing. Only a vprot row whose
+  // subtype explicitly includes Disintegration and whose value carries the
+  // Invulnerability flag applies.
+  function getVehicleProtection(charId, protKey, atkSubtype) {
+    const atkSub = String(atkSubtype || "").trim().toLowerCase();
+    const disintegrationOnly = isDisintegrationSubtype(atkSub);
+
     // Map protKey to vehicle armor attr
     const armorMap = {
       kinetic: "vehicle_armor_kinetic",
@@ -1114,9 +1130,11 @@ MP.Engine = (function () {
       bio: "vehicle_armor_biochem",
       entropy: "vehicle_armor_entropy",
       psychic: "vehicle_armor_psychic",
-      other: "vehicle_armor_kinetic"  // Default to kinetic for "other"
+      other: "vehicle_armor_kinetic"  // Default to kinetic for ordinary "other"
     };
-    let totalProt = getAttrNum(charId, armorMap[protKey] || armorMap.kinetic, 3);
+    let totalProt = disintegrationOnly
+      ? 0
+      : getAttrNum(charId, armorMap[protKey] || armorMap.kinetic, 3);
     let totalHardened = 0;
     let hasInvuln = false;
     let hasAdapt = false;
@@ -1142,11 +1160,34 @@ MP.Engine = (function () {
       const modeAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_mode`);
       const mode = modeAttr ? (modeAttr.get("current") || "normal").toLowerCase() : "normal";
       if (mode === "forcefield" || mode === "absorption" || mode === "reflection" || nm === "force field") return;
+
       const protAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_${protKey}`);
       if (!protAttr) return;
       const protValue = protAttr.get("current");
       if (!protValue || protValue === "0" || protValue === "") return;
+
+      // Blank subtype covers the parent type normally. Disintegration requires
+      // an explicit subtype match, never a blanket Other row.
+      const subtypeAttr = attrs.find(a => a.get("name") === `repeating_vehprotection_${rowId}_vprot_subtype`);
+      const protSubtype = subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "";
+      let subtypeMatches = false;
+      if (protSubtype === "") {
+        subtypeMatches = !disintegrationOnly;
+      } else if (atkSub === "") {
+        subtypeMatches = false;
+      } else {
+        const protSubtypes = protSubtype.split(",").map(s => s.trim().toLowerCase());
+        subtypeMatches = protSubtypes.includes(atkSub);
+      }
+      if (!subtypeMatches) return;
+
       const parsed = parseProtValue(protValue);
+      if (disintegrationOnly) {
+        // Numeric protection, Hardened, and Adaptation are expressly ignored.
+        if (parsed.invuln) hasInvuln = true;
+        return;
+      }
+
       totalProt += parsed.prot;
       if (parsed.invuln) hasInvuln = true;
       if (parsed.adapt) hasAdapt = true;
@@ -4163,6 +4204,9 @@ function generateRowID() {
     gas:"Other", gravity:"Other", disintegration:"Other", transmutation:"Other",
     healing:"Other", asphyxiation:"Other", drowning:"Other", time:"Other"
   };
+  function isDisintegrationSubtype(raw) {
+    return String(raw || "").trim().toLowerCase() === "disintegration";
+  }
   function resolveDmgType(raw, fallback) {
     const t = String(raw || "").trim().toLowerCase();
     if (DMG_TYPE_MAP[t]) return DMG_TYPE_MAP[t];
@@ -4263,9 +4307,9 @@ function generateRowID() {
   // NOTE: Force Field rows are SKIPPED - handled separately with deflection pool
   // NOTE: Hardened is read from separate prot_hard_* fields (not parsed from protection value)
   // dedicatedOnly: a protection row only counts if its prot_subtype EXPLICITLY
-  // lists the attack subtype. Used by Transmutation (p.77): "only dedicated
-  // Invulnerability vs. Transmutation works against it" — blanket Other
-  // protection does not cover it.
+  // lists the attack subtype. Used by Transmutation save handling. Disintegration
+  // is stricter and is handled internally: explicit subtype + Invulnerability only;
+  // numeric protection, Hardened, and Adaptation are ignored.
   function sumProtectionWithHardened(charId, protKey, atkSubtype, dedicatedOnly) {
     if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
     
@@ -4288,6 +4332,7 @@ function generateRowID() {
     
     // Normalize attack subtype for matching
     const atkSub = (atkSubtype || "").trim().toLowerCase();
+    const disintegrationOnly = isDisintegrationSubtype(atkSub);
     
     // Get all protection row IDs
     const rowIds = new Set();
@@ -4334,7 +4379,7 @@ function generateRowID() {
       if (protSubtype === "") {
         // Protection covers full type - matches unless the attack demands a
         // dedicated (subtype-named) defense.
-        subtypeMatches = !dedicatedOnly;
+        subtypeMatches = !(dedicatedOnly || disintegrationOnly);
       } else if (atkSub === "") {
         // Attack has no subtype, but protection is subtype-specific - no match
         subtypeMatches = false;
@@ -4348,6 +4393,12 @@ function generateRowID() {
       
       // Parse protection value (invuln/adapt flags)
       const parsed = parseProtValue(protValue);
+      if (disintegrationOnly) {
+        // Disintegration can only be blocked by dedicated Invulnerability.
+        // Ignore numeric protection, Hardened, and Adaptation on the row.
+        if (parsed.invuln) hasInvuln = true;
+        return;
+      }
       totalProt += parsed.prot;
       if (parsed.invuln) hasInvuln = true;
       if (parsed.adapt) hasAdapt = true;
@@ -4383,7 +4434,7 @@ function generateRowID() {
   // Get Absorption or Reflection data for a character and damage type
   // Returns { mode: "absorption"|"reflection"|null, limit, rowId, absorbsTo, current } or null
   function getAbsorptionReflection(charId, protKey, atkSubtype) {
-    if (!protKey) return null;
+    if (!protKey || isDisintegrationSubtype(atkSubtype)) return null;
     
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
     const atkSub = (atkSubtype || "").trim().toLowerCase();
@@ -4574,6 +4625,7 @@ function generateRowID() {
     
     // Normalize attack subtype for matching
     const atkSub = (atkSubtype || "").trim().toLowerCase();
+    const disintegrationOnly = isDisintegrationSubtype(atkSub);
     
     // Get all protection row IDs
     const rowIds = new Set();
@@ -4615,7 +4667,7 @@ function generateRowID() {
       // Matching rules (same as sumProtectionWithHardened):
       let subtypeMatches = false;
       if (protSubtype === "") {
-        subtypeMatches = true;  // Full type protection
+        subtypeMatches = !disintegrationOnly;  // Full type protection, except Disintegration
       } else if (atkSub === "") {
         subtypeMatches = false;  // Attack has no subtype, protection is specific
       } else {
@@ -4626,6 +4678,11 @@ function generateRowID() {
       if (!subtypeMatches) return;
       
       const parsed = parseProtValue(protValue);
+      if (disintegrationOnly) {
+        // Coverage is irrelevant: only dedicated Invulnerability applies.
+        if (parsed.invuln) hasInvuln = true;
+        return;
+      }
       if (parsed.invuln) hasInvuln = true;
       if (parsed.adapt) hasAdapt = true;
       
@@ -4744,6 +4801,7 @@ function generateRowID() {
       const nameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
       const damageAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_damage`);
       const dmgTypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_dmgtype`);
+      const subtypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_subtype`);
       const prAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_pr`);
       const kbAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_kb`);
       
@@ -4756,6 +4814,7 @@ function generateRowID() {
         name: nameAttr ? nameAttr.get("current") : "Ability Field",
         damage: damageDice,
         dmgType: dmgTypeAttr ? dmgTypeAttr.get("current") : "Energy",
+        dmgSubtype: subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "",
         pr: num(prAttr ? prAttr.get("current") : "1", 1),
         causesKB: kbAttr && kbAttr.get("current") === "1"
       };
@@ -6689,7 +6748,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const raw = areaRec.damage;
     const tokIsVehicle = isVehicleMode(tokData.charId);
     const protData = tokIsVehicle
-      ? getVehicleProtection(tokData.charId, areaRec.protKey)
+      ? getVehicleProtection(tokData.charId, areaRec.protKey, areaRec.dmgSubtype)
       : sumProtectionWithCoverage(tokData.charId, areaRec.protKey, true, areaRec.dmgSubtype);
     const baseProt = protData.prot;
     const hardened = protData.hardened;
@@ -7594,7 +7653,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Get target's protection
     const rhTargetIsVeh = isVehicleMode(targetCharId);
     const protData = rhTargetIsVeh
-      ? getVehicleProtection(targetCharId, rec.protKey)
+      ? getVehicleProtection(targetCharId, rec.protKey, rec.dmgSubtype)
       : sumProtectionWithHardened(targetCharId, rec.protKey, rec.dmgSubtype);
     const prot = protData.prot;
     const hasInvuln = protData.invuln;
@@ -8053,6 +8112,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           atkName: rec.atkName,
           damageTotal: afDmg,
           dmgTypeStr: afDmgType,
+          dmgSubtype: afData.dmgSubtype || "",
           protKey: afProtKey,
           causesKB: afData.causesKB,
           isAFCounter: true,
@@ -8143,8 +8203,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Get attacker's protection
     const afcAtkIsVeh = isVehicleMode(rec.atkCharId);
     const protData = afcAtkIsVeh
-      ? getVehicleProtection(rec.atkCharId, rec.protKey)
-      : sumProtectionWithHardened(rec.atkCharId, rec.protKey, "");
+      ? getVehicleProtection(rec.atkCharId, rec.protKey, rec.dmgSubtype)
+      : sumProtectionWithHardened(rec.atkCharId, rec.protKey, rec.dmgSubtype);
     const prot = protData.prot;
     const hasInvuln = protData.invuln;
     const hasAdapt = protData.adapt;
@@ -8540,10 +8600,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const protKey = rec.protKey;
     const damageType = rec.dmgTypeStr || "Kinetic";
+    const isDisintegration = isDisintegrationSubtype(rec.dmgSubtype);
     
     // Get armor protection (normal rows - NOT Force Field)
     const protData = defIsVehicle
-      ? getVehicleProtection(defChar.id, protKey)
+      ? getVehicleProtection(defChar.id, protKey, rec.dmgSubtype)
       : sumProtectionWithHardened(defChar.id, protKey, rec.dmgSubtype);
     let armorProt = protData.prot;
     let armorHardened = protData.hardened;
@@ -8565,6 +8626,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let ffOverflow = 0;
     let ffGasBlocked = false;
     let ffGravityBypassed = false;
+    let ffDisintegrationBypassed = false;
     let afterFF = raw;  // Damage after FF, before armor
     // Armor Piercing: original declared value, amount spent on FF, and leftover for armor.
     // RAW: AP ignores N points of protection vs its damage type -- a Force Field IS protection.
@@ -8578,8 +8640,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (ffData && !bypassProt) {
       const atkSub = (rec.dmgSubtype || "").trim().toLowerCase();
       
+      // Disintegration can only be blocked by dedicated Invulnerability.
+      if (isDisintegration) {
+        ffDisintegrationBypassed = true;
+      }
       // Gravity attacks bypass FF entirely
-      if (atkSub === "gravity" || damageType === "Gravity") {
+      else if (atkSub === "gravity" || damageType === "Gravity") {
         ffGravityBypassed = true;
       }
       // Gas attacks are completely blocked (no damage, no deflection cost)
@@ -8974,6 +9040,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     } else if (ffGravityBypassed && ffData) {
       ffIndicator = ` <span style="color:#e67e22;" title="Gravity bypasses Force Field">[FF:no vs Gravity]</span>`;
+    } else if (ffDisintegrationBypassed && ffData) {
+      ffLine = `<div style="color:#e67e22; font-size:11px; margin-top:2px;">` +
+        `🛡️ ${esc(ffData.name)} cannot block Disintegration; only dedicated Invulnerability applies.</div>`;
     }
 
     // Build damage line for chat card
@@ -9492,7 +9561,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isTransmutation = String(rec.dmgSubtype || "").trim().toLowerCase() === "transmutation";
 
     const protData = saveDefIsVeh
-      ? getVehicleProtection(defChar.id, rec.protKey)
+      ? getVehicleProtection(defChar.id, rec.protKey, rec.dmgSubtype)
       : sumProtectionWithHardened(defChar.id, rec.protKey, rec.dmgSubtype, isTransmutation);
     const prot = isTransmutation ? 0 : protData.prot;
     const invulnBonus = protData.invuln ? 8 : 0;
@@ -13143,7 +13212,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.103.1</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.107.0</b> Commands:<br/>
           <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/>
           <b>Attacks and Saves:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code> - Attack row N<br/>
@@ -13712,8 +13781,10 @@ function cmdStance(msg, args) {
       createObj("attribute", { characterid: charId, name: sp + "vsys_dmg", current: sys.atkDmg || "0" });
       createObj("attribute", { characterid: charId, name: sp + "vsys_notes", current: (lbl + (sys.desc || "")).trim() });
       const _vdt = vehDmgType(sys.atkType, sys.desc);
+      const _vsub = (ab && ab.abId === "disintegration") ? "Disintegration" : "";
       const _vtype = (ab && VEH_OFFENSIVE_AB[ab.abId]) ? (_vdt === "psychic" ? "M" : "P") : "none";
       createObj("attribute", { characterid: charId, name: sp + "vsys_dmgtype", current: _vdt });
+      createObj("attribute", { characterid: charId, name: sp + "vsys_subtype", current: _vsub });
       createObj("attribute", { characterid: charId, name: sp + "vsys_type", current: _vtype });
       createObj("attribute", { characterid: charId, name: sp + "vsys_tohit", current: "0" });
 
@@ -13725,6 +13796,7 @@ function cmdStance(msg, args) {
         createObj("attribute", { characterid: charId, name: ap + "attack_tohit", current: "" });
         createObj("attribute", { characterid: charId, name: ap + "attack_damage", current: sys.atkDmg || vehParseDice(sys.desc) || "" });
         createObj("attribute", { characterid: charId, name: ap + "attack_dmgtype", current: vehDmgType(sys.atkType, sys.desc) });
+        createObj("attribute", { characterid: charId, name: ap + "attack_subtype", current: (ab.abId === "disintegration") ? "Disintegration" : "" });
         createObj("attribute", { characterid: charId, name: ap + "attack_kb", current: "" });
         createObj("attribute", { characterid: charId, name: ap + "attack_num", current: String(atkNum) });
       }
@@ -14571,11 +14643,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.103.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.107.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.103.1 READY");
+  log("MP ENGINE v2.107.0 READY");
 });
