@@ -1,4 +1,4 @@
-/* Mighty Protectors Roll20 API Engine v2.107.1 - 2026-07-26
+/* Mighty Protectors Roll20 API Engine v2.107.2 - 2026-07-26
  * v2.107.1: SNARE/GRAPPLE STATUS BADGE FIXES. Stacked snares re-assert the
  *   cobweb marker and no longer write NaN BP into grapple records; snaring an
  *   already-grappled token is refused; a row flagged both Grapple and Snare
@@ -3677,6 +3677,22 @@ MP.Engine = (function () {
   // Parse a Roll20 statusmarkers string ("skull,stopwatch@3") into base marker names.
   function parseMarkers(s) {
     return String(s || "").split(",").map(m => m.trim().split("@")[0]).filter(Boolean);
+  }
+
+  // Roll20 keeps two views of a badge: the legacy status_<name> boolean and the
+  // aggregate statusmarkers string the client actually renders. They desync on
+  // tokens edited by hand or restored from an undo snapshot, and once they do,
+  // setting status_<name> to a value it already holds is a no-op — the engine
+  // reports success and no badge appears. Write both.
+  function setMarker(tok, name, on) {
+    if (!tok) return;
+    const base = String(name || "").replace(/^status_/, "");
+    if (!base) return;
+    tok.set("status_" + base, !!on);
+    const parts = String(tok.get("statusmarkers") || "").split(",").map(s => s.trim()).filter(Boolean);
+    const hasIt = parts.some(p => p.split("@")[0] === base);
+    if (on && !hasIt) tok.set("statusmarkers", parts.concat(base).join(","));
+    else if (!on && hasIt) tok.set("statusmarkers", parts.filter(p => p.split("@")[0] !== base).join(","));
   }
 
   function restoreTokenSnapshot(snap) {
@@ -10175,7 +10191,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const newBp = Math.min(oldBp + CFG.SNARE_STACK_BONUS, exMax);
       existing.bp = newBp;
       existing.maxBp = exMax;
-      defTok.set("status_cobweb", true);
+      setMarker(defTok, "cobweb", true);
       chCombat("MP", `<b>Snare Stacked on ${esc(rec.defName)}</b><br/>` +
         `BP increased: <b>${oldBp} → ${newBp}</b> (max ${exMax})` +
         `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)}`, rec.defCharId);
@@ -10241,7 +10257,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         resultLine = `<b style="color:#27ae60">ESCAPES!</b> (uses full turn)`;
       }
       delete state.MP_Engine.snares[tokId];
-      tok.set("status_cobweb", false);
+      setMarker(tok, "cobweb", false);
     } else {
       resultLine = `<b style="color:#e94560">STILL SNARED</b>`;
     }
@@ -10396,10 +10412,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     };
 
     // Set status markers - defender gets "grab" (being grappled), attacker gets "fist" (grappling)
-    defTok.set("status_grab", true);
+    setMarker(defTok, "grab", true);
     // Per 3.0.2.6 & 4.11: grappling somebody else still imposes restraint on physical tasks.
     // Remote grapples still count as an active grapple, so mark the grappler too.
-    atkTok.set("status_fist", true);
+    setMarker(atkTok, "fist", true);
 
     const remoteLabel = remote ? " <span style='color:#9b59b6;'>(Remote)</span>" : "";
     msg_out += `Result: <b style="color:#27ae60;">HIT - GRAPPLED${lockAttempt ? " & LOCKED" : ""}</b>${remoteLabel}<br/>`;
@@ -10567,11 +10583,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (success) {
       // Clear defender's grappled status
       delete state.MP_Engine.snares[defTokId];
-      defTok.set("status_grab", false);
+      setMarker(defTok, "grab", false);
 
       // Clear attacker's grappling status
       if (atkTok && !isGrapplingAnyoneElse(atkTokId, defTokId)) {
-        atkTok.set("status_fist", false);
+        setMarker(atkTok, "fist", false);
       }
 
       // Also clear counter-grapple if present
@@ -10603,11 +10619,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Clear the grapple
     delete state.MP_Engine.snares[defTokId];
-    defTok.set("status_grab", false);
+    setMarker(defTok, "grab", false);
     
     // Clear attacker's grappling status
     if (atkTok && !isGrapplingAnyoneElse(atkTokId, defTokId)) {
-      atkTok.set("status_fist", false);
+      setMarker(atkTok, "fist", false);
     }
 
     // Also clear counter-grapple if present
@@ -10707,11 +10723,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (ok) {
       delete state.MP_Engine.snares[defTokId];
-      defTok.set("status_grab", false);
+      setMarker(defTok, "grab", false);
 
       // Clear attacker's grappling status
       if (atkTok && !isGrapplingAnyoneElse(atkTokId, defTokId)) {
-        atkTok.set("status_fist", false);
+        setMarker(atkTok, "fist", false);
       }
 
       // Clear counter-grapple record if present
@@ -10786,8 +10802,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         counter: true
       };
       // Both are now grappling each other - both get status markers
-      atkTok.set("status_grab", true);
-      defTok.set("status_fist", true); // Defender is now also grappling
+      setMarker(atkTok, "grab", true);
+      setMarker(defTok, "fist", true); // Defender is now also grappling
       msg_out += `<br/>${esc(defChar.get("name"))} now has ${esc(atkChar ? atkChar.get("name") : "the grappler")} grappled${lockAttempt ? " in a LOCK" : ""}.`;
       msg_out += `<br/><i>Both parties now grappling each other (-3 restraint each)</i>`;
     }
@@ -14662,11 +14678,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.107.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.107.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.107.1 READY");
+  log("MP ENGINE v2.107.2 READY");
 });
