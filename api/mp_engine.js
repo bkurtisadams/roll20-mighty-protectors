@@ -10229,7 +10229,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
       `BP: ${bpDisplay} | Max: <b>${maxBp}</b>` +
       `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)} ` +
-      `${btn(`Break (+push, 2 PR)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);      `${btn(`Break (+push)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
+      `${btn(`Break (+push, 2 PR)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
   }
 
   function cmdBreak(msg, args) {
@@ -10597,11 +10597,27 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Defender always uses their own HTH
     const defHTH = getAttr(defChar.id, "hth_damage") || "1d4";
 
+    // 5.5: each push costs 2 Power, paid before the rolls, win or lose.
+    // The 1 Hit in 4.11.3 is an additional penalty for pushing and losing.
+    function payPush(tok, charId, who) {
+      const isVeh = isVehicleMode(charId);
+      const pow0 = isVeh ? getVehiclePower(tok, charId) : getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      if (pow0 < 2) {
+        ch("MP", `/w gm <b>MP:</b> ${esc(who)} needs 2 Power to Push (has ${pow0}) - pushing this roll.`.replace(" - pushing this roll.", " - push ignored."));
+        return false;
+      }
+      if (isVeh) setVehiclePower(tok, charId, pow0 - 2);
+      else setResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - 2);
+      return true;
+    }
+    const defPushed = pushDef ? payPush(defTok, defChar.id, defChar.get("name")) : false;
+    const atkPushed = pushAtk ? payPush(atkTok, atkChar.id, atkChar.get("name")) : false;
+
     const rawDef = rollExpr(defHTH);
     const rawAtk = rollExpr(atkHTH);
 
-    let defRoll = rawDef + (pushDef ? 2 : 0) + (locked ? -2 : 0); // lock: -2 to break free
-    let atkRoll = rawAtk + (pushAtk ? 2 : 0);
+    let defRoll = rawDef + (defPushed ? 2 : 0) + (locked ? -2 : 0); // lock: -2 to break free
+    let atkRoll = rawAtk + (atkPushed ? 2 : 0);
 
     const success = (defRoll > atkRoll);
 
