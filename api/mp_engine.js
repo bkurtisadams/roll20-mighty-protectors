@@ -10197,7 +10197,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       chCombat("MP", `<b>Snare Stacked on ${esc(rec.defName)}</b><br/>` +
         `BP increased: <b>${oldBp} → ${newBp}</b> (max ${exMax})` +
         `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)} ` +
-        `${btn(`Break (+push)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
+        `${btn(`Break (+push, 2 PR)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
       return;
     }
 
@@ -10229,7 +10229,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
       `BP: ${bpDisplay} | Max: <b>${maxBp}</b>` +
       `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)} ` +
-      `${btn(`Break (+push)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
+      `${btn(`Break (+push, 2 PR)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);      `${btn(`Break (+push)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
   }
 
   function cmdBreak(msg, args) {
@@ -10246,9 +10246,23 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!char) return ch("MP", `${wt(msg)}<b>MP:</b> Token not linked to character.`);
     if (!requireControl(msg, char.id, "break free from this Snare")) return;
 
+    // 5.5: pushing Strength gives +2 Base HTH Damage, costs 2 Power, and must
+    // be declared and paid before the roll.
+    let pushPaid = false;
+    if (push) {
+      const isVeh = isVehicleMode(char.id);
+      const pow0 = isVeh ? getVehiclePower(tok, char.id) : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+      if (pow0 < 2) {
+        return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(char.get("name"))} needs 2 Power to Push (has ${pow0}).`);
+      }
+      if (isVeh) setVehiclePower(tok, char.id, pow0 - 2);
+      else setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow0 - 2);
+      pushPaid = true;
+    }
+
     const hthExpr = String(getAttr(char.id, "hth_damage") || "1d4").trim();
     let roll = rollExpr(hthExpr);
-    if (push) roll += 2;
+    if (pushPaid) roll += 2;
 
     const success = (roll >= sn.bp);
     const margin = roll - sn.bp;
@@ -10267,11 +10281,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     let msg_out = `<b>Break Free Attempt</b> (${esc(char.get("name"))})<br/>` +
-      `HTH(${esc(hthExpr)}): <b>${roll}</b>${push ? " (+2 push)" : ""} vs BP <b>${sn.bp}</b><br/>` +
+      `HTH(${esc(hthExpr)}): <b>${roll}</b>${pushPaid ? " (+2 push, -2 PR)" : ""} vs BP <b>${sn.bp}</b><br/>` +
       resultLine;
 
     if (!success) {
-      msg_out += `<br/>${btn(`Try Again`, `!mp break --target ${tokId}`)} ${btn(`Try Again (+push)`, `!mp break --target ${tokId} --push 1`)}`;
+      msg_out += `<br/>${btn(`Try Again`, `!mp break --target ${tokId}`)} ${btn(`Try Again (+push, 2 PR)`, `!mp break --target ${tokId} --push 1`)}`;
     }
 
     chCombat("MP", msg_out, char.id);
