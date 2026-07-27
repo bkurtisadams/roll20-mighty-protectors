@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.107.0 - 2026-07-18
+/* Mighty Protectors Roll20 API Engine v2.107.1 - 2026-07-26
+ * v2.107.1: SNARE/GRAPPLE STATUS BADGE FIXES. Stacked snares re-assert the
+ *   cobweb marker and no longer write NaN BP into grapple records; snaring an
+ *   already-grappled token is refused; a row flagged both Grapple and Snare
+ *   resolves as Snare (4.10) with a GM warning instead of dropping the snare
+ *   silently; Break Free / Release / Escape keep the grappler's fist marker if
+ *   he still holds another victim; !mp test reset clears the fist marker.
  * v2.107.0: DISINTEGRATION DEFENSE (p.36). Disintegration damage now ignores
  *   ordinary Other protection, subtype-specific numeric protection, Hardened,
  *   Adaptation, Force Fields, Absorption, Reflection, and vehicle armor. Only
@@ -6053,7 +6059,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     const isGrappleAttack = (getAtk("attack_is_grapple") === "1");
-    if (isGrappleAttack) {
+    if (isGrappleAttack && isSnareAttack) {
+      ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(weaponName)}</b> is flagged Grapple and Snare - resolving as Snare (4.10). Untick one flag on the attack row.`);
+    }
+    if (isGrappleAttack && !isSnareAttack) {
       if (!atkTok) {
         ch("MP", `${wt(msg)}<b>MP:</b> Could not find an attacker token on this page.`);
         return;
@@ -10151,16 +10160,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // snBP can be a dice formula (Ice: "2d8") or fixed number (Grapnel: "6")
     const bpFormula = String(rec.snBP || "0").trim();
     const maxBp = Math.max(1, num(rec.snMaxBP, 0));
+
+    const priorRec = state.MP_Engine.snares[defTok.id];
+    if (priorRec && priorRec.type === "Grapple") {
+      return ch("MP", `/w gm <b>MP:</b> ${esc(rec.defName)} is held in a grapple - release or break it before applying a Snare.`);
+    }
     markResolution(rec, "snare", msg);
     
     // Check for existing snare - stack bonus per 4.10
     const existing = state.MP_Engine.snares[defTok.id];
     if (existing) {
-      const newBp = Math.min(existing.bp + CFG.SNARE_STACK_BONUS, existing.maxBp);
-      const oldBp = existing.bp;
-      state.MP_Engine.snares[defTok.id].bp = newBp;
+      const oldBp = num(existing.bp, 0);
+      const exMax = num(existing.maxBp, 0) || maxBp;
+      const newBp = Math.min(oldBp + CFG.SNARE_STACK_BONUS, exMax);
+      existing.bp = newBp;
+      existing.maxBp = exMax;
+      defTok.set("status_cobweb", true);
       chCombat("MP", `<b>Snare Stacked on ${esc(rec.defName)}</b><br/>` +
-        `BP increased: <b>${oldBp} → ${newBp}</b> (max ${existing.maxBp})`, rec.defCharId);
+        `BP increased: <b>${oldBp} → ${newBp}</b> (max ${exMax})` +
+        `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)}`, rec.defCharId);
       return;
     }
 
@@ -10552,7 +10570,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       defTok.set("status_grab", false);
 
       // Clear attacker's grappling status
-      if (atkTok) {
+      if (atkTok && !isGrapplingAnyoneElse(atkTokId, defTokId)) {
         atkTok.set("status_fist", false);
       }
 
@@ -10588,7 +10606,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     defTok.set("status_grab", false);
     
     // Clear attacker's grappling status
-    if (atkTok) {
+    if (atkTok && !isGrapplingAnyoneElse(atkTokId, defTokId)) {
       atkTok.set("status_fist", false);
     }
 
@@ -10692,7 +10710,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       defTok.set("status_grab", false);
 
       // Clear attacker's grappling status
-      if (atkTok) {
+      if (atkTok && !isGrapplingAnyoneElse(atkTokId, defTokId)) {
         atkTok.set("status_fist", false);
       }
 
@@ -12244,6 +12262,7 @@ function cmdStance(msg, args) {
     tok.set("status_back-pain", false);
     tok.set("status_cobweb", false);
     tok.set("status_grab", false);
+    tok.set("status_fist", false);
     tok.set("status_broken-leg", false);
     tok.set("status_broken-shield", false);
     tok.set("status_blue", false);
@@ -14643,11 +14662,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.107.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.107.1:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.107.0 READY");
+  log("MP ENGINE v2.107.1 READY");
 });
