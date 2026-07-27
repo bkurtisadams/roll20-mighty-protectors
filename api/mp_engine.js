@@ -5869,9 +5869,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const atkTokId = atkTok.id;
       const restraintRec = state.MP_Engine.snares[atkTokId];
       if (restraintRec && restraintRec.type === "Grapple") {
-        if (restraintRec.locked) {
+        if (restraintRec.locked || restraintRec.limbsRestrained) {
           atkRestraintPenalty = CFG.FULL_RESTRAINT_PENALTY;
-          atkRestraintLabel = " (fully restrained)";
+          atkRestraintLabel = restraintRec.locked ? " (fully restrained)" : " (limbs bound)";
         } else {
           atkRestraintPenalty = CFG.RESTRAINT_PENALTY;
           atkRestraintLabel = " (grappled)";
@@ -6110,6 +6110,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       cmdGrapple(msg, {
         atk: atkTok.id,
         def: defTok.id,
+        armshot: isArmShot ? "1" : "0",
         remote: remote ? "1" : "0",
         griptype: gripType,
         gripdice: gripDice,
@@ -10483,6 +10484,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       remote: remote,
       gripType: gripType,
       gripDice: gripDice,
+      limbsRestrained: (args.armshot === "1"),
       created: Date.now()
     };
 
@@ -10501,7 +10503,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     msg_out += `<i>Grip: <b>${gripDisplay}</b> (${gripSource})</i><br/>`;
     
     // Per 3.0.2.6: -3 restraint, -9 if fully restrained (locked)
-    const restraintPenalty = lockAttempt ? -9 : -3;
+    const boundLimbs = (args.armshot === "1");
+    const restraintPenalty = (lockAttempt || boundLimbs) ? CFG.FULL_RESTRAINT_PENALTY : CFG.RESTRAINT_PENALTY;
+    if (boundLimbs) msg_out += `<i>Called shot: <b>limbs bound</b></i><br/>`;
     msg_out += `<i>Restraint: Both parties at <b>${restraintPenalty}</b> to physical tasks</i><br/>`;
     const grappleAttackerButtons =
       `${btn(`Squeeze`, `!mp squeeze --target ${defTokId}`)} ` +
