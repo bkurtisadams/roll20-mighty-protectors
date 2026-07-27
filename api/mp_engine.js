@@ -10184,7 +10184,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
   // 4.10 / Grapnel: a snare leaves the limbs free unless it was a called shot.
   function snareBindsLimbs(rec) {
-    return !!(rec && rec.isArmShot);
+    if (!rec) return false;
+    if (rec.isArmShot) return true;
+    return /^arm\b/i.test(String(rec.calledShotType || "").trim());
   }
 
   function cmdSnare(msg, args) {
