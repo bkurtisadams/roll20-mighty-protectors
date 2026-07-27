@@ -1077,8 +1077,11 @@ MP.Engine = (function () {
 
     // Snare stacking bonus per additional hit
     SNARE_STACK_BONUS: 2,
-    // 3.0.2.6 penalty while a called-shot snare/grapnel binds the limbs
-    SNARE_LIMB_RESTRAINT_PENALTY: -9,
+    // 3.0.2.6 Restraint: physical tasks at -3 while snared, grappled, or
+    // grappling someone; -9 while fully restrained (grapple lock, or a
+    // called-shot snare that binds the limbs)
+    RESTRAINT_PENALTY: -3,
+    FULL_RESTRAINT_PENALTY: -9,
 
     // Area effect map marker (dashed circle drawn at blast center)
     AREA_MARKER: true,
@@ -5864,22 +5867,33 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let atkRestraintLabel = "";
     if (atkTok) {
       const atkTokId = atkTok.id;
-      const grappleRecord = state.MP_Engine.snares[atkTokId];
-      if (grappleRecord && grappleRecord.type === "Grapple") {
-        if (grappleRecord.locked) {
-          atkRestraintPenalty = -9;
+      const restraintRec = state.MP_Engine.snares[atkTokId];
+      if (restraintRec && restraintRec.type === "Grapple") {
+        if (restraintRec.locked) {
+          atkRestraintPenalty = CFG.FULL_RESTRAINT_PENALTY;
           atkRestraintLabel = " (fully restrained)";
         } else {
-          atkRestraintPenalty = -3;
+          atkRestraintPenalty = CFG.RESTRAINT_PENALTY;
           atkRestraintLabel = " (grappled)";
         }
       }
-      else if (grappleRecord && grappleRecord.limbsRestrained) {
-        atkRestraintPenalty = CFG.SNARE_LIMB_RESTRAINT_PENALTY;
-        atkRestraintLabel = " (limbs bound)";
+      // 3.0.2.6: being snared is itself -3; a called shot that binds the
+      // limbs counts as fully restrained.
+      else if (restraintRec) {
+        if (restraintRec.limbsRestrained) {
+          atkRestraintPenalty = CFG.FULL_RESTRAINT_PENALTY;
+          atkRestraintLabel = " (limbs bound)";
+        } else {
+          atkRestraintPenalty = CFG.RESTRAINT_PENALTY;
+          atkRestraintLabel = " (snared)";
+        }
+      }
+      else if (atkTok.get("status_cobweb")) {
+        atkRestraintPenalty = CFG.RESTRAINT_PENALTY;
+        atkRestraintLabel = " (snared)";
       }
       else if (atkTok.get("status_fist")) {
-        atkRestraintPenalty = -3;
+        atkRestraintPenalty = CFG.RESTRAINT_PENALTY;
         atkRestraintLabel = " (grappling)";
       }
     }
@@ -10241,7 +10255,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     chCombat("MP", `<b>Snare Applied to ${esc(rec.defName)}</b><br/>` +
       `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
       `BP: ${bpDisplay} | Max: <b>${maxBp}</b>` +
-      (snareBindsLimbs(rec) ? `<br/><i>Called shot: <b>limbs bound</b> (${CFG.SNARE_LIMB_RESTRAINT_PENALTY} to physical actions)</i>` : "") +
+      (snareBindsLimbs(rec) ? `<br/><i>Called shot: <b>limbs bound</b> (${CFG.FULL_RESTRAINT_PENALTY} to physical actions)</i>` : "") +
       `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)} ` +
       `${btn(`Break (+push, 2 PR)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
   }
