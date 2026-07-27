@@ -10220,7 +10220,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       created: Date.now()
     };
 
-    defTok.set("status_cobweb", true);
+    setMarker(defTok, "cobweb", true);
 
     chCombat("MP", `<b>Snare Applied to ${esc(rec.defName)}</b><br/>` +
       `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
@@ -10273,6 +10273,35 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     chCombat("MP", msg_out, char.id);
   }
 
+  // GM diagnostic: dump what the engine and the token each believe about badges.
+  function cmdMarkerDebug(msg, args) {
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else if (msg.selected && msg.selected.length) msg.selected.forEach(sel => { if (sel._type === "graphic") ids.push(sel._id); });
+    if (!ids.length) return ch("MP", `/w gm <b>MP:</b> Select a token (or pass --target).`);
+
+    let out = `<div style="font-family:monospace; font-size:11px;">`;
+    ids.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      if (!tok) { out += `<b>${esc(tokId)}</b>: token not found<br/>`; return; }
+      const char = getCharFromToken(tok);
+      const sn = state.MP_Engine.snares[tokId];
+      const page = getObj("page", tok.get("_pageid"));
+      out += `<b>${esc(tok.get("name") || "(unnamed)")}</b> [${esc(tokId)}]<br/>`;
+      out += `&nbsp;char: ${esc(char ? char.get("name") : "UNLINKED")}<br/>`;
+      out += `&nbsp;page: ${esc(page ? page.get("name") : "?")} (${esc(tok.get("_pageid"))})<br/>`;
+      out += `&nbsp;playerpage: ${esc(Campaign().get("playerpageid"))}<br/>`;
+      out += `&nbsp;statusmarkers: [${esc(String(tok.get("statusmarkers") || ""))}]<br/>`;
+      ["cobweb", "grab", "fist"].forEach(m => {
+        out += `&nbsp;status_${m}: <b>${tok.get("status_" + m) === true ? "true" : String(tok.get("status_" + m))}</b><br/>`;
+      });
+      out += `&nbsp;snare record: ${sn ? esc(JSON.stringify(sn)) : "<i>none</i>"}<br/>`;
+      out += `&nbsp;<a href="!mp mk --target ${tokId}">re-dump</a><br/><br/>`;
+    });
+    out += `</div>`;
+    return ch("MP", `/w gm ${out}`);
+  }
+
   // GM: force-clear any snare or grapple on the target with no roll (cleanup).
   // Works on --target or selected token(s); clears both sides of a grapple.
   function cmdSnareClear(msg, args) {
@@ -10293,8 +10322,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           if (gTok && !isGrapplingAnyoneElse(sn.grapplerTokenId, tokId)) gTok.set("status_fist", false);
         }
         delete state.MP_Engine.snares[tokId];
-        tok.set("status_grab", false);
-        tok.set("status_cobweb", false);
+        setMarker(tok, "grab", false);
+        setMarker(tok, "cobweb", false);
         cleared++;
       }
       // This token is grappling others: release each held target
@@ -11115,9 +11144,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Clear all status markers
       tok.set("status_dead", false);
       tok.set("status_sleepy", false);
-      tok.set("status_grab", false);        // Being grappled
-      tok.set("status_fist", false);        // Grappling someone
-      tok.set("status_cobweb", false);      // Snared
+      setMarker(tok, "grab", false);        // Being grappled
+      setMarker(tok, "fist", false);        // Grappling someone
+      setMarker(tok, "cobweb", false);      // Snared
       tok.set("status_broken-heart", false); // Off balance
       tok.set("status_broken-leg", false);  // Leg disabled
       tok.set("status_broken-shield", false); // Arm disabled
@@ -12276,9 +12305,9 @@ function cmdStance(msg, args) {
     tok.set("status_dead", false);
     tok.set("status_sleepy", false);
     tok.set("status_back-pain", false);
-    tok.set("status_cobweb", false);
-    tok.set("status_grab", false);
-    tok.set("status_fist", false);
+    setMarker(tok, "cobweb", false);
+    setMarker(tok, "grab", false);
+    setMarker(tok, "fist", false);
     tok.set("status_broken-leg", false);
     tok.set("status_broken-shield", false);
     tok.set("status_blue", false);
@@ -13005,6 +13034,9 @@ function cmdStance(msg, args) {
       case "snareclear":
         if (gmOnly(msg)) return;
         return cmdSnareClear(msg, args);
+      case "mk":
+        if (gmOnly(msg)) return;
+        return cmdMarkerDebug(msg, args);
       // Sense-loss fields (v2.89.0)
       case "darkness":
         if (gmOnly(msg)) return;
