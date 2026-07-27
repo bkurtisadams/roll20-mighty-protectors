@@ -10194,7 +10194,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       setMarker(defTok, "cobweb", true);
       chCombat("MP", `<b>Snare Stacked on ${esc(rec.defName)}</b><br/>` +
         `BP increased: <b>${oldBp} → ${newBp}</b> (max ${exMax})` +
-        `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)}`, rec.defCharId);
+        `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)} ` +
+        `${btn(`Break (+push)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
       return;
     }
 
@@ -10225,7 +10226,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     chCombat("MP", `<b>Snare Applied to ${esc(rec.defName)}</b><br/>` +
       `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
       `BP: ${bpDisplay} | Max: <b>${maxBp}</b>` +
-      `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)}`, rec.defCharId);
+      `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)} ` +
+      `${btn(`Break (+push)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
   }
 
   function cmdBreak(msg, args) {
@@ -10267,7 +10269,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       resultLine;
 
     if (!success) {
-      msg_out += `<br/>${btn(`Try Again`, `!mp break --target ${tokId}`)} ${btn(`Push (+2)`, `!mp break --target ${tokId} --push 1`)}`;
+      msg_out += `<br/>${btn(`Try Again`, `!mp break --target ${tokId}`)} ${btn(`Try Again (+push)`, `!mp break --target ${tokId} --push 1`)}`;
     }
 
     chCombat("MP", msg_out, char.id);
