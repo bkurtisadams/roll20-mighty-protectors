@@ -10187,7 +10187,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const existing = state.MP_Engine.snares[defTok.id];
     if (existing) {
       const oldBp = num(existing.bp, 0);
-      const exMax = num(existing.maxBp, 0) || maxBp;
+      // Grapnel: subsequent hits add +2, capped at the NEW grapnel's own Max
+      const incomingMax = num(rec.snMaxBP, 0);
+      const exMax = incomingMax > 0 ? incomingMax : (num(existing.maxBp, 0) || maxBp);
       const newBp = Math.min(oldBp + CFG.SNARE_STACK_BONUS, exMax);
       existing.bp = newBp;
       existing.maxBp = exMax;
