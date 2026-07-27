@@ -1077,6 +1077,8 @@ MP.Engine = (function () {
 
     // Snare stacking bonus per additional hit
     SNARE_STACK_BONUS: 2,
+    // 3.0.2.6 penalty while a called-shot snare/grapnel binds the limbs
+    SNARE_LIMB_RESTRAINT_PENALTY: -9,
 
     // Area effect map marker (dashed circle drawn at blast center)
     AREA_MARKER: true,
@@ -5872,6 +5874,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           atkRestraintLabel = " (grappled)";
         }
       }
+      else if (grappleRecord && grappleRecord.limbsRestrained) {
+        atkRestraintPenalty = CFG.SNARE_LIMB_RESTRAINT_PENALTY;
+        atkRestraintLabel = " (limbs bound)";
+      }
       else if (atkTok.get("status_fist")) {
         atkRestraintPenalty = -3;
         atkRestraintLabel = " (grappling)";
@@ -10161,6 +10167,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // SNARE ATTACKS (4.10)
   // -------------------------
 
+  // 4.10 / Grapnel: a snare leaves the limbs free unless it was a called shot.
+  function snareBindsLimbs(rec) {
+    return !!(rec && rec.isArmShot);
+  }
+
   function cmdSnare(msg, args) {
     const rollId = args.id;
     const rec = state.MP_Engine.pending[rollId];
@@ -10193,6 +10204,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const newBp = Math.min(oldBp + CFG.SNARE_STACK_BONUS, exMax);
       existing.bp = newBp;
       existing.maxBp = exMax;
+      if (snareBindsLimbs(rec)) existing.limbsRestrained = true;
       setMarker(defTok, "cobweb", true);
       chCombat("MP", `<b>Snare Stacked on ${esc(rec.defName)}</b><br/>` +
         `BP increased: <b>${oldBp} → ${newBp}</b> (max ${exMax})` +
@@ -10220,6 +10232,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       maxBp,
       type: rec.snType || "Snare",
       source: rec.atkName,
+      limbsRestrained: snareBindsLimbs(rec),
       created: Date.now()
     };
 
@@ -10228,6 +10241,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     chCombat("MP", `<b>Snare Applied to ${esc(rec.defName)}</b><br/>` +
       `Type: <b>${esc(rec.snType || "Snare")}</b><br/>` +
       `BP: ${bpDisplay} | Max: <b>${maxBp}</b>` +
+      (snareBindsLimbs(rec) ? `<br/><i>Called shot: <b>limbs bound</b> (${CFG.SNARE_LIMB_RESTRAINT_PENALTY} to physical actions)</i>` : "") +
       `<br/>${btn(`Break Free`, `!mp break --target ${defTok.id}`)} ` +
       `${btn(`Break (+push, 2 PR)`, `!mp break --target ${defTok.id} --push 1`)}`, rec.defCharId);
   }
