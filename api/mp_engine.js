@@ -1,4 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.119.0 - 2026-07-28
+/* Mighty Protectors Roll20 API Engine v2.120.0 - 2026-07-28
+ * v2.120.0: !mp restore left condition badges on the token. Both restore
+ *   branches and the reset path each cleared a hand-maintained list of marker
+ *   names, and that list never contained skull (paralysed/poisoned),
+ *   chained-heart (mind control), chemical-bolt (transmuted) or padlock
+ *   (generic) — so those badges have always survived a restore. v2.110.0 made
+ *   it visible by moving damaging poison onto three-leaves, which was not on
+ *   the list either. New clearEngineMarkers() derives the set from
+ *   CONDITION_MARKERS plus ENGINE_OWNED_MARKERS (KO, grapple/snare, stance,
+ *   limb, prone), so adding a condition can no longer leave a badge that no
+ *   restore path knows about. Replaces all three hardcoded lists.
  * v2.119.0: REMOVE DEAD BADGE-DIAGNOSIS SCAFFOLDING (~330 lines). The
  *   "condition badges never appear" hunt turned out to be an opaque token
  *   tint painted over the marker icons — invisible to the API, which is why
@@ -1082,7 +1092,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.119.0";
+var MP_VERSION = "2.120.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -3888,6 +3898,23 @@ MP.Engine = (function () {
   // Parse a Roll20 statusmarkers string ("skull,stopwatch@3") into base marker names.
   function parseMarkers(s) {
     return String(s || "").split(",").map(m => m.trim().split("@")[0]).filter(Boolean);
+  }
+
+  // Markers the engine owns that are NOT condition markers (KO/incapacitated,
+  // grapple/snare, stance, limb and prone badges). Condition markers are taken
+  // from CONDITION_MARKERS so adding a condition can never again leave a badge
+  // that no restore path knows how to clear.
+  const ENGINE_OWNED_MARKERS = [
+    "dead", "sleepy", "grab", "fist", "cobweb", "broken-heart",
+    "broken-leg", "broken-shield", "back-pain", "purple", "blue", "white-tower"
+  ];
+
+  function clearEngineMarkers(tok) {
+    if (!tok) return;
+    const seen = {};
+    ENGINE_OWNED_MARKERS.forEach(m => { seen[m] = true; });
+    Object.keys(CONDITION_MARKERS).forEach(k => { seen[CONDITION_MARKERS[k]] = true; });
+    Object.keys(seen).forEach(m => setMarker(tok, m, false));
   }
 
   // Roll20 keeps two views of a badge: the virtual status_<n> boolean and the
@@ -11698,18 +11725,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         tok.set("bar2_max", vHitsMax);
         tok.set("bar1_max", vPowMax);
         
-        // Clear status markers
-        setMarker(tok, "dead", false);
-        // v2.89.2: vehicles can sit in Darkness/Glare fields too
-        setMarker(tok, "bleeding-eye", false);
-        setMarker(tok, "interdiction", false);
-        setMarker(tok, "ninja-mask", false);
-        setMarker(tok, "aura", false);
-        setMarker(tok, "half-haze", false);
-        setMarker(tok, "stopwatch", false);
-        setMarker(tok, "tread", false);
-        setMarker(tok, "drink-me", false);
-        setMarker(tok, "screaming", false);
+        // Clear status markers (vehicles can sit in Darkness/Glare fields too)
+        clearEngineMarkers(tok);
         tok.set(CFG.DEF_MOD_BAR, 0);
         
         // v2.89.2: clear conditions (darkness/glare etc.) - previously the
@@ -11730,29 +11747,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tok.set("bar1_value", powMax);
       tok.set("bar2_value", hitsMax);
       
-      // Clear all status markers
-      setMarker(tok, "dead", false);
-      setMarker(tok, "sleepy", false);
-      setMarker(tok, "grab", false);        // Being grappled
-      setMarker(tok, "fist", false);        // Grappling someone
-      setMarker(tok, "cobweb", false);      // Snared
-      setMarker(tok, "broken-heart", false); // Off balance
-      setMarker(tok, "broken-leg", false);  // Leg disabled
-      setMarker(tok, "broken-shield", false); // Arm disabled
-      setMarker(tok, "back-pain", false);       // Prone (back-pain marker)
-      setMarker(tok, "purple", false);      // Absorption effect active
-      setMarker(tok, "blue", false);        // Defensive stance
-      setMarker(tok, "white-tower", false); // Full defense
-      // v2.89.2: sense-loss markers (Flash dazzle, blindness, Darkness, Glare)
-      setMarker(tok, "bleeding-eye", false); // Dazzled (Flash / Laser dazzle)
-      setMarker(tok, "interdiction", false); // Blinded
-      setMarker(tok, "ninja-mask", false);   // Darkness field
-      setMarker(tok, "aura", false);         // Glare field
-      setMarker(tok, "half-haze", false);    // Invisible (v2.91.0)
-      setMarker(tok, "stopwatch", false);    // Duration effect badge (v2.91.2)
-      setMarker(tok, "tread", false);        // Sneaking (v2.91.3)
-      setMarker(tok, "drink-me", false);     // Discomfort (v2.93.0)
-      setMarker(tok, "screaming", false);    // Succumbed/Feared (v2.93.0)
+      // Clear all status markers the engine owns, condition badges included
+      clearEngineMarkers(tok);
       // v2.91.1: forget acquisitions involving this token
       if (state.MP_Engine.acquired) {
         Object.keys(state.MP_Engine.acquired).forEach(k => {
@@ -12892,18 +12888,8 @@ function cmdStance(msg, args) {
     setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, powMax);
     tok.set(CFG.DEF_MOD_BAR, 0);
 
-    // Clear all status markers
-    setMarker(tok, "dead", false);
-    setMarker(tok, "sleepy", false);
-    setMarker(tok, "back-pain", false);
-    setMarker(tok, "cobweb", false);
-    setMarker(tok, "grab", false);
-    setMarker(tok, "fist", false);
-    setMarker(tok, "broken-leg", false);
-    setMarker(tok, "broken-shield", false);
-    setMarker(tok, "blue", false);
-    setMarker(tok, "white-tower", false);
-    setMarker(tok, "broken-heart", false);
+    // Clear all status markers the engine owns, condition badges included
+    clearEngineMarkers(tok);
 
     // Clear snares
     delete state.MP_Engine.snares[tok.id];
