@@ -1,4 +1,72 @@
-/* Mighty Protectors Roll20 API Engine v2.112.1 - 2026-07-28
+/* Mighty Protectors Roll20 API Engine v2.116.0 - 2026-07-28
+ * v2.116.0: BADGES SELECTED BUT NOT DRAWN — MARKER TAG FORM. Testing showed
+ *   padlock and three-leaves highlighted in the token's marker tray while
+ *   neither icon rendered on the token. The write lands and the data stores;
+ *   the canvas will not draw it. Once a game uses Roll20's token marker
+ *   library, icon tags are qualified with the marker id
+ *   ("three-leaves::59"). The marker tray matches on the bare name, so a bare
+ *   write highlights there, but the renderer resolves artwork by full tag and
+ *   finds nothing. The engine wrote bare names everywhere.
+ *   campaignMarkerTags() now maps base name -> full campaign tag;
+ *   resolveMarkerTag() returns the tag to write, falling back to the bare
+ *   name when the catalog is unreadable or has no entry; setMarker() writes
+ *   the resolved tag. New markerBase() strips both the @count and the ::id
+ *   suffix, and parseMarkers()/comparisons use it, so CONDITION_MARKERS
+ *   values and stored cond.marker values stay bare names and every existing
+ *   comparison keeps working. !mp markers shows the resolved tag per marker
+ *   and flags when the game qualifies tags.
+ * v2.115.0: !mp fixbadges now force re-asserts a marker that is already
+ *   stored, by clearing it and setting it again, instead of skipping it.
+ *   setMarker is idempotent and only writes statusmarkers when the value
+ *   changes, so a badge present in the token data but absent on screen would
+ *   never generate another change event for the client to redraw from. Two
+ *   writes guarantee one.
+ * v2.114.2: The startup banner was hardcoded and had read "v2.108.0" through
+ *   every release since, so the API console could not be used to confirm
+ *   which build was actually live. Single MP_VERSION constant now drives the
+ *   banner. New: !mp version reports it plus the sandbox load time.
+ * v2.114.1: !mp mk now lists each tracked condition with its marker, whether
+ *   that marker is present in the token's statusmarkers aggregate, the
+ *   virtual boolean, and whether the marker is renderable per the campaign
+ *   catalog. Run it straight after a poison hit to separate "the engine never
+ *   wrote it" from "Roll20 will not draw it".
+ * v2.114.0: TOKEN MARKER SET AUDIT + MISSED CONVERSION.
+ *   cmdRecover cleared its badge with tok.set(statusKey, false) where
+ *   statusKey was a variable, so the v2.110.0 sweep that routed marker writes
+ *   through setMarker skipped it (the match required a literal "status_").
+ *   Successful recovery therefore cleared the virtual boolean while leaving
+ *   the marker in the aggregate statusmarkers string. Now routed correctly.
+ *   Roll20 permits a game to detach the Default Token Marker Set. In that
+ *   state the API still stores tags like skull or three-leaves and reports
+ *   success, but the VTT has no artwork, so conditions track correctly and no
+ *   icon ever appears — which matches every symptom seen so far. On ready the
+ *   engine now audits the campaign marker catalog and warns when a condition
+ *   icon is unavailable. The audit is deliberately conservative: it accepts
+ *   either _token_markers or token_markers, and only judges availability when
+ *   the catalog demonstrably enumerates the default set, so a catalog listing
+ *   custom markers alone cannot raise a false alarm. !mp fixbadges reports
+ *   stored-but-not-renderable separately from out-of-sync.
+ *   New: !mp markers (GM) dumps the catalog and the status of every
+ *   CONDITION_MARKERS value, saying "unknown" where it cannot tell.
+ *   Poison self-test assertions now check the rendered statusmarkers
+ *   aggregate rather than the virtual status_<name> property.
+ * v2.113.0: BADGE WRITE PROBE. Condition badges still do not appear after
+ *   v2.110.0 routed every marker write through setMarker. The write path is
+ *   confirmed reached (cmdSave calls setMarker, the condition is tracked and
+ *   listed correctly), so the remaining candidates are the marker name not
+ *   being in this game's marker set, something clearing the badge after the
+ *   write, or the client not re-rendering. Nothing in the engine can tell
+ *   these apart by reasoning, so:
+ *   New: !mp test badge [names...] (GM, 1 selected token) writes badges via
+ *   setMarker and reports, per name, the status_<name> boolean and whether
+ *   the name landed in the aggregate statusmarkers string. Defaults probe a
+ *   known-good colour (red), a known-good named marker (skull) and whatever
+ *   damaging_poison currently maps to, so a name-specific failure separates
+ *   from a systemic one at a glance. Badges are left on to be eyeballed;
+ *   !mp test badgeclear removes them.
+ *   setMarker reordered to snapshot the aggregate before writing the boolean
+ *   and to write the aggregate last. This is a robustness change, not a fix:
+ *   the previous ordering is correct under both plausible Roll20 semantics.
  * v2.112.1: !mp sight no longer needs a selection AND a target cursor at the
  *   same time, which Roll20 does not allow. It now takes one selected token
  *   (observer-side gates only: page Dynamic Lighting, daylight/global
@@ -1141,7 +1209,8 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.108.0 FILE STARTING");
+var MP_VERSION = "2.116.0";
+log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -3578,6 +3647,63 @@ MP.Engine = (function () {
     ch("MP", `/w gm <b style="color:#c88fff;">TEST SENSELOSS</b> — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
   }
 
+  // Self-test: !mp test badge [names...] (GM, 1 selected token). Sets marker
+  // badges through setMarker and reports what the token actually stores, so a
+  // badge that never appears can be pinned on the write path vs. the marker
+  // name vs. the client. Defaults probe a known-good color, a known-good
+  // named marker, and whatever damaging_poison is currently mapped to.
+  // Badges are left ON so they can be eyeballed; clear with
+  // !mp test badgeclear.
+  function testBadge(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then <code>!mp test badge [names...]</code>.`);
+    const tok = getObj("graphic", sel[0]._id);
+    if (!tok) return ch("MP", `/w gm <b>MP:</b> Token missing.`);
+
+    const parts = msg.content.split(/\s+/).slice(3).filter(Boolean);
+    const seen = {};
+    const names = (parts.length ? parts : ["red", "skull", "three-leaves", CONDITION_MARKERS.damaging_poison])
+      .filter(n => { if (seen[n]) return false; seen[n] = 1; return true; });
+
+    const before = String(tok.get("statusmarkers") || "");
+    let rows = "";
+    names.forEach(n => {
+      setMarker(tok, n, true);
+      const boolNow = tok.get("status_" + n);
+      const aggNow = parseMarkers(tok.get("statusmarkers"));
+      const inAgg = aggNow.indexOf(n) >= 0;
+      const ok = inAgg ? "\u2705" : "\u274c";
+      rows += `<br/>${ok} <b>${esc(n)}</b> — status_${esc(n)}=<b>${esc(String(boolNow))}</b>, in statusmarkers=<b>${inAgg ? "yes" : "no"}</b>`;
+    });
+
+    state.MP_Engine.badgeTest = { tokenId: tok.id, names: names, before: before };
+
+    let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px; overflow:hidden;">`;
+    out += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">Badge write test</div>`;
+    out += `<div style="padding:6px 10px;">`;
+    out += `<b>${esc(tok.get("name") || "(unnamed)")}</b>`;
+    out += `<br/><span style="color:#aab;">statusmarkers before:</span> [${esc(before)}]`;
+    out += rows;
+    out += `<br/><span style="color:#aab;">statusmarkers after:</span> [${esc(String(tok.get("statusmarkers") || ""))}]`;
+    out += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a; font-size:11px; color:#aab;">`;
+    out += `Now look at the token. A row marked \u2705 that shows no icon on the map means the marker name is not in this game's marker set — pick another. No icons at all with \u2705 rows means the client is not re-rendering.`;
+    out += `</div>`;
+    out += `<br/>${btnDanger(`Clear test badges`, `!mp test badgeclear`)}`;
+    out += `</div></div>`;
+    ch("MP", `/w gm ` + out);
+  }
+
+  function testBadgeClear(msg, args) {
+    const rec = state.MP_Engine.badgeTest;
+    if (!rec) return ch("MP", `/w gm <b>MP:</b> No badge test to clear.`);
+    const tok = getObj("graphic", rec.tokenId);
+    if (tok) {
+      (rec.names || []).forEach(n => setMarker(tok, n, false));
+    }
+    delete state.MP_Engine.badgeTest;
+    ch("MP", `/w gm <b>MP:</b> Test badges cleared. statusmarkers now [${esc(tok ? String(tok.get("statusmarkers") || "") : "?")}]`);
+  }
+
   // Self-test: !mp test areapoison [DMG] (GM, 1 selected token). Exercises
   // resolveAreaSave for a Damaging Poison delivered as an Area Effect:
   // forced pass, forced fail (condition + badge + recurring damage), refresh
@@ -3624,7 +3750,7 @@ MP.Engine = (function () {
     setMarker(tok, marker, false);
     resolveAreaSave(fakeArea, tokId, 1);
     check(`forced pass => no condition`, (state.MP_Engine.conditions[tokId] || []).length === 0);
-    check(`forced pass => no badge`, tok.get("status_" + marker) !== true);
+    check(`forced pass => no badge`, parseMarkers(tok.get("statusmarkers")).indexOf(marker) < 0);
 
     // 2. Forced fail: damaging_poison condition, badge on, damage carried
     state.MP_Engine.conditions[tokId] = [];
@@ -3633,7 +3759,7 @@ MP.Engine = (function () {
     let conds = state.MP_Engine.conditions[tokId] || [];
     let c0 = conds.find(c => c.type === "damaging_poison");
     check(`forced fail => damaging_poison condition`, !!c0);
-    check(`badge "${marker}" applied`, tok.get("status_" + marker) === true);
+    check(`badge "${marker}" stored in statusmarkers`, parseMarkers(tok.get("statusmarkers")).indexOf(marker) >= 0);
     check(`condition carries ${dmg} recurring damage`, !!c0 && c0.damage === dmg);
     check(`prot excluded from save TN (recTN = ${baseSave - 30})`, !!c0 && c0.recTN === baseSave - 30);
     check(`condition has stable id`, !!c0 && typeof c0.id === "string" && c0.id.length > 0);
@@ -3662,7 +3788,7 @@ MP.Engine = (function () {
     cmdClearCondition({ playerid: msg.playerid, selected: [] }, { target: tokId, cid: poisonId });
     const after = state.MP_Engine.conditions[tokId] || [];
     check(`clear by cid removed condition (count=${after.length})`, !after.some(c => c.id === poisonId));
-    check(`badge "${marker}" removed`, tok.get("status_" + marker) !== true);
+    check(`badge "${marker}" removed from statusmarkers`, parseMarkers(tok.get("statusmarkers")).indexOf(marker) < 0);
 
     // Restore
     state.MP_Engine.conditions[tokId] = snapshot;
@@ -3929,9 +4055,17 @@ MP.Engine = (function () {
     };
   }
 
-  // Parse a Roll20 statusmarkers string ("skull,stopwatch@3") into base marker names.
+  // Base name of a statusmarkers entry. Entries look like "skull",
+  // "stopwatch@3", or — once a game uses Roll20's marker library — the
+  // id-qualified form "three-leaves::59@3". Comparisons are always on the
+  // bare name; writes use the full tag (see resolveMarkerTag).
+  function markerBase(entry) {
+    return String(entry || "").trim().split("@")[0].split("::")[0];
+  }
+
+  // Parse a Roll20 statusmarkers string into base marker names.
   function parseMarkers(s) {
-    return String(s || "").split(",").map(m => m.trim().split("@")[0]).filter(Boolean);
+    return String(s || "").split(",").map(m => markerBase(m)).filter(Boolean);
   }
 
   // Roll20 keeps two views of a badge: the legacy status_<name> boolean and the
@@ -3939,15 +4073,127 @@ MP.Engine = (function () {
   // tokens edited by hand or restored from an undo snapshot, and once they do,
   // setting status_<name> to a value it already holds is a no-op — the engine
   // reports success and no badge appears. Write both.
+  // Roll20 lets a game detach the Default Token Marker Set. When it is gone the
+  // API still stores tags like "skull" or "three-leaves" in statusmarkers and
+  // every write reports success, but the VTT has no artwork to draw, so the
+  // condition tracks correctly and no icon ever appears. The colour dots and
+  // dead cannot be removed, so they render regardless.
+  const ALWAYS_AVAILABLE_MARKERS = {
+    red: true, blue: true, green: true, brown: true, purple: true, pink: true,
+    yellow: true, dead: true
+  };
+
+  // Tags that ship with the default set. Used only to decide whether the
+  // catalog actually enumerates defaults, so a catalog that lists custom
+  // markers alone cannot trigger a false "everything is missing" alarm.
+  const DEFAULT_SET_PROBE_TAGS = ["skull", "sleepy", "padlock", "cobweb", "stopwatch", "fist", "grab", "screaming"];
+
+  // Read-only campaign properties are underscore-prefixed; accept either form
+  // rather than betting on one. Returns null when unreadable.
+  // base name -> full tag as the campaign stores it. A game on Roll20's marker
+  // library qualifies icon tags with the marker id ("three-leaves::59"); the
+  // marker tray still matches on the bare name, so a bare write highlights in
+  // the tray but the canvas cannot resolve an image and draws nothing.
+  function campaignMarkerTags() {
+    let raw = null;
+    try { raw = Campaign().get("_token_markers"); } catch (e) { raw = null; }
+    if (raw === undefined || raw === null || raw === "") {
+      try { raw = Campaign().get("token_markers"); } catch (e) { raw = null; }
+    }
+    if (raw === undefined || raw === null || raw === "") return null;
+    try {
+      const rows = JSON.parse(raw || "[]");
+      if (!Array.isArray(rows)) return null;
+      const tags = {};
+      rows.forEach(m => {
+        if (!m) return;
+        const tag = String(m.tag || "").trim();
+        const name = String(m.name || "").trim();
+        const id = (m.id === undefined || m.id === null) ? "" : String(m.id).trim();
+        const base = markerBase(tag || name);
+        if (!base) return;
+        // Prefer the campaign's own tag; fall back to name::id when the row
+        // carries an id but no explicit tag.
+        let full = tag || (id ? `${name}::${id}` : name);
+        tags[base] = full;
+      });
+      return tags;
+    } catch (e) {
+      log("MP badge audit: could not parse campaign token markers: " + e.message);
+      return null;
+    }
+  }
+
+  // Full tag to write for a marker, falling back to the bare name when the
+  // catalog is unreadable or has no matching entry.
+  function resolveMarkerTag(name, tags) {
+    const base = markerBase(name);
+    if (!base) return "";
+    if (ALWAYS_AVAILABLE_MARKERS[base]) return base;
+    const catalog = (tags === undefined) ? campaignMarkerTags() : tags;
+    if (catalog && catalog[base]) return catalog[base];
+    return base;
+  }
+
+  // True only when the catalog is readable AND demonstrably enumerates the
+  // default set. Otherwise availability cannot be judged and we say so instead
+  // of guessing.
+  function markerCatalogIsTrustworthy(tags) {
+    if (!tags) return false;
+    return DEFAULT_SET_PROBE_TAGS.some(t => tags[t]);
+  }
+
+  function markerTagAvailable(name, tags, trustworthy) {
+    const base = markerBase(String(name || "").replace(/^status_/, ""));
+    if (!base) return false;
+    if (ALWAYS_AVAILABLE_MARKERS[base]) return true;
+    if (!trustworthy) return true; // unknown, not missing
+    return !!(tags && tags[base]);
+  }
+
+  function missingConditionMarkerTags() {
+    const tags = campaignMarkerTags();
+    const trustworthy = markerCatalogIsTrustworthy(tags);
+    if (!trustworthy) return { known: false, missing: [], tags: tags };
+    const seen = {};
+    Object.keys(CONDITION_MARKERS).forEach(k => { seen[CONDITION_MARKERS[k]] = true; });
+    return {
+      known: true,
+      tags: tags,
+      missing: Object.keys(seen).filter(m => !markerTagAvailable(m, tags, true)).sort()
+    };
+  }
+
+  function auditConditionMarkerSet() {
+    const res = missingConditionMarkerTags();
+    if (!res.known || !res.missing.length) return;
+    ch("MP", `/w gm <div style="background:#2a1d1d;color:#eee;padding:7px;border:2px solid #c0392b;">` +
+      `<b>\u26a0\ufe0f MP condition badges cannot render</b><br/>` +
+      `This game does not expose these markers: <b>${esc(res.missing.join(", "))}</b>.<br/>` +
+      `<span style="font-size:11px;color:#f4d03f;">Game Settings \u2192 Token Marker Sets \u2192 add Roll20's <b>Default Token Marker Set</b>, reload the VTT, then run <code>!mp fixbadges --all 1</code>. Conditions are still tracked meanwhile.</span></div>`);
+  }
+
   function setMarker(tok, name, on) {
     if (!tok) return;
     const base = String(name || "").replace(/^status_/, "");
     if (!base) return;
+    // Decide from a snapshot taken BEFORE touching status_<name>, then write
+    // the aggregate last so it is authoritative regardless of what the legacy
+    // boolean setter does or does not propagate. The previous ordering read
+    // the aggregate AFTER writing the boolean, which is correct under both
+    // plausible Roll20 semantics but leaves the outcome dependent on which
+    // one is in play. This ordering does not.
+    const before = String(tok.get("statusmarkers") || "");
+    const parts = before.split(",").map(x => x.trim()).filter(Boolean);
+    const hasIt = parts.some(p => markerBase(p) === base);
+    // Write the campaign's full tag so the canvas can resolve the artwork.
+    const writeTag = resolveMarkerTag(base);
+    const next = on
+      ? (hasIt ? parts : parts.concat(writeTag))
+      : parts.filter(p => markerBase(p) !== base);
+    const nextStr = next.join(",");
     tok.set("status_" + base, !!on);
-    const parts = String(tok.get("statusmarkers") || "").split(",").map(s => s.trim()).filter(Boolean);
-    const hasIt = parts.some(p => p.split("@")[0] === base);
-    if (on && !hasIt) tok.set("statusmarkers", parts.concat(base).join(","));
-    else if (!on && hasIt) tok.set("statusmarkers", parts.filter(p => p.split("@")[0] !== base).join(","));
+    if (nextStr !== before) tok.set("statusmarkers", nextStr);
   }
 
   function restoreTokenSnapshot(snap) {
@@ -10281,11 +10527,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const markerStillUsed = conditions.some(c => c.marker === cond.marker);
       log(`MP Recovery: Clearing condition. marker="${cond.marker}", markerStillUsed=${markerStillUsed}`);
       if (!markerStillUsed && cond.marker) {
-        const statusKey = "status_" + cond.marker;
-        log(`MP Recovery: Removing marker "${statusKey}" from token ${tokId}`);
-        tok.set(statusKey, false);
-        // Verify it was set
-        log(`MP Recovery: After set, tok.get("${statusKey}")=${tok.get(statusKey)}`);
+        log(`MP Recovery: Removing marker "${cond.marker}" from token ${tokId}`);
+        setMarker(tok, cond.marker, false);
+        // Verify against the aggregate the client renders, not the virtual boolean.
+        log(`MP Recovery: After set, statusmarkers=${tok.get("statusmarkers")}`);
       }
       
       msg_out += `<br/><span style="color:#27ae60;">Condition cleared!</span>`;
@@ -10440,6 +10685,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     let lines = "";
     let fixed = 0;
+    const unavailable = {};
+    const catalogTags = campaignMarkerTags();
+    const catalogTrusted = markerCatalogIsTrustworthy(catalogTags);
     tokIds.forEach(tokId => {
       const tok = getObj("graphic", tokId);
       if (!tok) return;
@@ -10454,9 +10702,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const removed = [];
       Object.keys(wanted).forEach(m => {
         const parts = parseMarkers(tok.get("statusmarkers"));
-        if (parts.indexOf(m) < 0 || tok.get("status_" + m) !== true) {
+        if (!markerTagAvailable(m, catalogTags, catalogTrusted)) unavailable[m] = true;
+        if (parts.indexOf(m) < 0) {
           setMarker(tok, m, true);
           added.push(m);
+        } else {
+          // Already stored. setMarker is idempotent, so a marker that is
+          // present in the data but absent on screen would never be rewritten
+          // and the client would never get a change event to redraw from.
+          // Drop it and re-assert to force two writes.
+          setMarker(tok, m, false);
+          setMarker(tok, m, true);
+          added.push(m + " (re-asserted)");
         }
       });
       parseMarkers(tok.get("statusmarkers")).forEach(m => {
@@ -10474,8 +10731,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     });
 
-    if (!fixed) return ch("MP", `/w gm <b>MP:</b> Badges already in sync (${tokIds.length} token(s) checked).`);
-    ch("MP", `/w gm <b>MP:</b> Badge resync — ${fixed} token(s) repaired.${lines}`);
+    const missing = Object.keys(unavailable).sort();
+    const renderNote = missing.length
+      ? `<br/><span style="color:#e67e22;"><b>Stored but not renderable:</b> ${esc(missing.join(", "))}. Add the Default Token Marker Set, reload the VTT, then run this again.</span>`
+      : (catalogTrusted ? "" : `<br/><span style="font-size:11px; color:#889;">Marker catalog unreadable — renderability not checked. <code>!mp markers</code> for detail.</span>`);
+    if (!fixed) return ch("MP", `/w gm <b>MP:</b> Badge data already in sync (${tokIds.length} token(s) checked).${renderNote}`);
+    ch("MP", `/w gm <b>MP:</b> Badge resync — ${fixed} token(s) repaired.${lines}${renderNote}`);
   }
 
   function cmdClearCondition(msg, args) {
@@ -10788,6 +11049,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       ["cobweb", "grab", "fist"].forEach(m => {
         out += `&nbsp;status_${m}: <b>${tok.get("status_" + m) === true ? "true" : String(tok.get("status_" + m))}</b><br/>`;
       });
+      // Tracked conditions vs. what the token actually stores, so a badge that
+      // never draws can be pinned on the engine or on Roll20 at a glance.
+      const mkConds = state.MP_Engine.conditions[tokId] || [];
+      const mkAgg = parseMarkers(tok.get("statusmarkers"));
+      const mkTags = campaignMarkerTags();
+      const mkTrust = markerCatalogIsTrustworthy(mkTags);
+      if (!mkConds.length) {
+        out += `&nbsp;conditions: <i>none tracked</i><br/>`;
+      } else {
+        mkConds.forEach(c => {
+          const inAgg = c.marker ? mkAgg.indexOf(c.marker) >= 0 : false;
+          const boolNow = c.marker ? tok.get("status_" + c.marker) : undefined;
+          const rend = !c.marker ? "n/a"
+            : (ALWAYS_AVAILABLE_MARKERS[c.marker] ? "always"
+              : (!mkTrust ? "unknown" : (markerTagAvailable(c.marker, mkTags, true) ? "yes" : "NO")));
+          out += `&nbsp;cond <b>${esc(c.type)}</b> marker=<b>${esc(String(c.marker || "-"))}</b> ` +
+            `stored=<b>${inAgg ? "true" : "false"}</b> bool=<b>${esc(String(boolNow))}</b> renderable=<b>${esc(rend)}</b><br/>`;
+        });
+      }
       out += `&nbsp;snare record: ${sn ? esc(JSON.stringify(sn)) : "<i>none</i>"}<br/>`;
       out += `&nbsp;<a href="!mp mk --target ${tokId}">re-dump</a><br/><br/>`;
     });
@@ -11454,6 +11734,51 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   //   !mp sight --target ID         - observer from selection
   // Most gates (page lighting, Vision checkbox, config, sheet vision) need no
   // target at all; arc, barriers and illumination-at-target need one.
+  // !mp markers (GM). Dumps the campaign's token marker catalog and checks each
+  // CONDITION_MARKERS value against it. Reports rather than assumes: if the
+  // catalog cannot be read, or reads but does not enumerate the default set,
+  // it says so instead of declaring every icon missing.
+  function cmdMarkers(msg, args) {
+    const tags = campaignMarkerTags();
+    const trusted = markerCatalogIsTrustworthy(tags);
+    const names = tags ? Object.keys(tags).sort() : [];
+
+    let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px; overflow:hidden;">`;
+    out += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">Token marker catalog</div>`;
+    out += `<div style="padding:6px 10px;">`;
+
+    if (tags === null) {
+      out += `<span style="color:#e67e22;">Catalog unreadable</span> — this Roll20 sandbox did not return a marker list.`;
+      out += `<br/><span style="font-size:11px; color:#aab;">Use <code>!mp test badge</code> instead: it sets <b>red</b> (a colour dot, always available) beside <b>skull</b> and the poison marker. If red draws and the others do not, the Default Token Marker Set is detached.</span>`;
+    } else {
+      out += `<span style="color:#aab;">Markers exposed:</span> <b>${names.length}</b>`;
+      out += `<br/><span style="color:#aab;">Enumerates default set:</span> ${trusted ? `<span style="color:#2ecc71;">yes</span>` : `<span style="color:#f4d03f;">no / inconclusive</span>`}`;
+      const seen = {};
+      Object.keys(CONDITION_MARKERS).forEach(k => { seen[CONDITION_MARKERS[k]] = true; });
+      const used = Object.keys(seen).sort();
+      out += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">Condition markers in use:</div>`;
+      used.forEach(m => {
+        const avail = markerTagAvailable(m, tags, trusted);
+        const mark = ALWAYS_AVAILABLE_MARKERS[m] ? `<span style="color:#2ecc71;">always</span>`
+          : (!trusted ? `<span style="color:#f4d03f;">unknown</span>`
+            : (avail ? `<span style="color:#2ecc71;">present</span>` : `<span style="color:#ff6b6b;">MISSING</span>`));
+        const full = resolveMarkerTag(m, tags);
+        const qualified = full !== m;
+        out += `<br/>&nbsp;<b>${esc(m)}</b> — ${mark}` +
+          (qualified ? ` <span style="color:#f4d03f;">writes as</span> <code>${esc(full)}</code>` : "");
+      });
+      const anyQualified = used.some(m => resolveMarkerTag(m, tags) !== m);
+      if (anyQualified) {
+        out += `<div style="margin-top:6px; font-size:11px; color:#aab;">This game qualifies icon tags with a marker id. Bare names highlight in the marker tray but the canvas cannot resolve artwork for them, which is why badges were selected yet invisible. The engine now writes the full tag.</div>`;
+      }
+      if (!trusted) {
+        out += `<div style="margin-top:6px; font-size:11px; color:#aab;">The catalog did not contain any known default tag, so it may list custom markers only. Renderability was not judged. <code>!mp test badge</code> settles it visually.</div>`;
+      }
+    }
+    out += `</div></div>`;
+    ch("MP", `/w gm ` + out);
+  }
+
   function cmdSight(msg, args) {
     const sel = (msg.selected || []).filter(s => s._type === "graphic").map(s => s._id);
     let obsId = args.obs || null;
@@ -12367,6 +12692,10 @@ function cmdStance(msg, args) {
         return testFlash(msg, args);
       case "areapoison":
         return testAreaPoison(msg, args);
+      case "badge":
+        return testBadge(msg, args);
+      case "badgeclear":
+        return testBadgeClear(msg, args);
       case "acquire":
         return testAcquire(msg, args);
       case "invis":
@@ -13702,6 +14031,11 @@ function cmdStance(msg, args) {
       case "sight":
         if (gmOnly(msg)) return;
         return cmdSight(msg, args);
+      case "markers":
+        if (gmOnly(msg)) return;
+        return cmdMarkers(msg, args);
+      case "version":
+        return ch("MP", `/w gm <b>MP Engine</b> v${esc(MP_VERSION)} — loaded ${esc(new Date(state.MP_Engine.loadedAt || Date.now()).toISOString())}`);
       case "checkexpiry":
         if (gmOnly(msg)) return;
         return cmdCheckExpiry(msg, args);
@@ -13961,7 +14295,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.108.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.116.0</b> Commands:<br/>
           <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/>
           <b>Attacks and Saves:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code> - Attack row N<br/>
@@ -15383,8 +15717,10 @@ function cmdStance(msg, args) {
         if (c.type === "absorption" && c.expires && c.expires < Date.UTC(2100, 0, 1)) c.expires = gc.ms + 300000;
       });
     });
+    state.MP_Engine.loadedAt = Date.now();
     runGameTimeSweep();
     updateClockHandout();
+    auditConditionMarkerSet();
     if (Campaign().get("initiativepage")) {
       const top = turnorderTopId(readTurnorder());
       if (!gc.topId) gc.topId = top;
@@ -15392,11 +15728,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.108.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.116.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.108.0 READY");
+  log("MP ENGINE v2.116.0 READY");
 });
