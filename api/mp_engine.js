@@ -1,4 +1,92 @@
-/* Mighty Protectors Roll20 API Engine v2.108.0 - 2026-07-27
+/* Mighty Protectors Roll20 API Engine v2.112.1 - 2026-07-28
+ * v2.112.1: !mp sight no longer needs a selection AND a target cursor at the
+ *   same time, which Roll20 does not allow. It now takes one selected token
+ *   (observer-side gates only: page Dynamic Lighting, daylight/global
+ *   illumination, the Vision checkbox, CFG.REQUIRE_TOKEN_VISION, sheet vision
+ *   level and loss), two selected tokens (adds arc, barrier,
+ *   illumination-at-target and the held acquisition), or explicit
+ *   --obs ID --target ID. It calls out the case where Dynamic Lighting is on
+ *   with the observer's Vision box off, which blocks vision against every
+ *   target, and warns when Dynamic Lighting is on with no page daylight.
+ *   A [Why this sense?] button is added to the acquisition notes - fresh,
+ *   held, and blocked - where both token ids are already known, so the usual
+ *   path needs no selection at all. Swap observer/target button included.
+ * v2.112.0: STALE ACQUISITION CACHE AFTER A LIGHTING/VISION CHANGE.
+ *   acqSignature() cached on the WINNING sense's envSig. When vision was
+ *   unusable and acquisition fell back to hearing, that signature described
+ *   the audible sense only - it carried no lighting state and no observer
+ *   Vision-checkbox state. Lighting the room, ticking the token's Vision box
+ *   or flipping CFG.REQUIRE_TOKEN_VISION therefore did not change the
+ *   signature, and the held "acquired by hearing (Basic) [?]" entry survived
+ *   at -6 to hit until the target physically moved. observationLevel now
+ *   returns visSig (vision level + reach + environment usability + env sig)
+ *   on every branch, and acqSignature folds it in, so any change to the
+ *   vision gate invalidates the cache.
+ *   The "Already acquired" card now also prints the cached reason, which the
+ *   v2.111.0 diagnostic only added to the freshly-rolled branch.
+ *   New: !mp sight --target ID (GM) dumps every gate that decides whether
+ *   vision is usable - page Dynamic Lighting, daylight/global illumination,
+ *   the observer's Vision checkbox, CFG.REQUIRE_TOKEN_VISION, computed
+ *   illumination level and its source, sense arc, barriers, sheet vision
+ *   level and effective level after loss - plus the held acquisition for the
+ *   pair and a button to clear it (--clear 1).
+ * v2.111.0: RESOURCE MAXIMUMS AND ACQUISITION DIAGNOSTICS.
+ *   getResource() reads a bar-backed resource from the token first, but every
+ *   MAX lookup went straight to the sheet attribute and fell through to the
+ *   hardcoded default (20 Hits / 40 Power) when it was absent. On unlinked
+ *   mook tokens that carry their own bar maxima this mis-reported the status
+ *   card and, worse, capped !mp heal, !mp rest and reset-to-full below the
+ *   token's real maximum. New getResourceMax() mirrors getResource (token bar
+ *   _max, then sheet attribute, then fallback) and is wired into the status
+ *   card, heal, rest, reset-to-full, applyHealing and the Unliving
+ *   self-repair threshold.
+ *   Target acquisition: when vision was unusable the engine knew why and
+ *   discarded the reason, so the card reported a fallback sense with an empty
+ *   "()". observationLevel now returns visDropReason and the acquisition note
+ *   prints it (out of range, blocked by barrier, natural darkness, outside
+ *   sense arc, Vision checkbox off); an empty cause no longer renders bare
+ *   parentheses. New CFG.REQUIRE_TOKEN_VISION (default true, current
+ *   behavior) — set false to judge sight by illumination and barriers alone
+ *   and ignore Roll20's per-token Vision checkbox, which most GMs leave off
+ *   on NPC tokens.
+ * v2.110.0: CONDITION BADGES NOW ACTUALLY APPEAR. setMarker() was added in
+ *   v2.107.1 to write both views Roll20 keeps of a badge (the legacy
+ *   status_<name> boolean and the aggregate statusmarkers string the client
+ *   renders), but it was only wired into the snare/grapple paths. Every
+ *   condition badge — poison, paralysis, mind control, dazzled, duration,
+ *   invisible, sneaking, discomfort, succumbed — still wrote status_<name>
+ *   alone, and restoreTokenSnapshot (Undo) did the same. Once the two views
+ *   desync, setting status_<name> to a value it already holds is a silent
+ *   no-op: the condition is tracked, the card says it applied, and no badge
+ *   ever shows. Reproduced by save -> Undo -> re-save. All 109 status-marker
+ *   writes now route through setMarker, including the Undo restore path, so
+ *   the two views can no longer drift and existing drift self-heals on the
+ *   next write.
+ *   New: !mp fixbadges [--all 1] (GM) repairs tokens already desynced — it
+ *   re-asserts a badge for every tracked condition and prunes condition
+ *   badges with no backing condition. Only markers in CONDITION_MARKERS are
+ *   touched; dead/sleepy/purple/grab/fist/cobweb and hand-set markers are
+ *   left alone.
+ * v2.109.0: AREA-EFFECT SAVE ATTACKS + STABLE CONDITION IDs.
+ *   Area Effect delivery of a save attack previously only worked for sense
+ *   loss (Flash); every other save attack fell through to the flat-damage
+ *   path. An area Damaging Poison landed as a one-shot Biochemical blast with
+ *   no EN save, no condition, no badge and no per-round recurrence, and an
+ *   area Paralytic Poison (no damage) did nothing at all. resolveAreaSenseLoss
+ *   is generalized to resolveAreaSave, which mirrors cmdSave per target:
+ *   condition type inferred from the attack, Damaging Poison keeps protection
+ *   off the save TN and applies it to the damage, status badge set, recurring
+ *   damage and recovery buttons emitted. resolveAreaTarget now gates on
+ *   isSaveAttack alone; pendingArea carries saveDamage/noDamage/noDamageType/
+ *   hasDuration; area save attacks skip the damage roll-with deferral in
+ *   cmdAreaDamageAll; area/attack cards and the "Resolve All Saves" label key
+ *   off isSaveAttack instead of senseLoss.
+ *   Conditions now carry a stable id. Recovery/Clear buttons pass --cid, so a
+ *   button posted earlier no longer points at the wrong condition (or none)
+ *   once an earlier condition is spliced out of the array; --idx is kept as a
+ *   fallback for buttons already sitting in chat. Damaging Poison gets its own
+ *   three-leaves badge instead of sharing skull with paralysis.
+ *   New: !mp test areapoison [DMG].
  * v2.108.0: GRAPPLE ATTACKS USE THE STANDARD ATTACK CARD. A grapple-flagged
  *   attack row no longer forks out of the attack pipeline into a plain-text
  *   result block; it renders the normal dark card with header, outcome
@@ -379,7 +467,7 @@
  *   protection/invuln/adapt do NOT add to the save TN (Flash has no Damage
  *   Type - only Protected Sense mitigates, GM adjudicated), fumbled initial
  *   save = PERMANENT regardless of attack name; (2) area attacks route
- *   per-target through resolveAreaSenseLoss: EN (or row BC) save per target
+ *   per-target through resolveAreaSave: EN (or row BC) save per target
  *   that failed/skipped escape, failure = dazzled + senseLevels + recovery
  *   at recMod (defaults to -12 when the Rec field is blank, per Flash
  *   rules), refresh-in-place (no stacking), Recovery button per victim,
@@ -1098,6 +1186,11 @@ MP.Engine = (function () {
     FULL_RESTRAINT_PENALTY: -9,
 
     // Area effect map marker (dashed circle drawn at blast center)
+    // Roll20's per-token Vision checkbox. When dynamic lighting is on, a token
+    // without it sees nothing, which is right for PCs but blinds NPC/mook
+    // tokens most GMs never enable it on. Set false to judge sight purely by
+    // illumination and barriers (4.6) and ignore the checkbox.
+    REQUIRE_TOKEN_VISION: true,
     AREA_MARKER: true,
     AREA_MARKER_COLOR: "#e74c3c",
     AREA_MARKER_WIDTH: 3,
@@ -1294,7 +1387,7 @@ MP.Engine = (function () {
     blinded: "interdiction",
     transmuted: "chemical-bolt",
     poisoned: "skull",
-    damaging_poison: "skull",
+    damaging_poison: "three-leaves",
     feared: "screaming",
     duration: "stopwatch",
     darkness: "ninja-mask",
@@ -1340,6 +1433,31 @@ MP.Engine = (function () {
   // Check if condition deals damage on failed recovery
   function conditionDealsDamage(condType) {
     return condType === "damaging_poison";
+  }
+
+  // Stable per-condition handle. Array indices shift on splice, so chat buttons
+  // posted earlier can point at the wrong condition (or none) once an earlier
+  // one is cleared. Buttons carry --cid; --idx remains as a legacy fallback.
+  function newCondId() {
+    return "c" + Date.now().toString(36) + randomInteger(999999).toString(36);
+  }
+
+  // Resolve a condition reference from command args to a live array index.
+  // Prefers --cid; falls back to --idx for older buttons still in chat.
+  function resolveCondRef(list, args) {
+    const cid = args && args.cid ? String(args.cid) : "";
+    if (cid) {
+      const byId = (list || []).findIndex(c => c && c.id === cid);
+      if (byId >= 0) return byId;
+      return -1;
+    }
+    const idx = num(args && args.idx, -1);
+    return (idx >= 0 && idx < (list || []).length) ? idx : -1;
+  }
+
+  // Button reference for a condition: cid when present, idx otherwise.
+  function condRefArgs(cond, idx) {
+    return (cond && cond.id) ? `--cid ${cond.id}` : `--idx ${idx}`;
   }
 
   // -------------------------
@@ -1588,6 +1706,7 @@ MP.Engine = (function () {
           `${Math.round(num(atkTok.get("rotation"), 0))}`
         : "observer:-",
       `env:${obs.envSig || "-"}`,
+      obs.visSig || "vis:-",
       (obs.extraToHit || obs.rangeSensitive)
         ? `rb:${Math.round(num(rangeInches, 0))}`
         : "rb:-"
@@ -2087,13 +2206,14 @@ MP.Engine = (function () {
       const dynamic = page && mpBool(page.get("dynamic_lighting_enabled"));
 
       if (
+        CFG.REQUIRE_TOKEN_VISION &&
         dynamic &&
         !mpBool(atkTok.get("has_bright_light_vision"))
       ) {
         return {
           usable: false,
           obscured: false,
-          reason: "Roll20 token vision disabled",
+          reason: "Roll20 token Vision checkbox is off",
           sig: `arc:1;wall:${blocked ? 1 : 0};vision:0`
         };
       }
@@ -2269,6 +2389,8 @@ MP.Engine = (function () {
 
       return {
         level: visLevel,
+        visDropReason: null,
+        visSig: `vis:${visLevel}:1:1:${visEnv.sig || "-"}`,
         label:
           `vision (${lvlLabel}` +
           `${inv && inv.blur ? ", blurred" : ""}` +
@@ -2349,6 +2471,8 @@ MP.Engine = (function () {
 
       return {
         level: 0,
+        visDropReason: blockedWhy,
+        visSig: `vis:${visLevel}:${visReach.usable ? 1 : 0}:${visEnv.usable ? 1 : 0}:${visEnv.sig || "-"}`,
         label: `no usable sense (${blockedWhy})`,
         oppMod,
         chkMod: 0,
@@ -2385,8 +2509,25 @@ MP.Engine = (function () {
         ? `, ${bestEnv.reason}`
         : "";
 
+    // Why vision was not used, so the attack card can say so instead of
+    // silently reporting a fallback sense with no explanation.
+    const visDropReason = (visLevel <= 0)
+      ? (inv ? null : "attacker has no usable vision")
+      : (!visReach.usable
+          ? "vision out of range"
+          : (!visEnv.usable ? visEnv.reason : null));
+
+    // The chosen fallback sense's envSig knows nothing about lighting or the
+    // observer's Vision checkbox, so caching on it alone left a stale
+    // "acquired by hearing" entry alive after the room was lit or Vision was
+    // switched on. Carry the vision gate's own state so any change to it
+    // invalidates the cached acquisition.
+    const visSig = `vis:${visLevel}:${visReach.usable ? 1 : 0}:${visEnv.usable ? 1 : 0}:${visEnv.sig || "-"}`;
+
     return {
       level: best.lvl,
+      visDropReason,
+      visSig,
       label:
         `${best.label} (${bLabel}` +
         `${inv && !inv.blur ? " - target invisible" : ""}` +
@@ -2441,7 +2582,7 @@ MP.Engine = (function () {
       if (turnOff) {
         if (idx >= 0) {
           conds.splice(idx, 1);
-          if (!conds.some(c => c.marker === marker)) tok.set("status_" + marker, false);
+          if (!conds.some(c => c.marker === marker)) setMarker(tok, marker, false);
           lines.push(`<b>${esc(tokName)}</b> — visible again (no action or Power to drop).`);
         } else {
           lines.push(`<b>${esc(tokName)}</b> — wasn't invisible.`);
@@ -2462,7 +2603,7 @@ MP.Engine = (function () {
         created: Date.now()
       };
       if (idx >= 0) conds[idx] = condition; else conds.push(condition);
-      tok.set("status_" + marker, true);
+      setMarker(tok, marker, true);
       lines.push(`<b>${esc(tokName)}</b> — ${isBlur ? "BLURRED (observers -1 sense level)" : "INVISIBLE (vision blocked)"}${isSneaking ? ", sneaking (opposed AG)" : ""}. <span style="font-size:11px; color:#8a84a8;">Takes an action; PR 1/round auto-drains on round advance. Gear carried turns invisible too; drops become visible.</span>`);
     });
 
@@ -2503,7 +2644,7 @@ MP.Engine = (function () {
       if (turnOff) {
         if (idx >= 0) {
           conds.splice(idx, 1);
-          if (!conds.some(c => c.marker === marker)) tok.set("status_" + marker, false);
+          if (!conds.some(c => c.marker === marker)) setMarker(tok, marker, false);
           lines.push(`<b>${esc(tokName)}</b> — stops sneaking.`);
         } else lines.push(`<b>${esc(tokName)}</b> — wasn't sneaking.`);
         return;
@@ -2515,7 +2656,7 @@ MP.Engine = (function () {
         startRound: state.MP_Engine.currentRound, created: Date.now()
       };
       if (idx >= 0) conds[idx] = condition; else conds.push(condition);
-      tok.set("status_" + marker, true);
+      setMarker(tok, marker, true);
       lines.push(`<b>${esc(tokName)}</b> — SNEAKING (1/2 move rate).`);
     });
     let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
@@ -2956,7 +3097,7 @@ MP.Engine = (function () {
     }
     if (flags.unliving <= 50) {
       const hits0 = getResource(tok, charId, CFG.HITS_BAR, CFG.HITS_ATTR);
-      const hitsMax = getAttrNum(charId, CFG.HITS_MAX_ATTR, 0);
+      const hitsMax = getResourceMax(tok, charId, CFG.HITS_BAR, CFG.HITS_MAX_ATTR, 0);
       const half = Math.ceil(hitsMax / 2);
       if (hitsMax > 0 && hits0 >= half) {
         return `Unliving (50% self-repair) — only heals below half Hits (${half}); currently at ${hits0}/${hitsMax}.`;
@@ -3009,6 +3150,7 @@ MP.Engine = (function () {
     const recTN = clSave + mod + (present ? -4 : 0);
     const marker = "screaming";
     const condition = {
+      id: newCondId(),
       type: "succumbed", sourceAtk: isPhobia ? `Phobia (${stim})` : `Compulsion (${stim})`,
       saveBC: "CL", saveTN: tn, recTN: recTN, recTime: "1 round",
       startRound: state.MP_Engine.currentRound, marker: marker, created: Date.now(),
@@ -3017,9 +3159,9 @@ MP.Engine = (function () {
     };
     let idx = condList.findIndex(c => c.type === "succumbed");
     if (idx >= 0) condList[idx] = condition; else { condList.push(condition); idx = condList.length - 1; }
-    tok.set("status_" + marker, true);
+    setMarker(tok, marker, true);
     out += `<b style="color:#e94560;">SUCCUMBS</b> — ${esc(condition.effectDesc)}<br/>`;
-    out += `<span style="font-size:11px;">Recovery: CL <b>${recTN}-</b> each round${present ? " (-4: stimulus present)" : ""}</span> ${btn(`Recovery`, `!mp recover --target ${tok.id} --idx ${idx}`)}`;
+    out += `<span style="font-size:11px;">Recovery: CL <b>${recTN}-</b> each round${present ? " (-4: stimulus present)" : ""}</span> ${btn(`Recovery`, `!mp recover --target ${tok.id} ${condRefArgs(condition, idx)}`)}`;
     out += `</div>`;
     chCombat("MP", `${wt(msg)}` + out, char.id);
   }
@@ -3046,7 +3188,7 @@ MP.Engine = (function () {
       if (turnOff) {
         if (idx >= 0) {
           conds.splice(idx, 1);
-          if (!conds.some(c => c.marker === marker)) tok.set("status_" + marker, false);
+          if (!conds.some(c => c.marker === marker)) setMarker(tok, marker, false);
           lines.push(`<b>${esc(tokName)}</b> — requirement met, discomfort ends.`);
         } else lines.push(`<b>${esc(tokName)}</b> — wasn't in discomfort.`);
         return;
@@ -3058,7 +3200,7 @@ MP.Engine = (function () {
         startRound: state.MP_Engine.currentRound, created: Date.now()
       };
       if (idx >= 0) conds[idx] = condition; else conds.push(condition);
-      tok.set("status_" + marker, true);
+      setMarker(tok, marker, true);
       lines.push(`<b>${esc(tokName)}</b> — DISCOMFORT (-3 attacks, saves, perception).`);
     });
     let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>🥀 Special Requirement</b>`;
@@ -3165,7 +3307,7 @@ MP.Engine = (function () {
       setResource(tok, char ? char.id : null, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
       if (pow1 <= 0) {
         conds.splice(idx, 1);
-        if (!conds.some(c => c.marker === CONDITION_MARKERS.invisible)) tok.set("status_" + CONDITION_MARKERS.invisible, false);
+        if (!conds.some(c => c.marker === CONDITION_MARKERS.invisible)) setMarker(tok, CONDITION_MARKERS.invisible, false);
         frag += `<br/><span style="color:#ff6b6b;">🫥 <b>${esc(name)}</b> can't pay PR (Power ${pow0}→${pow1}) — <b>invisibility DROPS</b></span>`;
       } else {
         frag += `<br/><span style="color:#8a84a8; font-size:11px;">🫥 ${esc(name)} invisible: -${cost} Power (${pow0}→${pow1})</span>`;
@@ -3256,14 +3398,14 @@ MP.Engine = (function () {
         };
         if (idx >= 0) conds[idx] = condition; // refresh in place, no stacking
         else conds.push(condition);
-        tok.set("status_" + marker, true);
+        setMarker(tok, marker, true);
         const info = visionLossInfo(tokId, tokChar ? tokChar.id : null);
         applied.push(`<b>${esc(tokName)}</b> — ${label} ${ranks} (vision now <b>${info.effLabel}</b>)`);
       } else {
         if (idx >= 0) {
           conds.splice(idx, 1);
           const markerStillUsed = conds.some(c => c.marker === marker);
-          if (!markerStillUsed) tok.set("status_" + marker, false);
+          if (!markerStillUsed) setMarker(tok, marker, false);
           const info = visionLossInfo(tokId, tokChar ? tokChar.id : null);
           removed.push(`<b>${esc(tokName)}</b> — ${label} cleared (vision now <b>${info.effLabel}</b>)`);
         } else {
@@ -3436,8 +3578,102 @@ MP.Engine = (function () {
     ch("MP", `/w gm <b style="color:#c88fff;">TEST SENSELOSS</b> — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
   }
 
+  // Self-test: !mp test areapoison [DMG] (GM, 1 selected token). Exercises
+  // resolveAreaSave for a Damaging Poison delivered as an Area Effect:
+  // forced pass, forced fail (condition + badge + recurring damage), refresh
+  // in place, and stable-id recovery clearing the badge. Non-destructive.
+  function testAreaPoison(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then run <code>!mp test areapoison [DMG]</code>.`);
+    const tokId = sel[0]._id;
+    const tok = getObj("graphic", tokId);
+    const char = getCharFromToken(tok);
+    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Token missing or unlinked.`);
+
+    const parts = msg.content.split(/\s+/);
+    const dmg = Math.max(1, num(parts[3], 5));
+
+    const marker = CONDITION_MARKERS.damaging_poison;
+    const snapshot = JSON.parse(JSON.stringify(state.MP_Engine.conditions[tokId] || []));
+    const markerBefore = tok.get("status_" + marker);
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "\u2705" : "\u274c"} ${name}`);
+
+    const fakeArea = {
+      atkName: "Test Damaging Poison",
+      atkCharIdForCond: char.id,
+      saveBC: "EN",
+      saveMod: -8,
+      recMod: 0,
+      recTime: "1 round",
+      senseLoss: 0,
+      isSaveAttack: true,
+      saveDamage: dmg,
+      damage: dmg,
+      damageType: "Biochemical",
+      protKey: "bio",
+      noDamage: false,
+      tokens: {}
+    };
+    fakeArea.tokens[tokId] = { charId: char.id, name: char.get("name"), escaped: false };
+
+    const baseSave = getAttrNum(char.id, "endurance_save", 10);
+
+    // 1. Forced pass: no condition, no badge
+    state.MP_Engine.conditions[tokId] = [];
+    setMarker(tok, marker, false);
+    resolveAreaSave(fakeArea, tokId, 1);
+    check(`forced pass => no condition`, (state.MP_Engine.conditions[tokId] || []).length === 0);
+    check(`forced pass => no badge`, tok.get("status_" + marker) !== true);
+
+    // 2. Forced fail: damaging_poison condition, badge on, damage carried
+    state.MP_Engine.conditions[tokId] = [];
+    fakeArea.saveMod = -30;
+    resolveAreaSave(fakeArea, tokId, 19);
+    let conds = state.MP_Engine.conditions[tokId] || [];
+    let c0 = conds.find(c => c.type === "damaging_poison");
+    check(`forced fail => damaging_poison condition`, !!c0);
+    check(`badge "${marker}" applied`, tok.get("status_" + marker) === true);
+    check(`condition carries ${dmg} recurring damage`, !!c0 && c0.damage === dmg);
+    check(`prot excluded from save TN (recTN = ${baseSave - 30})`, !!c0 && c0.recTN === baseSave - 30);
+    check(`condition has stable id`, !!c0 && typeof c0.id === "string" && c0.id.length > 0);
+
+    // 3. Refresh in place: second fail doesn't stack a duplicate
+    resolveAreaSave(fakeArea, tokId, 19);
+    conds = state.MP_Engine.conditions[tokId] || [];
+    check(`re-apply refreshes, no duplicate (count=${conds.filter(c => c.type === "damaging_poison").length})`,
+      conds.filter(c => c.type === "damaging_poison").length === 1);
+
+    // 4. Stale-index safety: a decoy condition ahead of the poison, cleared by
+    //    id, must not shift the poison out from under its own button.
+    conds = state.MP_Engine.conditions[tokId] || [];
+    c0 = conds.find(c => c.type === "damaging_poison");
+    const poisonId = c0 ? c0.id : "";
+    conds.unshift({ id: newCondId(), type: "generic", marker: CONDITION_MARKERS.generic, recTN: 10, saveBC: "EN", recTime: "1 round", sourceAtk: "decoy" });
+    const decoyId = conds[0].id;
+    const resolvedDecoy = resolveCondRef(conds, { cid: decoyId });
+    const resolvedPoison = resolveCondRef(conds, { cid: poisonId });
+    check(`resolveCondRef finds decoy at 0 / poison at 1`, resolvedDecoy === 0 && resolvedPoison === 1);
+    conds.splice(0, 1);
+    check(`after splice, cid still resolves poison (now 0)`, resolveCondRef(conds, { cid: poisonId }) === 0);
+
+    // 5. Clearing by id removes the condition and the badge (deterministic
+    //    stand-in for a successful recovery roll)
+    cmdClearCondition({ playerid: msg.playerid, selected: [] }, { target: tokId, cid: poisonId });
+    const after = state.MP_Engine.conditions[tokId] || [];
+    check(`clear by cid removed condition (count=${after.length})`, !after.some(c => c.id === poisonId));
+    check(`badge "${marker}" removed`, tok.get("status_" + marker) !== true);
+
+    // Restore
+    state.MP_Engine.conditions[tokId] = snapshot;
+    setMarker(tok, marker, markerBefore === true);
+
+    const passCount = results.filter(r => r.startsWith("\u2705")).length;
+    ch("MP", `/w gm <b style="color:#c88fff;">TEST AREA POISON</b> (${dmg} dmg) \u2014 ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
+  }
+
   // Self-test: !mp test flash [LEVELS] (GM, 1 selected token). Exercises
-  // resolveAreaSenseLoss with forced rolls: guaranteed pass, guaranteed
+  // resolveAreaSave with forced rolls: guaranteed pass, guaranteed
   // fail, and fumble (permanent). Non-destructive (snapshot/restore).
   function testFlash(msg, args) {
     const sel = (msg.selected || []).filter(s => s._type === "graphic");
@@ -3472,13 +3708,13 @@ MP.Engine = (function () {
 
     // 1. Forced pass (roll 1): no condition
     state.MP_Engine.conditions[tokId] = [];
-    resolveAreaSenseLoss(fakeArea, tokId, 1);
+    resolveAreaSave(fakeArea, tokId, 1);
     check(`forced pass (roll 1 vs ${baseSave}-) => no condition`, (state.MP_Engine.conditions[tokId] || []).length === 0);
 
     // 2. Forced fail (roll 19 w/ -30 mod): dazzled condition with senseLevels
     state.MP_Engine.conditions[tokId] = [];
     fakeArea.saveMod = -30;
-    resolveAreaSenseLoss(fakeArea, tokId, 19);
+    resolveAreaSave(fakeArea, tokId, 19);
     let conds = state.MP_Engine.conditions[tokId] || [];
     let c0 = conds.find(c => c.type === "dazzled");
     check(`forced fail => dazzled, senseLevels ${levels}`, !!c0 && c0.senseLevels === levels && !c0.permanent);
@@ -3487,7 +3723,7 @@ MP.Engine = (function () {
     check(`vision reflects loss (eff=${vis.effective})`, vis.effective === Math.max(0, 2 - levels));
 
     // 3. Refresh in place: second fail doesn't stack a duplicate
-    resolveAreaSenseLoss(fakeArea, tokId, 19);
+    resolveAreaSave(fakeArea, tokId, 19);
     conds = state.MP_Engine.conditions[tokId] || [];
     check(`re-apply refreshes, no duplicate (count=${conds.filter(c => c.type === "dazzled").length})`,
       conds.filter(c => c.type === "dazzled").length === 1);
@@ -3495,14 +3731,14 @@ MP.Engine = (function () {
     // 4. Fumble (roll 20): permanent
     state.MP_Engine.conditions[tokId] = [];
     fakeArea.saveMod = 0;
-    resolveAreaSenseLoss(fakeArea, tokId, 20);
+    resolveAreaSave(fakeArea, tokId, 20);
     conds = state.MP_Engine.conditions[tokId] || [];
     c0 = conds.find(c => c.type === "dazzled");
     check(`fumble (roll 20) => PERMANENT`, !!c0 && c0.permanent === true);
 
     // Restore
     state.MP_Engine.conditions[tokId] = snapshot;
-    tok.set("status_" + CONDITION_MARKERS.dazzled, markerBefore === true);
+    setMarker(tok, CONDITION_MARKERS.dazzled, markerBefore === true);
 
     const passCount = results.filter(r => r.startsWith("✅")).length;
     ch("MP", `/w gm <b style="color:#c88fff;">TEST FLASH</b> (${levels} level(s)) — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
@@ -3623,7 +3859,7 @@ MP.Engine = (function () {
     let snippet;
     if (existing) {
       existing.roundsRemaining = num(existing.roundsRemaining, 0) + ticks;
-      defTok.set("status_" + marker, true);
+      setMarker(defTok, marker, true);
       snippet = `<br/><span style="color:#f4d03f; font-weight:bold;">⏱ DURATION extended</span>` +
         `<br/><span style="font-size:11px;">${esc(rec.atkName)} — ${existing.roundsRemaining} round(s) of effect remain (cumulative)</span>`;
     } else {
@@ -3645,7 +3881,7 @@ MP.Engine = (function () {
         startRound: state.MP_Engine.currentRound,
         created: Date.now()
       });
-      defTok.set("status_" + marker, true);
+      setMarker(defTok, marker, true);
       snippet = `<br/><span style="color:#f4d03f; font-weight:bold;">⏱ ONGOING EFFECT (${esc(unitLabel)})</span>`;
       if (ticks > 0 && rec.durDamageExpr) {
         snippet += `<br/><span style="font-size:11px;">Repeats <b>${esc(rec.durDamageExpr)}</b> ${esc(rec.dmgTypeStr || "")} each round for ${ticks} round(s)</span>`;
@@ -3733,8 +3969,8 @@ MP.Engine = (function () {
       const current = parseMarkers(tok.get("statusmarkers"));
       const targetHas = {}; target.forEach(m => { targetHas[m] = true; });
       const currentHas = {}; current.forEach(m => { currentHas[m] = true; });
-      current.forEach(m => { if (!targetHas[m]) tok.set("status_" + m, false); });
-      target.forEach(m => { if (!currentHas[m]) tok.set("status_" + m, true); });
+      current.forEach(m => { if (!targetHas[m]) setMarker(tok, m, false); });
+      target.forEach(m => { if (!currentHas[m]) setMarker(tok, m, true); });
     }
     state.MP_Engine.conditions[snap.tokenId] = snap.conditions || [];
   }
@@ -4213,6 +4449,25 @@ function generateRowID() {
       }
     }
     return getAttrNum(charId, attrName, 0);
+  }
+
+  // Max for a bar-backed resource. Mirrors getResource: an unlinked/mook token
+  // carries its own bar max, and the sheet attribute may not exist at all. Read
+  // the token's bar _max first, then the sheet attribute, then the fallback.
+  // Previously every max site went straight to the sheet attribute and silently
+  // landed on the hardcoded default (20 Hits / 40 Power), which mis-reported the
+  // status card and capped healing/reset below the token's real maximum.
+  function getResourceMax(token, charId, barProp, attrName, fallback) {
+    if (token) {
+      const maxProp = String(barProp || "").replace(/_value$/, "_max");
+      const v = token.get(maxProp);
+      if (v !== "" && v != null && !isNaN(parseFloat(v))) {
+        return num(v, 0);
+      }
+    }
+    const attrVal = getAttrNum(charId, attrName, NaN);
+    if (!isNaN(attrVal) && attrVal !== 0) return attrVal;
+    return num(fallback, 0);
   }
 
   function setResource(token, charId, barProp, attrName, value) {
@@ -5959,7 +6214,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (cached && cached.sig === acqSig) {
         atkVisionPenalty = cached.toHitMod + num(obs.extraToHit, 0);
         acqHover = `&#10;Acquired [${cached.tier}]: ${cached.toHitMod} (${obs.label}, held from round ${cached.round})`;
-        acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)</div>`;
+        acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} ${cached.why ? ` <span style="color:#f4d03f;">(${esc(cached.why)})</span>` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)<br/>${btn(`Why this sense?`, `!mp sight --obs ${atkTok.id} --target ${defTokenId}`)}</div>`;
         ch("MP", `${wt(msg)}` + acqNote);
       } else {
         const acqDisc = atkDiscomfortPenalty; // -3 on all checks incl. perception
@@ -5974,18 +6229,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (${modParts.join(", ")}) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}`;
         const causeTxt = [
           atkVision.causes.length ? atkVision.causes.join(", ") : null,
+          obs.visDropReason || null,
           obs.inv ? (obs.inv.blur ? "target Blurred" : "target Invisible") : null,
           obs.sneaking ? "target sneaking" : null
         ].filter(Boolean).join("; ");
         acqHover = `&#10;Acquire [${acq.tier}]: ${acq.toHitMod} (${obs.label}, ${rollTxt})`;
         if (acq.blocked) {
           delete state.MP_Engine.acquired[acqKey];
-          ch("MP", `${wt(msg)}<div style="background:#8e2b2b; border:2px solid #000; padding:4px 8px; color:#fff;">🕶 <b>${esc(atkChar.get("name"))}</b> fails to acquire <b>${esc(defTok.get("name") || "the target")}</b> by ${obs.label} (${rollTxt} — ${esc(acq.outcome)}) — <b>cannot attack</b> (4.6 tier "-"). ${esc(causeTxt)}</div>`);
+          ch("MP", `${wt(msg)}<div style="background:#8e2b2b; border:2px solid #000; padding:4px 8px; color:#fff;">🕶 <b>${esc(atkChar.get("name"))}</b> fails to acquire <b>${esc(defTok.get("name") || "the target")}</b> by ${obs.label} (${rollTxt} — ${esc(acq.outcome)}) — <b>cannot attack</b> (4.6 tier "-"). ${esc(causeTxt)}<br/>${btn(`Why this sense?`, `!mp sight --obs ${atkTok.id} --target ${defTokenId}`)}</div>`);
           return;
         }
-        state.MP_Engine.acquired[acqKey] = { sig: acqSig, tier: acq.tier, toHitMod: acq.toHitMod, label: acq.label, round: state.MP_Engine.currentRound };
+        state.MP_Engine.acquired[acqKey] = { sig: acqSig, tier: acq.tier, toHitMod: acq.toHitMod, label: acq.label, round: state.MP_Engine.currentRound, why: causeTxt || "" };
         const tierColor = acq.tier === "?" ? "#ff6b6b" : (acq.tier === "-3" ? "#f4d03f" : "#2ecc71");
-        acqNote = `<div style="background:#3a2f14; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">🎯 Acquire by ${obs.label}: <b style="color:${tierColor};">[${acq.tier}] ${esc(acq.label)}</b>${acq.toHitMod !== 0 ? ` (${acq.toHitMod} to hit)` : ""} — ${rollTxt} (${esc(causeTxt)})</div>`;
+        acqNote = `<div style="background:#3a2f14; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">Acquire by ${obs.label}: <b style="color:${tierColor};">[${acq.tier}] ${esc(acq.label)}</b>${acq.toHitMod !== 0 ? ` (${acq.toHitMod} to hit)` : ""} — ${rollTxt}${causeTxt ? ` (${esc(causeTxt)})` : ""}${obs.senseKey !== "visible" ? `<br/>${btn(`Why this sense?`, `!mp sight --obs ${atkTok.id} --target ${defTokenId}`)}` : ""}</div>`;
         ch("MP", `${wt(msg)}` + acqNote);
       }
     }
@@ -6588,13 +6844,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       siphonMode: rec.siphonMode,
       siphonBC: rec.siphonBC,
       siphonCat: rec.siphonCat,
-      // v2.89.1: sense-loss save attacks (Flash) resolve per-target saves
+      // Save attacks in an area resolve a per-target save (any condition type,
+      // not just sense loss). saveDamage carries the condition's damage roll so
+      // Damaging Poison recurs correctly instead of landing as a flat blast.
       isSaveAttack: !!rec.isSaveAttack,
       saveBC: rec.saveBC || "",
       saveMod: num(rec.saveMod, 0),
       recMod: num(rec.recMod, 0),
       recTime: rec.recTime || "1 round",
       senseLoss: num(rec.senseLoss, 0),
+      saveDamage: num(rec.saveDamage, 0),
+      noDamage: !!rec.noDamage,
+      noDamageType: !!rec.noDamageType,
+      hasDuration: !!rec.hasDuration,
       atkCharIdForCond: rec.atkCharId
     };
     
@@ -6606,6 +6868,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<div style="padding:6px 10px; background:#16213e; border-bottom:1px solid #2a2a4a;">`;
     if (num(rec.senseLoss, 0) > 0) {
       html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; <b style="color:#f4d03f;">FLASH</b> — ${esc(rec.saveBC || "EN")} save or lose <b style="color:#fff;">${rec.senseLoss}</b> vision level(s)`;
+    } else if (rec.isSaveAttack) {
+      const areaSaveDmg = num(rec.saveDamage, 0) || (rec.noDamage ? 0 : num(rec.damageTotal, 0));
+      html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; <b style="color:#f4d03f;">SAVE</b> — ${esc(rec.saveBC || "EN")} save${areaSaveDmg > 0 ? ` or <b style="color:#fff;">${areaSaveDmg}</b> ${esc(rec.dmgTypeStr)}/round` : ""}`;
     } else {
       html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; Damage: <b style="color:#fff;">${rec.damageTotal}</b> ${esc(rec.dmgTypeStr)}`;
     }
@@ -6871,12 +7136,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
   // Resolve one area target with a chosen roll-with divert. Returns an html result line.
-  // v2.89.1: per-target save for a sense-loss area attack (Flash, Light
-  // Control B). Failed save: dazzled condition, senseLevels from the attack
-  // row, recovery each between-rounds phase at recMod (default -12).
-  // Fumbled INITIAL save: permanently blinded (rules). Optional forcedRoll
-  // for the test harness.
-  function resolveAreaSenseLoss(areaRec, tokId, forcedRoll) {
+  // Per-target save for ANY save attack delivered as an Area Effect. Mirrors
+  // cmdSave: condition type inferred from the attack, Damaging Poison keeps
+  // protection off the save TN and applies it to the damage instead, sense-loss
+  // (Flash, Light Control B) reports vision levels. Fumbled INITIAL save on a
+  // sense-loss attack is permanent blindness (rules). Optional forcedRoll for
+  // the test harness.
+  function resolveAreaSave(areaRec, tokId, forcedRoll) {
     const tokData = areaRec.tokens[tokId];
     const tok = getObj("graphic", tokId);
     const char = getObj("character", tokData.charId);
@@ -6884,25 +7150,59 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b> - token missing</span>`;
     }
 
+    const isSenseLoss = num(areaRec.senseLoss, 0) > 0;
+    const atkNameLower = String(areaRec.atkName || "").toLowerCase();
+    const hasPoisonInName = atkNameLower.includes("poison") || atkNameLower.includes("venom");
+    const rawCondDamage = num(areaRec.saveDamage, 0) || (areaRec.noDamage ? 0 : num(areaRec.damage, 0));
+    const isDamagingPoison = hasPoisonInName && rawCondDamage > 0 && !atkNameLower.includes("paralytic");
+    const isTransmutation = String(areaRec.dmgSubtype || "").trim().toLowerCase() === "transmutation";
+
+    const tokIsVeh = isVehicleMode(tokData.charId);
+    const protData = tokIsVeh
+      ? getVehicleProtection(tokData.charId, areaRec.protKey, areaRec.dmgSubtype)
+      : sumProtectionWithHardened(tokData.charId, areaRec.protKey, areaRec.dmgSubtype, isTransmutation);
+    const prot = isTransmutation ? 0 : protData.prot;
+    const invulnBonus = protData.invuln ? 8 : 0;
+    const adaptBonus = (!isTransmutation && protData.adapt) ? 5 : 0;
+    const protForSave = (isDamagingPoison || isSenseLoss || isTransmutation) ? 0 : Math.floor(prot);
+    const invulnForSave = (isDamagingPoison || isSenseLoss) ? 0 : invulnBonus;
+    const adaptForSave = (isDamagingPoison || isSenseLoss || isTransmutation) ? 0 : adaptBonus;
+
     const saveAttr = bcToSaveAttr(areaRec.saveBC || "EN") || "endurance_save";
-    const baseSave = getAttrNum(tokData.charId, saveAttr, 10);
-    const tn = baseSave + num(areaRec.saveMod, 0);
+    const baseSave = tokIsVeh
+      ? getAttrNum(tokData.charId, "vehicle_" + saveAttr, 10)
+      : getAttrNum(tokData.charId, saveAttr, 10);
+    const discomfort = hasDiscomfort(tokId) ? -3 : 0;
+    const vulnData = (!areaRec.noDamageType && areaRec.damageType)
+      ? getVulnerabilityMods(tokData.charId, areaRec.damageType, areaRec.dmgSubtype)
+      : { protMod: 0, dmgMod: 0, notes: [] };
+    const vulnSaveMod = (vulnData && vulnData.dmgMod) ? -Math.abs(num(vulnData.dmgMod, 0)) : 0;
+
+    const tn = baseSave + num(areaRec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod + discomfort;
     const d20 = (forcedRoll !== undefined) ? forcedRoll : randomInteger(20);
     const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
     const pass = !isFumble && (d20 <= tn);
 
     if (pass) {
-      return `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> saves (${tn}-, rolled ${d20}) — vision unaffected</span>`;
+      return `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> saves (${tn}-, rolled ${d20})${isSenseLoss ? " \u2014 vision unaffected" : " \u2014 no effect"}</span>`;
     }
 
-    const levels = Math.max(1, Math.min(3, num(areaRec.senseLoss, 2)));
-    const recTN = baseSave + num(areaRec.saveMod, 0) + num(areaRec.recMod, -12);
-    const marker = CONDITION_MARKERS.dazzled;
+    const condType = isSenseLoss ? "dazzled"
+      : (isDamagingPoison ? "damaging_poison"
+        : inferConditionType(areaRec.atkName, areaRec.saveBC, areaRec.damageType, rawCondDamage));
+    const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
+    const hasDamage = conditionDealsDamage(condType);
+    const condDamage = hasDamage ? rawCondDamage : 0;
+    const levels = isSenseLoss ? Math.max(1, Math.min(3, num(areaRec.senseLoss, 2))) : 0;
+    const isPermanent = isFumble && isSenseLoss;
+    const recTN = baseSave + num(areaRec.saveMod, 0) + num(areaRec.recMod, 0)
+      + protForSave + invulnForSave + adaptForSave + vulnSaveMod + discomfort;
 
     if (!state.MP_Engine.conditions[tokId]) state.MP_Engine.conditions[tokId] = [];
     const condList = state.MP_Engine.conditions[tokId];
     const condition = {
-      type: "dazzled",
+      id: newCondId(),
+      type: condType,
       sourceAtk: areaRec.atkName,
       atkCharId: areaRec.atkCharIdForCond,
       saveBC: areaRec.saveBC || "EN",
@@ -6912,22 +7212,60 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       startRound: state.MP_Engine.currentRound,
       marker: marker,
       created: Date.now(),
-      permanent: isFumble,
-      senseLevels: levels,
-      effectDesc: getConditionDesc("dazzled", areaRec.atkName),
-      damage: 0, dmgType: null, protKey: null
+      permanent: isPermanent,
+      senseLevels: isSenseLoss ? levels : ((condType === "dazzled" || condType === "blinded") ? 2 : 0),
+      effectDesc: getConditionDesc(condType, areaRec.atkName),
+      damage: condDamage,
+      dmgType: hasDamage ? (areaRec.damageType || "Biochemical") : null,
+      protKey: hasDamage ? areaRec.protKey : null
     };
-    let condIdx = condList.findIndex(c => c.type === "dazzled");
+    let condIdx = condList.findIndex(c => c.type === condType);
     if (condIdx >= 0) condList[condIdx] = condition; // refresh in place
     else { condList.push(condition); condIdx = condList.length - 1; }
-    tok.set("status_" + marker, true);
+    setMarker(tok, marker, true);
 
-    const visNow = visionLossInfo(tokId, tokData.charId);
-    let out = `<br/><span style="color:#e94560;">\u2717 <b>${esc(tokData.name)}</b> FAILS (${tn}-, rolled ${d20}${isFumble ? " FUMBLE" : ""}) — loses ${levels} vision level(s), now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
-    if (isFumble) {
-      out += `<br/><span style="color:#ff0000; font-weight:bold; font-size:11px;">\ud83d\udc80 FUMBLE — blindness is PERMANENT!</span>`;
+    let out = `<br/><span style="color:#e94560;">\u2717 <b>${esc(tokData.name)}</b> FAILS (${tn}-, rolled ${d20}${isFumble ? " FUMBLE" : ""})`;
+    if (isSenseLoss) {
+      const visNow = visionLossInfo(tokId, tokData.charId);
+      out += ` \u2014 loses ${levels} vision level(s), now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
     } else {
-      out += `<br/><span style="font-size:11px;">Rec: ${esc(areaRec.saveBC || "EN")} at <b>${recTN}-</b> every ${esc(areaRec.recTime || "1 round")}</span> ${btn(`Recovery`, `!mp recover --target ${tokId} --idx ${condIdx}`)}`;
+      out += ` \u2014 <b>${esc(String(condType).replace(/_/g, " ").toUpperCase())}</b></span>`;
+    }
+
+    // Damaging Poison: protection applies to the damage, not the save TN.
+    if (hasDamage && condDamage > 0) {
+      const dmgProt = Math.floor(prot);
+      const penetrating = Math.max(0, condDamage - dmgProt);
+      if (penetrating > 0) {
+        const poisonRollId = String(Date.now()) + "_poison_" + randomInteger(999999);
+        state.MP_Engine.pending[poisonRollId] = {
+          rollId: poisonRollId,
+          defTokenId: tokId,
+          defCharId: tokData.charId,
+          defName: tokData.name,
+          damageTotal: penetrating,
+          dmgTypeStr: areaRec.damageType || "Biochemical",
+          protKey: null,  // Protection already applied
+          atkName: areaRec.atkName + " (Poison)",
+          condIdx: condIdx,
+          condId: condition.id,
+          created: Date.now()
+        };
+        out += `<br/><span style="color:#e94560;">Takes <b>${penetrating}</b> ${esc(areaRec.damageType || "Biochemical")} damage!</span> (${condDamage} raw - ${dmgProt} prot)`;
+        out += `<br/>${btnDanger(`Take Full Damage`, `!mp apply --id ${poisonRollId} --mode straight`)} `;
+        out += `${btn(`Roll-With Max`, `!mp apply --id ${poisonRollId} --mode rollwithmax`)} `;
+        out += `${btn(`Roll-With Custom`, `!mp apply --id ${poisonRollId} --mode rollwithcustom --amt ?{Power to divert|0}`)}`;
+      } else {
+        out += `<br/><span style="font-size:11px;">Poison damage blocked by ${dmgProt} ${esc(areaRec.damageType || "Biochemical")} protection</span>`;
+      }
+      out += `<br/><span style="font-size:11px;">Takes <b>${condDamage}</b> ${esc(areaRec.damageType || "Biochemical")} dmg each failed recovery</span>`;
+    }
+
+    if (isPermanent) {
+      out += `<br/><span style="color:#ff0000; font-weight:bold; font-size:11px;">\ud83d\udc80 FUMBLE \u2014 effect is PERMANENT!</span>`;
+    } else {
+      out += `<br/><span style="font-size:11px;">Rec: ${esc(areaRec.saveBC || "EN")} at <b>${recTN}-</b> every ${esc(areaRec.recTime || "1 round")}${areaRec.hasDuration ? ` <span style="color:#f4d03f;">(Duration)</span>` : ""}</span> ` +
+        `${btn(`Recovery`, `!mp recover --target ${tokId} ${condRefArgs(condition, condIdx)}`)}`;
     }
     return out;
   }
@@ -6940,11 +7278,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!tok || !char) {
       return `<br/><span style="color:#ff6b6b;">\u2717 <b>${esc(tokData.name)}</b> - token missing</span>`;
     }
-    // v2.89.1: sense-loss area attacks (Flash) roll a per-target save
-    // instead of applying damage. No protection to the save (no Damage
-    // Type; only the Protected Sense Modifier mitigates - GM adjudicated).
-    if (areaRec.isSaveAttack && num(areaRec.senseLoss, 0) > 0) {
-      return resolveAreaSenseLoss(areaRec, tokId);
+    // Save attacks in an area roll a per-target save instead of applying the
+    // damage directly. Covers sense loss (Flash), Damaging/Paralytic Poison,
+    // Fear, Mind Control and any other save condition delivered as Area Effect.
+    if (areaRec.isSaveAttack) {
+      return resolveAreaSave(areaRec, tokId);
     }
     const c = computeAreaPen(areaRec, tokData);
     const tokIsVehicle = c.tokIsVehicle;
@@ -7001,11 +7339,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let statusNote = "";
     if (incapacitated) {
       statusNote = " <b>INCAPACITATED!</b>";
-      tok.set("status_dead", true);
+      setMarker(tok, "dead", true);
       if (!tokIsVehicle) statusNote += startBleed(tokId, tokData.charId);
     } else if (unconscious) {
       statusNote = " <b>UNCONSCIOUS!</b>";
-      tok.set("status_sleepy", true);
+      setMarker(tok, "sleepy", true);
     }
 
     if (sipGain > 0 && areaRec.rowId) {
@@ -7059,10 +7397,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden;">`;
     const isSenseArea = num(areaRec.senseLoss, 0) > 0;
-    html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">${isSenseArea ? "AREA FLASH RESULTS" : "AREA DAMAGE RESULTS"}</div>`;
+    const isSaveArea = !!areaRec.isSaveAttack;
+    html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">${isSenseArea ? "AREA FLASH RESULTS" : (isSaveArea ? "AREA SAVE RESULTS" : "AREA DAMAGE RESULTS")}</div>`;
     html += `<div style="padding:6px 10px;">`;
     if (isSenseArea) {
       html += `${esc(areaRec.saveBC || "EN")} save or lose <b style="color:#fff;">${areaRec.senseLoss}</b> vision level(s)`;
+    } else if (isSaveArea) {
+      const saveAreaDmg = num(areaRec.saveDamage, 0) || (areaRec.noDamage ? 0 : num(areaRec.damage, 0));
+      html += `${esc(areaRec.saveBC || "EN")} save${saveAreaDmg > 0 ? ` or <b style="color:#fff;">${saveAreaDmg}</b> ${esc(areaRec.damageType)}/round` : ""}`;
     } else {
       html += `<b style="color:#fff;">${areaRec.damage}</b> ${esc(areaRec.damageType)}`;
     }
@@ -7091,7 +7433,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         return;
       }
       
-      // 4.8.3: conscious, aware characters may roll with area damage
+      // 4.8.3: conscious, aware characters may roll with area damage.
+      // Save attacks resolve their own per-target save (and their own damage
+      // roll-with buttons), so they skip the damage-deferral path entirely.
+      if (isSaveArea) {
+        html += resolveAreaTarget(areaRec, tokId, 0);
+        return;
+      }
       const c = computeAreaPen(areaRec, tokData);
       const maxDivert = areaMaxDivert(tokData, tok);
       const koFlag = tok.get("status_sleepy") === true || tok.get("status_dead") === true;
@@ -7185,7 +7533,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const allResolved = Object.values(areaRec.tokens).every(t => t.escaped !== null);
     if (allResolved) {
-      const doneLabel = (num(areaRec.senseLoss, 0) > 0) ? "Resolve All Saves" : "Apply All Damage";
+      const doneLabel = areaRec.isSaveAttack ? "Resolve All Saves" : "Apply All Damage";
       const resolvedNote = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved.</div>`;
       const resolvedGM = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. ${btnDanger(doneLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
       if (CFG.GM_ONLY_BUTTONS) {
@@ -7538,7 +7886,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       state.MP_Engine.conditions[rec.defTokenId].push(absEffect);
       
       // Set a purple aura marker to indicate active absorption
-      defTok.set("status_purple", true);
+      setMarker(defTok, "purple", true);
     }
     
     // Status effects (only if net result is bad)
@@ -7547,8 +7895,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const unconscious = !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0 && hits1 < hits0;
     const incapacitated = (hits1 === 0);
     
-    if (incapacitated) defTok.set("status_dead", true);
-    else if (unconscious) defTok.set("status_sleepy", true);
+    if (incapacitated) setMarker(defTok, "dead", true);
+    else if (unconscious) setMarker(defTok, "sleepy", true);
     
     // Build output
     let html = `<div style="background:#9b59b6; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
@@ -7635,8 +7983,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const unconscious = !refDefIsVeh && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
     
-    if (incapacitated) defTok.set("status_dead", true);
-    else if (unconscious) defTok.set("status_sleepy", true);
+    if (incapacitated) setMarker(defTok, "dead", true);
+    else if (unconscious) setMarker(defTok, "sleepy", true);
     
     // Store reflection data for counter-attack
     const reflectRollId = "reflect_" + String(Date.now()) + "_" + randomInteger(999999);
@@ -7773,8 +8121,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const unconscious = !rhTargetIsVeh && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
     
-    if (incapacitated) targetTok.set("status_dead", true);
-    else if (unconscious) targetTok.set("status_sleepy", true);
+    if (incapacitated) setMarker(targetTok, "dead", true);
+    else if (unconscious) setMarker(targetTok, "sleepy", true);
     
     // Build output
     let html = `<div style="background:#e67e22; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
@@ -8319,8 +8667,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const unconscious = !afcAtkIsVeh && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
     
-    if (incapacitated) atkTok.set("status_dead", true);
-    else if (unconscious) atkTok.set("status_sleepy", true);
+    if (incapacitated) setMarker(atkTok, "dead", true);
+    else if (unconscious) setMarker(atkTok, "sleepy", true);
     
     let html = `<div style="background:#e74c3c; border:3px solid #000; padding:4px 8px;">`;
     html += `<span style="color:#fff; font-weight:bold;">⚡ AF Counter-Damage to ${esc(atkName)}</span>`;
@@ -9002,10 +9350,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           statusLine += `<div style="background:#2a0a0a; border:1px solid #8b0000; border-radius:6px; padding:4px 8px; margin-top:3px; font-family:Arial,sans-serif; font-size:11px; color:#ff9999; max-width:280px;">💀 <b>Death Touch</b> — reduced to 0 Hits. Make an EN save or die instantly: ${btn(`EN Save vs Death`, `!mp dtsave --id ${rollId}`)}</div>`;
         }
       }
-      defTok.set("status_dead", true);
+      setMarker(defTok, "dead", true);
     } else if (unconscious) {
       statusLine = `<div style="color:#e67e22; font-weight:bold; margin-top:4px;">UNCONSCIOUS!</div>`;
-      defTok.set("status_sleepy", true);
+      setMarker(defTok, "sleepy", true);
     }
 
     let effectNotes = "";
@@ -9210,7 +9558,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `<span style="font-size:16px;"><span style="color:#999; text-decoration:line-through;">${pow0}</span> <span style="color:#667;">→</span> <b style="color:#ff6b6b;">${pow1}</b></span></td>` +
       `</tr></table>` +
       statusLine +
-      (rec.condIdx !== undefined ? `<br/>${btn(`Try Again`, `!mp recover --target ${rec.defTokenId} --idx ${rec.condIdx}`)}` : "") +
+      (rec.condId || rec.condIdx !== undefined
+        ? `<br/>${btn(`Try Again`, `!mp recover --target ${rec.defTokenId} ${rec.condId ? `--cid ${rec.condId}` : `--idx ${rec.condIdx}`}`)}`
+        : "") +
       `</div>`;
 
     // Undo: register the pre-mutation snapshot and append a button to the card.
@@ -9295,13 +9645,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Apply status markers
     if (!enPass) {
       if (limb === "leg") {
-        defTok.set("status_broken-leg", true);
+        setMarker(defTok, "broken-leg", true);
       } else {
-        defTok.set("status_broken-shield", true);
+        setMarker(defTok, "broken-shield", true);
       }
     }
     if (!agPass && limb === "leg") {
-      defTok.set("status_back-pain", true);
+      setMarker(defTok, "back-pain", true);
     }
 
     chCombat("MP", msg_out, rec.defCharId, rec.atkCharId);
@@ -9535,7 +9885,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `Roll: <b>${roll}</b> → <b>${pass ? "STAYS UP" : "PRONE!"}</b>`;
 
     if (!pass) {
-      tok.set("status_back-pain", true);
+      setMarker(tok, "back-pain", true);
     }
 
     chCombat("MP", msg_out, char.id);
@@ -9719,6 +10069,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       // Create condition record
       const condition = {
+        id: newCondId(),
         type: condType,
         sourceAtk: rec.atkName,
         atkCharId: rec.atkCharId,
@@ -9759,7 +10110,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       // Apply status marker
       log(`MP Save: Creating condition type="${condType}", marker="${marker}"`);
-      defTok.set("status_" + marker, true);
+      setMarker(defTok, marker, true);
       
       // Build status line
       const condLabel = condType.replace(/_/g, " ").toUpperCase();
@@ -9789,7 +10140,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
             dmgTypeStr: rec.dmgTypeStr || "Biochemical",
             protKey: null,  // Protection already applied
             atkName: rec.atkName + " (Poison)",
-            condIdx: condIdx,  // For retry button
+            condIdx: condIdx,  // Legacy fallback for retry button
+            condId: condition.id,
             created: Date.now()
           };
           
@@ -9810,7 +10162,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         statusLine += `<br/><span style="color:#ff0000; font-weight:bold;">💀 FUMBLE - Effect is PERMANENT!</span>`;
       } else if (!damageButtons) {
         // Only show Recovery Roll button if no damage buttons (damage buttons include Try Again after applied)
-        statusLine += `<br/>${btn(`Recovery Roll`, `!mp recover --target ${rec.defTokenId} --idx ${condIdx}`)}`;
+        statusLine += `<br/>${btn(`Recovery Roll`, `!mp recover --target ${rec.defTokenId} ${condRefArgs(condition, condIdx)}`)}`;
       }
     }
 
@@ -9864,9 +10216,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
   function cmdRecover(msg, args) {
     const tokId = args.target;
-    const condIdx = num(args.idx, -1);  // Index into conditions array
+    const condIdx = resolveCondRef(state.MP_Engine.conditions[tokId] || [], args);
     
-    log(`MP cmdRecover: tokId="${tokId}", condIdx=${condIdx}`);
+    log(`MP cmdRecover: tokId="${tokId}", cid="${args.cid || ""}", condIdx=${condIdx}`);
     
     // Legacy support: allow --bc and --tn for manual recovery rolls
     const manualBC = args.bc;
@@ -9957,7 +10309,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
             dmgTypeStr: cond.dmgType || "Biochemical",
             protKey: null,  // Protection already applied
             atkName: cond.sourceAtk + " (Poison)",
-            condIdx: condIdx,  // For retry button
+            condIdx: condIdx,  // Legacy fallback for retry button
+            condId: cond.id,
             created: Date.now()
           };
           
@@ -9971,13 +10324,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           msg_out += `<br/><span style="font-size:11px;">Damage blocked by ${prot} ${cond.dmgType || "Biochemical"} protection</span>`;
           // Still show retry button even if damage was blocked
           msg_out += `<br/><span style="font-size:11px;">Next attempt: ${recTime}</span>`;
-          msg_out += `<br/>${btn(`Try Again`, `!mp recover --target ${tokId} --idx ${condIdx}`)}`;
+          msg_out += `<br/>${btn(`Try Again`, `!mp recover --target ${tokId} ${condRefArgs(cond, condIdx)}`)}`;
         }
       } else {
         // Non-damaging condition (paralysis, etc.) - just show retry
         msg_out += `<br/><span style="font-size:11px;">Next attempt: ${recTime}</span>`;
         if (cond) {
-          msg_out += `<br/>${btn(`Try Again`, `!mp recover --target ${tokId} --idx ${condIdx}`)}`;
+          msg_out += `<br/>${btn(`Try Again`, `!mp recover --target ${tokId} ${condRefArgs(cond, condIdx)}`)}`;
         } else {
           msg_out += `<br/>${btn(`Try Again`, `!mp recover --target ${tokId} --bc ${bc} --tn ${tn}`)}`;
         }
@@ -10024,7 +10377,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           msg_out += `<br/><span style="color:#e74c3c; font-size:11px;">⚠️ EXPIRED</span>`;
         }
         if (playerIsGM(msg.playerid)) {
-          msg_out += `<br/>${btn(`Clear Effect`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+          msg_out += `<br/>${btn(`Clear Effect`, `!mp clearcondition --target ${tokId} ${condRefArgs(cond, idx)}`)}`;
         }
       } else if (cond.type === "duration") {
         // Durational ongoing effect
@@ -10040,7 +10393,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         }
         if (cond.escape) msg_out += `<br/><span style="font-size:11px; color:#9ad;">Escape: ${esc(cond.escape)}</span>`;
         if (playerIsGM(msg.playerid)) {
-          msg_out += `<br/>${btn(`End Effect`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+          msg_out += `<br/>${btn(`End Effect`, `!mp clearcondition --target ${tokId} ${condRefArgs(cond, idx)}`)}`;
         }
       } else {
         // Standard condition
@@ -10051,9 +10404,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         if (cond.permanent) {
           msg_out += `<br/><span style="color:#ff0000; font-size:11px;">⚠️ PERMANENT</span>`;
         } else {
-          msg_out += `<br/>${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${idx}`)}`;
+          msg_out += `<br/>${btn(`Recovery Roll`, `!mp recover --target ${tokId} ${condRefArgs(cond, idx)}`)}`;
           if (playerIsGM(msg.playerid)) {
-            msg_out += ` ${btn(`Remove`, `!mp clearcondition --target ${tokId} --idx ${idx}`)}`;
+            msg_out += ` ${btn(`Remove`, `!mp clearcondition --target ${tokId} ${condRefArgs(cond, idx)}`)}`;
           }
         }
       }
@@ -10062,9 +10415,72 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     ch("MP", wt(msg) + msg_out);
   }
   
+  // !mp fixbadges [--all] (GM). Repairs tokens whose status_<name> booleans and
+  // aggregate statusmarkers string have desynced (hand-edited tokens, or state
+  // written by a pre-v2.110.0 build). Re-asserts a badge for every tracked
+  // condition and prunes condition badges with no backing condition. Only
+  // markers in CONDITION_MARKERS are touched — dead/sleepy/purple/grab/fist/
+  // cobweb and any hand-set markers are left alone.
+  function cmdFixBadges(msg, args) {
+    const doAll = (args.all === "1" || args.all === true);
+    let tokIds = [];
+    if (doAll) {
+      tokIds = Object.keys(state.MP_Engine.conditions || {});
+    } else if (args.target) {
+      tokIds = [args.target];
+    } else {
+      tokIds = (msg.selected || []).filter(s => s._type === "graphic").map(s => s._id);
+    }
+    if (!tokIds.length) {
+      return ch("MP", `/w gm <b>MP:</b> Select token(s), or run <code>!mp fixbadges --all 1</code>.`);
+    }
+
+    const condMarkers = {};
+    Object.keys(CONDITION_MARKERS).forEach(k => { condMarkers[CONDITION_MARKERS[k]] = true; });
+
+    let lines = "";
+    let fixed = 0;
+    tokIds.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      if (!tok) return;
+      const char = getCharFromToken(tok);
+      const name = char ? char.get("name") : (tok.get("name") || "Token");
+      const conds = state.MP_Engine.conditions[tokId] || [];
+
+      const wanted = {};
+      conds.forEach(c => { if (c && c.marker) wanted[c.marker] = true; });
+
+      const added = [];
+      const removed = [];
+      Object.keys(wanted).forEach(m => {
+        const parts = parseMarkers(tok.get("statusmarkers"));
+        if (parts.indexOf(m) < 0 || tok.get("status_" + m) !== true) {
+          setMarker(tok, m, true);
+          added.push(m);
+        }
+      });
+      parseMarkers(tok.get("statusmarkers")).forEach(m => {
+        if (condMarkers[m] && !wanted[m]) {
+          setMarker(tok, m, false);
+          removed.push(m);
+        }
+      });
+
+      if (added.length || removed.length) {
+        fixed++;
+        lines += `<br/><b>${esc(name)}</b>`;
+        if (added.length) lines += ` <span style="color:#27ae60;">+${esc(added.join(", "))}</span>`;
+        if (removed.length) lines += ` <span style="color:#e94560;">-${esc(removed.join(", "))}</span>`;
+      }
+    });
+
+    if (!fixed) return ch("MP", `/w gm <b>MP:</b> Badges already in sync (${tokIds.length} token(s) checked).`);
+    ch("MP", `/w gm <b>MP:</b> Badge resync — ${fixed} token(s) repaired.${lines}`);
+  }
+
   function cmdClearCondition(msg, args) {
     const tokId = args.target;
-    const condIdx = num(args.idx, -1);
+    const condIdx = resolveCondRef(state.MP_Engine.conditions[tokId] || [], args);
     const clearAll = (args.all === "1");
     
     const tok = getObj("graphic", tokId);
@@ -10082,13 +10498,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           setAttr(char.id, cond.statAttr, cond.originalValue);
         }
         if (cond.marker) {
-          tok.set("status_" + cond.marker, false);
+          setMarker(tok, cond.marker, false);
         }
       });
       // Remove purple marker if any absorptions were cleared
       const hadAbsorption = conditions.some(c => c.type === "absorption");
       if (hadAbsorption) {
-        tok.set("status_purple", false);
+        setMarker(tok, "purple", false);
       }
       state.MP_Engine.conditions[tokId] = [];
       return ch("MP", `/w gm All conditions cleared from <b>${esc(char.get("name"))}</b>.`);
@@ -10122,7 +10538,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (cond.marker) {
       const markerStillUsed = conditions.some(c => c.marker === cond.marker);
       if (!markerStillUsed) {
-        tok.set("status_" + cond.marker, false);
+        setMarker(tok, cond.marker, false);
       }
     }
     
@@ -10130,7 +10546,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (cond.type === "absorption") {
       const hasOtherAbsorption = conditions.some(c => c.type === "absorption");
       if (!hasOtherAbsorption) {
-        tok.set("status_purple", false);
+        setMarker(tok, "purple", false);
       }
     }
     
@@ -10172,7 +10588,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Remove purple marker if no more absorption effects
       const hasAbsorption = conditions.some(c => c.type === "absorption");
       if (!hasAbsorption) {
-        tok.set("status_purple", false);
+        setMarker(tok, "purple", false);
       }
       
       if (report.length > 0) {
@@ -10396,7 +10812,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (sn) {
         if (sn.grapplerTokenId) {
           const gTok = getObj("graphic", sn.grapplerTokenId);
-          if (gTok && !isGrapplingAnyoneElse(sn.grapplerTokenId, tokId)) gTok.set("status_fist", false);
+          if (gTok && !isGrapplingAnyoneElse(sn.grapplerTokenId, tokId)) setMarker(gTok, "fist", false);
         }
         delete state.MP_Engine.snares[tokId];
         setMarker(tok, "grab", false);
@@ -10408,12 +10824,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const s = state.MP_Engine.snares[heldId];
         if (s.type === "Grapple" && s.grapplerTokenId === tokId) {
           const hTok = getObj("graphic", heldId);
-          if (hTok) hTok.set("status_grab", false);
+          if (hTok) setMarker(hTok, "grab", false);
           delete state.MP_Engine.snares[heldId];
           cleared++;
         }
       });
-      tok.set("status_fist", false);
+      setMarker(tok, "fist", false);
     });
     return ch("MP", `/w gm <b>MP:</b> Cleared ${cleared} snare/grapple link(s).`);
   }
@@ -10771,8 +11187,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const maybeCounter = atkTok && state.MP_Engine.snares[atkTokId];
       if (maybeCounter && maybeCounter.type === "Grapple" && maybeCounter.grapplerTokenId === defTokId) {
         delete state.MP_Engine.snares[atkTokId];
-        atkTok.set("status_grab", false);
-        defTok.set("status_fist", false);
+        setMarker(atkTok, "grab", false);
+        setMarker(defTok, "fist", false);
       }
     }
 
@@ -10808,8 +11224,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const maybeCounter = state.MP_Engine.snares[atkTokId];
       if (maybeCounter && maybeCounter.type === "Grapple" && maybeCounter.grapplerTokenId === defTokId) {
         delete state.MP_Engine.snares[atkTokId];
-        atkTok.set("status_grab", false);
-        defTok.set("status_fist", false);
+        setMarker(atkTok, "grab", false);
+        setMarker(defTok, "fist", false);
       }
     }
 
@@ -10911,8 +11327,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const maybeCounter = atkTok && state.MP_Engine.snares[atkTokId];
       if (maybeCounter && maybeCounter.type === "Grapple" && maybeCounter.grapplerTokenId === defTokId) {
         delete state.MP_Engine.snares[atkTokId];
-        atkTok.set("status_grab", false);
-        defTok.set("status_fist", false);
+        setMarker(atkTok, "grab", false);
+        setMarker(defTok, "fist", false);
       }
     }
 
@@ -11017,7 +11433,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `Remaining Hits: <b>${hits}</b> | Roll: <b>${roll}</b> → <b>${success ? "WAKES UP!" : "Still unconscious"}</b>`;
 
     if (success) {
-      tok.set("status_sleepy", false);
+      setMarker(tok, "sleepy", false);
     } else {
       msg_out += `<br/>${btn(`Try Again`, `!mp wakeup --target ${tokId}`)}`;
     }
@@ -11028,6 +11444,116 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // -------------------------
   // STATUS COMMANDS
   // -------------------------
+
+  // !mp sight (GM). Diagnoses why vision is or isn't usable for acquisition (4.6).
+  // Roll20 only allows one selection at a time, so nothing here requires both a
+  // selection and a target cursor:
+  //   !mp sight                     - one token selected: observer-side gates only
+  //   !mp sight                     - two tokens selected: observer + target
+  //   !mp sight --obs ID --target ID- explicit, used by card buttons
+  //   !mp sight --target ID         - observer from selection
+  // Most gates (page lighting, Vision checkbox, config, sheet vision) need no
+  // target at all; arc, barriers and illumination-at-target need one.
+  function cmdSight(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic").map(s => s._id);
+    let obsId = args.obs || null;
+    let tgtId = args.target || null;
+
+    if (!obsId) obsId = sel[0] || null;
+    if (!tgtId && sel.length > 1) tgtId = (sel[1] === obsId) ? sel[0] : sel[1];
+    if (obsId && tgtId === obsId) tgtId = null;
+
+    if (!obsId) return ch("MP", `/w gm <b>MP:</b> Select the observer token, then <code>!mp sight</code>. Select two tokens (observer + target) for the full per-target check.`);
+
+    const obsTok = getObj("graphic", obsId);
+    if (!obsTok) return ch("MP", `/w gm <b>MP:</b> Observer token missing.`);
+    const tgtTok = tgtId ? getObj("graphic", tgtId) : null;
+
+    const obsChar = getCharFromToken(obsTok);
+    const tgtChar = tgtTok ? getCharFromToken(tgtTok) : null;
+    const pageId = obsTok.get("_pageid");
+    const page = getObj("page", pageId);
+    const barriers = roll20BarrierSegments(pageId);
+    const senses = obsChar ? getCharacterSenses(obsChar.id) : defaultSenses();
+    const vis = senses.visible || defaultSenses().visible;
+
+    const dyn = !!(page && mpBool(page.get("dynamic_lighting_enabled")));
+    const daylight = !!(page && (mpBool(page.get("daylight_mode_enabled")) || mpBool(page.get("lightglobalillum"))));
+    const tokVision = mpBool(obsTok.get("has_bright_light_vision"));
+    const lossInfo = visionLossInfo(obsTok.id, obsChar ? obsChar.id : null);
+
+    const yes = v => v ? `<span style="color:#2ecc71;">yes</span>` : `<span style="color:#ff6b6b;">no</span>`;
+    const row = (k, v) => `<br/><span style="color:#aab;">${k}:</span> ${v}`;
+    const obsName = obsChar ? obsChar.get("name") : (obsTok.get("name") || "Observer");
+
+    let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px; overflow:hidden;">`;
+    html += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">\ud83d\udc41 Sight check</div>`;
+    html += `<div style="padding:6px 10px;">`;
+    html += `<b>${esc(obsName)}</b>`;
+    if (tgtTok) html += ` \u2192 <b>${esc(tgtChar ? tgtChar.get("name") : (tgtTok.get("name") || "Target"))}</b>`;
+
+    // --- Observer-side gates (no target needed) ---
+    html += row("Page Dynamic Lighting", yes(dyn));
+    html += row("Page daylight / global illum", yes(daylight));
+    html += row("Observer Vision checkbox", yes(tokVision) + (CFG.REQUIRE_TOKEN_VISION ? "" : ` <span style="color:#f4d03f;">(gate disabled)</span>`));
+    html += row("CFG.REQUIRE_TOKEN_VISION", yes(CFG.REQUIRE_TOKEN_VISION));
+    html += row("Vision level (sheet)", `${vis.lvl} \u2014 effective ${lossInfo.effective} (${esc(lossInfo.effLabel)})`);
+    if (lossInfo.causes && lossInfo.causes.length) html += row("Vision loss causes", esc(lossInfo.causes.join(", ")));
+
+    // The one gate that blocks before any target is considered.
+    if (CFG.REQUIRE_TOKEN_VISION && dyn && !tokVision) {
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="color:#ff6b6b; font-weight:bold;">\u2717 Vision UNUSABLE vs every target</span>`;
+      html += `<br/><span style="font-size:11px; color:#aab;">Dynamic Lighting is on and this token's Vision checkbox is off. Tick Vision on the token, or set <code>CFG.REQUIRE_TOKEN_VISION</code> false to ignore the checkbox campaign-wide.</span>`;
+      html += `</div>`;
+    } else if (dyn && !daylight) {
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="font-size:11px; color:#f4d03f;">Dynamic Lighting on with no page daylight \u2014 a target is only lit if a token in range emits light with an unblocked line to it. Map art that looks lit does not count.</span>`;
+      html += `</div>`;
+    }
+
+    // --- Per-target gates ---
+    if (!tgtTok) {
+      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+      html += `<span style="font-size:11px; color:#aab;">Select this token plus a target and re-run for arc, barrier, illumination-at-target and the held acquisition.</span>`;
+      html += `</div></div></div>`;
+      return ch("MP", `/w gm ` + html);
+    }
+
+    const inArc = senseFacesTarget(obsTok, tgtTok, "visible", vis);
+    const blocked = lineBlockedBySegments(tokenCenter(obsTok), tokenCenter(tgtTok), barriers);
+    const light = roll20Illumination(obsTok, tgtTok, page, barriers);
+    const env = roll20SenseEnvironment(obsTok.id, tgtTok.id, "visible", vis);
+
+    html += row("Illumination at target", `<b>${esc(light.level)}</b>${light.source ? ` <span style="color:#889;">(${esc(light.source)})</span>` : ""}`);
+    html += row("In sense arc", yes(inArc));
+    html += row("Barrier between", blocked
+      ? `<span style="color:#ff6b6b;">yes</span>${vis.pen ? ` <span style="color:#f4d03f;">(Penetrating \u2014 passes)</span>` : ""}`
+      : `<span style="color:#2ecc71;">none</span>`);
+
+    html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+    html += env.usable
+      ? `<span style="color:#2ecc71; font-weight:bold;">\u2713 Vision USABLE</span>${env.reason ? ` <span style="color:#889;">(${esc(env.reason)})</span>` : ""}`
+      : `<span style="color:#ff6b6b; font-weight:bold;">\u2717 Vision UNUSABLE</span> \u2014 ${esc(env.reason || "unknown")}<br/><span style="font-size:11px; color:#aab;">Acquisition falls back to the best remaining sense.</span>`;
+    html += `</div>`;
+
+    const acqKey = obsTok.id + "|" + tgtTok.id;
+    const cached = state.MP_Engine.acquired && state.MP_Engine.acquired[acqKey];
+    html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
+    if (args.clear !== undefined) {
+      if (cached) delete state.MP_Engine.acquired[acqKey];
+      html += `<span style="color:#f4d03f;">Held acquisition cleared.</span>`;
+    } else if (cached) {
+      html += `<span style="color:#f4d03f;">Held:</span> [${esc(cached.tier)}] ${esc(cached.label)} from round ${cached.round}`;
+      if (cached.why) html += `<br/><span style="font-size:11px; color:#889;">${esc(cached.why)}</span>`;
+      html += `<br/>${btnDanger(`Clear held acquisition`, `!mp sight --obs ${obsTok.id} --target ${tgtTok.id} --clear 1`)}`;
+    } else {
+      html += `<span style="font-size:11px; color:#889;">No held acquisition for this pair.</span>`;
+    }
+    html += `<br/>${btn(`Swap observer/target`, `!mp sight --obs ${tgtTok.id} --target ${obsTok.id}`)}`;
+    html += `</div></div></div>`;
+    ch("MP", `/w gm ` + html);
+  }
 
   function cmdStatus(msg, args) {
     // Prefer selected tokens (works as a persistent Token Action); fall back to
@@ -11052,9 +11578,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const isVeh = isVehicleMode(char.id);
     const hits = isVeh ? getVehicleHits(tok, char.id) : getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const hitsMax = isVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const hitsMax = isVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getResourceMax(tok, char.id, CFG.HITS_BAR, CFG.HITS_MAX_ATTR, 20);
     const pow = isVeh ? getVehiclePower(tok, char.id) : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const powMax = isVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const powMax = isVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getResourceMax(tok, char.id, CFG.POWER_BAR, CFG.POWER_MAX_ATTR, 40);
     const label = isVeh ? (getAttr(char.id, "vehicle_name") || char.get("name")) : char.get("name");
 
     const hitsColor = hits <= 0 ? "#ff6b6b" : (hits <= hitsMax / 2 ? "#f4d03f" : "#2ecc71");
@@ -11113,7 +11639,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `<span style="color:#aab; font-size:10px;">Attacks roll 4.6 acquisition (${vis.effective <= 0 ? "by hearing, Basic row" : "Basic row"}); -3 defense vs physical</span><br/>`;
       const tokConds = state.MP_Engine.conditions[tokId] || [];
       const dazIdx = tokConds.findIndex(c => (c.type === "dazzled" || c.type === "blinded") && !c.permanent);
-      if (dazIdx >= 0) html += `${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${dazIdx}`)} `;
+      if (dazIdx >= 0) html += `${btn(`Recovery Roll`, `!mp recover --target ${tokId} ${condRefArgs(tokConds[dazIdx], dazIdx)}`)} `;
       if (tokConds.some(c => c.type === "dazzled" && c.permanent)) html += `<span style="color:#ff6b6b; font-size:11px;">PERMANENT dazzle </span>`;
       if (vis.darkness > 0) html += `${btnDanger(`Clear Darkness`, `!mp darkness --off --target ${tokId}`)} `;
       if (vis.glare > 0) html += `${btnDanger(`Clear Glare`, `!mp glare --off --target ${tokId}`)}`;
@@ -11258,17 +11784,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         tok.set("bar1_max", vPowMax);
         
         // Clear status markers
-        tok.set("status_dead", false);
+        setMarker(tok, "dead", false);
         // v2.89.2: vehicles can sit in Darkness/Glare fields too
-        tok.set("status_bleeding-eye", false);
-        tok.set("status_interdiction", false);
-        tok.set("status_ninja-mask", false);
-        tok.set("status_aura", false);
-        tok.set("status_half-haze", false);
-        tok.set("status_stopwatch", false);
-        tok.set("status_tread", false);
-        tok.set("status_drink-me", false);
-        tok.set("status_screaming", false);
+        setMarker(tok, "bleeding-eye", false);
+        setMarker(tok, "interdiction", false);
+        setMarker(tok, "ninja-mask", false);
+        setMarker(tok, "aura", false);
+        setMarker(tok, "half-haze", false);
+        setMarker(tok, "stopwatch", false);
+        setMarker(tok, "tread", false);
+        setMarker(tok, "drink-me", false);
+        setMarker(tok, "screaming", false);
         tok.set(CFG.DEF_MOD_BAR, 0);
         
         // v2.89.2: clear conditions (darkness/glare etc.) - previously the
@@ -11290,28 +11816,28 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tok.set("bar2_value", hitsMax);
       
       // Clear all status markers
-      tok.set("status_dead", false);
-      tok.set("status_sleepy", false);
+      setMarker(tok, "dead", false);
+      setMarker(tok, "sleepy", false);
       setMarker(tok, "grab", false);        // Being grappled
       setMarker(tok, "fist", false);        // Grappling someone
       setMarker(tok, "cobweb", false);      // Snared
-      tok.set("status_broken-heart", false); // Off balance
-      tok.set("status_broken-leg", false);  // Leg disabled
-      tok.set("status_broken-shield", false); // Arm disabled
-      tok.set("status_back-pain", false);       // Prone (back-pain marker)
-      tok.set("status_purple", false);      // Absorption effect active
-      tok.set("status_blue", false);        // Defensive stance
-      tok.set("status_white-tower", false); // Full defense
+      setMarker(tok, "broken-heart", false); // Off balance
+      setMarker(tok, "broken-leg", false);  // Leg disabled
+      setMarker(tok, "broken-shield", false); // Arm disabled
+      setMarker(tok, "back-pain", false);       // Prone (back-pain marker)
+      setMarker(tok, "purple", false);      // Absorption effect active
+      setMarker(tok, "blue", false);        // Defensive stance
+      setMarker(tok, "white-tower", false); // Full defense
       // v2.89.2: sense-loss markers (Flash dazzle, blindness, Darkness, Glare)
-      tok.set("status_bleeding-eye", false); // Dazzled (Flash / Laser dazzle)
-      tok.set("status_interdiction", false); // Blinded
-      tok.set("status_ninja-mask", false);   // Darkness field
-      tok.set("status_aura", false);         // Glare field
-      tok.set("status_half-haze", false);    // Invisible (v2.91.0)
-      tok.set("status_stopwatch", false);    // Duration effect badge (v2.91.2)
-      tok.set("status_tread", false);        // Sneaking (v2.91.3)
-      tok.set("status_drink-me", false);     // Discomfort (v2.93.0)
-      tok.set("status_screaming", false);    // Succumbed/Feared (v2.93.0)
+      setMarker(tok, "bleeding-eye", false); // Dazzled (Flash / Laser dazzle)
+      setMarker(tok, "interdiction", false); // Blinded
+      setMarker(tok, "ninja-mask", false);   // Darkness field
+      setMarker(tok, "aura", false);         // Glare field
+      setMarker(tok, "half-haze", false);    // Invisible (v2.91.0)
+      setMarker(tok, "stopwatch", false);    // Duration effect badge (v2.91.2)
+      setMarker(tok, "tread", false);        // Sneaking (v2.91.3)
+      setMarker(tok, "drink-me", false);     // Discomfort (v2.93.0)
+      setMarker(tok, "screaming", false);    // Succumbed/Feared (v2.93.0)
       // v2.91.1: forget acquisitions involving this token
       if (state.MP_Engine.acquired) {
         Object.keys(state.MP_Engine.acquired).forEach(k => {
@@ -11328,7 +11854,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const sn = state.MP_Engine.snares[tokId];
         if (sn.grapplerTokenId) {
           const grapplerTok = getObj("graphic", sn.grapplerTokenId);
-          if (grapplerTok) grapplerTok.set("status_fist", false);
+          if (grapplerTok) setMarker(grapplerTok, "fist", false);
         }
         delete state.MP_Engine.snares[tokId];
       }
@@ -11338,7 +11864,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const sn = state.MP_Engine.snares[victimId];
         if (sn && sn.grapplerTokenId === tokId) {
           const victimTok = getObj("graphic", victimId);
-          if (victimTok) victimTok.set("status_grab", false);
+          if (victimTok) setMarker(victimTok, "grab", false);
           delete state.MP_Engine.snares[victimId];
         }
       });
@@ -11702,13 +12228,13 @@ function cmdStance(msg, args) {
     tok.set(CFG.DEF_MOD_BAR, stance.mod);
     
     // Clear previous stance markers
-    tok.set("status_blue", false);
-    tok.set("status_white-tower", false);
-    tok.set("status_broken-heart", false);
+    setMarker(tok, "blue", false);
+    setMarker(tok, "white-tower", false);
+    setMarker(tok, "broken-heart", false);
     
     // Set new marker if any
     if (stance.marker) {
-      tok.set("status_" + stance.marker, true);
+      setMarker(tok, stance.marker, true);
     }
     
     const modStr = stance.mod >= 0 ? `+${stance.mod}` : `${stance.mod}`;
@@ -11724,9 +12250,9 @@ function cmdStance(msg, args) {
         const tok = getObj("graphic", s._id);
         if (tok) {
           tok.set(CFG.DEF_MOD_BAR, 0);
-          tok.set("status_blue", false);
-          tok.set("status_white-tower", false);
-          tok.set("status_broken-heart", false);
+          setMarker(tok, "blue", false);
+          setMarker(tok, "white-tower", false);
+          setMarker(tok, "broken-heart", false);
         }
       });
       ch("MP", `/w gm Cleared stances for ${selected.length} selected token(s).`);
@@ -11739,9 +12265,9 @@ function cmdStance(msg, args) {
         const bar3 = tok.get(CFG.DEF_MOD_BAR);
         if (bar3 && bar3 !== "0" && bar3 !== 0) {
           tok.set(CFG.DEF_MOD_BAR, 0);
-          tok.set("status_blue", false);
-          tok.set("status_white-tower", false);
-          tok.set("status_broken-heart", false);
+          setMarker(tok, "blue", false);
+          setMarker(tok, "white-tower", false);
+          setMarker(tok, "broken-heart", false);
           count++;
         }
       });
@@ -11751,7 +12277,7 @@ function cmdStance(msg, args) {
 
   function applyOffBalance(tok, charName) {
     tok.set(CFG.DEF_MOD_BAR, -3);
-    tok.set("status_broken-heart", true);
+    setMarker(tok, "broken-heart", true);
     return `<br/><span style="color:#e94560;"><b>${esc(charName)}</b> is Off Balance! (-3 Def)</span>`;
   }
 
@@ -11839,6 +12365,8 @@ function cmdStance(msg, args) {
         return testSenseLoss(msg, args);
       case "flash":
         return testFlash(msg, args);
+      case "areapoison":
+        return testAreaPoison(msg, args);
       case "acquire":
         return testAcquire(msg, args);
       case "invis":
@@ -11923,10 +12451,10 @@ function cmdStance(msg, args) {
     const hasPainResistance = (num(getAttr(defChar.id, "willpower_pain_resistance"), 0) === 1);
     if (hits1 === 0 && toHits > 0) {
       statusNote = ` <b style="color:#ff6b6b;">INCAPACITATED!</b>`;
-      defTok.set("status_dead", true);
+      setMarker(defTok, "dead", true);
     } else if (drain === "hits" && !hasPainResistance && toHits > Math.floor(hits0 / 2) && hits0 > 0) {
       statusNote = ` <b style="color:#e67e22;">UNCONSCIOUS!</b>`;
-      defTok.set("status_sleepy", true);
+      setMarker(defTok, "sleepy", true);
     }
 
     const unit = drain === "power" ? "Power" : (drain === "hits" ? "Hits" : (drain === "bc" ? `${sBC || "BC"} pts` : `${sCat || "Ability"} CPs`));
@@ -11987,10 +12515,10 @@ function cmdStance(msg, args) {
       gripDice: gripDice,
       created: Date.now()
     };
-    defTok.set("status_grab", true);
+    setMarker(defTok, "grab", true);
     // Per 3.0.2.6 & 4.11: grappling somebody else still imposes restraint on physical tasks.
     // Remote grapples still count as an active grapple, so mark the grappler too.
-    atkTok.set("status_fist", true);
+    setMarker(atkTok, "fist", true);
 
     const sn = state.MP_Engine.snares[defTok.id];
     const lockedNow = sn.locked ? " (LOCKED)" : "";
@@ -12399,9 +12927,9 @@ function cmdStance(msg, args) {
 
     const healIsVeh = isVehicleMode(char.id);
     const hits0 = healIsVeh ? getVehicleHits(tok, char.id) : getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const hitsMax = healIsVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const hitsMax = healIsVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getResourceMax(tok, char.id, CFG.HITS_BAR, CFG.HITS_MAX_ATTR, 20);
     const pow0 = healIsVeh ? getVehiclePower(tok, char.id) : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const powMax = healIsVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const powMax = healIsVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getResourceMax(tok, char.id, CFG.POWER_BAR, CFG.POWER_MAX_ATTR, 40);
 
     const hits1 = Math.min(hitsMax, hits0 + healAmount);
     const pow1 = Math.min(powMax, pow0 + healPower);
@@ -12416,10 +12944,10 @@ function cmdStance(msg, args) {
 
     // Clear status markers if healed above thresholds
     if (hits1 > 0) {
-      tok.set("status_dead", false);
+      setMarker(tok, "dead", false);
     }
     if (hits1 > Math.floor(hitsMax / 2)) {
-      tok.set("status_sleepy", false);
+      setMarker(tok, "sleepy", false);
     }
 
     let msg_out = `<b>🧪 TEST HEAL</b> (${esc(char.get("name"))})<br/>` +
@@ -12442,25 +12970,25 @@ function cmdStance(msg, args) {
       return ch("MP", `/w gm Token not linked to a character.`);
     }
 
-    const hitsMax = getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
-    const powMax = getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const hitsMax = getResourceMax(tok, char.id, CFG.HITS_BAR, CFG.HITS_MAX_ATTR, 20);
+    const powMax = getResourceMax(tok, char.id, CFG.POWER_BAR, CFG.POWER_MAX_ATTR, 40);
 
     setResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR, hitsMax);
     setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, powMax);
     tok.set(CFG.DEF_MOD_BAR, 0);
 
     // Clear all status markers
-    tok.set("status_dead", false);
-    tok.set("status_sleepy", false);
-    tok.set("status_back-pain", false);
+    setMarker(tok, "dead", false);
+    setMarker(tok, "sleepy", false);
+    setMarker(tok, "back-pain", false);
     setMarker(tok, "cobweb", false);
     setMarker(tok, "grab", false);
     setMarker(tok, "fist", false);
-    tok.set("status_broken-leg", false);
-    tok.set("status_broken-shield", false);
-    tok.set("status_blue", false);
-    tok.set("status_white-tower", false);
-    tok.set("status_broken-heart", false);
+    setMarker(tok, "broken-leg", false);
+    setMarker(tok, "broken-shield", false);
+    setMarker(tok, "blue", false);
+    setMarker(tok, "white-tower", false);
+    setMarker(tok, "broken-heart", false);
 
     // Clear snares
     delete state.MP_Engine.snares[tok.id];
@@ -12480,9 +13008,9 @@ function cmdStance(msg, args) {
     }
 
     const hits = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const hitsMax = getAttrNum(char.id, CFG.HITS_MAX_ATTR, 20);
+    const hitsMax = getResourceMax(tok, char.id, CFG.HITS_BAR, CFG.HITS_MAX_ATTR, 20);
     const pow = getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const powMax = getAttrNum(char.id, CFG.POWER_MAX_ATTR, 40);
+    const powMax = getResourceMax(tok, char.id, CFG.POWER_BAR, CFG.POWER_MAX_ATTR, 40);
     const defMod = num(tok.get(CFG.DEF_MOD_BAR), 0);
 
     const enSave = getAttrNum(char.id, "endurance_save", 10);
@@ -12867,7 +13395,7 @@ function cmdStance(msg, args) {
       // Hard kill: zero Power, stop the bleed, mark dead permanently.
       setResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR, 0);
       if (state.MP_Engine.bleeds[tokId]) delete state.MP_Engine.bleeds[tokId];
-      tok.set("status_dead", true);
+      setMarker(tok, "dead", true);
       html += `<div style="font-size:15px; font-weight:bold; color:#e94560; margin-top:3px;">💀 DIES INSTANTLY</div>`;
     }
     html += `</div>`;
@@ -13171,9 +13699,15 @@ function cmdStance(msg, args) {
         // Check for expired absorptions first
         if (args.target) checkAbsorptionExpiry(args.target);
         return cmdConditions(msg, args);
+      case "sight":
+        if (gmOnly(msg)) return;
+        return cmdSight(msg, args);
       case "checkexpiry":
         if (gmOnly(msg)) return;
         return cmdCheckExpiry(msg, args);
+      case "fixbadges":
+        if (gmOnly(msg)) return;
+        return cmdFixBadges(msg, args);
       case "clearcondition":
         if (gmOnly(msg)) return;
         return cmdClearCondition(msg, args);
@@ -14269,7 +14803,7 @@ function cmdStance(msg, args) {
       });
       state.MP_Engine.conditions[tokId] = keep;
       if (tok && !keep.some(c => c.type === "duration")) {
-        tok.set("status_" + CONDITION_MARKERS.duration, false);
+        setMarker(tok, CONDITION_MARKERS.duration, false);
       }
     });
     return frag;
@@ -14311,7 +14845,7 @@ function cmdStance(msg, args) {
           const label = String(cond.type).replace(/_/g, " ").toUpperCase();
           frag += `<br/><span style="color:#e94560; font-weight:bold;">${esc(name)}: ${label}</span> ` +
             `<span style="font-size:11px;">recovery due — ${esc(cond.saveBC)} at <b>${cond.recTN}-</b></span>` +
-            `<br/>${btn(`Recovery Roll`, `!mp recover --target ${tokId} --idx ${idx}`)}`;
+            `<br/>${btn(`Recovery Roll`, `!mp recover --target ${tokId} ${condRefArgs(cond, idx)}`)}`;
           cond.nextRecRound = newRound + interval; // schedule next opportunity
         }
       });
@@ -14466,9 +15000,9 @@ function cmdStance(msg, args) {
   function applyHealing(tok, charId, amount) {
     const isVeh = isVehicleMode(charId);
     const pow0 = isVeh ? getVehiclePower(tok, charId) : getResource(tok, charId, CFG.POWER_BAR, CFG.POWER_ATTR);
-    const powMax = isVeh ? getAttrNum(charId, "vehicle_power_max", 0) : getAttrNum(charId, CFG.POWER_MAX_ATTR, 0);
+    const powMax = isVeh ? getAttrNum(charId, "vehicle_power_max", 0) : getResourceMax(tok, charId, CFG.POWER_BAR, CFG.POWER_MAX_ATTR, 0);
     const hits0 = isVeh ? getVehicleHits(tok, charId) : getResource(tok, charId, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const hitsMax = isVeh ? getAttrNum(charId, "vehicle_hits_max", 0) : getAttrNum(charId, CFG.HITS_MAX_ATTR, 0);
+    const hitsMax = isVeh ? getAttrNum(charId, "vehicle_hits_max", 0) : getResourceMax(tok, charId, CFG.HITS_BAR, CFG.HITS_MAX_ATTR, 0);
 
     let remaining = amount;
     const powRoom = powMax > 0 ? Math.max(0, powMax - pow0) : remaining;
@@ -14640,7 +15174,7 @@ function cmdStance(msg, args) {
         if (c.type !== "duration" || !c.expiresMs || c.expiresMs > gc.ms) continue;
         conds.splice(i, 1);
         if (tok && c.marker && !conds.some(o => o.marker === c.marker)) {
-          tok.set("status_" + c.marker, false);
+          setMarker(tok, c.marker, false);
         }
         const name = tok ? tok.get("name") : "target";
         ch("MP", `/w gm <b>MP:</b> ⏱ <b>${esc(name)}</b>: <b>${esc(c.sourceAtk || "duration effect")}</b> (${esc(c.unitLabel || "")}) has expired.`);
@@ -14858,11 +15392,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.107.2:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v2.108.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.107.2 READY");
+  log("MP ENGINE v2.108.0 READY");
 });
