@@ -1,4 +1,18 @@
-/* Mighty Protectors Roll20 API Engine v2.107.2 - 2026-07-26
+/* Mighty Protectors Roll20 API Engine v2.108.0 - 2026-07-27
+ * v2.108.0: GRAPPLE ATTACKS USE THE STANDARD ATTACK CARD. A grapple-flagged
+ *   attack row no longer forks out of the attack pipeline into a plain-text
+ *   result block; it renders the normal dark card with header, outcome
+ *   banner, Roll/Confirm/To-Hit grid, Type/KB/Rng row, and Modifiers line.
+ *   The Damage cell shows the grip dice under a GRIP label (4.11: grapple
+ *   deals no damage). Grapples now resolve criticals and fumbles, register a
+ *   pending record, and get the GM Undo button like every other attack.
+ *   Squeeze/Lock/Release and Break Free/Escape/Counter move into the card's
+ *   attacker/defender button groups. Fixes the defender's Defense being
+ *   subtracted twice on attack-row grapples (the to-hit total was already
+ *   net of Defense before being passed on as a base chance). !mp grapple and
+ *   !mp test grapple keep the manual path unchanged. Known gaps: Undo
+ *   refunds PR but does not clear the snare record, and a confirmed nat 1
+ *   still rolls the standard crit table.
  * v2.107.1: SNARE/GRAPPLE STATUS BADGE FIXES. Stacked snares re-assert the
  *   cobweb marker and no longer write NaN BP into grapple records; snaring an
  *   already-grappled token is refused; a row flagged both Grapple and Snare
@@ -1039,7 +1053,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-log("MP ENGINE v2.107.0 FILE STARTING");
+log("MP ENGINE v2.108.0 FILE STARTING");
 
 var MP = MP || {};
 MP.Engine = (function () {
@@ -5642,6 +5656,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const calledShotRaw = (fields.calledtype || "None").trim();
     const calledShotInput = calledShotRaw.split(" (")[0].trim();
     
+    
     // Map for type name lookup (case-insensitive)
     const calledShotMap = {
       "none": "None", "head": "Head", "arm": "Arm", "leg": "Leg",
@@ -5659,6 +5674,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!calledShotType) {
       calledShotType = penaltyToType[calledShotInput] || (calledShotInput === "0" ? "None" : calledShotInput);
     }
+    ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
     
     // Get penalty: if input was numeric, use it directly; otherwise lookup by type
     const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6 };
@@ -6098,27 +6114,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isGrappleAttack && isSnareAttack) {
       ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(weaponName)}</b> is flagged Grapple and Snare - resolving as Snare (4.10). Untick one flag on the attack row.`);
     }
-    if (isGrappleAttack && !isSnareAttack) {
-      if (!atkTok) {
-        ch("MP", `${wt(msg)}<b>MP:</b> Could not find an attacker token on this page.`);
-        return;
-      }
-      const remote = (getAtk("attack_grapple_remote") === "1");
-      const gripType = (getAtk("attack_grip_type") || "hth");
-      const gripDice = String(getAtk("attack_grip_dice") || "").trim();
-
-      cmdGrapple(msg, {
-        atk: atkTok.id,
-        def: defTok.id,
-        armshot: isArmShot ? "1" : "0",
-        remote: remote ? "1" : "0",
-        griptype: gripType,
-        gripdice: gripDice,
-        tohit: targetTotal,
-        roll: roll
-      });
+    const doGrapple = isGrappleAttack && !isSnareAttack;
+    if (doGrapple && !atkTok) {
+      ch("MP", `${wt(msg)}<b>MP:</b> Could not find an attacker token on this page.`);
       return;
     }
+    const grappleRemote = doGrapple && (getAtk("attack_grapple_remote") === "1");
+    const grappleGripType = doGrapple ? (getAtk("attack_grip_type") || "hth") : "hth";
+    const grappleGripDice = doGrapple ? String(getAtk("attack_grip_dice") || "").trim() : "";
+    const grappleGripDisplay = (grappleGripType === "power" && grappleGripDice)
+      ? grappleGripDice
+      : (getAttr(atkCharId, "hth_damage") || "1d4");
+    let grappleGroups = null;
 
     let outcome = "MISS";
     let isCrit = false;
@@ -6307,10 +6314,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#889; margin-top:3px;">To-Hit</div>`;
     html += `</td>`;
 
-    // Damage
+    // Damage (grapple deals none per 4.11 - show grip dice instead)
     html += `<td style="width:25%; text-align:center; padding:8px 4px 6px;">`;
-    html += `<div title="${esc(damageBreakdown)}" style="font-size:28px; font-weight:bold; color:#ff6b6b; line-height:1.1; padding:2px 0;">${damageTotal}</div>`;
-    html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#ff6b6b; margin-top:3px;">Damage</div>`;
+    if (doGrapple) {
+      html += `<div title="Grip dice - used for Squeeze and Break Free" style="font-size:20px; font-weight:bold; color:#8be9fd; line-height:1.1; padding:6px 0;">${esc(grappleGripDisplay)}</div>`;
+      html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#8be9fd; margin-top:3px;">Grip</div>`;
+    } else {
+      html += `<div title="${esc(damageBreakdown)}" style="font-size:28px; font-weight:bold; color:#ff6b6b; line-height:1.1; padding:2px 0;">${damageTotal}</div>`;
+      html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#ff6b6b; margin-top:3px;">Damage</div>`;
+    }
     html += `</td>`;
 
     html += `</tr></table>`;
@@ -6410,6 +6422,20 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
+    // --- Grapple (4.11): establish the hold on a successful attack ---
+    if (doGrapple && (outcome === "HIT" || outcome === "CRIT")) {
+      const g = establishGrapple(atkTok, defTok, atkChar, defChar, {
+        remote: grappleRemote,
+        gripType: grappleGripType,
+        gripDice: grappleGripDice,
+        gripDisplay: grappleGripDisplay,
+        armshot: isArmShot,
+        tohit: targetTotal
+      });
+      html += g.info;
+      grappleGroups = g.groups;
+    }
+
     // --- Close card ---
     html += `</div>`;
 
@@ -6433,6 +6459,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       } else if (isSnareAttack) {
         buttons = buildSnareAttackButtons(uniqueRollId, critResult, pushAmount);
         buttonGroups.attacker = buttons;
+      } else if (doGrapple) {
+        buttonGroups = grappleGroups || { attacker: "", defender: "" };
       } else {
         const pendingRec = state.MP_Engine.pending[uniqueRollId];
         buttons = buildStandardAttackButtons(uniqueRollId, critResult, causesKB, pendingRec);
@@ -10403,6 +10431,58 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // GRAPPLE COMMANDS (4.11)
   // -------------------------
 
+  // Establish a hold from an already-resolved attack card. Writes the snare
+  // record + markers and returns the card footer HTML and button groups.
+  function establishGrapple(atkTok, defTok, atkChar, defChar, opts) {
+    const lockAttempt = !!opts.lock;
+    const remote = !!opts.remote;
+    const gripType = opts.gripType || "hth";
+    const gripDice = String(opts.gripDice || "").trim();
+    const boundLimbs = !!opts.armshot;
+
+    state.MP_Engine.snares[defTok.id] = {
+      type: "Grapple",
+      source: atkChar.get("name"),
+      grapplerTokenId: atkTok.id,
+      chanceToHit: opts.tohit,
+      locked: lockAttempt,
+      remote: remote,
+      gripType: gripType,
+      gripDice: gripDice,
+      limbsRestrained: boundLimbs,
+      created: Date.now()
+    };
+
+    setMarker(defTok, "grab", true);
+    setMarker(atkTok, "fist", true);
+
+    const gripSource = (gripType === "power" && gripDice) ? "Power" : "HTH";
+    const restraintPenalty = (lockAttempt || boundLimbs) ? CFG.FULL_RESTRAINT_PENALTY : CFG.RESTRAINT_PENALTY;
+
+    let info = `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; color:#8be9fd;">`;
+    info += `<b>GRAPPLED${lockAttempt ? " &amp; LOCKED" : ""}</b>`;
+    if (remote) info += ` <span style="color:#c88fff;">(Remote)</span>`;
+    info += ` &middot; Grip: <b>${esc(opts.gripDisplay || gripDice || "1d4")}</b> (${gripSource})`;
+    if (boundLimbs) info += ` &middot; <b>limbs bound</b>`;
+    info += `<br/><span style="color:#889;">Both parties at <b>${restraintPenalty}</b> to physical tasks [3.0.2.6]</span>`;
+    info += `</div>`;
+
+    return {
+      info: info,
+      groups: {
+        attacker:
+          `${btn(`Squeeze`, `!mp squeeze --target ${defTok.id}`)} ` +
+          (lockAttempt ? "" : `${btn(`Lock`, `!mp grapplelock --target ${defTok.id}`)} `) +
+          `${btn(`Release`, `!mp grapplerelease --target ${defTok.id}`)}`,
+        defender:
+          `<b>${esc(defChar.get("name"))}'s options:</b> ` +
+          `${btn(`Break Free`, `!mp grapplebreak --target ${defTok.id}`)} ` +
+          `${btn(`Escape`, `!mp escape --target ${defTok.id}`)} ` +
+          (remote || lockAttempt ? "" : `${btn(`Counter`, `!mp countergrapple --target ${defTok.id}`)}`)
+      }
+    };
+  }
+
   function cmdGrapple(msg, args) {
     // Get attacker and defender tokens from args or selected tokens
     let atkTokId = args.atk;
@@ -13347,7 +13427,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.107.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v2.108.0</b> Commands:<br/>
           <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/>
           <b>Attacks and Saves:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code> - Attack row N<br/>
