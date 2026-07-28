@@ -1,4 +1,27 @@
-/* Mighty Protectors Roll20 API Engine v2.116.0 - 2026-07-28
+/* Mighty Protectors Roll20 API Engine v2.117.1 - 2026-07-28
+ * v2.117.1: Three hardcoded version strings (the !mp help header, the loaded
+ *   message and the READY log) were still reading v2.108.0. All now use
+ *   MP_VERSION, so every version surface moves with one constant.
+ *   !mp markers additionally dumps the raw catalog rows for three-leaves,
+ *   padlock and skull. A summary of names cannot show which field the
+ *   renderer keys on; the id/name/tag/url values can.
+ * v2.117.0: !mp test badge rewritten as a write-METHOD test. The marker tray
+ *   writes only the aggregate statusmarkers property; setMarker also writes
+ *   the virtual status_<name> boolean. Manual badges render and engine badges
+ *   do not, on tokens with identical geometry, identical stored strings and a
+ *   catalog that confirms the marker is present — so the method is the last
+ *   difference left. The test now applies skull via the aggregate alone,
+ *   padlock via the boolean alone, and three-leaves via both, and asks which
+ *   icons actually drew.
+ * v2.116.2: setMarker treated an entry already present under the BARE name as
+ *   a match and left it untouched, so a marker stored before v2.116.0 was
+ *   never upgraded to the id-qualified tag. Matching entries are now rewritten
+ *   to the resolved tag, preserving any @count badge.
+ * v2.116.1: !mp mk also dumps token geometry (width, height, rotation, layer,
+ *   scale, flip, isdrawing, imgsrc). Roll20 scales marker ICONS from token
+ *   size while colour dots are drawn as vectors, so a token with unusual
+ *   geometry can show dots and no icons. Run it on the affected token and on
+ *   one whose badges work, and diff.
  * v2.116.0: BADGES SELECTED BUT NOT DRAWN — MARKER TAG FORM. Testing showed
  *   padlock and three-leaves highlighted in the token's marker tray while
  *   neither icon rendered on the token. The write lands and the data stores;
@@ -1209,7 +1232,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.116.0";
+var MP_VERSION = "2.117.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -3656,37 +3679,56 @@ MP.Engine = (function () {
   // !mp test badgeclear.
   function testBadge(msg, args) {
     const sel = (msg.selected || []).filter(s => s._type === "graphic");
-    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then <code>!mp test badge [names...]</code>.`);
+    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then <code>!mp test badge</code>.`);
     const tok = getObj("graphic", sel[0]._id);
     if (!tok) return ch("MP", `/w gm <b>MP:</b> Token missing.`);
 
-    const parts = msg.content.split(/\s+/).slice(3).filter(Boolean);
-    const seen = {};
-    const names = (parts.length ? parts : ["red", "skull", "three-leaves", CONDITION_MARKERS.damaging_poison])
-      .filter(n => { if (seen[n]) return false; seen[n] = 1; return true; });
+    // Three markers, three write methods. The marker tray writes the aggregate
+    // only; setMarker has been writing the virtual boolean as well. Whichever
+    // rows draw on the token identify the method that actually renders.
+    const AGG = "skull";        // aggregate statusmarkers only (tray's method)
+    const BOOL = "padlock";     // virtual status_<name> only
+    const BOTH = "three-leaves";// both (what setMarker does today)
 
+    const clean = String(tok.get("statusmarkers") || "")
+      .split(",").map(x => x.trim()).filter(Boolean)
+      .filter(p => [AGG, BOOL, BOTH].indexOf(markerBase(p)) < 0);
+    tok.set("statusmarkers", clean.join(","));
+    [AGG, BOOL, BOTH].forEach(m => tok.set("status_" + m, false));
     const before = String(tok.get("statusmarkers") || "");
-    let rows = "";
-    names.forEach(n => {
-      setMarker(tok, n, true);
-      const boolNow = tok.get("status_" + n);
-      const aggNow = parseMarkers(tok.get("statusmarkers"));
-      const inAgg = aggNow.indexOf(n) >= 0;
-      const ok = inAgg ? "\u2705" : "\u274c";
-      rows += `<br/>${ok} <b>${esc(n)}</b> — status_${esc(n)}=<b>${esc(String(boolNow))}</b>, in statusmarkers=<b>${inAgg ? "yes" : "no"}</b>`;
-    });
 
-    state.MP_Engine.badgeTest = { tokenId: tok.id, names: names, before: before };
+    // A: aggregate only
+    const aParts = String(tok.get("statusmarkers") || "").split(",").map(x => x.trim()).filter(Boolean);
+    tok.set("statusmarkers", aParts.concat(AGG).join(","));
+
+    // B: virtual boolean only
+    tok.set("status_" + BOOL, true);
+
+    // C: both, in setMarker's order
+    tok.set("status_" + BOTH, true);
+    const cParts = String(tok.get("statusmarkers") || "").split(",").map(x => x.trim()).filter(Boolean);
+    if (!cParts.some(p => markerBase(p) === BOTH)) {
+      tok.set("statusmarkers", cParts.concat(BOTH).join(","));
+    }
+
+    const after = String(tok.get("statusmarkers") || "");
+    state.MP_Engine.badgeTest = { tokenId: tok.id, names: [AGG, BOOL, BOTH], before: before };
+
+    const row = (label, m) => `<br/><b>${esc(m)}</b> — ${esc(label)}<br/>` +
+      `&nbsp;&nbsp;in statusmarkers: <b>${parseMarkers(after).indexOf(m) >= 0 ? "yes" : "no"}</b>, ` +
+      `status_${esc(m)}: <b>${esc(String(tok.get("status_" + m)))}</b>`;
 
     let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px; overflow:hidden;">`;
-    out += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">Badge write test</div>`;
+    out += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">Badge write-method test</div>`;
     out += `<div style="padding:6px 10px;">`;
     out += `<b>${esc(tok.get("name") || "(unnamed)")}</b>`;
-    out += `<br/><span style="color:#aab;">statusmarkers before:</span> [${esc(before)}]`;
-    out += rows;
-    out += `<br/><span style="color:#aab;">statusmarkers after:</span> [${esc(String(tok.get("statusmarkers") || ""))}]`;
-    out += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a; font-size:11px; color:#aab;">`;
-    out += `Now look at the token. A row marked \u2705 that shows no icon on the map means the marker name is not in this game's marker set — pick another. No icons at all with \u2705 rows means the client is not re-rendering.`;
+    out += `<br/><span style="color:#aab;">before:</span> [${esc(before)}]`;
+    out += row("A: statusmarkers only (tray's method)", AGG);
+    out += row("B: status_<name> only", BOOL);
+    out += row("C: both (setMarker today)", BOTH);
+    out += `<br/><span style="color:#aab;">after:</span> [${esc(after)}]`;
+    out += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a; font-size:11px; color:#f4d03f;">`;
+    out += `Now look at the token and report which icons DREW: skull (A), padlock (B), three leaves (C).`;
     out += `</div>`;
     out += `<br/>${btnDanger(`Clear test badges`, `!mp test badgeclear`)}`;
     out += `</div></div>`;
@@ -4188,8 +4230,17 @@ MP.Engine = (function () {
     const hasIt = parts.some(p => markerBase(p) === base);
     // Write the campaign's full tag so the canvas can resolve the artwork.
     const writeTag = resolveMarkerTag(base);
+    // An entry already present under the BARE name is still a match by base,
+    // so simply leaving it alone would never upgrade it to the qualified tag.
+    // Rewrite any matching entry whose tag differs, preserving its @count.
+    const upgrade = p => {
+      if (markerBase(p) !== base) return p;
+      const at = p.indexOf("@");
+      const count = at >= 0 ? p.slice(at) : "";
+      return writeTag + count;
+    };
     const next = on
-      ? (hasIt ? parts : parts.concat(writeTag))
+      ? (hasIt ? parts.map(upgrade) : parts.concat(writeTag))
       : parts.filter(p => markerBase(p) !== base);
     const nextStr = next.join(",");
     tok.set("status_" + base, !!on);
@@ -11046,6 +11097,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       out += `&nbsp;page: ${esc(page ? page.get("name") : "?")} (${esc(tok.get("_pageid"))})<br/>`;
       out += `&nbsp;playerpage: ${esc(Campaign().get("playerpageid"))}<br/>`;
       out += `&nbsp;statusmarkers: [${esc(String(tok.get("statusmarkers") || ""))}]<br/>`;
+      // Marker icons are scaled from token geometry; colour dots are vectors and
+      // survive geometry that shrinks icons to nothing. Dump the geometry so a
+      // token whose badges never draw can be compared against one that works.
+      ["width", "height", "rotation", "layer", "scale_x", "scale_y", "flipv", "fliph", "isdrawing", "imgsrc"].forEach(k => {
+        const v = tok.get(k);
+        if (v !== undefined) out += `&nbsp;${k}: <b>${esc(String(v))}</b><br/>`;
+      });
       ["cobweb", "grab", "fist"].forEach(m => {
         out += `&nbsp;status_${m}: <b>${tok.get("status_" + m) === true ? "true" : String(tok.get("status_" + m))}</b><br/>`;
       });
@@ -11773,6 +11831,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
       if (!trusted) {
         out += `<div style="margin-top:6px; font-size:11px; color:#aab;">The catalog did not contain any known default tag, so it may list custom markers only. Renderability was not judged. <code>!mp test badge</code> settles it visually.</div>`;
+      }
+      // Raw rows for a couple of markers. Field values (id/name/tag/url) decide
+      // what the renderer wants; a summary of names cannot show that.
+      let rawRows = null;
+      try {
+        let rr = Campaign().get("_token_markers");
+        if (rr === undefined || rr === null || rr === "") rr = Campaign().get("token_markers");
+        rawRows = JSON.parse(rr || "[]");
+      } catch (e) { rawRows = null; }
+      if (Array.isArray(rawRows)) {
+        const want = ["three-leaves", "padlock", "skull"];
+        const picked = rawRows.filter(m => m && want.indexOf(markerBase(String(m.tag || m.name || ""))) >= 0).slice(0, 3);
+        out += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">Raw catalog rows:</div>`;
+        if (!picked.length) {
+          out += `<br/><span style="font-size:11px; color:#ff6b6b;">None of ${esc(want.join(", "))} found by tag or name.</span>`;
+        }
+        picked.forEach(m => {
+          out += `<br/><span style="font-family:monospace; font-size:10px;">${esc(JSON.stringify(m))}</span>`;
+        });
       }
     }
     out += `</div></div>`;
@@ -14295,7 +14372,7 @@ function cmdStance(msg, args) {
 
       case "help":
       default:
-        return ch("MP", `/w gm <b>MP Engine v2.116.0</b> Commands:<br/>
+        return ch("MP", `/w gm <b>MP Engine v${MP_VERSION}</b> Commands:<br/>
           <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/>
           <b>Attacks and Saves:</b><br/>
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code> - Attack row N<br/>
@@ -15728,11 +15805,11 @@ function cmdStance(msg, args) {
     }
   });
 
-  ch("MP", `/w gm <b>MP Engine v2.116.0:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  ch("MP", `/w gm <b>MP Engine v${MP_VERSION}:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
 })();
 
 on("ready", function() {
-  log("MP ENGINE v2.116.0 READY");
+  log("MP ENGINE v" + MP_VERSION + " READY");
 });
