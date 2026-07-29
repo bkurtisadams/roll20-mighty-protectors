@@ -1,4 +1,34 @@
-/* Mighty Protectors Roll20 API Engine v2.133.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.135.0 - 2026-07-29
+ * v2.135.0: PROFILE-AWARE PERCEPTION RANGE (3.0.2.5 / 4.7.3.1). Every
+ *   perception/acquisition path with a specific subject now uses actual range
+ *   × observer Profile ÷ subject Profile before looking up the range
+ *   difficulty. The attack, scan, locate, reverse defender-acquisition, and
+ *   sight-diagnostic paths already supplied both character IDs; !mp perceive
+ *   did not, silently treating every subject as Profile 1. That path now uses
+ *   the subject's character Profile too. Profile parsing also accepts numeric,
+ *   xN, /N, and N/D forms defensively. Perception, Scan, attack-acquisition,
+ *   and !mp sight cards now expose actual range, both Profiles, effective
+ *   range, and the resulting range modifier so the rule can be audited live.
+ *   A negative effective range modifier now makes even a Full or Analytical
+ *   sense roll for a distant target under 3.1.5. Radiating Ranged senses also
+ *   explicitly require the alternate IN+6 check once actual distance exceeds
+ *   IN/2; previously Full vision stayed automatic, so the Profile-adjusted
+ *   modifier was calculated but often never entered a perception roll.
+ *   Added !mp test profile for deterministic 4.7.3.1 regression checks.
+ * v2.134.0: NORMAL-SENSE AND TARGET-ACQUISITION CORRECTIONS. Characters now
+ *   always begin with MP's six free human senses; active default-sense rows
+ *   can improve or modify that baseline but cannot silently downgrade it. A
+ *   Level=None row remains the explicit Diminished Sense removal. Roll20 token
+ *   Vision, Night Vision, light-sensitivity, Limit Field of Vision, and token
+ *   rotation no longer define MP senses or character facing. Map illumination
+ *   and barriers still describe the environment. Dim and total darkness reduce
+ *   visible-light sense level per 4.6.1 instead of merely forcing a roll or
+ *   bypassing the sheet model. observationLevel now compares every applicable
+ *   sense, including vision, and selects the best effective sense. Walls damp
+ *   sound/odor rather than universally erasing them. Sneaking opposition now
+ *   uses the full 3.0.2.4 formula (10 - opposing save). Critical-confirmation
+ *   rolls honor natural 1/20. Defender perception is resolved through the same
+ *   acquisition pipeline instead of a flat vision-loss flag.
  * v2.133.0: APPLY INERTIA TO KNOCKBACK. cmdKnockback rolled bare Mass, so the
  *   Inertia Physical Ability (C) never reduced knockback. Inertia is Continual
  *   at PR 0 per round and adds +1 per purchase to the Mass roll vs Knockback,
@@ -1335,7 +1365,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.133.0";
+var MP_VERSION = "2.135.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1387,11 +1417,10 @@ MP.Engine = (function () {
     FULL_RESTRAINT_PENALTY: -9,
 
     // Area effect map marker (dashed circle drawn at blast center)
-    // Roll20's per-token Vision checkbox. When dynamic lighting is on, a token
-    // without it sees nothing, which is right for PCs but blinds NPC/mook
-    // tokens most GMs never enable it on. Set false to judge sight purely by
-    // illumination and barriers (4.6) and ignore the checkbox.
-    REQUIRE_TOKEN_VISION: true,
+    // Legacy compatibility switch only. MP characters possess senses from the
+    // character rules, not from Roll20 display permissions. Keep this false.
+    // Map illumination and barriers are still evaluated independently.
+    REQUIRE_TOKEN_VISION: false,
     AREA_MARKER: true,
     AREA_MARKER_COLOR: "#e74c3c",
     AREA_MARKER_WIDTH: 3,
@@ -1749,12 +1778,16 @@ MP.Engine = (function () {
   }
 
   function getCharacterSenses(charId) {
+    const defaults = defaultSenses();
     const senses = defaultSenses();
     if (!charId) return senses;
     const attrs = findObjs({ _type: "attribute", _characterid: charId });
 
-    // Gather rows by suffix match. Penetrating and its "blocked by"
-    // material were present on the sheet but were not previously read.
+    // Sense rows describe additions, upgrades, and explicit Diminished Sense
+    // changes. They do not create the character's normal human senses. For a
+    // default sense, an active row is therefore layered over the free baseline:
+    // its level/range/Global fields may improve the sense, while modifiers and
+    // weaknesses alter it. Only Level=None removes the sense.
     const rows = {};
     attrs.forEach(a => {
       const n = a.get("name");
@@ -1775,7 +1808,7 @@ MP.Engine = (function () {
         senses[detects] = {
           lvl: 0, rng: 0, glob: 0, rad: 0, chk: 0, tele: 0,
           amp: 0, prot: 0, pen: 0, penBlock: "", weak: "",
-          removed: true, label: detects
+          removed: true, label: (defaults[detects] && defaults[detects].label) || detects
         };
         return;
       }
@@ -1786,10 +1819,10 @@ MP.Engine = (function () {
         (r.gear === "1" && r.broken === "1");
       if (inactive) return;
 
-      senses[detects] = {
+      const rowSense = {
         lvl: SENSE_LEVEL_NUM[level] != null ? SENSE_LEVEL_NUM[level] : 1,
         rng: r.sense_ranged === "1" ? 1 : 0,
-        // Both Global builds cover all directions on a flat Roll20 map.
+        // On a flat Roll20 map either Global purchase covers all directions.
         glob: (r.sense_global === "full" || r.sense_global === "circle") ? 1 : 0,
         rad: (r.sense_radiates != null)
           ? (r.sense_radiates === "1" ? 1 : 0)
@@ -1801,8 +1834,24 @@ MP.Engine = (function () {
         pen: r.sense_pen === "1" ? 1 : 0,
         penBlock: (r.sense_pen_block || "").trim(),
         weak: (r.sense_weakness || "").toLowerCase(),
-        label: (senses[detects] && senses[detects].label) || detects
+        label: (defaults[detects] && defaults[detects].label) || detects
       };
+
+      const base = defaults[detects];
+      if (base) {
+        // A Heightened Sense row can improve or modify a default sense, but it
+        // cannot accidentally erase the free level, range, or Global build.
+        // Diminishment is represented explicitly by Level=None or Weakness.
+        senses[detects] = Object.assign({}, base, rowSense, {
+          lvl: Math.max(num(base.lvl, 0), num(rowSense.lvl, 0)),
+          rng: base.rng || rowSense.rng ? 1 : 0,
+          glob: base.glob || rowSense.glob ? 1 : 0,
+          rad: base.rad || rowSense.rad ? 1 : 0,
+          label: base.label
+        });
+      } else {
+        senses[detects] = rowSense;
+      }
     });
     return senses;
   }
@@ -1886,6 +1935,12 @@ MP.Engine = (function () {
     }
   }
 
+  function acqDefensePenalty(tier) {
+    if (tier === "-") return num(state.MP_Engine.blindPenalty, -6);
+    if (tier === "?" || tier === "-3") return -3;
+    return 0;
+  }
+
   // Roll 4.6 target acquisition for an impaired attacker. senseLevel is the
   // effective level of the best sense used (0-3). When vision is None, the
   // caller falls back to default human hearing (Basic). forcedRolls =
@@ -1896,6 +1951,12 @@ MP.Engine = (function () {
   // checks only detect on a critical success; all other outcomes drop to
   // "-" (undetected, cannot attack). Full/Analytical senses are unaffected
   // by the gate (only by the AG opposition modifier).
+  function d20TaskSucceeds(roll, target) {
+    if (roll === 1) return true;
+    if (roll === 20) return false;
+    return roll <= target;
+  }
+
   function rollAcquisition(charId, senseLevel, forcedRolls, modifier, sneakGate) {
     const inSave = getAttrNum(charId, "intelligence_save", 10);
     const mod = num(modifier, 0);
@@ -1904,10 +1965,10 @@ MP.Engine = (function () {
     let outcome, d2 = null;
     if (d1 === 1) {
       d2 = (forcedRolls && forcedRolls[1] !== undefined) ? forcedRolls[1] : randomInteger(20);
-      outcome = (d2 <= tn) ? "critSuccess" : "succeed"; // a 1 always succeeds (3.0.1)
+      outcome = d20TaskSucceeds(d2, tn) ? "critSuccess" : "succeed";
     } else if (d1 === 20) {
       d2 = (forcedRolls && forcedRolls[1] !== undefined) ? forcedRolls[1] : randomInteger(20);
-      outcome = (d2 > tn) ? "critFumble" : "fail"; // a 20 always fails
+      outcome = d20TaskSucceeds(d2, tn) ? "fail" : "critFumble";
     } else {
       outcome = (d1 <= tn) ? "succeed" : "fail";
     }
@@ -1948,8 +2009,7 @@ MP.Engine = (function () {
       `lvl:${obs.level}:${obs.oppMod}:${obs.chkMod || 0}`,
       atkTok
         ? `observer:${Math.round(num(atkTok.get("left"), 0))},` +
-          `${Math.round(num(atkTok.get("top"), 0))},` +
-          `${Math.round(num(atkTok.get("rotation"), 0))}`
+          `${Math.round(num(atkTok.get("top"), 0))}`
         : "observer:-",
       `env:${obs.envSig || "-"}`,
       obs.visSig || "vis:-",
@@ -1979,14 +2039,13 @@ MP.Engine = (function () {
   // ROLL20 SENSORY ENVIRONMENT (v2.101.0)
   // -------------------------
   // Roll20 does not expose a "can token A see token B" API call. Scan must
-  // therefore reproduce the parts of Dynamic Lighting needed by MP:
-  // illumination, facing arcs, and blocking barriers.
-  //
-  // Conservative ruling: a Roll20 wall/closed door blocks every ordinary
-  // ranged sense. A Penetrating sense may ignore it; the sense's specified
-  // "blocked by" material remains GM adjudication because Roll20 barriers
-  // do not expose material data. Windows are transparent to sight and are
-  // not included as blocking segments.
+  // therefore reproduce the environmental parts of Dynamic Lighting needed
+  // by MP: illumination and blocking barriers. Token rotation/FOV settings
+  // are deliberately excluded because MP has no persistent character-facing
+  // procedure. Walls block sight and most special senses; they impose generic
+  // interference on sound/odor. Penetrating may ignore them, with the listed
+  // blocking material left to GM adjudication because Roll20 walls do not
+  // expose material data. Windows remain transparent to sight.
 
   function mpBool(v) {
     return v === true || v === 1 || v === "1" || v === "true";
@@ -2027,29 +2086,14 @@ MP.Engine = (function () {
 
   function senseFacesTarget(sourceTok, targetTok, senseKey, senseObj) {
     if (!sourceTok || !targetTok) return false;
-    if (senseObj && senseObj.glob) return true;
 
-    // Ordinary visible-light vision is omnidirectional unless Roll20's
-    // Limit Field of Vision option is enabled for the observer token. When
-    // enabled, honor the configured cone exactly, including cones wider than
-    // the normal MP 90-degree arc used by other non-Global senses.
-    if (senseKey === "visible") {
-      if (!mpBool(sourceTok.get("has_limit_field_of_vision"))) return true;
-
-      const total = Math.max(
-        0,
-        Math.min(
-          360,
-          num(sourceTok.get("limit_field_of_vision_total"), 90)
-        )
-      );
-      const center = num(sourceTok.get("limit_field_of_vision_center"), 0);
-      return pointInArc(sourceTok, targetTok, total, center);
-    }
-
-    // Non-visual MP senses retain their normal 90-degree forward arc unless
-    // the sense itself is Global (handled above).
-    return pointInArc(sourceTok, targetTok, 90, 0);
+    // MP does not track persistent character facing. Ordinary characters may
+    // turn their head/body freely while perceiving or attacking; Roll20 token
+    // rotation and Limit Field of Vision are display aids, not combat state.
+    // Global senses still matter narratively for passive awareness/surprise,
+    // but target acquisition never rejects a known subject for being "behind"
+    // the token artwork.
+    return true;
   }
 
   function rotateLocalPoint(x, y, degrees) {
@@ -2313,32 +2357,6 @@ MP.Engine = (function () {
     return pointInArc(source, target, total, center);
   }
 
-  function nightVisionCovers(observer, target, page, barriers) {
-    if (!mpBool(observer.get("has_night_vision"))) return false;
-    const dist = Math.max(0, num(observer.get("night_vision_distance"), 0));
-    if (dist <= 0) return false;
-
-    const px = dist * pagePixelsPerScaleUnit(page);
-    if (centerDistancePx(observer, target) > px) return false;
-
-    if (
-      mpBool(observer.get("has_limit_field_of_night_vision")) &&
-      !pointInArc(
-        observer,
-        target,
-        num(observer.get("limit_field_of_night_vision_total"), 360),
-        num(observer.get("limit_field_of_night_vision_center"), 0)
-      )
-    ) {
-      return false;
-    }
-
-    return !lineBlockedBySegments(
-      tokenCenter(observer),
-      tokenCenter(target),
-      barriers
-    );
-  }
 
   function roll20Illumination(observer, target, page, barriers) {
     if (!page || !mpBool(page.get("dynamic_lighting_enabled"))) {
@@ -2352,14 +2370,10 @@ MP.Engine = (function () {
       return { level: "bright", source: "page daylight" };
     }
 
-    if (nightVisionCovers(observer, target, page, barriers)) {
-      return { level: "night", source: "night vision" };
-    }
-
-    const sensitivity = Math.max(
-      0,
-      num(observer.get("light_sensitivity_multiplier"), 100)
-    ) / 100;
+    // Roll20 Night Vision and light-sensitivity settings control what the
+    // browser renders. MP sensory abilities come from the character sheet, so
+    // those token settings do not grant or modify a rules-level sense here.
+    const sensitivity = 1;
     let best = "dark";
     let sourceName = "";
 
@@ -2408,6 +2422,18 @@ MP.Engine = (function () {
     return { level: best, source: sourceName };
   }
 
+  function barrierSenseInterference(senseKey) {
+    // Roll20 walls do not identify thickness/material. MP sound can travel
+    // through air or solid matter, so a generic wall forces a harder check
+    // rather than erasing ordinary hearing. Odor loses detail and is harder
+    // to follow. Other senses remain blocked unless Penetrating.
+    if (["audible", "subsonic", "ultrasonic"].indexOf(senseKey) >= 0) {
+      return { levelLoss: 0, checkMod: -3 };
+    }
+    if (senseKey === "odors") return { levelLoss: 1, checkMod: -3 };
+    return null;
+  }
+
   function roll20SenseEnvironment(atkTokId, defTokId, senseKey, senseObj) {
     const atkTok = getObj("graphic", atkTokId);
     const defTok = getObj("graphic", defTokId);
@@ -2415,6 +2441,8 @@ MP.Engine = (function () {
       return {
         usable: false,
         obscured: false,
+        levelLoss: 0,
+        checkMod: 0,
         reason: "missing token",
         sig: "missing"
       };
@@ -2423,34 +2451,29 @@ MP.Engine = (function () {
     const pageId = atkTok.get("_pageid");
     const page = getObj("page", pageId);
     const barriers = roll20BarrierSegments(pageId);
-    const inArc = senseFacesTarget(atkTok, defTok, senseKey, senseObj);
     const blocked = lineBlockedBySegments(
       tokenCenter(atkTok),
       tokenCenter(defTok),
       barriers
     );
-
-    if (!inArc) {
-      return {
-        usable: false,
-        obscured: false,
-        reason: "outside sense arc",
-        sig: "arc:0"
-      };
-    }
-
-    if (blocked && !(senseObj && senseObj.pen)) {
-      return {
-        usable: false,
-        obscured: false,
-        reason: "blocked by barrier",
-        sig: "arc:1;wall:1"
-      };
-    }
+    const penetrating = !!(senseObj && senseObj.pen);
+    const observerSig =
+      `${Math.round(num(atkTok.get("left"), 0))},` +
+      `${Math.round(num(atkTok.get("top"), 0))}`;
 
     if (senseKey === "visible") {
-      const dynamic = page && mpBool(page.get("dynamic_lighting_enabled"));
+      if (blocked && !penetrating) {
+        return {
+          usable: false,
+          obscured: false,
+          levelLoss: 0,
+          checkMod: 0,
+          reason: "blocked by barrier",
+          sig: `wall:1;light:-;obs:${observerSig}`
+        };
+      }
 
+      const dynamic = page && mpBool(page.get("dynamic_lighting_enabled"));
       if (
         CFG.REQUIRE_TOKEN_VISION &&
         dynamic &&
@@ -2459,266 +2482,276 @@ MP.Engine = (function () {
         return {
           usable: false,
           obscured: false,
-          reason: "Roll20 token Vision checkbox is off",
-          sig: `arc:1;wall:${blocked ? 1 : 0};vision:0`
+          levelLoss: 0,
+          checkMod: 0,
+          reason: "legacy Roll20 Vision gate",
+          sig: `wall:${blocked ? 1 : 0};vision:0;obs:${observerSig}`
         };
       }
 
       const light = roll20Illumination(atkTok, defTok, page, barriers);
-      if (light.level === "dark") {
-        return {
-          usable: false,
-          obscured: false,
-          reason: "natural darkness",
-          sig: `arc:1;wall:${blocked ? 1 : 0};light:dark`
-        };
-      }
-
+      const lightLoss = light.level === "dim" ? 1 : (light.level === "dark" ? 3 : 0);
       const penNote =
-        blocked && senseObj && senseObj.pen
+        blocked && penetrating
           ? `; Penetrating${senseObj.penBlock ? ` (blocked by ${senseObj.penBlock}, GM)` : ""}`
           : "";
+      const reason =
+        (light.level === "dim" ? "dim light" :
+         light.level === "dark" ? "total darkness" :
+         light.level === "unknown" ? "" : "illuminated") +
+        penNote;
 
       return {
         usable: true,
-        obscured: light.level === "dim",
-        reason:
-          (light.level === "dim" ? "dim light" :
-           light.level === "night" ? "night vision" :
-           light.level === "unknown" ? "" : "illuminated") +
-          penNote,
+        obscured: lightLoss > 0,
+        levelLoss: lightLoss,
+        checkMod: 0,
+        reason,
         sig:
-          `arc:1;wall:${blocked ? 1 : 0};light:${light.level};` +
-          `obs:${Math.round(num(atkTok.get("left"), 0))},` +
-          `${Math.round(num(atkTok.get("top"), 0))},` +
-          `${Math.round(num(atkTok.get("rotation"), 0))}`
+          `wall:${blocked ? 1 : 0};light:${light.level};` +
+          `obs:${observerSig}`
+      };
+    }
+
+    if (blocked && !penetrating) {
+      const interference = barrierSenseInterference(senseKey);
+      if (!interference) {
+        return {
+          usable: false,
+          obscured: false,
+          levelLoss: 0,
+          checkMod: 0,
+          reason: "blocked by barrier",
+          sig: `wall:1;sense:${senseKey};obs:${observerSig}`
+        };
+      }
+      return {
+        usable: true,
+        obscured: true,
+        levelLoss: interference.levelLoss,
+        checkMod: interference.checkMod,
+        reason: `${senseKey === "odors" ? "odor" : "sound"} dampened by barrier`,
+        sig: `wall:1;loss:${interference.levelLoss};mod:${interference.checkMod};sense:${senseKey};obs:${observerSig}`
       };
     }
 
     const penNote =
-      blocked && senseObj && senseObj.pen
+      blocked && penetrating
         ? `Penetrating${senseObj.penBlock ? `; blocked by ${senseObj.penBlock} is GM-adjudicated` : ""}`
         : "";
 
     return {
       usable: true,
       obscured: false,
+      levelLoss: 0,
+      checkMod: 0,
       reason: penNote,
       sig:
-        `arc:1;wall:${blocked ? 1 : 0};sense:${senseKey};` +
-        `obs:${Math.round(num(atkTok.get("left"), 0))},` +
-        `${Math.round(num(atkTok.get("top"), 0))},` +
-        `${Math.round(num(atkTok.get("rotation"), 0))}`
+        `wall:${blocked ? 1 : 0};sense:${senseKey};` +
+        `obs:${observerSig}`
     };
   }
 
   function senseReach(s, rangeInches, inScore) {
-    if (rangeInches == null) return { usable: true, bonus: num(s.tele, 0), capped: false };
-    if (!s.rng) return { usable: rangeInches <= 1, bonus: 0, capped: rangeInches > 1 };
-    if (s.rad) return { usable: true, bonus: 6 + num(s.tele, 0), capped: false };
+    if (rangeInches == null) return { usable: true, bonus: num(s.tele, 0), capped: false, requiresCheck: false };
+    if (!s.rng) return { usable: rangeInches <= 1, bonus: 0, capped: rangeInches > 1, requiresCheck: false };
+
     const cap = Math.max(1, Math.floor(num(inScore, 10) / 2));
-    return { usable: rangeInches <= cap, bonus: num(s.tele, 0), capped: rangeInches > cap, cap };
+    if (s.rad) {
+      // Ranged senses can operate normally to IN/2. Beyond that, a radiating
+      // stimulus remains detectable only through the alternate IN+6
+      // perception-check route. Full vision therefore stops being automatic
+      // at long distance even when the +6 offsets the final range penalty.
+      return {
+        usable: true,
+        bonus: 6 + num(s.tele, 0),
+        capped: false,
+        cap,
+        beyondCap: rangeInches > cap,
+        requiresCheck: rangeInches > cap
+      };
+    }
+    return {
+      usable: rangeInches <= cap,
+      bonus: num(s.tele, 0),
+      capped: rangeInches > cap,
+      cap,
+      beyondCap: rangeInches > cap,
+      requiresCheck: false
+    };
+  }
+
+  function perceptionRangeModifier(rangePenalty, senseBonus) {
+    return Math.min(0, num(rangePenalty, 0) + num(senseBonus, 0));
+  }
+
+  function senseCanAcquireCombatTarget(senseKey, senseObj, rangeInches) {
+    // Time and flavor do not locate ordinary combatants. Touch can locate a
+    // subject only in contact range; senseReach enforces the same limit, but
+    // this explicit check prevents Time/Taste from winning a fallback tie.
+    if (senseKey === "time" || senseKey === "flavors") return false;
+    if (senseKey === "shapes" && rangeInches != null && rangeInches > 1) return false;
+    return !!senseObj;
   }
 
   function observationLevel(atkTokId, defTokId, defCharId, atkCharId, rangeInches, rangePenalty) {
     const atkVision = visionLossInfo(atkTokId, atkCharId);
     const senses = atkCharId ? getCharacterSenses(atkCharId) : defaultSenses();
     const defConds =
-      (state.MP_Engine.conditions &&
-       state.MP_Engine.conditions[defTokId]) || [];
+      (state.MP_Engine.conditions && state.MP_Engine.conditions[defTokId]) || [];
     const inv = defConds.find(c => c.type === "invisible");
     const sneaking =
       !!defConds.find(c => c.type === "sneaking") ||
       !!(inv && inv.sneaking);
 
-    let visLevel = atkVision.effective;
-    if (inv) {
-      visLevel = inv.blur
-        ? Math.max(0, visLevel - 1)
-        : 0;
-    }
+    // 3.0.2.4: subtract (opponent save - 10), which is exactly 10-save.
+    // A weak opposing save therefore grants a positive modifier rather than
+    // being clamped at zero.
+    const oppMod = sneaking
+      ? 10 - getAttrNum(defCharId, "agility_save", 10)
+      : 0;
 
-    // Range-conditional Diminished Senses.
+    const inScore = getAttrNum(atkCharId, "intelligence_score", 10);
+    const acqRangeMod = (senseObj, reach) =>
+      perceptionRangeModifier(rangePenalty, reach.bonus);
+    const candidates = [];
+
     const vis = senses.visible || defaultSenses().visible;
+    let visLevel = atkVision.effective;
     let weakNote = "";
-    let extraToHit = 0;
+    let visExtraToHit = 0;
     let rangeWeak = false;
 
+    if (inv) {
+      visLevel = inv.blur ? Math.max(0, visLevel - 1) : 0;
+    }
+
     if (visLevel > 0 && rangeInches != null) {
-      if (
-        vis.weak === "nearsighted" &&
-        rangeInches > 4 &&
-        visLevel > 1
-      ) {
+      if (vis.weak === "nearsighted" && rangeInches > 4 && visLevel > 1) {
         visLevel = 1;
         weakNote = `Nearsighted >4"`;
         rangeWeak = true;
-      } else if (
-        vis.weak === "farsighted" &&
-        rangeInches < 5 &&
-        visLevel > 1
-      ) {
+      } else if (vis.weak === "farsighted" && rangeInches < 5 && visLevel > 1) {
         visLevel = 1;
         weakNote = `Farsighted <5"`;
         rangeWeak = true;
       }
 
-      if (
-        vis.weak === "nodepth" &&
-        rangeInches > 1
-      ) {
-        extraToHit = -2;
-        weakNote =
-          (weakNote ? weakNote + "; " : "") +
-          `No Depth >1" (-2)`;
+      if (vis.weak === "nodepth" && rangeInches > 1) {
+        visExtraToHit = -2;
+        weakNote = (weakNote ? weakNote + "; " : "") + `No Depth >1" (-2)`;
         rangeWeak = true;
       }
     }
 
-    const oppMod = sneaking
-      ? -Math.max(
-          0,
-          getAttrNum(defCharId, "agility_save", 10) - 10
-        )
-      : 0;
+    const visReach = senseReach(vis, rangeInches, inScore);
+    const visEnv = roll20SenseEnvironment(atkTokId, defTokId, "visible", vis);
+    const visNaturalLoss = Math.max(0, num(visEnv.levelLoss, 0) - num(vis.amp, 0));
+    const visBeforeEnvironment = visLevel;
+    visLevel = Math.max(0, visLevel - visNaturalLoss);
 
-    const inScore = getAttrNum(
-      atkCharId,
-      "intelligence_score",
-      10
-    );
+    const visSig =
+      `vis:${visLevel}:${visReach.usable ? 1 : 0}:${visEnv.usable ? 1 : 0}:` +
+      `${visNaturalLoss}:${visEnv.sig || "-"}`;
 
-    const acqRangeMod = (senseObj, reach) =>
-      Math.min(
-        0,
-        num(rangePenalty, 0) + num(reach.bonus, 0)
-      );
-
-    /*
-     * VISION
-     *
-     * Visible Light requires illumination. It must also be in the sense's
-     * arc and not blocked by a barrier the sense cannot penetrate.
-     */
-    const visReach = senseReach(
-      vis,
-      rangeInches,
-      inScore
-    );
-    const visEnv = roll20SenseEnvironment(
-      atkTokId,
-      defTokId,
-      "visible",
-      vis
-    );
-
-    if (
-      visLevel > 0 &&
-      visReach.usable &&
-      visEnv.usable
-    ) {
-      const lvlLabel =
-        visLevel >= 3
-          ? "Analytical"
-          : (visLevel === 2 ? "Full" : "Basic");
-
-      const envNote = visEnv.reason
-        ? `, ${visEnv.reason}`
-        : "";
-
-      const needsRoll =
-        visLevel <= 1 ||
-        atkVision.lost > 0 ||
-        !!inv ||
-        visEnv.obscured ||
-        (rangeWeak && visLevel <= 1);
-
-      return {
+    if (visLevel > 0 && visReach.usable && visEnv.usable) {
+      const lvlLabel = visLevel >= 3 ? "Analytical" : (visLevel === 2 ? "Full" : "Basic");
+      const envNote = visEnv.reason ? `, ${visEnv.reason}` : "";
+      const visRngMod = acqRangeMod(vis, visReach);
+      candidates.push({
+        key: "visible",
+        sense: vis,
         level: visLevel,
-        visDropReason: null,
-        visSig: `vis:${visLevel}:1:1:${visEnv.sig || "-"}`,
         label:
           `vision (${lvlLabel}` +
           `${inv && inv.blur ? ", blurred" : ""}` +
           `${weakNote ? ", " + weakNote : ""}` +
           `${envNote})`,
-        oppMod,
-        chkMod: num(vis.chk, 0),
-        rngMod: acqRangeMod(vis, visReach),
-        extraToHit,
-        needsRoll,
-        inv,
-        sneaking,
-        sneakGate: sneaking && visLevel === 1,
-        atkVision,
-        atkTokId,
-        senseKey: "visible",
-        envSig: visEnv.sig,
-        rangeSensitive: rangeWeak || !vis.rad
-      };
+        chkMod: num(vis.chk, 0) + num(visEnv.checkMod, 0),
+        rngMod: visRngMod,
+        extraToHit: visExtraToHit,
+        needsRoll:
+          visLevel <= 1 ||
+          atkVision.lost > 0 ||
+          visNaturalLoss > 0 ||
+          !!inv ||
+          !!visReach.requiresCheck ||
+          visRngMod < 0 ||
+          (rangeWeak && visLevel <= 1),
+        env: visEnv,
+        reach: visReach,
+        rangeSensitive: rangeWeak || !vis.rad,
+        interferenceLoss: Math.max(0, visBeforeEnvironment - visLevel)
+      });
     }
-
-    /*
-     * FALLBACK SENSE
-     *
-     * Use the highest-level remaining sense that reaches the target, covers
-     * its direction, and is not blocked by a Roll20 barrier. A Penetrating
-     * sense may ignore the barrier; its specified blocking material remains
-     * a GM call because Roll20 walls do not identify their material.
-     */
-    let bestKey = null;
-    let best = null;
-    let bestReach = null;
-    let bestEnv = null;
 
     Object.keys(senses).forEach(k => {
       if (k === "visible") return;
+      const sense = senses[k];
+      if (!sense || sense.removed || sense.lvl <= 0) return;
+      if (!senseCanAcquireCombatTarget(k, sense, rangeInches)) return;
 
-      const s = senses[k];
-      if (s.removed || s.lvl <= 0) return;
-
-      const reach = senseReach(
-        s,
-        rangeInches,
-        inScore
-      );
+      const reach = senseReach(sense, rangeInches, inScore);
       if (!reach.usable) return;
-
-      const env = roll20SenseEnvironment(
-        atkTokId,
-        defTokId,
-        k,
-        s
-      );
+      const env = roll20SenseEnvironment(atkTokId, defTokId, k, sense);
       if (!env.usable) return;
 
-      if (
-        !best ||
-        s.lvl > best.lvl ||
-        (
-          s.lvl === best.lvl &&
-          num(s.chk, 0) > num(best.chk, 0)
-        )
-      ) {
-        best = s;
-        bestKey = k;
-        bestReach = reach;
-        bestEnv = env;
-      }
+      const envLoss = Math.max(0, num(env.levelLoss, 0) - num(sense.amp, 0));
+      const level = Math.max(0, num(sense.lvl, 0) - envLoss);
+      if (level <= 0) return;
+
+      const lvlLabel = level >= 3 ? "Analytical" : (level === 2 ? "Full" : "Basic");
+      const senseRngMod = acqRangeMod(sense, reach);
+      const capNote =
+        (!sense.rad && sense.rng && reach.cap != null)
+          ? `, IN/2=${reach.cap}"`
+          : "";
+      const envNote = env.reason ? `, ${env.reason}` : "";
+
+      candidates.push({
+        key: k,
+        sense,
+        level,
+        label:
+          `${sense.label} (${lvlLabel}` +
+          `${inv && !inv.blur ? " - target invisible" : ""}` +
+          `${capNote}${envNote})`,
+        chkMod: num(sense.chk, 0) + num(env.checkMod, 0),
+        rngMod: senseRngMod,
+        extraToHit: 0,
+        needsRoll: level <= 1 || envLoss > 0 || !!env.obscured || !!reach.requiresCheck || senseRngMod < 0,
+        env,
+        reach,
+        rangeSensitive: !sense.rad,
+        interferenceLoss: envLoss
+      });
     });
 
+    // 3.1.5 grants the free check using the best available sense. Compare
+    // vision alongside every other candidate rather than returning it first.
+    candidates.sort((a, b) => {
+      if (b.level !== a.level) return b.level - a.level;
+      if (a.needsRoll !== b.needsRoll) return a.needsRoll ? 1 : -1;
+      const aCheck = num(a.chkMod, 0) + num(a.rngMod, 0);
+      const bCheck = num(b.chkMod, 0) + num(b.rngMod, 0);
+      if (bCheck !== aCheck) return bCheck - aCheck;
+      if (a.key === "visible" && b.key !== "visible") return -1;
+      if (b.key === "visible" && a.key !== "visible") return 1;
+      return a.key.localeCompare(b.key);
+    });
+
+    const best = candidates[0] || null;
     if (!best) {
       const blockedWhy =
         !visReach.usable
           ? "vision out of range"
           : (!visEnv.usable
               ? visEnv.reason
-              : "no usable sense");
-
+              : (visLevel <= 0 ? "no effective visible-light sense" : "no usable sense"));
       return {
         level: 0,
         visDropReason: blockedWhy,
-        visSig: `vis:${visLevel}:${visReach.usable ? 1 : 0}:${visEnv.usable ? 1 : 0}:${visEnv.sig || "-"}`,
+        visSig,
         label: `no usable sense (${blockedWhy})`,
         oppMod,
         chkMod: 0,
@@ -2731,68 +2764,42 @@ MP.Engine = (function () {
         atkVision,
         atkTokId,
         senseKey: null,
-        envSig:
-          (visEnv && visEnv.sig) ||
-          `none:${blockedWhy}`,
+        envSig: (visEnv && visEnv.sig) || `none:${blockedWhy}`,
         rangeSensitive: true
       };
     }
 
-    const bLabel =
-      best.lvl >= 3
-        ? "Analytical"
-        : (best.lvl === 2 ? "Full" : "Basic");
-
-    const capNote =
-      (!best.rad &&
-       best.rng &&
-       bestReach.cap != null)
-        ? `, IN/2=${bestReach.cap}"`
-        : "";
-
-    const envNote =
-      bestEnv && bestEnv.reason
-        ? `, ${bestEnv.reason}`
-        : "";
-
-    // Why vision was not used, so the attack card can say so instead of
-    // silently reporting a fallback sense with no explanation.
-    const visDropReason = (visLevel <= 0)
-      ? (inv ? null : "attacker has no usable vision")
-      : (!visReach.usable
-          ? "vision out of range"
-          : (!visEnv.usable ? visEnv.reason : null));
-
-    // The chosen fallback sense's envSig knows nothing about lighting or the
-    // observer's Vision checkbox, so caching on it alone left a stale
-    // "acquired by hearing" entry alive after the room was lit or Vision was
-    // switched on. Carry the vision gate's own state so any change to it
-    // invalidates the cached acquisition.
-    const visSig = `vis:${visLevel}:${visReach.usable ? 1 : 0}:${visEnv.usable ? 1 : 0}:${visEnv.sig || "-"}`;
+    let visDropReason = null;
+    if (best.key !== "visible") {
+      if (!visReach.usable) visDropReason = "vision out of range";
+      else if (!visEnv.usable) visDropReason = visEnv.reason;
+      else if (visLevel <= 0) {
+        visDropReason = inv && !inv.blur
+          ? "target invisible to visible light"
+          : "visible-light sense reduced to None";
+      } else {
+        visDropReason = `${best.sense.label} is the better available sense`;
+      }
+    }
 
     return {
-      level: best.lvl,
+      level: best.level,
       visDropReason,
       visSig,
-      label:
-        `${best.label} (${bLabel}` +
-        `${inv && !inv.blur ? " - target invisible" : ""}` +
-        `${capNote}${envNote})`,
+      label: best.label,
       oppMod,
-      chkMod: num(best.chk, 0),
-      rngMod: acqRangeMod(best, bestReach),
-      extraToHit: 0,
-      needsRoll: true,
+      chkMod: best.chkMod,
+      rngMod: best.rngMod,
+      extraToHit: best.extraToHit,
+      needsRoll: best.needsRoll,
       inv,
       sneaking,
-      sneakGate:
-        sneaking &&
-        best.lvl === 1,
+      sneakGate: sneaking && best.level === 1,
       atkVision,
       atkTokId,
-      senseKey: bestKey,
-      envSig: bestEnv ? bestEnv.sig : "",
-      rangeSensitive: !best.rad
+      senseKey: best.key,
+      envSig: best.env ? best.env.sig : "",
+      rangeSensitive: best.rangeSensitive
     };
   }
 
@@ -2863,10 +2870,10 @@ MP.Engine = (function () {
 
   // !mp sneak [--off] (selected tokens or --target). 3.1.5.1: move at 1/2
   // rate; observers' BASIC-sense checks detect only on a critical success,
-  // opposed by the sneaker's AG. Sneaking does NOT conceal from a Full
-  // sense with the sneaker in its vision arc - it matters from behind /
-  // out of arc (GM adjudicated), in darkness, or combined with
-  // Invisibility. No PR cost.
+  // opposed by the sneaker's AG. Sneaking does NOT conceal from an
+  // unobscured Full sense. It matters when only a Basic sense is applicable,
+  // in darkness, or combined with Invisibility. Token rotation is not facing.
+  // No PR cost.
   function cmdSneak(msg, args) {
     const turnOff = ("off" in args);
     const marker = CONDITION_MARKERS.sneaking;
@@ -2908,7 +2915,7 @@ MP.Engine = (function () {
     let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
     out += `<b>👣 Stealth (3.1.5.1)</b>`;
     lines.forEach(l => out += `<br/>` + l);
-    if (!turnOff) out += `<br/><span style="font-size:11px; color:#8a84a8;">Still visible to Full senses (e.g. vision) with the sneaker in their arc. BASIC-sense checks (hearing/scent, or vision degraded to Basic) detect only on a CRITICAL success, opposed by the sneaker's AG — e.g. approaching from behind. Undetected = Surprise bonus (4.6).</span>`;
+    if (!turnOff) out += `<br/><span style="font-size:11px; color:#8a84a8;">A clearly visible sneaker remains visible to a Full sense. BASIC-sense checks (hearing/scent, or vision degraded to Basic) detect only on a CRITICAL success, opposed by the sneaker's AG. Token rotation is not MP facing. Undetected = Surprise bonus (4.6).</span>`;
     out += `</div>`;
     ch("MP", `${wt(msg)}` + out);
   }
@@ -2950,14 +2957,14 @@ MP.Engine = (function () {
 
     // optional subject: --target or 2nd selected token (sneaking opposition)
     let subjTok = args.target ? getObj("graphic", args.target) : (sel.length > 1 && sel[1] !== obsTok ? sel[1] : null);
+    const subjChar = subjTok ? getCharFromToken(subjTok) : null;
     let oppMod = 0, oppNote = "";
     if (subjTok) {
       const sConds = (state.MP_Engine.conditions && state.MP_Engine.conditions[subjTok.id]) || [];
       const inv = sConds.find(c => c.type === "invisible");
       const snk = !!sConds.find(c => c.type === "sneaking") || !!(inv && inv.sneaking);
       if (snk) {
-        const sc = getCharFromToken(subjTok);
-        oppMod = -Math.max(0, getAttrNum(sc ? sc.id : null, "agility_save", 10) - 10);
+        oppMod = 10 - getAttrNum(subjChar ? subjChar.id : null, "agility_save", 10);
         oppNote = ` opp ${oppMod} (sneaking)`;
       }
     }
@@ -2967,7 +2974,7 @@ MP.Engine = (function () {
     // limits (IN/2" non-radiating, 1" non-Ranged) refuse the check.
     let rngNote = "", rngMod = 0;
     if (subjTok && obsTok) {
-      const rd = calculateRangeWithProfile(obsTok, subjTok, obsChar.id, null);
+      const rd = calculateRangeWithProfile(obsTok, subjTok, obsChar.id, subjChar ? subjChar.id : null);
       const inScore = getAttrNum(obsChar.id, "intelligence_score", 10);
       const reach = senseReach(s, rd.inches, inScore);
       if (!reach.usable) {
@@ -2975,11 +2982,17 @@ MP.Engine = (function () {
         return ch("MP", `${wt(msg)}<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b>'s ${esc(s.label || key)} can't reach the subject at ${Math.round(rd.inches)}\" (${why}).</div>`);
       }
       rngMod = Math.min(0, num(rd.penalty, 0) + num(reach.bonus, 0));
-      if (num(rd.penalty, 0) !== 0) rngNote = ` ${rngMod} range${reach.bonus ? ` (pen ${rd.penalty}, +${reach.bonus} ${s.rad ? "radiates" : ""}${s.tele ? "/tele" : ""})` : ""}`;
+      if (num(rd.penalty, 0) !== 0 || rd.profileAdjusted) {
+        const offset = reach.bonus
+          ? `; penalty ${rd.penalty}, +${reach.bonus} ${s.rad ? "radiates" : ""}${s.tele ? "/tele" : ""}`
+          : "";
+        rngNote = ` ${rngMod} range (${profileRangeText(rd)}${offset})`;
+      }
     }
     const discMod = (obsTok && hasDiscomfort(obsTok.id)) ? -3 : 0;
     const mod = num(args.mod, 0) + num(s.chk, 0) + oppMod + rngMod + discMod;
     const sneakGate = !!oppNote && s.lvl === 1;
+    const perceptionUse = obsTok ? claimPerceptionCheck(obsTok.id) : { isFree: true };
     const acq = rollAcquisition(obsChar.id, s.lvl, undefined, mod, sneakGate);
 
     const detail = {
@@ -3000,6 +3013,11 @@ MP.Engine = (function () {
 
     let out = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
     out += `<b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b> by ${esc(s.label || key)} (${lvlLabel})<br/>`;
+    out += `<span style="color:${perceptionUse.isFree ? "#2ecc71" : "#f4d03f"};">${perceptionUse.isFree ? "Free perception check this turn" : "Additional check costs an Action (3.1.5)"}</span><br/>`;
+    if (subjTok && obsTok) {
+      const profileData = calculateRangeWithProfile(obsTok, subjTok, obsChar.id, subjChar ? subjChar.id : null);
+      out += `<span style="font-size:11px; color:#8a84a8;">Range: ${esc(profileRangeText(profileData))}; modifier ${profileData.penalty}${s.rad || s.tele ? ` before sense offsets` : ""}</span><br/>`;
+    }
     out += `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (${modBits.join(", ")}) = ${acq.tn}-` : ""} · rolled <b>${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}</b>${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}<br/>`;
     out += `<b>[${acq.tier}]</b> ${esc(detail)}${critNote}`;
     out += `</div>`;
@@ -3102,7 +3120,7 @@ MP.Engine = (function () {
         `${wt(msg)}` +
         `<div style="background:#1a1a2e; border:2px solid #c0392b; border-radius:6px; padding:6px 10px; color:#eee; font-family:Arial,sans-serif; max-width:320px;">` +
         `<b style="color:#ff8a8a;">Contact lost</b><br/>` +
-        `The target moved or its concealment, lighting, facing, range, or barriers changed. Scan again to reacquire it.` +
+        `The target moved or its concealment, lighting, range, or barriers changed. Scan again to reacquire it.` +
         `</div>`
       );
     }
@@ -3124,6 +3142,17 @@ MP.Engine = (function () {
       `<span style="color:#7fb3d5;"><b>Locate:</b></span> ` +
       `Centered your view on <b>${esc(targetName)}</b>.`
     );
+  }
+
+  function claimPerceptionCheck(tokId) {
+    if (!state.MP_Engine.perceptionUsed) state.MP_Engine.perceptionUsed = {};
+    const round = state.MP_Engine.currentRound;
+    const isFree = state.MP_Engine.perceptionUsed[tokId] !== round;
+    state.MP_Engine.perceptionUsed[tokId] = round;
+    // Preserve the legacy key for campaigns/scripts that inspect it.
+    if (!state.MP_Engine.scanUsed) state.MP_Engine.scanUsed = {};
+    state.MP_Engine.scanUsed[tokId] = round;
+    return { isFree, round };
   }
 
   // -------------------------
@@ -3164,11 +3193,11 @@ MP.Engine = (function () {
     if (!canControl(msg, obsChar.id)) return ch("MP", `${wt(msg)}You don't control ${esc(obsChar.get("name"))}.`);
     const obsName = obsChar.get("name");
 
-    // 3.1.5: one free save per turn; additional checks cost an action
-    if (!state.MP_Engine.scanUsed) state.MP_Engine.scanUsed = {};
-    const round = state.MP_Engine.currentRound;
-    const isFree = state.MP_Engine.scanUsed[obsTok.id] !== round;
-    state.MP_Engine.scanUsed[obsTok.id] = round;
+    // 3.1.5: one free save per turn across Scan, Perceive, and automatic
+    // attack acquisition; additional checks cost an action.
+    const perceptionUse = claimPerceptionCheck(obsTok.id);
+    const round = perceptionUse.round;
+    const isFree = perceptionUse.isFree;
 
     // one d20 for the whole sweep; confirm pre-rolled so nat 1/20 is
     // shared, only the per-target TN varies
@@ -3234,7 +3263,7 @@ MP.Engine = (function () {
           `<b>${esc(tokName)}</b> — ${esc(scanDistanceLabel(rangeData.inches, acq.tier))}, ${esc(bearing)} ` +
           `· <b style="color:${tierColor};">[${acq.tier}]</b> ${esc(acq.label)}` +
           `${acq.toHitMod !== 0 ? ` (${acq.toHitMod} to hit)` : ""} ` +
-          `<span style="color:#8a84a8; font-size:10px;">by ${esc(obs.label)}, TN ${acq.tn}-</span> ` +
+          `<span style="color:#8a84a8; font-size:10px;">by ${esc(obs.label)}, ${esc(profileRangeText(rangeData))}, range ${rangeData.penalty}, TN ${acq.tn}-</span> ` +
           `${locateBtn}${atkBtn}`
       });
     });
@@ -3273,7 +3302,7 @@ MP.Engine = (function () {
       }
     }
 
-    out += `<div style="color:#8a84a8; font-size:10px; margin-top:4px;">Locate centers only your view and pings the acquired position. Contacts stay acquired until they move or their concealment, lighting, facing, range, or barriers change (4.6).</div>`;
+    out += `<div style="color:#8a84a8; font-size:10px; margin-top:4px;">Locate centers only your view and pings the acquired position. Contacts stay acquired until they move or their concealment, lighting, range, or barriers change (4.6).</div>`;
     out += `</div>`;
     chBoth("MP", out, msg);
   }
@@ -4004,6 +4033,48 @@ MP.Engine = (function () {
     ch("MP", `/w gm <b style="color:#c88fff;">TEST FLASH</b> (${levels} level(s)) — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
   }
 
+  // Self-test: !mp test profile. Exercises the same pure 4.7.3.1 helper
+  // used by attack and perception range. With two selected linked tokens it
+  // also reports their live actual/effective range without modifying either.
+  function testProfilePerception(msg, args) {
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "✅" : "❌"} ${name}`);
+
+    let r = profileAdjustedRange(24, 1, 3.2);
+    check(`24" × P1 ÷ P3.2 = 7.5", penalty -1`, r.adjustedInches === 7.5 && r.penalty === -1);
+    r = profileAdjustedRange(24, 1, 0.5);
+    check(`24" × P1 ÷ P0.5 = 48", penalty -4`, r.adjustedInches === 48 && r.penalty === -4);
+    r = profileAdjustedRange(24, 2, 1);
+    check(`24" × P2 ÷ P1 = 48", penalty -4`, r.adjustedInches === 48 && r.penalty === -4);
+    r = profileAdjustedRange(24, 0.5, 1);
+    check(`24" × P0.5 ÷ P1 = 12", penalty -2`, r.adjustedInches === 12 && r.penalty === -2);
+    check(`Profile parser accepts x3.2, /2, and 1/420`,
+      parseProfileValue("x3.2") === 3.2 &&
+      parseProfileValue("/2") === 0.5 &&
+      Math.abs(parseProfileValue("1/420") - (1 / 420)) < 0.0000001);
+    check(`Negative effective range modifier requires a distant-target perception check`,
+      perceptionRangeModifier(-3, 0) === -3 && perceptionRangeModifier(-3, 6) === 0);
+
+    let live = "";
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (sel.length >= 2) {
+      const obsTok = getObj("graphic", sel[0]._id);
+      const tgtTok = getObj("graphic", sel[1]._id);
+      const obsChar = getCharFromToken(obsTok);
+      const tgtChar = getCharFromToken(tgtTok);
+      if (obsTok && tgtTok && obsChar && tgtChar) {
+        const rd = calculateRangeWithProfile(obsTok, tgtTok, obsChar.id, tgtChar.id);
+        live = `<br/><b>Selected pair:</b> ${esc(obsChar.get("name"))} → ${esc(tgtChar.get("name"))}<br/>` +
+          `${esc(profileRangeText(rd))}; perception range modifier <b>${rd.penalty}</b>`;
+      } else {
+        live = `<br/><span style="color:#f4d03f;">Selected tokens must both be linked to characters for the live Profile check.</span>`;
+      }
+    }
+
+    const passCount = results.filter(x => x.indexOf("✅") === 0).length;
+    ch("MP", `/w gm <b style="color:#c88fff;">TEST PROFILE PERCEPTION</b> — ${passCount}/${results.length} passed<br/>${results.join("<br/>")}${live}`);
+  }
+
   // Self-test: !mp test acquire (GM, 1 selected token). Exercises the 4.6
   // acquisition table with forced rolls (deterministic: nat 1/20 + forced
   // confirms). Assumes the token's IN save is between 2 and 19.
@@ -4065,10 +4136,10 @@ MP.Engine = (function () {
     o = observationLevel(obsTokId, tgtTokId, tgtChar.id);
     check(`invisible target => hearing Basic, no opp (lvl=${o.level}, opp=${o.oppMod})`, o.needsRoll && o.level === 1 && o.oppMod === 0 && o.label.indexOf("hearing") === 0);
 
-    // 3. invisible + sneaking: opposition -(AG-10)
+    // 3. invisible + sneaking: opposition 10-AG save
     state.MP_Engine.conditions[tgtTokId] = [{ type: "invisible", blur: false, sneaking: true }];
     o = observationLevel(obsTokId, tgtTokId, tgtChar.id);
-    check(`sneaking opposes at ${-Math.max(0, agSave - 10)} (AG ${agSave})`, o.oppMod === -Math.max(0, agSave - 10));
+    check(`sneaking opposition ${10 - agSave} (AG ${agSave})`, o.oppMod === 10 - agSave);
 
     // 4. blur vs Full observer: vision Basic
     state.MP_Engine.conditions[tgtTokId] = [{ type: "invisible", blur: true, sneaking: false }];
@@ -4085,10 +4156,11 @@ MP.Engine = (function () {
     const obsChar = getCharFromToken(getObj("graphic", obsTokId));
     if (obsChar) {
       const inSave = getAttrNum(obsChar.id, "intelligence_save", 10);
-      const a = rollAcquisition(obsChar.id, 1, [inSave], -Math.max(0, agSave - 10));
-      const expectFail = inSave > inSave - Math.max(0, agSave - 10);
-      check(`opposed TN = ${inSave}${-Math.max(0, agSave - 10)} => roll ${inSave} ${expectFail && agSave > 10 ? "fails" : "passes"}`,
-        agSave > 10 ? (a.outcome === "fail") : (a.outcome === "succeed"));
+      const opposition = 10 - agSave;
+      const a = rollAcquisition(obsChar.id, 1, [inSave], opposition);
+      const expectedSuccess = d20TaskSucceeds(inSave, inSave + opposition);
+      check(`opposed TN = ${inSave}${opposition >= 0 ? "+" : ""}${opposition} => roll ${inSave} ${expectedSuccess ? "passes" : "fails"}`,
+        expectedSuccess ? (a.outcome === "succeed") : (a.outcome === "fail"));
     }
 
     state.MP_Engine.conditions[obsTokId] = snapObs;
@@ -6094,36 +6166,72 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
 
+  // Profiles are normally stored as a numeric derived attribute, but accept
+  // the sheet's multiplier notation defensively as well. A missing, zero, or
+  // negative Profile cannot be used as a divisor and therefore falls back to 1.
+  function parseProfileValue(raw) {
+    let text = String(raw == null ? "" : raw).trim().toLowerCase();
+    if (!text) return 1;
+    text = text.replace(/\s+/g, "");
+    if (text.charAt(0) === "x" || text.charAt(0) === "*") text = text.slice(1);
+    if (text.charAt(0) === "/") text = "1" + text;
+
+    let value;
+    if (/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)\/(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) {
+      const parts = text.split("/");
+      const numerator = parseFloat(parts[0]);
+      const denominator = parseFloat(parts[1]);
+      value = denominator ? numerator / denominator : NaN;
+    } else {
+      value = parseFloat(text);
+    }
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  }
+
+  function getProfileValue(charId) {
+    return parseProfileValue(charId ? getAttr(charId, "profile") : 1);
+  }
+
+  // Pure 4.7.3.1 calculation, shared by attacks and perception. "Attacker"
+  // means the acting observer when the task is a perception check.
+  function profileAdjustedRange(actualInches, observerProfile, targetProfile) {
+    const actual = Math.max(0, num(actualInches, 0));
+    const obsProfile = parseProfileValue(observerProfile);
+    const tgtProfile = parseProfileValue(targetProfile);
+    const effective = actual * obsProfile / tgtProfile;
+    return {
+      inches: Math.round(actual * 10) / 10,
+      adjustedInches: Math.round(effective * 10) / 10,
+      penalty: getRangePenalty(effective),
+      atkProfile: obsProfile,
+      defProfile: tgtProfile,
+      profileAdjusted: Math.abs(obsProfile - 1) > 0.000001 || Math.abs(tgtProfile - 1) > 0.000001
+    };
+  }
+
+  function profileRangeText(rangeData) {
+    if (!rangeData) return "";
+    if (!rangeData.profileAdjusted) return `${rangeData.inches}"`;
+    return `${rangeData.inches}" × P${rangeData.atkProfile} ÷ P${rangeData.defProfile} = ${rangeData.adjustedInches}"`;
+  }
+
   function calculateRangeWithProfile(atkTok, defTok, atkCharId, defCharId) {
     const baseRange = calculateRange(atkTok, defTok);
-    
-    // Early return for invalid tokens (calculateRange returns 0 for missing tokens)
-    if (baseRange.inches === 0) return baseRange;
-    
-    // Get both profiles (default 1) - per rulebook 4.7.3.1:
-    // "Multiply the actual range by the attacker's profile, then divide it by the target's profile"
-    const atkProfile = getAttrNum(atkCharId, "profile", 1) || 1;
-    const defProfile = getAttrNum(defCharId, "profile", 1) || 1;
-    
-    // Adjusted range = actual range × attacker profile / target profile
-    // Small attacker profile: multiplying by fraction decreases range (easier to hide/aim)
-    // Large attacker profile: multiplying by larger number increases range (harder to aim)
-    // Small target profile: dividing by fraction increases range (harder to hit)
-    // Large target profile: dividing by larger number decreases range (easier to hit)
-    // Example from rulebook: Gauntlet (profile 1) at Cybernaut (profile 3.2) at 24" = 24×1/3.2 = 7.5"
-    const adjustedInches = baseRange.inches * atkProfile / defProfile;
-    
-    // Check if either profile differs from 1
-    const profileAdjusted = (atkProfile !== 1 || defProfile !== 1);
-    
-    return {
-      inches: Math.round(baseRange.inches * 10) / 10,
-      adjustedInches: Math.round(adjustedInches * 10) / 10,
-      penalty: getRangePenalty(adjustedInches),
-      atkProfile,
-      defProfile,
-      profileAdjusted
-    };
+
+    // Early return for invalid tokens (calculateRange returns 0 for missing tokens).
+    if (baseRange.inches === 0) {
+      return {
+        inches: 0, adjustedInches: 0, penalty: 0,
+        atkProfile: 1, defProfile: 1, profileAdjusted: false
+      };
+    }
+
+    // 4.7.3.1: actual range × acting observer/attacker Profile ÷ target Profile.
+    return profileAdjustedRange(
+      baseRange.inches,
+      getProfileValue(atkCharId),
+      getProfileValue(defCharId)
+    );
   }
 
   // -------------------------
@@ -6765,6 +6873,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} ${cached.why ? ` <span style="color:#f4d03f;">(${esc(cached.why)})</span>` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)<br/>${btn(`Why this sense?`, `!mp sight --obs ${atkTok.id} --target ${defTokenId}`)}</div>`;
         ch("MP", `${wt(msg)}` + acqNote);
       } else {
+        const perceptionUse = claimPerceptionCheck(atkTok.id);
+        if (!perceptionUse.isFree) {
+          ch("MP", `${wt(msg)}<div style="background:#3a2f14; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;"><b>Perception action:</b> this character already used the free perception check this turn. Re-acquiring now costs an Action under 3.1.5; apply normal Multiple Action handling if attacking in the same phase.</div>`);
+        }
         const acqDisc = atkDiscomfortPenalty; // -3 on all checks incl. perception
         const acqMod = num(obs.oppMod, 0) + num(obs.chkMod, 0) + num(obs.rngMod, 0) + acqDisc;
         const acq = rollAcquisition(atkCharId, obs.level, undefined, acqMod, obs.sneakGate);
@@ -6772,7 +6884,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const modParts = [];
         if (obs.oppMod) modParts.push(`${obs.oppMod} sneak`);
         if (obs.chkMod) modParts.push(`${obs.chkMod > 0 ? "+" : ""}${obs.chkMod} chk`);
-        if (obs.rngMod) modParts.push(`${obs.rngMod} range`);
+        if (obs.rngMod || rangeData.profileAdjusted) modParts.push(`${obs.rngMod} range [${profileRangeText(rangeData)}]`);
         if (acqDisc) modParts.push(`${acqDisc} discomfort`);
         const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (${modParts.join(", ")}) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}`;
         const causeTxt = [
@@ -6804,7 +6916,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
       const atkSneak = atkConds.find(c => c.type === "sneaking");
       if (atkSneak && !atkInv) {
-        ch("MP", `${wt(msg)}<div style="background:#2a2a4a; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">👣 <b>${esc(atkChar.get("name"))}</b> is SNEAKING — if outside the target's vision arc (e.g. from behind), the target detects only on a CRITICAL Basic-sense check opposed by AG (3.1.5.1); undetected = <b>Surprise bonus (4.6)</b> (GM: add via --mod).</div>`);
+        ch("MP", `${wt(msg)}<div style="background:#2a2a4a; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">👣 <b>${esc(atkChar.get("name"))}</b> is SNEAKING — when only a Basic sense can perceive the approach, detection requires a CRITICAL check opposed by AG (3.1.5.1); token rotation is not character facing; undetected = <b>Surprise bonus (4.6)</b> (GM: add via --mod).</div>`);
       }
     }
 
@@ -6823,13 +6935,76 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const defAttr = (atkTypeCode === "M" || atkTypeCode === "E") ? "mental_def" : "physical_def";
     const defBase = getAttrNum(defChar.id, defAttr, 0);
     const defMod = num(defTok.get(CFG.DEF_MOD_BAR), 0);
-    // v2.90.0: 4.6 - a vision-impaired DEFENDER suffers -3 to defend against
-    // attacks they perceive poorly ("?" and "-3" tiers; "-" is -3/-6 per
-    // 4.7.2, GM-adjusted). Applied only to Physical defense - mental/
-    // emotional attacks aren't dodged by sight.
-    const defVision = visionLossInfo(defTokenId);
-    const defVisionPenalty = (atkTypeCode !== "M" && atkTypeCode !== "E" && defVision.lost > 0) ? -3 : 0;
-    const defValue = defBase + defMod + defVisionPenalty;
+    // 4.6 defender perception uses the same sense/acquisition pipeline as
+    // attacker targeting. This catches invisibility, darkness, hearing/radar,
+    // barriers, and the actual acquisition tier instead of applying a flat
+    // penalty whenever a vision-loss condition exists.
+    let defPerceptionPenalty = 0;
+    let defPerceptionNote = "";
+    if (atkTypeCode !== "M" && atkTypeCode !== "E" && atkTok) {
+      const defRangeData = calculateRangeWithProfile(
+        defTok,
+        atkTok,
+        defChar.id,
+        atkCharId
+      );
+      const defObservation = observationLevel(
+        defTokenId,
+        atkTok.id,
+        atkCharId,
+        defChar.id,
+        defRangeData.inches,
+        defRangeData.penalty
+      );
+
+      if (defObservation.needsRoll) {
+        if (!state.MP_Engine.acquired) state.MP_Engine.acquired = {};
+        const defAcqKey = defTokenId + "|" + atkTok.id;
+        const defAcqSig = acqSignature(atkTok, defObservation, defRangeData.inches);
+        const cachedDefAcq = state.MP_Engine.acquired[defAcqKey];
+        let defAcq;
+
+        if (cachedDefAcq && cachedDefAcq.sig === defAcqSig) {
+          defAcq = {
+            tier: cachedDefAcq.tier,
+            label: cachedDefAcq.label,
+            cached: true
+          };
+        } else {
+          const defDisc = hasDiscomfort(defTokenId) ? -3 : 0;
+          const defAcqMod =
+            num(defObservation.oppMod, 0) +
+            num(defObservation.chkMod, 0) +
+            num(defObservation.rngMod, 0) +
+            defDisc;
+          defAcq = rollAcquisition(
+            defChar.id,
+            defObservation.level,
+            undefined,
+            defAcqMod,
+            defObservation.sneakGate
+          );
+          if (!defAcq.blocked) {
+            state.MP_Engine.acquired[defAcqKey] = {
+              sig: defAcqSig,
+              tier: defAcq.tier,
+              toHitMod: defAcq.toHitMod,
+              label: defAcq.label,
+              round: state.MP_Engine.currentRound,
+              why: defObservation.label
+            };
+          } else {
+            delete state.MP_Engine.acquired[defAcqKey];
+          }
+        }
+
+        defPerceptionPenalty = acqDefensePenalty(defAcq.tier);
+        defPerceptionNote =
+          `${defObservation.label}: [${defAcq.tier}] ${defAcq.label}` +
+          `${defAcq.cached ? " (cached)" : ""}`;
+      }
+    }
+    const defValue = defBase + defMod + defPerceptionPenalty;
 
     // 4.7.2 Surprised & Immobile Targets (v2.106.0): the defender's own status
     // grants the attacker a bonus and may negate defenses. Auto-detected from
@@ -6947,7 +7122,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     };
 
     if (nat === 20) {
-      if (confirm > targetTotal) {
+      if (!d20TaskSucceeds(confirm, targetTotal)) {
         isFumble = true;
         outcome = "FUMBLE";
         fumbleResult = applyFumbleDefault(rollFumbleTable(), defaultCtx);
@@ -6955,7 +7130,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         outcome = "MISS";
       }
     } else if (nat === 1) {
-      if (confirm <= targetTotal) {
+      if (d20TaskSucceeds(confirm, targetTotal)) {
         isCrit = true;
         outcome = "CRIT";
         critResult = applyCritDefault(rollCriticalTable(), defaultCtx);
@@ -7087,7 +7262,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (acqHover) hoverBreakdown += acqHover;
     if (obs.extraToHit) hoverBreakdown += `&#10;Depth/weakness: ${obs.extraToHit}`;
     if (atkDiscomfortPenalty) hoverBreakdown += `&#10;Discomfort: ${atkDiscomfortPenalty}`;
-    if (defVisionPenalty !== 0) hoverBreakdown += `&#10;Tgt vision impaired: +3 (def ${defBase + defMod} → ${defValue})`;
+    if (defPerceptionPenalty !== 0) hoverBreakdown += `&#10;Tgt perception: ${defPerceptionPenalty} def (${esc(defPerceptionNote)}; ${defBase + defMod} → ${defValue})`;
     
     // Range penalty tooltip
     if (rangeData && typeof rangeData.inches === "number") {
@@ -7209,6 +7384,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<div style="padding:5px 10px; font-size:11px; color:#889; background:#1a1a2e;">`;
     html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#997; margin-bottom:3px;">Modifiers</div>`;
     html += `<span style="color:#aaa;">${defTypeLabel}: <b style="color:#ddd;">${effDefValue}</b>${defStatusNoDef && defValue !== 0 ? `<span style="color:#e94560;" title="4.7.2: target makes no effort to defend — defenses do not apply"> (was ${defValue})</span>` : ""}</span> `;
+    if (defPerceptionPenalty !== 0) {
+      html += `<span style="color:#f4d03f; cursor:help;" title="4.6 target acquisition: ${esc(defPerceptionNote)}">Tgt perception ${defPerceptionPenalty}</span> `;
+    }
     if (defStatusBonus !== 0) {
       html += `<span style="color:#e94560; font-weight:bold; cursor:help;" title="4.7.2 Surprised &amp; Immobile Targets: +3 prone/unaware/off-balance, +6 completely immobile (no defenses if making no effort to defend)">Tgt ${esc(defStatusLabel)}</span> `;
     }
@@ -12031,7 +12209,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const obsName = obsChar ? obsChar.get("name") : (obsTok.get("name") || "Observer");
 
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px; overflow:hidden;">`;
-    html += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">\ud83d\udc41 Sight check</div>`;
+    html += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">\ud83d\udc41 Sense check</div>`;
     html += `<div style="padding:6px 10px;">`;
     html += `<b>${esc(obsName)}</b>`;
     if (tgtTok) html += ` \u2192 <b>${esc(tgtChar ? tgtChar.get("name") : (tgtTok.get("name") || "Target"))}</b>`;
@@ -12039,46 +12217,46 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // --- Observer-side gates (no target needed) ---
     html += row("Page Dynamic Lighting", yes(dyn));
     html += row("Page daylight / global illum", yes(daylight));
-    html += row("Observer Vision checkbox", yes(tokVision) + (CFG.REQUIRE_TOKEN_VISION ? "" : ` <span style="color:#f4d03f;">(gate disabled)</span>`));
-    html += row("CFG.REQUIRE_TOKEN_VISION", yes(CFG.REQUIRE_TOKEN_VISION));
+    html += row("Observer Vision checkbox", yes(tokVision) + ` <span style="color:#f4d03f;">(Roll20 display only; ignored by MP)</span>`);
+    html += row("Legacy Vision gate", yes(CFG.REQUIRE_TOKEN_VISION));
     html += row("Vision level (sheet)", `${vis.lvl} \u2014 effective ${lossInfo.effective} (${esc(lossInfo.effLabel)})`);
     if (lossInfo.causes && lossInfo.causes.length) html += row("Vision loss causes", esc(lossInfo.causes.join(", ")));
 
-    // The one gate that blocks before any target is considered.
-    if (CFG.REQUIRE_TOKEN_VISION && dyn && !tokVision) {
+    if (dyn && !daylight) {
       html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
-      html += `<span style="color:#ff6b6b; font-weight:bold;">\u2717 Vision UNUSABLE vs every target</span>`;
-      html += `<br/><span style="font-size:11px; color:#aab;">Dynamic Lighting is on and this token's Vision checkbox is off. Tick Vision on the token, or set <code>CFG.REQUIRE_TOKEN_VISION</code> false to ignore the checkbox campaign-wide.</span>`;
-      html += `</div>`;
-    } else if (dyn && !daylight) {
-      html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
-      html += `<span style="font-size:11px; color:#f4d03f;">Dynamic Lighting on with no page daylight \u2014 a target is only lit if a token in range emits light with an unblocked line to it. Map art that looks lit does not count.</span>`;
+      html += `<span style="font-size:11px; color:#f4d03f;">Dynamic Lighting is on with no page daylight. Map light sources and barriers define the MP illumination environment; token Vision/Night Vision settings do not grant or remove senses.</span>`;
       html += `</div>`;
     }
 
     // --- Per-target gates ---
     if (!tgtTok) {
       html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
-      html += `<span style="font-size:11px; color:#aab;">Select this token plus a target and re-run for arc, barrier, illumination-at-target and the held acquisition.</span>`;
+      html += `<span style="font-size:11px; color:#aab;">Select this token plus a target and re-run for barriers, illumination, best-sense selection, and held acquisition.</span>`;
       html += `</div></div></div>`;
       return ch("MP", `/w gm ` + html);
     }
 
-    const inArc = senseFacesTarget(obsTok, tgtTok, "visible", vis);
     const blocked = lineBlockedBySegments(tokenCenter(obsTok), tokenCenter(tgtTok), barriers);
     const light = roll20Illumination(obsTok, tgtTok, page, barriers);
     const env = roll20SenseEnvironment(obsTok.id, tgtTok.id, "visible", vis);
 
     html += row("Illumination at target", `<b>${esc(light.level)}</b>${light.source ? ` <span style="color:#889;">(${esc(light.source)})</span>` : ""}`);
-    html += row("In sense arc", yes(inArc));
+    html += row("Token rotation / facing", `<span style="color:#2ecc71;">ignored</span> <span style="color:#889;">(MP does not track persistent character facing)</span>`);
     html += row("Barrier between", blocked
       ? `<span style="color:#ff6b6b;">yes</span>${vis.pen ? ` <span style="color:#f4d03f;">(Penetrating \u2014 passes)</span>` : ""}`
       : `<span style="color:#2ecc71;">none</span>`);
 
     html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #2a2a4a;">`;
     html += env.usable
-      ? `<span style="color:#2ecc71; font-weight:bold;">\u2713 Vision USABLE</span>${env.reason ? ` <span style="color:#889;">(${esc(env.reason)})</span>` : ""}`
-      : `<span style="color:#ff6b6b; font-weight:bold;">\u2717 Vision UNUSABLE</span> \u2014 ${esc(env.reason || "unknown")}<br/><span style="font-size:11px; color:#aab;">Acquisition falls back to the best remaining sense.</span>`;
+      ? `<span style="color:#2ecc71; font-weight:bold;">\u2713 Visible-light environment evaluated</span>${env.reason ? ` <span style="color:#889;">(${esc(env.reason)})</span>` : ""}${env.levelLoss ? ` <span style="color:#f4d03f;">-${env.levelLoss} sense level</span>` : ""}`
+      : `<span style="color:#ff6b6b; font-weight:bold;">\u2717 Visible light blocked</span> \u2014 ${esc(env.reason || "unknown")}`;
+    const sightRange = calculateRangeWithProfile(obsTok, tgtTok, obsChar ? obsChar.id : null, tgtChar ? tgtChar.id : null);
+    const resolvedSense = observationLevel(obsTok.id, tgtTok.id, tgtChar ? tgtChar.id : null, obsChar ? obsChar.id : null, sightRange.inches, sightRange.penalty);
+    html += `<br/><span style="color:#7fb3d5;">Best usable sense:</span> <b>${esc(resolvedSense.label)}</b>${resolvedSense.needsRoll ? " (check required)" : " (automatic)"}`;
+    html += row("Actual range", `${sightRange.inches}"`);
+    html += row("Observer / target Profile", `${sightRange.atkProfile} / ${sightRange.defProfile}`);
+    html += row("Profile-effective range", `${sightRange.adjustedInches}" <span style="color:#889;">(${sightRange.inches} × ${sightRange.atkProfile} ÷ ${sightRange.defProfile})</span>`);
+    html += row("Perception range modifier", `<b>${sightRange.penalty}</b>`);
     html += `</div>`;
 
     const acqKey = obsTok.id + "|" + tgtTok.id;
@@ -12886,6 +13064,8 @@ function cmdStance(msg, args) {
         return testInvis(msg, args);
       case "senses":
         return testSenses(msg, args);
+      case "profile":
+        return testProfilePerception(msg, args);
       case "heal":
         return testHeal(msg, args);
       case "reset":
@@ -12904,6 +13084,7 @@ function cmdStance(msg, args) {
           <code>!mp test acquire</code> - 4.6 target-acquisition table self-test (select 1 token)<br/>
           <code>!mp test invis</code> - Invisibility/observation self-test (select 2 tokens: observer, target)<br/>
           <code>!mp test senses</code> - Report the selected token's resolved sense map + acquisition fallback<br/>
+          <code>!mp test profile</code> - 4.7.3.1 Profile-adjusted perception-range regression test; select observer then target for a live check<br/>
           <code>!mp test heal N</code> - Heal N hits to selected token<br/>
           <code>!mp test reset</code> - Reset selected token to full Hits/Power<br/>
           <code>!mp test status</code> - Show selected token's full status (shows Hardened/Invuln)`);
@@ -16002,7 +16183,7 @@ function cmdStance(msg, args) {
 
   ch("MP", `/w gm <b>MP Engine v${MP_VERSION}:</b> Loaded. Type <code>!mp help</code> for commands.`);
 
-  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort };
+  return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort, parseProfileValue, profileAdjustedRange, perceptionRangeModifier, calculateRangeWithProfile };
 })();
 
 on("ready", function() {

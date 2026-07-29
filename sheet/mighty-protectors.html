@@ -1,4 +1,12 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.76 - Disintegration subtype plumbing
+<!-- Mighty Protectors Roll20 Character Sheet v44.77 - Normal sense baselines
+        v44.77: Selecting one of the six default human senses in a Heightened/
+          Diminished Sense row now seeds its printed MP baseline (Full Ranged
+          vision; Basic Ranged Global hearing/scent; Basic Global touch; Basic
+          taste/time). Heightened Sense rows are also set Active when selected,
+          matching their Continual operation. The row therefore starts as a
+          modification of the free sense rather than accidentally replacing it
+          with Basic, non-Ranged, non-Global defaults. Existing characters are
+          also protected by MP Engine v2.134.0's defensive baseline merge.
         v44.76: Vehicle attacks and protection rows now carry an explicit damage
           subtype into MP Engine v2.107.0. This lets vehicle Disintegration attacks
           use the same RAW defense rule as character attacks and lets a vehicle list
@@ -5214,6 +5222,16 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   var SENSE_RADIATING = { visible:1, infrared:1, ultraviolet:1, audible:1, subsonic:1, ultrasonic:1,
     odors:1, radio:1, mental:1, mood:1, life:1, magic:1, magnetism:1, radiation:1, danger:1, xrays:1 };
+  /* Printed free human builds. A sense row modifies these; it does not replace
+     them with the row controls' generic defaults. */
+  var SENSE_DEFAULT_BUILD = {
+    visible: { level:"full", ranged:"1", global:"", radiates:"1", misc:"0" },
+    audible: { level:"basic", ranged:"1", global:"full", radiates:"1", misc:"0" },
+    odors:   { level:"basic", ranged:"1", global:"full", radiates:"1", misc:"0" },
+    shapes:  { level:"basic", ranged:"0", global:"full", radiates:"0", misc:"5" },
+    flavors: { level:"basic", ranged:"0", global:"", radiates:"0", misc:"0" },
+    time:    { level:"basic", ranged:"0", global:"", radiates:"0", misc:"0" }
+  };
   /* default human senses: total free build cost (for upgrade credit / removal refund) */
   var SENSE_DEFAULT_COST = { visible:15, audible:20, odors:20, shapes:20, flavors:5, time:5 };
   var SENSE_LEVEL_COST = { basic:5, full:10, analytical:20, minimum:2.5, none:0 };
@@ -5277,10 +5295,33 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     attrList.push(prefix + "_ability_cp");
     getAttrs(attrList, function(v) {
       var updates = {};
-      /* auto-derive Radiates when Detects changes */
+      /* Seed the printed normal build when a default sense is selected.
+         Custom senses retain the generic Basic/no-range starting point. */
       if (eventInfo.sourceAttribute === prefix + "_ability_sense_detects") {
         var d = v[prefix + "_ability_sense_detects"] || "";
-        updates[prefix + "_ability_sense_radiates"] = SENSE_RADIATING[d] ? "1" : "0";
+        var build = SENSE_DEFAULT_BUILD[d] || {
+          level: "basic",
+          ranged: "0",
+          global: "",
+          radiates: SENSE_RADIATING[d] ? "1" : "0",
+          misc: "0"
+        };
+        updates[prefix + "_ability_sense_level"] = build.level;
+        updates[prefix + "_ability_sense_ranged"] = build.ranged;
+        updates[prefix + "_ability_sense_global"] = build.global;
+        updates[prefix + "_ability_sense_radiates"] = build.radiates;
+        updates[prefix + "_ability_sense_misc"] = build.misc;
+        if (d) {
+          updates[prefix + "_ability_state"] = "Active";
+          updates[prefix + "_ability_state_active"] = "1";
+          updates[prefix + "_ability_state_held"] = "0";
+        }
+        /* computeSenseCost reads v, so mirror pending updates immediately. */
+        v[prefix + "_ability_sense_level"] = build.level;
+        v[prefix + "_ability_sense_ranged"] = build.ranged;
+        v[prefix + "_ability_sense_global"] = build.global;
+        v[prefix + "_ability_sense_radiates"] = build.radiates;
+        v[prefix + "_ability_sense_misc"] = build.misc;
       }
       var readout = computeSenseCost(v, prefix);
       updates[prefix + "_ability_sense_cp_calc"] = readout || "";
