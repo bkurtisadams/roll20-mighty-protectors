@@ -1,4 +1,20 @@
-/* Mighty Protectors Roll20 API Engine v2.124.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.125.0 - 2026-07-29
+ * v2.125.0: MUSCLE STRAIN PER RAW. Crit row 9 and fumble rows 9-10 were both
+ *   implemented as a flat 1 Hit deduction with no protection and no roll-with.
+ *   RAW is the strainer's OWN Base HTH damage, plus the pushing bonus if they
+ *   were pushing (fumble only), halved and rounded UP, with protection applying
+ *   and roll-with allowed. New rollMuscleStrain() rolls it; the result is
+ *   emitted as a child pending record routed through the normal damage pipeline
+ *   so the Apply / RW Max / RW Custom buttons behave exactly as they do for any
+ *   other damage. Crit strain rolls the TARGET's HTH, fumble strain rolls the
+ *   ATTACKER's.
+ *   Fumble Leg Strain and Arm Strain were bundled into the same branch and are
+ *   now split out. Those two ARE a flat 1 Hit, and the table's footnote denies
+ *   protection and roll-with, which the old code got right only by accident of
+ *   sharing the muscle strain path. They keep the direct deduction and now say
+ *   so on the card.
+ *   Vehicles are excluded from both strains; applyCritDefault already
+ *   substitutes Muscle Strain away for vehicle targets, this is belt and braces.
  * v2.124.0: !mp test crit takes --called TYPE. The 4.7.6 Default column was
  *   otherwise unreachable from the test harness: substitution happens in the
  *   attack handler, and testForceCrit built its own pending record with no
@@ -5969,6 +5985,18 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     };
   }
 
+  // 4.7.6 crit row 9 and fumble rows 9-10: the strainer rolls their OWN Base
+  // HTH damage, adds the pushing bonus if they were pushing, halves it and
+  // rounds up. Protection applies and they may roll with it, so the result goes
+  // through the normal damage pipeline as a child pending record rather than a
+  // flat deduction. Leg Strain and Arm Strain are different -- those are a flat
+  // 1 Hit with no protection and no roll-with, per the table's footnote.
+  function rollMuscleStrain(charId, pushBonus) {
+    const hth = getAttr(charId, "hth_damage") || "1d4";
+    const raw = rollExpr(hth) + Math.max(0, num(pushBonus, 0));
+    return { hth, raw, dmg: Math.max(0, Math.ceil(raw / 2)) };
+  }
+
   function rollCriticalTable() {
     const r = randomInteger(20);
     let type, desc;
@@ -6882,6 +6910,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `</div>`;
 
     // --- Crit / Fumble / Called Shot Results ---
+    let strainPending = null;
     if (isCrit && critResult) {
       html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#f1c40f;">CRIT: ${esc(critResult.desc)}</div>`;
       if (critResult.substitutedFrom) {
@@ -6892,15 +6921,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         if (hasProtectedBrain) html += `<div style="color:#8be9fd; font-size:11px; font-weight:bold; padding:0 10px;">PROTECTED BRAIN - Head Shot negated!</div>`;
       }
       if (critResult.type === CRIT_TYPES.OFF_BALANCE) html += applyOffBalance(defTok, defName);
-      if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
-        const msDefIsVeh = isVehicleMode(defChar.id);
-        const hits0 = msDefIsVeh ? getVehicleHits(defTok, defChar.id) : getResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR);
-        if (msDefIsVeh) {
-          setVehicleHits(defTok, defChar.id, Math.max(0, hits0 - 1));
-        } else {
-          setResource(defTok, defChar.id, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, hits0 - 1));
-        }
-        html += `<div style="color:#ff6b6b; font-size:11px; padding:0 10px;"><b>${esc(defName)}</b> takes 1 Hit (muscle strain)! Hits: ${hits0}→${hits0-1}</div>`;
+      if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET && !isVehicleMode(defChar.id)) {
+        const ms = rollMuscleStrain(defChar.id, 0);
+        strainPending = {
+          id: "strain_" + uniqueRollId, tokenId: defTokenId, charId: defChar.id,
+          name: defName, playerid: originalPlayerId, dmg: ms.dmg
+        };
+        html += `<div style="color:#ff6b6b; font-size:11px; padding:0 10px;"><b>${esc(defName)}</b> strains: Base HTH ${esc(ms.hth)} = ${ms.raw}, halved = <b>${ms.dmg}</b></div>`;
       }
     }
 
@@ -6910,10 +6937,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         html += `<div style="color:#889; font-size:10px; padding:0 10px;">4.7.6 default: ${esc(fumbleResult.substitutedFrom)} - ${esc(fumbleResult.substitutedReason)}</div>`;
       }
       if (fumbleResult.type === FUMBLE_TYPES.OFF_BALANCE_ATK && atkTok) html += applyOffBalance(atkTok, atkChar.get("name"));
-      if ([FUMBLE_TYPES.MUSCLE_STRAIN_ATK, FUMBLE_TYPES.LEG_STRAIN, FUMBLE_TYPES.ARM_STRAIN].includes(fumbleResult.type) && atkTok) {
+      if (fumbleResult.type === FUMBLE_TYPES.MUSCLE_STRAIN_ATK && atkTok && !isVehicleMode(atkCharId)) {
+        const ms = rollMuscleStrain(atkCharId, isPushing ? pushAmount : 0);
+        strainPending = {
+          id: "strain_" + uniqueRollId, tokenId: atkTok.id, charId: atkCharId,
+          name: atkChar.get("name"), playerid: originalPlayerId, dmg: ms.dmg
+        };
+        const pushNote = isPushing ? ` + push ${pushAmount}` : "";
+        html += `<div style="color:#ff6b6b; font-size:11px; padding:0 10px;"><b>${esc(atkChar.get("name"))}</b> strains: Base HTH ${esc(ms.hth)}${pushNote} = ${ms.raw}, halved = <b>${ms.dmg}</b></div>`;
+      } else if ([FUMBLE_TYPES.LEG_STRAIN, FUMBLE_TYPES.ARM_STRAIN].includes(fumbleResult.type) && atkTok) {
+        // Table footnote: no protection Abilities apply, nor may the attacker
+        // roll with the damage. Flat 1 Hit, unlike Muscle Strain.
+        const limbTxt = fumbleResult.type === FUMBLE_TYPES.LEG_STRAIN ? "leg" : "arm";
         const atkHits0 = getResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
         setResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, atkHits0 - 1));
-        html += `<div style="color:#ff6b6b; font-size:11px; padding:0 10px;"><b>${esc(atkChar.get("name"))}</b> takes 1 Hit (strain)! Hits: ${atkHits0}→${atkHits0-1}</div>`;
+        html += `<div style="color:#ff6b6b; font-size:11px; padding:0 10px;"><b>${esc(atkChar.get("name"))}</b> takes 1 Hit to a random ${limbTxt} - no protection, no roll-with. Hits: ${atkHits0}→${Math.max(0, atkHits0 - 1)}</div>`;
       }
     }
 
@@ -6998,6 +7036,33 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     });
     chPendingCard("MP", html, state.MP_Engine.pending[uniqueRollId], buttonGroups);
     ch("MP", "/w gm " + undoButton(atkUndoId));
+
+    // Muscle Strain resolves through the normal pipeline so protection and
+    // roll-with apply (4.7.6 rows 9 / 9-10).
+    if (strainPending && strainPending.dmg > 0) {
+      state.MP_Engine.pending[strainPending.id] = {
+        rollId: strainPending.id,
+        playerid: strainPending.playerid,
+        atkCharId: null,
+        atkName: "Muscle Strain",
+        defTokenId: strainPending.tokenId,
+        defCharId: strainPending.charId,
+        defName: strainPending.name,
+        damageTotal: strainPending.dmg,
+        dmgTypeStr: "Kinetic",
+        dmgSubtype: "blunt",
+        protKey: "kinetic",
+        atkAP: 0,
+        causesKB: false,
+        created: Date.now()
+      };
+      const strainRec = state.MP_Engine.pending[strainPending.id];
+      const strainHtml = `<div style="background:#2c2c3e; border:2px solid #ff6b6b; padding:6px 8px; color:#eaeaea;">` +
+        `<b>Muscle Strain</b> - ${esc(strainPending.name)} takes <b>${strainPending.dmg}</b> Blunt Kinetic` +
+        `<div style="font-size:10px; color:#889;">Protection and roll-with apply.</div></div>`;
+      chPendingCard("MP", strainHtml, strainRec,
+        { attacker: "", defender: buildStandardAttackButtonsAfterAF(strainPending.id, null, false, strainRec) });
+    }
   }
 
   // -------------------------
@@ -9022,7 +9087,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
         buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
       } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
-        buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+        buttons += `<br/><i>(Muscle Strain: Base HTH \u00f72 round up, protection and roll-with apply)</i>`;
       }
     }
     
@@ -9120,7 +9185,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
         buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
       } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
-        buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+        buttons += `<br/><i>(Muscle Strain: Base HTH \u00f72 round up, protection and roll-with apply)</i>`;
       }
     }
     
