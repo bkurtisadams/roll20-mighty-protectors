@@ -1,4 +1,20 @@
-/* Mighty Protectors Roll20 API Engine v2.126.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.127.0 - 2026-07-29
+ * v2.127.0: PUBLIC CARD BODIES, PRIVATE BUTTONS. With GM_ONLY_BUTTONS the card
+ *   itself was whispered only to the attacker's and defender's controllers, so
+ *   the rest of the table could not see what was happening. New PUBLIC_CARDS
+ *   flag sends every card body to everyone while the button groups stay
+ *   whispered to the controlling player and the GM, so players follow the whole
+ *   fight but can only act for their own characters. New chCardBody() decides
+ *   body routing in one place; chCombat, chPendingCard and the six area /
+ *   reflection sites all route through it. Set PUBLIC_CARDS false to restore
+ *   the old behaviour.
+ *   cmdAreaDamageAll had NPC roll-with buttons and the GM's "Apply Rest (No RW)"
+ *   button built into the card body, so making that body public would have
+ *   handed every player control of the GM's tokens. They are now collected
+ *   separately and whispered.
+ *   Hiding a button is presentation, not the security boundary: every command
+ *   already runs requireControl / requirePendingRole, so a player who retypes
+ *   the API call for someone else's character is still rejected.
  * v2.126.0: MAKE THE STRAIN ROWS TESTABLE. Muscle Strain needs a natural 1 that
  *   confirms and then rolls exactly 9, or a natural 20 that fails confirm and
  *   rolls 9-10 -- roughly 1 in 300-400 attacks each, so v2.125.0 shipped
@@ -1237,6 +1253,12 @@ MP.Engine = (function () {
 
     // Whisper results to GM (can be overridden by game default setting)
     GM_ONLY_BUTTONS: true,
+
+    // Card bodies go to everyone so the table can follow the action; only the
+    // action buttons are whispered, to the controlling player and the GM. Set
+    // false to restore the old behaviour where the card itself was visible
+    // only to the attacker's and defender's controllers.
+    PUBLIC_CARDS: true,
 
     // Auto-cleanup old pending rolls (ms)
     PENDING_EXPIRE_MS: 3600000, // 1 hour
@@ -4511,6 +4533,16 @@ function generateRowID() {
     return null;
   }
 
+  // Card bodies are public when PUBLIC_CARDS is set, so every player can follow
+  // what the rest of the table is doing. Only button groups stay whispered.
+  // Hiding a button is presentation, not the security boundary: every command
+  // still runs requireControl / requirePendingRole, so a player who reproduces
+  // the API call by hand for someone else's character is rejected.
+  function chCardBody(who, content, charIds) {
+    if (CFG.PUBLIC_CARDS) { ch(who, content); return; }
+    chToChars(who, content, charIds || []);
+  }
+
   // Send combat result to defender + attacker characters via whisper
   // defCharId: defender character ID, atkCharId: optional attacker character ID
   function chCombat(who, content, defCharId, atkCharId) {
@@ -4518,7 +4550,7 @@ function generateRowID() {
       ch(who, content);
       return;
     }
-    chToChars(who, content, [defCharId, atkCharId]);
+    chCardBody(who, content, [defCharId, atkCharId]);
   }
 
   // Send a shared pending-action card, but whisper each button group only to
@@ -4530,7 +4562,7 @@ function generateRowID() {
       ch(who, content + attackerButtons + defenderButtons);
       return;
     }
-    chToChars(who, content, [rec && rec.atkCharId, rec && rec.defCharId]);
+    chCardBody(who, content, [rec && rec.atkCharId, rec && rec.defCharId]);
     if (attackerButtons && rec && rec.atkCharId) chToChar(who, attackerButtons, rec.atkCharId);
     if (defenderButtons && rec && rec.defCharId) chToChar(who, defenderButtons, rec.defCharId);
   }
@@ -7036,11 +7068,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // --- Area attacks: send normal card then delegate to area handler ---
     if (isAreaAttack) {
-      if (CFG.GM_ONLY_BUTTONS) {
-        chToChar("MP", html, atkCharId);
-      } else {
-        ch("MP", html);
-      }
+      chCardBody("MP", html, [atkCharId]);
       handleAreaAttack(msg, uniqueRollId, state.MP_Engine.pending[uniqueRollId], defTok, atkTok);
       return;
     }
@@ -7265,12 +7293,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     html += `</div>`;
-    if (CFG.GM_ONLY_BUTTONS) {
-      chToChar("MP", html, rec.atkCharId);
-      if (gmButtons) ch("MP", "/w gm " + gmButtons);
-    } else {
-      ch("MP", html + gmButtons);
-    }
+    chCardBody("MP", html, [rec.atkCharId]);
+    if (gmButtons) ch("MP", "/w gm " + gmButtons);
   }
 
   // Handle escape attempt for area effect
@@ -7756,6 +7780,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     let deferred = 0;
+    // NPC roll-with buttons are kept out of the card body so the body can be
+    // public without handing every player control of the GM's tokens.
+    let npcBtns = "";
     Object.keys(areaRec.tokens).forEach(tokId => {
       const tokData = areaRec.tokens[tokId];
       if (tokData.applied) return;
@@ -7799,7 +7826,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           chToChar("MP", `<b>AREA DAMAGE vs ${esc(tokData.name)}</b> \u2014 ${c.penetrating} penetrating (roll-with up to ${maxDivert})<br/>${rwBtns}`, tokData.charId);
           html += `<br/><span style="color:#f1c40f;">\u23f3 <b>${esc(tokData.name)}</b>: ${c.penetrating} pen \u2014 roll-with offered to player</span>`;
         } else {
-          html += `<br/><span style="color:#f1c40f;">\u23f3 <b>${esc(tokData.name)}</b> (NPC): ${c.penetrating} pen</span><br/>${rwBtns}`;
+          html += `<br/><span style="color:#f1c40f;">\u23f3 <b>${esc(tokData.name)}</b> (NPC): ${c.penetrating} pen</span>`;
+          npcBtns += `<br/><b>${esc(tokData.name)}</b>: ${rwBtns}`;
         }
         return;
       }
@@ -7808,23 +7836,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     });
     
     if (deferred > 0) {
-      html += `<br/><br/>${btnDanger(`Apply Rest (No RW)`, `!mp arearwrest --id ${rollId}`)}`;
       html += `</div></div>`;
       areaRec.timestamp = Date.now();
-      if (CFG.GM_ONLY_BUTTONS) {
-        chToChar("MP", html, areaRec.atkCharId);
-      } else {
-        ch("MP", html);
-      }
+      chCardBody("MP", html, [areaRec.atkCharId]);
+      chToChar("MP", npcBtns + `<br/>${btnDanger(`Apply Rest (No RW)`, `!mp arearwrest --id ${rollId}`)}`,
+        areaRec.atkCharId);
       return;
     }
     
     html += `</div></div>`;
-    if (CFG.GM_ONLY_BUTTONS) {
-      chToChar("MP", html, areaRec.atkCharId);
-    } else {
-      ch("MP", html);
-    }
+    chCardBody("MP", html, [areaRec.atkCharId]);
     
     // Clean up
     removeAreaMarker(areaRec);
@@ -7864,11 +7885,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     });
     html += `</div>`;
     if (!any) return ch("MP", `/w gm <b>MP:</b> Nothing left to resolve.`);
-    if (CFG.GM_ONLY_BUTTONS) {
-      chToChar("MP", html, areaRec.atkCharId);
-    } else {
-      ch("MP", html);
-    }
+    chCardBody("MP", html, [areaRec.atkCharId]);
     finalizeAreaIfDone(rollId);
   }
 
@@ -7882,12 +7899,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const doneLabel = areaRec.isSaveAttack ? "Resolve All Saves" : "Apply All Damage";
       const resolvedNote = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved.</div>`;
       const resolvedGM = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">All escapes resolved. ${btnDanger(doneLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
-      if (CFG.GM_ONLY_BUTTONS) {
-        chToChar("MP", resolvedNote, areaRec.atkCharId);
-        ch("MP", "/w gm " + resolvedGM);
-      } else {
-        ch("MP", resolvedGM);
-      }
+      chCardBody("MP", resolvedNote, [areaRec.atkCharId]);
+      ch("MP", "/w gm " + resolvedGM);
     }
   }
 
@@ -8370,12 +8383,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let buttons = `<br/>${btn(`Reflect at Original Attacker`, `!mp reflecthit --id ${reflectRollId} --target original`)}`;
     buttons += ` ${btn(`Reflect at Target...`, `!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id}`)}`;
     
-    if (CFG.GM_ONLY_BUTTONS) {
-      chToChars("MP", html, [rec.defCharId, rec.atkCharId]);
-      chToChar("MP", buttons, rec.defCharId);
-    } else {
-      ch("MP", html + buttons);
-    }
+    chCardBody("MP", html, [rec.defCharId, rec.atkCharId]);
+    chToChar("MP", buttons, rec.defCharId);
     
     // Clean up original pending record
     delete state.MP_Engine.pending[rollId];
