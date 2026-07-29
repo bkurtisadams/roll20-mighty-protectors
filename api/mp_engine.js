@@ -1,4 +1,16 @@
-/* Mighty Protectors Roll20 API Engine v2.123.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.124.0 - 2026-07-29
+ * v2.124.0: !mp test crit takes --called TYPE. The 4.7.6 Default column was
+ *   otherwise unreachable from the test harness: substitution happens in the
+ *   attack handler, and testForceCrit built its own pending record with no
+ *   called-shot context, so forcing a type bypassed it. Exercising it for real
+ *   needed a natural 1 that also confirmed, on a called shot -- roughly 1 in 40
+ *   attacks. --called now sets the called shot flags on the test record, runs
+ *   applyCritDefault over the forced or rolled result, and reports both the
+ *   rolled result and the substitution reason on the card.
+ *   Also fixes testForceCrit calling buildStandardAttackButtons with three
+ *   arguments: rec was undefined, so composite apply modes and limb-save
+ *   buttons never appeared on a test crit card even before --called existed.
+ *   --damage N now works as a flag as well as positionally.
  * v2.123.0: FIX CALLED SHOT TYPE NEVER REACHING THE ENGINE. Roll20 asks a roll
  *   query once per prompt LABEL and substitutes that one answer everywhere the
  *   label appears. called_mod_query and called_type_query both prompted
@@ -12493,7 +12505,7 @@ function cmdStance(msg, args) {
         return testReset(msg, args);
       default:
         return ch("MP", `/w gm <b>Test Commands:</b><br/>
-          <code>!mp test crit [type]</code> - Force crit (types: headshot, solid, precise, armor, leg, arm, gear, free, muscle, offbal, other)<br/>
+          <code>!mp test crit [type] [--damage N] [--called TYPE]</code> - Force crit (types: headshot, solid, precise, armor, leg, arm, gear, free, muscle, offbal, other). --called applies a declared called shot (head, helmet, arm, leg, light, heavy, gear) so the 4.7.6 Default column can be exercised.<br/>
           <code>!mp test fumble [type]</code> - Force fumble<br/>
           <code>!mp test grapple [TOHIT] [lock] [remote] [gripdice]</code> - Grapple test harness (select 2 tokens: grappler, target)<br/>
           <code>!mp test siphon [PTS]</code> - Siphon PTS points using attacker's Siphon row config (select 2 tokens: attacker, target)<br/>
@@ -12701,6 +12713,31 @@ function cmdStance(msg, args) {
       critResult = rollCriticalTable();
     }
 
+    // --called TYPE lets the GM exercise the 4.7.6 Default column, which is
+    // otherwise only reachable on a real natural 1 that also confirms.
+    const calledMapTest = {
+      "none": "None", "head": "Head", "helmet": "Head Avoid Helmet",
+      "headhelmet": "Head Avoid Helmet", "arm": "Arm", "leg": "Leg",
+      "light": "Avoid Light Armor", "avoidlight": "Avoid Light Armor",
+      "heavy": "Avoid Heavy Armor", "avoidheavy": "Avoid Heavy Armor",
+      "gear": "Gear", "dazzle": "Dazzle"
+    };
+    const calledRawTest = String(args.called || "None").trim();
+    const calledTypeTest = calledMapTest[calledRawTest.toLowerCase()] || calledRawTest;
+    const tIsHeadShot = calledTypeTest === "Head" || calledTypeTest === "Head Avoid Helmet";
+    const tIsAvoidArmor = calledTypeTest === "Avoid Light Armor" ||
+      calledTypeTest === "Avoid Heavy Armor" || calledTypeTest === "Head Avoid Helmet";
+    const tIsLegShot = calledTypeTest === "Leg";
+    const tIsArmShot = calledTypeTest === "Arm";
+    const tIsGearShot = calledTypeTest === "Gear";
+
+    const rolledCrit = critResult;
+    critResult = applyCritDefault(critResult, {
+      defIsVehicle: isVehicleMode(char.id), atkIsVehicle: false,
+      isHeadShot: tIsHeadShot, isLegShot: tIsLegShot,
+      isArmShot: tIsArmShot, isGearShot: tIsGearShot
+    });
+
     // Create a fake pending record for testing
     const rollId = "test_" + String(Date.now()) + "_" + randomInteger(999999);
     const testDamage = num(args.damage, 10);
@@ -12736,6 +12773,9 @@ function cmdStance(msg, args) {
       snType: "",
       causesKB: true,
       isPushing: false, pushAmount: 0,
+      calledShotType: calledTypeTest,
+      isHeadShot: tIsHeadShot, isLegShot: tIsLegShot, isArmShot: tIsArmShot,
+      isAvoidArmor: tIsAvoidArmor, isGearShot: tIsGearShot,
       created: Date.now()
     };
 
@@ -12743,10 +12783,16 @@ function cmdStance(msg, args) {
     html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST CRIT!</span> `;
     html += `<span style="color:#000;">vs ${esc(char.get("name"))}</span>`;
     html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;">⚡ ${esc(critResult.desc)}</span>`;
+    if (calledTypeTest !== "None") {
+      html += `<br/><span style="color:#333; font-size:10px;">Called shot: ${esc(calledTypeTest)}</span>`;
+    }
+    if (critResult.substitutedFrom) {
+      html += `<br/><span style="color:#333; font-size:10px;">4.7.6 default: rolled ${esc(rolledCrit.desc)} - ${esc(critResult.substitutedReason)}</span>`;
+    }
     html += `<br/><span style="color:#333; font-size:10px;">Base Damage: ${testDamage} (use --damage N to change)</span>`;
     html += `</div>`;
 
-    const buttons = buildStandardAttackButtons(rollId, critResult, true);
+    const buttons = buildStandardAttackButtons(rollId, critResult, true, state.MP_Engine.pending[rollId]);
 
     ch("MP", "/w gm " + html + buttons);
   }
@@ -13729,8 +13775,16 @@ function cmdStance(msg, args) {
         const testArgs = { subcmd: testParts[2] || "" };
         // Parse remaining args based on subcommand
         if (testArgs.subcmd === "crit") {
-          testArgs.type = testParts[3] || "";
-          testArgs.damage = testParts[4] || "10";
+          testArgs.type = (testParts[3] && !testParts[3].startsWith("--")) ? testParts[3] : "";
+          testArgs.damage = (testArgs.type && testParts[4] && !testParts[4].startsWith("--")) ? testParts[4] : "10";
+          for (let i = 3; i < testParts.length; i++) {
+            if (testParts[i] === "--called") {
+              const rest = [];
+              for (let j = i + 1; j < testParts.length && !testParts[j].startsWith("--"); j++) rest.push(testParts[j]);
+              testArgs.called = rest.join(" ") || "None";
+            }
+            if (testParts[i] === "--damage") testArgs.damage = testParts[i + 1] || "10";
+          }
         } else if (testArgs.subcmd === "fumble") {
           testArgs.type = testParts[3] || "";
         } else if (testArgs.subcmd === "damage") {
