@@ -1,4 +1,29 @@
-/* Mighty Protectors Roll20 API Engine v2.120.0 - 2026-07-28
+/* Mighty Protectors Roll20 API Engine v2.121.0 - 2026-07-29
+ * v2.121.0: COMPOSITE APPLY MODES + AVOID HELMET CALLED SHOT. 4.14.2.1 doubles
+ *   Hits as the LAST step ("after determining the number of Hits which get past
+ *   the target's protection, rolling with damage"), so a head shot never
+ *   competes with a crit-table result -- Solid Hit's +3 lands on the damage
+ *   roll, Avoid Armor changes what protection applies, Precise Hit halves
+ *   roll-with capacity, and the doubling happens after all of it. cmdApply
+ *   already read every modifier as an independent substring flag in exactly
+ *   that order, but the button builders picked ONE branch from an exclusive
+ *   else-if chain and so never emitted a composite mode: a called head shot
+ *   silently ate Solid Hit, Avoid Armor and Precise Hit. New damageApplyProfile()
+ *   derives the flag set once and applyModeName() composes the mode string from
+ *   it; allowedApplyModes() and both builders now share that single source, so
+ *   the whitelist can no longer drift from the buttons. Legacy mode strings are
+ *   unchanged for every single-modifier case; head shot gains the RW Max button
+ *   it was missing.
+ *   Head shot supersedes a crit-table LOCATION result (rows 1-2 Gear, 5-6 Leg,
+ *   10-11 Arm) -- one blow lands in one place, and the declared called shot is
+ *   what the attacker paid -6 for. Those rows are purely a location assignment,
+ *   so they are discarded rather than layered; the card says so. Crit 18 on a
+ *   declared head shot grants an effect already in play and does not double
+ *   twice. limbsave rejects saves superseded this way.
+ *   New called shot "Head Avoid Helmet" (-9) per 4.14.2.1: sets the head shot
+ *   and avoid-armor flags, composing to headshot+noprot. NOTE: inherits the
+ *   existing Avoid Armor simplification -- protection is not modelled per piece,
+ *   so this bypasses ALL armor, not just partial coverage (4.14.2.4).
  * v2.120.0: !mp restore left condition badges on the token. Both restore
  *   branches and the reset path each cleared a hand-maintained list of marker
  *   names, and that list never contained skull (paralysed/poisoned),
@@ -4269,6 +4294,61 @@ function generateRowID() {
     rec.resolvedPhases[phase] = { by: msg.playerid, at: Date.now() };
   }
 
+  // 4.14.2.1 doubles Hits AFTER protection and roll-with, so a head shot is the
+  // last step in the chain and never competes with a crit-table result: Solid
+  // Hit adds to the damage roll, Avoid Armor changes protection, Precise Hit
+  // halves roll-with capacity. cmdApply reads each as an independent substring
+  // flag in that order, so the mode string is composed from the flag set rather
+  // than picked from one exclusive branch.
+  function damageApplyProfile(rec, critType) {
+    const defIsVeh = !!(rec && rec.defCharId && isVehicleMode(rec.defCharId));
+    const hasProtectedBrain = !defIsVeh && !!(rec && rec.defCharId) &&
+      num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1;
+    const headShot = !defIsVeh && !hasProtectedBrain &&
+      (critType === CRIT_TYPES.HEAD_SHOT || !!(rec && rec.isHeadShot));
+    const avoidArmor = !!(rec && rec.isAvoidArmor) ||
+      critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR;
+    const solid = critType === CRIT_TYPES.SOLID_HIT;
+    const precise = !defIsVeh && critType === CRIT_TYPES.PRECISE_HIT;
+
+    const build = (withPrecise) => {
+      const m = [];
+      if (solid) m.push("solid");
+      if (avoidArmor) m.push("noprot");
+      if (withPrecise && precise) m.push("precise");
+      if (headShot) m.push("headshot");
+      return m;
+    };
+    const tagList = (withPrecise) => {
+      const t = [];
+      if (solid) t.push("+3");
+      if (avoidArmor) t.push("No Prot");
+      if (withPrecise && precise) t.push("\u00bd RW");
+      if (headShot) t.push("Head Shot");
+      return t;
+    };
+
+    return {
+      defIsVeh, hasProtectedBrain, headShot, avoidArmor, solid, precise,
+      parts: build(false), rwParts: build(true), tags: tagList(false), rwTags: tagList(true)
+    };
+  }
+
+  // Unmodified attacks keep their legacy mode strings so older cards and macros
+  // still resolve; modified attacks join their flags with underscores.
+  function applyModeName(parts, suffix) {
+    if (!parts.length) {
+      if (suffix === "rwmax") return "rollwithmax";
+      if (suffix === "rw") return "rollwithcustom";
+      return "noroll";
+    }
+    return suffix ? parts.concat(suffix).join("_") : parts.join("_");
+  }
+
+  function applyModeLabel(base, tags) {
+    return tags.length ? `${base} (${tags.join(", ")})` : base;
+  }
+
   function allowedApplyModes(rec) {
     if (!rec) return [];
     if (rec.isDeathTouch && !isVehicleMode(rec.defCharId)) return ["noroll"];
@@ -4281,22 +4361,9 @@ function generateRowID() {
     }
 
     const critType = rec.critResult ? rec.critResult.type : null;
-    const defIsVeh = rec.defCharId && isVehicleMode(rec.defCharId);
-    const hasProtectedBrain = !defIsVeh && rec.defCharId &&
-      num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1;
-    const headShot = (critType === CRIT_TYPES.HEAD_SHOT || rec.isHeadShot) && !hasProtectedBrain;
-    const avoidArmor = rec.isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR;
-
-    if (defIsVeh) {
-      if (avoidArmor) return ["noprot"];
-      if (critType === CRIT_TYPES.SOLID_HIT) return ["solid"];
-      return ["noroll"];
-    }
-    if (headShot) return ["headshot", "headshot_rw"];
-    if (avoidArmor) return ["noprot", "noprot_rwmax", "noprot_rw"];
-    if (critType === CRIT_TYPES.SOLID_HIT) return ["solid", "solid_rwmax", "solid_rw"];
-    if (critType === CRIT_TYPES.PRECISE_HIT) return ["noroll", "precise_rwmax", "precise_rw"];
-    return ["noroll", "rollwithmax", "rollwithcustom"];
+    const p = damageApplyProfile(rec, critType);
+    if (p.defIsVeh) return [applyModeName(p.parts, null)];
+    return [applyModeName(p.parts, null), applyModeName(p.rwParts, "rwmax"), applyModeName(p.rwParts, "rw")];
   }
 
   // Get the first controlling player ID for a character (or null)
@@ -5902,7 +5969,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       "none": "None", "head": "Head", "arm": "Arm", "leg": "Leg",
       "avoid light armor": "Avoid Light Armor", "light": "Avoid Light Armor",
       "avoid heavy armor": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
-      "gear": "Gear", "dazzle": "Dazzle"
+      "gear": "Gear", "dazzle": "Dazzle",
+      "head avoid helmet": "Head Avoid Helmet", "helmet": "Head Avoid Helmet",
+      "headhelmet": "Head Avoid Helmet", "avoidhelmet": "Head Avoid Helmet"
     };
     
     // Reverse map: penalty number -> type (for when sheet sends numeric value)
@@ -5914,10 +5983,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!calledShotType) {
       calledShotType = penaltyToType[calledShotInput] || (calledShotInput === "0" ? "None" : calledShotInput);
     }
-    ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
+    // ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
     
     // Get penalty: if input was numeric, use it directly; otherwise lookup by type
-    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6 };
+    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6, "Head Avoid Helmet": -9 };
     let calledShotPenalty = calledShotPenalties[calledShotType];
     if (calledShotPenalty === undefined) {
       // Input might be raw number like "-6" or "-3"
@@ -5925,10 +5994,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       calledShotPenalty = isNaN(numVal) ? 0 : numVal;
     }
     const isCalledShot = calledShotType !== "None" && calledShotType !== "";
-    const isHeadShot = calledShotType === "Head";
+    // 4.14.2.1: helmets can be avoided on a head shot at -9 instead of -6. No
+    // per-piece protection model exists, so this rides the existing avoid-armor
+    // flag and bypasses all armor (same simplification as 4.14.2.4 crits).
+    const isHeadShot = calledShotType === "Head" || calledShotType === "Head Avoid Helmet";
     const isLegShot = calledShotType === "Leg";
     const isArmShot = calledShotType === "Arm";
-    const isAvoidArmor = calledShotType === "Avoid Light Armor" || calledShotType === "Avoid Heavy Armor";
+    const isAvoidArmor = calledShotType === "Avoid Light Armor" || calledShotType === "Avoid Heavy Armor" ||
+      calledShotType === "Head Avoid Helmet";
     const isGearShot = calledShotType === "Gear";
     // v2.90.1: Laser dazzle called shot (Light Control A) - -6 to hit, no
     // damage, ignores protection (goggles block entirely, GM-adjudicated).
@@ -6650,6 +6723,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           "Head": "HEAD SHOT (-6) - Hits DOUBLED!", "Leg": "LEG SHOT (-3) - Saves required",
           "Arm": "ARM SHOT (-3) - Saves required", "Avoid Light Armor": "AVOID LIGHT ARMOR (-3)",
           "Avoid Heavy Armor": "AVOID HEAVY ARMOR (-6)", "Gear": "GEAR SHOT (-3)",
+          "Head Avoid Helmet": "HEAD SHOT, HELMET AVOIDED (-9) - Hits DOUBLED, armor bypassed!",
           "Called": "CALLED SHOT (-3)",
           "Dazzle": "DAZZLE SHOT (-6) - no damage, ignores protection, EN save vs blind (goggles block)"
         };
@@ -8706,8 +8780,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isHeadShot = rec && rec.isHeadShot;
     const isLegShot = rec && rec.isLegShot;
     const isArmShot = rec && rec.isArmShot;
-    const isAvoidArmor = rec && rec.isAvoidArmor;
     const isGearShot = rec && rec.isGearShot;
+    
+    // A declared head shot supersedes a crit-table LOCATION result (rows 1-2
+    // Gear, 5-6 Leg, 10-11 Arm): one blow lands in one place, and the attacker
+    // paid -6 to choose it. Those rows are purely a location assignment, so
+    // they are discarded rather than layered.
+    const critLocName = critType === CRIT_TYPES.LEG_SHOT ? "leg" :
+      critType === CRIT_TYPES.ARM_SHOT ? "arm" :
+      critType === CRIT_TYPES.GEAR_SHOT ? "gear" : null;
+    const dropCritLoc = !!isHeadShot && !!critLocName;
     
     // Death Touch (p.53): penetrating damage may NOT be rolled with. Apply only.
     if (rec && rec.isDeathTouch && !defIsVeh) {
@@ -8715,38 +8797,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return buttons;
     }
     
-    if (defIsVeh) {
-      // Vehicles: Apply only, no roll-with options
-      if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
-        buttons = `${btnDanger(`Apply (No Prot)`, `!mp apply --id ${rollId} --mode noprot`)}`;
-      } else if (critType === CRIT_TYPES.SOLID_HIT) {
-        buttons = `${btnDanger(`Apply (+3 Solid)`, `!mp apply --id ${rollId} --mode solid`)}`;
-      } else {
-        buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)}`;
-      }
-    } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
-      buttons = `${btnDanger(`Apply (Head Shot)`, `!mp apply --id ${rollId} --mode headshot`)} `;
-      buttons += `${btn(`RW + Head Shot`, `!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0}`)}`;
-    } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && hasProtectedBrain) {
-      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
-      buttons += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rollwithmax`)} `;
-      buttons += `${btn(`Roll-With Custom`, `!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
-    } else if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
-      buttons = `${btnDanger(`Apply (No Prot)`, `!mp apply --id ${rollId} --mode noprot`)} `;
-      buttons += `${btn(`RW Max (No Prot)`, `!mp apply --id ${rollId} --mode noprot_rwmax`)} `;
-      buttons += `${btn(`RW Custom (No Prot)`, `!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0}`)}`;
-    } else if (critType === CRIT_TYPES.SOLID_HIT) {
-      buttons = `${btnDanger(`Apply (+3 Solid)`, `!mp apply --id ${rollId} --mode solid`)} `;
-      buttons += `${btn(`RW Max (+3)`, `!mp apply --id ${rollId} --mode solid_rwmax`)} `;
-      buttons += `${btn(`RW Custom (+3)`, `!mp apply --id ${rollId} --mode solid_rw --amt ?{Divert to Power|0}`)}`;
-    } else if (critType === CRIT_TYPES.PRECISE_HIT) {
-      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
-      buttons += `${btn(`RW Max (½)`, `!mp apply --id ${rollId} --mode precise_rwmax`)} `;
-      buttons += `${btn(`RW Custom (½)`, `!mp apply --id ${rollId} --mode precise_rw --amt ?{Divert to Power|0}`)}`;
-    } else {
-      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
-      buttons += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rollwithmax`)} `;
-      buttons += `${btn(`Roll-With Custom`, `!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
+    const prof = damageApplyProfile(rec, critType);
+    buttons = `${btnDanger(applyModeLabel(`Apply`, prof.tags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.parts, null)}`)}`;
+    if (!prof.defIsVeh) {
+      buttons += ` ${btn(applyModeLabel(`RW Max`, prof.rwTags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.rwParts, "rwmax")}`)} `;
+      buttons += `${btn(applyModeLabel(`RW Custom`, prof.rwTags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.rwParts, "rw")} --amt ?{Divert to Power|0}`)}`;
     }
     
     if (causesKB) {
@@ -8771,12 +8826,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     if (!defIsVeh) {
-      if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
+      if (!dropCritLoc && (critType === CRIT_TYPES.LEG_SHOT || isLegShot)) {
         buttons += `<br/>${btn(`Leg Shot Saves`, `!mp limbsave --id ${rollId} --limb leg`)}`;
-      } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
+      } else if (!dropCritLoc && (critType === CRIT_TYPES.ARM_SHOT || isArmShot)) {
         buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
       } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
         buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+      } else if (dropCritLoc) {
+        buttons += `<br/><i>(Head shot declared - crit ${critLocName} result superseded)</i>`;
       }
     }
     
@@ -8831,8 +8888,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isHeadShot = rec && rec.isHeadShot;
     const isLegShot = rec && rec.isLegShot;
     const isArmShot = rec && rec.isArmShot;
-    const isAvoidArmor = rec && rec.isAvoidArmor;
     const isGearShot = rec && rec.isGearShot;
+    
+    // A declared head shot supersedes a crit-table LOCATION result (rows 1-2
+    // Gear, 5-6 Leg, 10-11 Arm): one blow lands in one place, and the attacker
+    // paid -6 to choose it. Those rows are purely a location assignment, so
+    // they are discarded rather than layered.
+    const critLocName = critType === CRIT_TYPES.LEG_SHOT ? "leg" :
+      critType === CRIT_TYPES.ARM_SHOT ? "arm" :
+      critType === CRIT_TYPES.GEAR_SHOT ? "gear" : null;
+    const dropCritLoc = !!isHeadShot && !!critLocName;
     
     // Death Touch (p.53): penetrating damage may NOT be rolled with. Apply only.
     if (rec && rec.isDeathTouch && !defIsVeh) {
@@ -8840,44 +8905,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return buttons;
     }
     
-    if (defIsVeh) {
-      // Vehicles: Apply only, no roll-with options
-      if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
-        buttons = `${btnDanger(`Apply (No Prot)`, `!mp apply --id ${rollId} --mode noprot`)}`;
-      } else if (critType === CRIT_TYPES.SOLID_HIT) {
-        buttons = `${btnDanger(`Apply (+3 Solid)`, `!mp apply --id ${rollId} --mode solid`)}`;
-      } else {
-        buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)}`;
-      }
-    } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && !hasProtectedBrain) {
-      // Head shot: apply damage then double after prot/roll-with
-      buttons = `${btnDanger(`Apply (Head Shot)`, `!mp apply --id ${rollId} --mode headshot`)} `;
-      buttons += `${btn(`RW + Head Shot`, `!mp apply --id ${rollId} --mode headshot_rw --amt ?{Divert to Power|0}`)}`;
-    } else if ((critType === CRIT_TYPES.HEAD_SHOT || isHeadShot) && hasProtectedBrain) {
-      // Head shot negated by Protected Brain - show normal buttons
-      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
-      buttons += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rollwithmax`)} `;
-      buttons += `${btn(`Roll-With Custom`, `!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
-    } else if (isAvoidArmor || critType === CRIT_TYPES.AVOID_LIGHT_ARMOR || critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) {
-      // Avoid armor: ignore protection (crit OR deliberate called shot)
-      buttons = `${btnDanger(`Apply (No Prot)`, `!mp apply --id ${rollId} --mode noprot`)} `;
-      buttons += `${btn(`RW Max (No Prot)`, `!mp apply --id ${rollId} --mode noprot_rwmax`)} `;
-      buttons += `${btn(`RW Custom (No Prot)`, `!mp apply --id ${rollId} --mode noprot_rw --amt ?{Divert to Power|0}`)}`;
-    } else if (critType === CRIT_TYPES.SOLID_HIT) {
-      // Solid hit: +3 damage
-      buttons = `${btnDanger(`Apply (+3 Solid)`, `!mp apply --id ${rollId} --mode solid`)} `;
-      buttons += `${btn(`RW Max (+3)`, `!mp apply --id ${rollId} --mode solid_rwmax`)} `;
-      buttons += `${btn(`RW Custom (+3)`, `!mp apply --id ${rollId} --mode solid_rw --amt ?{Divert to Power|0}`)}`;
-    } else if (critType === CRIT_TYPES.PRECISE_HIT) {
-      // Precise hit: halved roll-with
-      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
-      buttons += `${btn(`RW Max (½)`, `!mp apply --id ${rollId} --mode precise_rwmax`)} `;
-      buttons += `${btn(`RW Custom (½)`, `!mp apply --id ${rollId} --mode precise_rw --amt ?{Divert to Power|0}`)}`;
-    } else {
-      // Normal hit or other crit types
-      buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode noroll`)} `;
-      buttons += `${btn(`Roll-With Max`, `!mp apply --id ${rollId} --mode rollwithmax`)} `;
-      buttons += `${btn(`Roll-With Custom`, `!mp apply --id ${rollId} --mode rollwithcustom --amt ?{Divert to Power|0}`)}`;
+    const prof = damageApplyProfile(rec, critType);
+    buttons = `${btnDanger(applyModeLabel(`Apply`, prof.tags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.parts, null)}`)}`;
+    if (!prof.defIsVeh) {
+      buttons += ` ${btn(applyModeLabel(`RW Max`, prof.rwTags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.rwParts, "rwmax")}`)} `;
+      buttons += `${btn(applyModeLabel(`RW Custom`, prof.rwTags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.rwParts, "rw")} --amt ?{Divert to Power|0}`)}`;
     }
     
     if (causesKB) {
@@ -8903,12 +8935,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Add limb shot saves if applicable (crit OR deliberate called shot) - not for vehicles
     if (!defIsVeh) {
-      if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
+      if (!dropCritLoc && (critType === CRIT_TYPES.LEG_SHOT || isLegShot)) {
         buttons += `<br/>${btn(`Leg Shot Saves`, `!mp limbsave --id ${rollId} --limb leg`)}`;
-      } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
+      } else if (!dropCritLoc && (critType === CRIT_TYPES.ARM_SHOT || isArmShot)) {
         buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
       } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
         buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
+      } else if (dropCritLoc) {
+        buttons += `<br/><i>(Head shot declared - crit ${critLocName} result superseded)</i>`;
       }
     }
     
@@ -9584,8 +9618,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!requirePendingRole(msg, rec, "defender", `make the ${limb || "limb"} shot saves`)) return;
     if (rec.hitsTaken === undefined) return ch("MP", `${wt(msg)}<b>MP:</b> Resolve this attack's damage before making limb-shot saves.`);
     const critType = rec.critResult ? rec.critResult.type : null;
-    const validLimb = (limb === "leg" && (rec.isLegShot || critType === CRIT_TYPES.LEG_SHOT)) ||
-      (limb === "arm" && (rec.isArmShot || critType === CRIT_TYPES.ARM_SHOT));
+    const validLimb = !rec.isHeadShot && (
+      (limb === "leg" && (rec.isLegShot || critType === CRIT_TYPES.LEG_SHOT)) ||
+      (limb === "arm" && (rec.isArmShot || critType === CRIT_TYPES.ARM_SHOT)));
     if (!validLimb) return ch("MP", `${wt(msg)}<b>MP:</b> That limb save does not belong to this attack.`);
     const phase = `limb_${limb}`;
     if (!requireOpenResolution(msg, rec, phase, `${limb === "leg" ? "Leg" : "Arm"} shot saves`)) return;
@@ -12649,6 +12684,7 @@ function cmdStance(msg, args) {
       snType: "",
       causesKB: true,
       isPushing: false, pushAmount: 0,
+      isHeadShot: isHeadshot,
       created: Date.now()
     };
 
@@ -12683,7 +12719,7 @@ function cmdStance(msg, args) {
     const dmgIsVeh = isVehicleMode(char.id);
     const buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode ${mode}`)} ` +
       (dmgIsVeh ? "" :
-        `${btn(`RW Max`, `!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithmax"}`)} ` +
+        `${btn(`RW Max`, `!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rwmax" : "rollwithmax"}`)} ` +
         `${btn(`RW Custom`, `!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithcustom"} --amt ?{Divert to Power|0}`)} `) +
       `${btn(`KB`, `!mp kb --id ${rollId}`)}`;
 
@@ -13149,8 +13185,8 @@ function cmdStance(msg, args) {
   // QUICK ATTACK COMMAND
   // -------------------------
   // Usage: !mp atk N --atk TOKEN_ID --target TOKEN_ID [--mod N] [--push N] [--called TYPE]
-  // Called types: None, Head, Arm, Leg, Light (Avoid Light Armor), Heavy (Avoid Heavy Armor), Gear
-  // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0} --called ?{Called|None|Head|Arm|Leg|Light|Heavy|Gear}
+  // Called types: None, Head, Helmet (Head Avoid Helmet, -9), Arm, Leg, Light (Avoid Light Armor), Heavy (Avoid Heavy Armor), Gear
+  // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0} --called ?{Called|None|Head|Helmet|Arm|Leg|Light|Heavy|Gear}
   // Triggers existing mpattack roll template handler
 
   function findAttackRowByIndex(charId, atkIndex) {
@@ -13233,7 +13269,8 @@ function cmdStance(msg, args) {
       "none": "None", "head": "Head", "arm": "Arm", "leg": "Leg",
       "avoidlight": "Avoid Light Armor", "light": "Avoid Light Armor",
       "avoidheavy": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
-      "gear": "Gear", "dazzle": "Dazzle"
+      "gear": "Gear", "dazzle": "Dazzle",
+      "helmet": "Head Avoid Helmet", "headhelmet": "Head Avoid Helmet"
     };
     const calledType = calledMap[calledRaw.toLowerCase()] || calledRaw;
 

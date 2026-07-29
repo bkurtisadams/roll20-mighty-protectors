@@ -3726,6 +3726,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       <div style="color:#f4d03f; font-weight:bold; margin-bottom:2px;">CALLED SHOTS (4.14.2)</div>
       <div style="font-size:11px; margin-bottom:8px;">
         <div>• Head -6: Double hits taken after protection</div>
+        <div>• Head, avoid helmet -9</div>
         <div>• Arm/Leg -3: EN+7 save or lose use; AG save or drop/fall</div>
         <div>• Avoid Light Armor -3 | Heavy Armor -6</div>
         <div>• Gear -3: Damage vs breakpoint</div>
@@ -4601,8 +4602,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       updates.range_query = (v.query_range === "1" && !useApi) ? "?{Range Penalty|1-4 in,0|5-9 in,-1|10-19 in,-2|20-39 in,-3|40-79 in,-4|80-159 in,-5|160-319 in,-6|320-639 in,-7|640-1279 in,-8|1280-2559 in,-9|2560-5119 in,-10|5120-10239 in,-11|10240+ in,-12}" : "0";
       updates.multi_query = v.query_multi === "1" ? "?{Actions This Phase|1 Action,0|2 Actions,-3|3 Actions,-6|4 Actions,-9|5 Actions,-12}" : "0";
       // Called shot: type query returns text for API, mod query returns number for calculation
-      updates.called_type_query = v.query_called === "1" ? "?{Called Shot|None,None|Head,Head|Arm,Arm|Leg,Leg|Avoid Light Armor,Avoid Light Armor|Avoid Heavy Armor,Avoid Heavy Armor|Gear,Gear|Dazzle,Dazzle}" : "None";
-      updates.called_mod_query = v.query_called === "1" ? "?{Called Shot|None,0|Head,-6|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3|Dazzle,-6}" : "0";
+      updates.called_type_query = v.query_called === "1" ? "?{Called Shot|None,None|Head,Head|Head - Avoid Helmet,Head Avoid Helmet|Arm,Arm|Leg,Leg|Avoid Light Armor,Avoid Light Armor|Avoid Heavy Armor,Avoid Heavy Armor|Gear,Gear|Dazzle,Dazzle}" : "None";
+      updates.called_mod_query = v.query_called === "1" ? "?{Called Shot|None,0|Head,-6|Head - Avoid Helmet,-9|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3|Dazzle,-6}" : "0";
       updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";
       updates.pushhb_query = v.query_pushhb === "1" ? "?{Push/Hold Back|0}" : "0";
       updates.push_query = updates.pushhb_query;
