@@ -1,4 +1,25 @@
-/* Mighty Protectors Roll20 API Engine v2.130.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.131.0 - 2026-07-29
+ * v2.131.0: DEFAULT COLUMN FOR CRIT ROWS 7-8 (4.7.6). Both rows are
+ *   conditional on their face - they strike an unprotected spot only "if the
+ *   target has Armor ... and that Ability offers only [Light] Partial
+ *   Coverage" - so a roll of 7 or 8 against a target with nothing matching to
+ *   avoid is exactly what 4.7.6 means by an inappropriate result. Both carry
+ *   Default 15, Solid Hit, so RAW turns the dud into +3 damage. Previously it
+ *   silently did nothing.
+ *   This was listed as a GM judgment call because partial coverage was not
+ *   mechanically detectable. v2.130.0 made it detectable.
+ *   hasAvoidableProtection() reuses sumProtectionWithHardened with the same
+ *   avoidTier cmdApply uses, so the substitution test and the damage
+ *   resolution cannot disagree about what counts as avoidable - same row
+ *   filters, same subtype matching. Force fields are checked too, since rows
+ *   7-8 say "any similar protective Ability".
+ *   Vehicles are excluded: their rows carry no coverage field and cmdApply
+ *   still gives them the flat bypass, so an avoid result is not inappropriate
+ *   against them. Revisit together if vehicle armor ever gets coverage.
+ *   Attacks with no damage type (protKey null) never substitute - the engine
+ *   cannot tell what would be avoided, so it leaves the call to the GM.
+ *   Reachable from the harness: !mp test crit armor / light against a target
+ *   whose Coverage rows you control.
  * v2.130.0: MODEL PARTIAL COVERAGE (4.14.2.4). Avoid Armor crits, the -3/-6
  *   avoid-armor called shots and Head Avoid Helmet all bypassed ALL protection.
  *   RAW is narrower: crit row 7 avoids armor offering only LIGHT Partial
@@ -1281,7 +1302,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.130.0";
+var MP_VERSION = "2.131.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -6080,6 +6101,22 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // column entry. Only mechanically detectable conflicts substitute here;
   // anything needing GM judgement (no breakable gear, no partial coverage,
   // target already prone) is left for the GM to call at the table.
+  // 4.7.6 rows 7-8 are conditional on their face: they strike an unprotected
+  // spot only "if the target has Armor ... and that Ability offers only
+  // [Light] Partial Coverage". With the coverage model in place this is now
+  // mechanically detectable, so a result with nothing to avoid is
+  // inappropriate and takes the Default column. Force fields count - rows 7-8
+  // say "any similar protective Ability".
+  function hasAvoidableProtection(charId, tokenId, protKey, atkSubtype, tier) {
+    if (!charId || !protKey || !tier || tier === "none") return false;
+    const p = sumProtectionWithHardened(charId, protKey, atkSubtype, false, tier);
+    if (num(p.avoidedRows, 0) > 0) return true;
+    const ff = getForceFieldData(charId, tokenId);
+    if (ff && coverageAvoided(ff.coverage, tier) &&
+        num(ff.protValues ? ff.protValues[protKey] : 0, 0) > 0) return true;
+    return false;
+  }
+
   function critIsInappropriate(type, ctx) {
     if (ctx.defIsVehicle) {
       if (type === CRIT_TYPES.LEG_SHOT || type === CRIT_TYPES.ARM_SHOT ||
@@ -6087,6 +6124,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         return "vehicle target";
       }
       if (type === CRIT_TYPES.PRECISE_HIT) return "vehicle cannot roll with damage";
+    }
+
+    // Rows 7-8 with no matching partial coverage to avoid. Vehicles are
+    // excluded: their armor rows carry no coverage field and cmdApply still
+    // gives them the flat bypass, so the result is not inappropriate there.
+    if (!ctx.defIsVehicle && (type === CRIT_TYPES.AVOID_LIGHT_ARMOR || type === CRIT_TYPES.AVOID_HEAVY_ARMOR)) {
+      const tier = type === CRIT_TYPES.AVOID_LIGHT_ARMOR ? "light" : "partial";
+      if (ctx.defCharId && ctx.protKey &&
+          !hasAvoidableProtection(ctx.defCharId, ctx.defTokenId, ctx.protKey, ctx.dmgSubtype, tier)) {
+        return tier === "light"
+          ? "no Light partial coverage to avoid"
+          : "no partial coverage to avoid";
+      }
     }
 
     // A declared called shot fixes where the blow lands. A crit naming a
@@ -6858,7 +6908,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const defaultCtx = {
       defIsVehicle: isVehicleMode(defChar.id), atkIsVehicle: atkIsVehicle,
-      isHeadShot, isLegShot, isArmShot, isGearShot
+      isHeadShot, isLegShot, isArmShot, isGearShot,
+      defCharId: defChar.id, defTokenId: defTokenId,
+      protKey: protKey, dmgSubtype: dmgSubtype
     };
 
     if (nat === 20) {
@@ -13011,7 +13063,9 @@ function cmdStance(msg, args) {
     critResult = applyCritDefault(critResult, {
       defIsVehicle: isVehicleMode(char.id), atkIsVehicle: false,
       isHeadShot: tIsHeadShot, isLegShot: tIsLegShot,
-      isArmShot: tIsArmShot, isGearShot: tIsGearShot
+      isArmShot: tIsArmShot, isGearShot: tIsGearShot,
+      defCharId: char.id, defTokenId: tok.id,
+      protKey: "kinetic", dmgSubtype: ""
     });
 
     // Create a fake pending record for testing
