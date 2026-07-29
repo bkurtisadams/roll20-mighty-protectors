@@ -6272,7 +6272,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const calledIR = inlineTotal(msg, fields.called);
     const calledNumeric = calledIR ? calledIR.total : num(fields.called, 0);
     const calledPenaltyInMacroMod = calledNumeric !== 0;
-    ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
+    // DEBUG: called-shot query resolution. Uncomment when a called shot
+    // resolves to the wrong type or arrives numeric.
+    // ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
     
     // Get penalty: if input was numeric, use it directly; otherwise lookup by type
     const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6, "Head Avoid Helmet": -9 };
