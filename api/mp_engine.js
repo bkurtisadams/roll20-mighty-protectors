@@ -1,4 +1,21 @@
-/* Mighty Protectors Roll20 API Engine v2.131.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.132.0 - 2026-07-29
+ * v2.132.0: SHOW MACRO --mod IN THE TO-HIT BREAKDOWN. A modifier passed to
+ *   !mp atk --mod was applied to the roll but appeared nowhere on the card,
+ *   and the hover subtotal silently excluded it, so the breakdown did not add
+ *   up to the To-Hit number printed beside it.
+ *   Cause: the sheet sends hitmod as aim+multi+other+called_mod AND sends
+ *   those four again as separate display fields, so the subtotal itemizes the
+ *   display fields rather than macroMod - correct there, and macroMod was
+ *   added back only for vehicles, whose hitmod carries wpnmod+targbonus
+ *   instead. !mp atk sends its --mod in hitmod with none of the display
+ *   fields, so it fell through both paths.
+ *   Fix itemizes the residual - macroMod minus whatever the display fields
+ *   already account for - so sheet attacks are unchanged (residual 0),
+ *   vehicles are unchanged, and a macro modifier now shows as its own line in
+ *   the hover and on the Modifiers row. A stale sheet with called_mod baked
+ *   into hitmod still nets to zero residual because calledNumeric is included
+ *   in the itemized total.
+ *   Reconciliation checked across sheet, stale-sheet, vehicle and macro paths.
  * v2.131.0: DEFAULT COLUMN FOR CRIT ROWS 7-8 (4.7.6). Both rows are
  *   conditional on their face - they strike an unprotected spot only "if the
  *   target has Armor ... and that Ability offers only [Light] Partial
@@ -1302,7 +1319,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.131.0";
+var MP_VERSION = "2.132.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7030,7 +7047,20 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (vTargBonus !== 0) hoverBreakdown += `&#10;Targeting: ${vTargBonus >= 0 ? '+' : ''}${vTargBonus}`;
     }
 
-    const subtotal = baseChance + atkMod + abilityTohitBonus + aimVal + multiVal + otherVal + (atkIsVehicle ? macroMod : 0);
+    // The sheet sends hitmod as aim+multi+other+called_mod AND sends those
+    // four again as display fields, so the subtotal itemizes them rather than
+    // macroMod. !mp atk sends its --mod in hitmod with none of those fields,
+    // so a macro modifier was itemized nowhere and dropped out of the subtotal,
+    // leaving the breakdown short of the To-Hit it sat next to. Itemize
+    // whatever part of macroMod the display fields do not already account for.
+    const itemizedMacroMod = aimVal + multiVal + otherVal + calledNumeric;
+    const macroModResidual = atkIsVehicle ? 0 : (macroMod - itemizedMacroMod);
+    if (macroModResidual !== 0) {
+      hoverBreakdown += `&#10;Macro Mod: ${macroModResidual >= 0 ? '+' : ''}${macroModResidual}`;
+    }
+
+    const subtotal = baseChance + atkMod + abilityTohitBonus + aimVal + multiVal + otherVal +
+      macroModResidual + (atkIsVehicle ? macroMod : 0);
     hoverBreakdown += `&#10;─────────`;
     hoverBreakdown += `&#10;Subtotal: ${subtotal}-`;
     
@@ -7171,6 +7201,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<span style="color:#aaa;">Aim: <b style="color:${modColor(aimVal)};">${aimVal}</b></span> `;
     html += `<span style="color:#aaa;">Multi: <b style="color:${modColor(multiVal)};">${multiVal}</b></span> `;
     html += `<span style="color:#aaa;">Other: <b style="color:${modColor(otherVal)};">${otherVal}</b></span> `;
+    if (macroModResidual !== 0) {
+      html += `<span style="color:#aaa; cursor:help;" title="Modifier passed on the command line (--mod)">Mod: <b style="color:${modColor(macroModResidual)};">${macroModResidual > 0 ? '+' : ''}${macroModResidual}</b></span> `;
+    }
     html += `<span style="color:#aaa;">Called: <b style="color:${modColor(calledShotPenalty)};">${calledShotPenalty}</b></span> `;
     html += `<span style="color:#aaa;">Push: <b style="color:${modColor(pushAmount)};">${pushAmount}</b></span>`;
     html += `</div>`;
