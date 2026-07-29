@@ -4607,8 +4607,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       // the mod query would answer the type query and calledtype would receive
       // a number. Under the API the engine applies the penalty from the type;
       // without it the sheet applies the number and the type is unused.
-      updates.called_type_query = (v.query_called === "1" && useApi) ? "?{Called Shot|None,None|Head,Head|Head - Avoid Helmet,Head Avoid Helmet|Arm,Arm|Leg,Leg|Avoid Light Armor,Avoid Light Armor|Avoid Heavy Armor,Avoid Heavy Armor|Gear,Gear|Dazzle,Dazzle}" : "None";
-      updates.called_mod_query = (v.query_called === "1" && !useApi) ? "?{Called Shot|None,0|Head,-6|Head - Avoid Helmet,-9|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3|Dazzle,-6}" : "0";
+      updates.called_type_query = (v.query_called === "1" && useApi) ? "?{Called Shot|None,None|Head,Head|Head - Avoid Helmet,Head Avoid Helmet|Arm,Arm|Leg,Leg|Avoid Light Armor,Avoid Light Armor|Avoid Heavy Armor,Avoid Heavy Armor|Gear,Gear|Avoid Snare,Avoid Snare|Dazzle,Dazzle}" : "None";
+      updates.called_mod_query = (v.query_called === "1" && !useApi) ? "?{Called Shot|None,0|Head,-6|Head - Avoid Helmet,-9|Arm,-3|Leg,-3|Avoid Light Armor,-3|Avoid Heavy Armor,-6|Gear,-3|Avoid Snare,-3|Dazzle,-6}" : "0";
       updates.aim_query = v.query_aim === "1" ? "?{Aim Bonus|0|+2,2|+4,4|+6,6}" : "0";
       updates.pushhb_query = v.query_pushhb === "1" ? "?{Push/Hold Back|0}" : "0";
       updates.push_query = updates.pushhb_query;

@@ -1,4 +1,28 @@
-/* Mighty Protectors Roll20 API Engine v2.127.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.128.0 - 2026-07-29
+ * v2.128.0: IMPLEMENT 4.14.2.9 AVOID SNARE. 4.7.2 grants +6 to hit a completely
+ *   immobile target and names snared explicitly, so the bonus was correct, but
+ *   the offsetting half of the trade was missing: a standard attack on a snared
+ *   target must be a called shot to avoid the snare or it hits the snare
+ *   instead. Attacking a snared target was therefore pure upside. New "Avoid
+ *   Snare" called shot at -3, the book's baseline for every called shot that
+ *   isn't head-sized or heavy armor; 4.14.2.9 states no number of its own.
+ *   +6 (4.7.2) minus -3 nets +3, the same band 4.7.2 gives a prone target.
+ *   Without the called shot the damage roll is compared to the snare's break
+ *   point (4.10): meeting or exceeding it frees the target, otherwise the snare
+ *   holds. No accumulation - 4.10 requires the break point on a single roll, so
+ *   a hit either breaks it or does nothing. The target takes no damage, no
+ *   knockback and no limb saves, and target-side crit effects (Off Balance,
+ *   Muscle Strain) are suppressed because the target was not hit. The damage
+ *   phase is marked resolved so a hand-typed !mp apply is rejected.
+ *   Gated on an engine snare record carrying a break point, NOT on
+ *   defRestrained: 4.11 has no grapple equivalent of 4.14.2.9, and a
+ *   hand-badged cobweb has no break point to roll against. The +6 itself still
+ *   keys on defRestrained and is unchanged.
+ *   Snare coverage is not modelled, so the penalty is flat rather than scaled
+ *   by snare type. That is the same gap as the armor Partial Coverage Modifier
+ *   (4.14.2.4); one flag would close both.
+ *   A stale sheet sending -3 still degrades to generic "Called", which does not
+ *   count as Avoid Snare and so hits the snare. The stale-sheet warning fires.
  * v2.127.0: PUBLIC CARD BODIES, PRIVATE BUTTONS. With GM_ONLY_BUTTONS the card
  *   itself was whispered only to the attacker's and defender's controllers, so
  *   the rest of the table could not see what was happening. New PUBLIC_CARDS
@@ -6241,7 +6265,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       "avoid heavy armor": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
       "gear": "Gear", "dazzle": "Dazzle",
       "head avoid helmet": "Head Avoid Helmet", "helmet": "Head Avoid Helmet",
-      "headhelmet": "Head Avoid Helmet", "avoidhelmet": "Head Avoid Helmet"
+      "headhelmet": "Head Avoid Helmet", "avoidhelmet": "Head Avoid Helmet",
+      "avoid snare": "Avoid Snare", "avoidsnare": "Avoid Snare", "snare": "Avoid Snare"
     };
     
     // Reverse map: penalty number -> type (for when sheet sends numeric value)
@@ -6272,12 +6297,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const calledIR = inlineTotal(msg, fields.called);
     const calledNumeric = calledIR ? calledIR.total : num(fields.called, 0);
     const calledPenaltyInMacroMod = calledNumeric !== 0;
-    // DEBUG: called-shot query resolution. Uncomment when a called shot
-    // resolves to the wrong type or arrives numeric.
-    // ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
+    ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
     
     // Get penalty: if input was numeric, use it directly; otherwise lookup by type
-    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6, "Head Avoid Helmet": -9 };
+    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6, "Head Avoid Helmet": -9, "Avoid Snare": -3 };
     let calledShotPenalty = calledShotPenalties[calledShotType];
     if (calledShotPenalty === undefined) {
       // Input might be raw number like "-6" or "-3"
@@ -6294,6 +6317,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isAvoidArmor = calledShotType === "Avoid Light Armor" || calledShotType === "Avoid Heavy Armor" ||
       calledShotType === "Head Avoid Helmet";
     const isGearShot = calledShotType === "Gear";
+    // 4.14.2.9: shoots past the snare to the target underneath. Costs the
+    // called shot penalty and grants nothing else - it only avoids the
+    // intercept below.
+    const isAvoidSnare = calledShotType === "Avoid Snare";
     // v2.90.1: Laser dazzle called shot (Light Control A) - -6 to hit, no
     // damage, ignores protection (goggles block entirely, GM-adjudicated).
     // On hit the victim rolls the row's EN save vs the Laser CP table's
@@ -6765,6 +6792,28 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       outcome = "HIT";
     }
 
+    // 4.14.2.9 Avoid Snare: without the called shot, a standard attack on a
+    // snared target hits the snare instead. Damage is compared to the break
+    // point (4.10); no accumulation, so it breaks or it holds. Keyed on a real
+    // snare record with a break point - 4.11 has no grapple equivalent and a
+    // hand-badged cobweb has nothing to roll against.
+    let snareHit = null;
+    if ((outcome === "HIT" || outcome === "CRIT") && !isAvoidSnare && !isAreaAttack &&
+        !isSaveAttack && !isSnareAttack && !doGrapple && !isDazzleShot && !noDamage) {
+      const interSn = state.MP_Engine.snares[defTokenId];
+      if (interSn && num(interSn.bp, 0) > 0) {
+        snareHit = {
+          bp: num(interSn.bp, 0),
+          type: interSn.type || "Snare",
+          broke: damageTotal >= num(interSn.bp, 0)
+        };
+        if (snareHit.broke) {
+          delete state.MP_Engine.snares[defTokenId];
+          setMarker(defTok, "cobweb", false);
+        }
+      }
+    }
+
     const uniqueRollId = String(Date.now()) + "_" + randomInteger(999999);
     state.MP_Engine.pending[uniqueRollId] = {
       rollId: uniqueRollId, playerid: originalPlayerId, atkCharId, atkName, defTokenId, 
@@ -6996,8 +7045,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
         if (hasProtectedBrain) html += `<div style="color:#8be9fd; font-size:11px; font-weight:bold; padding:0 10px;">PROTECTED BRAIN - Head Shot negated!</div>`;
       }
-      if (critResult.type === CRIT_TYPES.OFF_BALANCE) html += applyOffBalance(defTok, defName);
-      if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET && !isVehicleMode(defChar.id)) {
+      if (critResult.type === CRIT_TYPES.OFF_BALANCE && !snareHit) html += applyOffBalance(defTok, defName);
+      if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET && !isVehicleMode(defChar.id) && !snareHit) {
         const ms = rollMuscleStrain(defChar.id, 0);
         strainPending = {
           id: "strain_" + uniqueRollId, tokenId: defTokenId, charId: defChar.id,
@@ -7039,6 +7088,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           "Avoid Heavy Armor": "AVOID HEAVY ARMOR (-6)", "Gear": "GEAR SHOT (-3)",
           "Head Avoid Helmet": "HEAD SHOT, HELMET AVOIDED (-9) - Hits DOUBLED, armor bypassed!",
           "Called": "CALLED SHOT (-3)",
+          "Avoid Snare": "AVOID SNARE (-3) - shot past the snare",
           "Dazzle": "DAZZLE SHOT (-6) - no damage, ignores protection, EN save vs blind (goggles block)"
         };
         html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#e67e22;">${labels[calledShotType] || `CALLED SHOT: ${calledShotType}`}</div>`;
@@ -7065,6 +7115,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       grappleGroups = g.groups;
     }
 
+    if (snareHit) {
+      html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#e67e22;">HITS THE SNARE (4.14.2.9) - no called shot to avoid it</div>`;
+      html += `<div style="font-size:11px; padding:0 10px;">Damage <b>${damageTotal}</b> vs ${esc(snareHit.type)} BP <b>${snareHit.bp}</b> - ` +
+        (snareHit.broke
+          ? `<b style="color:#27ae60">SNARE BREAKS</b> - ${esc(defName)} is free`
+          : `<b style="color:#e94560">snare holds</b>`) +
+        `<br/><i>${esc(defName)} takes no damage.</i></div>`;
+    }
+
     // --- Close card ---
     html += `</div>`;
 
@@ -7086,6 +7145,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         buttonGroups.attacker = buttons;
       } else if (doGrapple) {
         buttonGroups = grappleGroups || { attacker: "", defender: "" };
+      } else if (snareHit) {
+        markResolution(state.MP_Engine.pending[uniqueRollId], "damage", msg);
       } else {
         const pendingRec = state.MP_Engine.pending[uniqueRollId];
         buttons = buildStandardAttackButtons(uniqueRollId, critResult, causesKB, pendingRec);
@@ -12818,7 +12879,8 @@ function cmdStance(msg, args) {
       "headhelmet": "Head Avoid Helmet", "arm": "Arm", "leg": "Leg",
       "light": "Avoid Light Armor", "avoidlight": "Avoid Light Armor",
       "heavy": "Avoid Heavy Armor", "avoidheavy": "Avoid Heavy Armor",
-      "gear": "Gear", "dazzle": "Dazzle"
+      "gear": "Gear", "dazzle": "Dazzle",
+      "snare": "Avoid Snare", "avoidsnare": "Avoid Snare"
     };
     const calledRawTest = String(args.called || "None").trim();
     const calledTypeTest = calledMapTest[calledRawTest.toLowerCase()] || calledRawTest;
@@ -13538,7 +13600,7 @@ function cmdStance(msg, args) {
   // QUICK ATTACK COMMAND
   // -------------------------
   // Usage: !mp atk N --atk TOKEN_ID --target TOKEN_ID [--mod N] [--push N] [--called TYPE]
-  // Called types: None, Head, Helmet (Head Avoid Helmet, -9), Arm, Leg, Light (Avoid Light Armor), Heavy (Avoid Heavy Armor), Gear
+  // Called types: None, Head, Helmet (Head Avoid Helmet, -9), Arm, Leg, Light (Avoid Light Armor), Heavy (Avoid Heavy Armor), Gear, Snare (Avoid Snare, -3)
   // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0} --called ?{Called|None|Head|Helmet|Arm|Leg|Light|Heavy|Gear}
   // Triggers existing mpattack roll template handler
 
@@ -13623,7 +13685,8 @@ function cmdStance(msg, args) {
       "avoidlight": "Avoid Light Armor", "light": "Avoid Light Armor",
       "avoidheavy": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
       "gear": "Gear", "dazzle": "Dazzle",
-      "helmet": "Head Avoid Helmet", "headhelmet": "Head Avoid Helmet"
+      "helmet": "Head Avoid Helmet", "headhelmet": "Head Avoid Helmet",
+      "snare": "Avoid Snare", "avoidsnare": "Avoid Snare"
     };
     const calledType = calledMap[calledRaw.toLowerCase()] || calledRaw;
 
