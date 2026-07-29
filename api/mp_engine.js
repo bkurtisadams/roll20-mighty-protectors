@@ -1,4 +1,20 @@
-/* Mighty Protectors Roll20 API Engine v2.132.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.133.0 - 2026-07-29
+ * v2.133.0: APPLY INERTIA TO KNOCKBACK. cmdKnockback rolled bare Mass, so the
+ *   Inertia Physical Ability (C) never reduced knockback. Inertia is Continual
+ *   at PR 0 per round and adds +1 per purchase to the Mass roll vs Knockback,
+ *   so it always applies; the sheet already derives kb_resistance by summing
+ *   ability_kbres_mod across ability rows, and cmdHTHMass was the only command
+ *   reading it. A character with Inertia therefore got a different Mass total
+ *   from the tug-of-war command and the sheet's own Mass button than from the
+ *   knockback that actually resolved.
+ *   Card itemizes the dice and the Inertia bonus separately when non-zero.
+ *   Vehicles get 0: Inertia is a character Ability and vehicle knockback rolls
+ *   vehicle_mass.
+ *   NOT folded in, both being conditional on holding on and left to the table:
+ *   Extra Limbs (Physical Ability B) adds +1 only while holding on, and 4.8.5
+ *   lets a braced or hanging character substitute Base HTH for Mass when the
+ *   HTH dice are better, or deduct Base HTH in addition to Mass when the
+ *   knockback direction is down.
  * v2.132.0: SHOW MACRO --mod IN THE TO-HIT BREAKDOWN. A modifier passed to
  *   !mp atk --mod was applied to the roll but appeared nowhere on the card,
  *   and the hover subtotal silently excluded it, so the breakdown did not add
@@ -1319,7 +1335,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.132.0";
+var MP_VERSION = "2.133.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -10239,7 +10255,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const massExpr = kbDefIsVeh
       ? (getAttr(defChar.id, "vehicle_mass") || getAttr(defChar.id, "vehicle_mass_roll") || "1d4")
       : (getAttr(defChar.id, "mass") || "1d4");
-    const massRoll = rollExpr(massExpr);
+    const massDiceRoll = rollExpr(massExpr);
+    // Inertia (Physical Ability C) is Continual at PR 0 per round and adds +1
+    // per purchase to the Mass roll vs Knockback, so it always applies. The
+    // sheet derives kb_resistance by summing ability_kbres_mod across ability
+    // rows. Extra Limbs (+1) is deliberately NOT folded in here: it applies
+    // only while the character is holding on, as does 4.8.5's option to
+    // substitute Base HTH for Mass. Both stay table-adjudicated.
+    const kbInertia = kbDefIsVeh ? 0 : getAttrNum(defChar.id, "kb_resistance", 0);
+    const massRoll = massDiceRoll + kbInertia;
 
     // Use hitsForKB (non-doubled for head shots per MP 4.14.2.1), fallback to hitsTaken
     const hitsForKB = rec.hitsForKB !== undefined ? rec.hitsForKB : (rec.hitsTaken || 0);
@@ -10249,8 +10273,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     markResolution(rec, "knockback", msg);
 
     const kbSrcLabel = rec.isRepulsion ? `💨 KB Damage` : `Hits for KB`;
+    const massLabel = kbInertia !== 0
+      ? `Mass(${esc(massExpr)}): <b>${massDiceRoll}</b> + Inertia: <b>${kbInertia > 0 ? '+' : ''}${kbInertia}</b> = <b>${massRoll}</b>`
+      : `Mass(${esc(massExpr)}): <b>${massRoll}</b>`;
     let msg_out = `<b>Knockback vs ${esc(rec.defName)}</b><br/>` +
-      `${kbSrcLabel}: <b>${hitsForKB}</b> - Mass(${esc(massExpr)}): <b>${massRoll}</b> = <b>${kb}"</b> KB`;
+      `${kbSrcLabel}: <b>${hitsForKB}</b> - ${massLabel} = <b>${kb}"</b> KB`;
 
     let kbSaveButton = "";
     let kbImpactButton = "";
