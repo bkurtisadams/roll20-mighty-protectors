@@ -1,4 +1,49 @@
-/* Mighty Protectors Roll20 API Engine v2.121.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.123.0 - 2026-07-29
+ * v2.123.0: FIX CALLED SHOT TYPE NEVER REACHING THE ENGINE. Roll20 asks a roll
+ *   query once per prompt LABEL and substitutes that one answer everywhere the
+ *   label appears. called_mod_query and called_type_query both prompted
+ *   "Called Shot", and the mod query comes first in the roll button, so
+ *   calledtype received the NUMBER instead of the name. Head shots appeared to
+ *   work only because -6 reverse-mapped to Head; -3 is ambiguous across Arm,
+ *   Leg, Avoid Light Armor and Gear and degraded to generic "Called", so limb
+ *   shots never produced their saves. Worse, an Avoid Heavy Armor called shot
+ *   sent -6 and was silently resolved as a HEAD SHOT, doubling Hits.
+ *   initQuerySettings now keeps exactly one of the two queries live: with the
+ *   API on, only the type query, and the engine applies the penalty; with it
+ *   off, only the mod query, and the sheet applies it as before. Non-API play
+ *   is unchanged -- same prompt, same math, no engine involvement.
+ *   targetTotal adds calledShotPenalty only when the sheet did not already bake
+ *   it into hitmod, so sheets whose query attributes have not refreshed yet
+ *   cannot double-count. Opening a character sheet refreshes them.
+ *   Side effect: !mp atk --called never applied the penalty at all (it sends
+ *   the raw attack_tohit_num and no called field). It does now.
+ * v2.122.0: IMPLEMENT 4.7.6 DEFAULT COLUMN. The critical and fumble tables each
+ *   carry a Default column the engine never read: "If the result is
+ *   inappropriate, switch to the Critical listed in the Default column." This
+ *   replaces v2.121.0's supersede-and-discard behaviour, which was a house rule
+ *   invented to fill a gap the rules already cover. A called head shot that
+ *   crits into Arm Shot no longer drops the crit -- Arm Shot is inappropriate,
+ *   so it becomes its default, Solid Hit (+3 damage). Crit 18 on a declared
+ *   head shot likewise becomes Solid Hit rather than doubling twice or doing
+ *   nothing. Gear Shot defaults to Precise Hit; everything else defaults to
+ *   Solid Hit. Substitution chains (max 4 hops) and is reported on the card.
+ *   Auto-substitutes only where the conflict is mechanically detectable: a
+ *   declared called shot vs a crit naming a different location (or the same
+ *   one, which grants nothing new), and biological results against vehicle
+ *   targets. Cases needing GM judgement -- no breakable gear, no partial
+ *   coverage, target already prone -- are left alone. Fumbles substitute for
+ *   vehicle attackers only (no legs, arms or muscles to strain).
+ *   Limb saves: natural 1 now always succeeds per 3.0.1. Previously enough Hits
+ *   drove the AG target number to zero or below and the defender could not
+ *   succeed at all, since only the natural 20 auto-fail was implemented.
+ *   Called shot desync guard: the sheet asks for the called shot twice
+ *   (called_mod_query for the to-hit math, called_type_query for the parser)
+ *   as two prompts with the same label, so setting one and not the other
+ *   applied the penalty with no called shot attached and no limb saves. The
+ *   engine now whispers the GM when a nonzero penalty arrives with type None or
+ *   generic Called. Adds -9 to the penalty reverse map for the helmet shot.
+ *   Crit row 8 relabelled "Avoid Armor" (Light OR Heavy partial coverage) and
+ *   row 7 "Avoid Light Armor"; both also avoid cover, which is still unmodelled.
  * v2.121.0: COMPOSITE APPLY MODES + AVOID HELMET CALLED SHOT. 4.14.2.1 doubles
  *   Hits as the LAST step ("after determining the number of Hits which get past
  *   the target's protection, rolling with damage"), so a head shot never
@@ -1309,6 +1354,51 @@ MP.Engine = (function () {
     OFF_BALANCE: "off_balance",
     HEAD_SHOT: "head_shot",
     OTHER: "other"
+  };
+
+  // 4.7.6 Default column: "If the result is inappropriate, switch to the
+  // Critical listed in the Default column." Keyed by type -> replacement type.
+  const CRIT_DEFAULTS = {
+    gear_shot: "precise_hit",
+    free_action: "other",
+    leg_shot: "solid_hit",
+    avoid_light_armor: "solid_hit",
+    avoid_heavy_armor: "solid_hit",
+    muscle_strain_target: "solid_hit",
+    arm_shot: "solid_hit",
+    precise_hit: "solid_hit",
+    solid_hit: null,
+    off_balance: "solid_hit",
+    head_shot: "solid_hit",
+    other: null
+  };
+
+  const FUMBLE_DEFAULTS = {
+    wrong_target: "off_balance_atk",
+    off_balance_atk: null,
+    leg_strain: "left_opening",
+    left_opening: "other_fumble",
+    muscle_strain_atk: null,
+    arm_strain: "lost_opportunity",
+    weapon_stuck: "muscle_strain_atk",
+    lost_opportunity: "gear_damage",
+    gear_damage: "other_fumble",
+    other_fumble: null
+  };
+
+  const CRIT_DESCS = {
+    gear_shot: "Gear Shot - damage vs target's gear break point",
+    free_action: "Free Action - attacker gets a free action",
+    leg_shot: "Leg Shot - EN+7 save at -1/Hit or lose leg; AG save or fall",
+    avoid_light_armor: "Avoid Light Armor - bypasses Light partial coverage and Light cover",
+    avoid_heavy_armor: "Avoid Armor - bypasses Light or Heavy partial coverage and cover",
+    muscle_strain_target: "Muscle Strain - target takes 1 Hit to torso",
+    arm_shot: "Arm Shot - EN+7 save at -1/Hit or lose arm; AG save or drop",
+    precise_hit: "Precise Hit - target's roll-with capacity halved",
+    solid_hit: "Solid Hit - +3 damage (standard) or -3 to save TN (save attack)",
+    off_balance: "Off Balance - target at -3 defense next phase",
+    head_shot: "Head Shot - DOUBLE Hits after protection & roll-with",
+    other: "Other - GM determines effect"
   };
 
   // Fumble types
@@ -5801,6 +5891,72 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // CRITICAL/FUMBLE TABLES (4.7.6)
   // -------------------------
 
+  // 4.7.6: a rolled critical that cannot apply is replaced by its Default
+  // column entry. Only mechanically detectable conflicts substitute here;
+  // anything needing GM judgement (no breakable gear, no partial coverage,
+  // target already prone) is left for the GM to call at the table.
+  function critIsInappropriate(type, ctx) {
+    if (ctx.defIsVehicle) {
+      if (type === CRIT_TYPES.LEG_SHOT || type === CRIT_TYPES.ARM_SHOT ||
+          type === CRIT_TYPES.HEAD_SHOT || type === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
+        return "vehicle target";
+      }
+      if (type === CRIT_TYPES.PRECISE_HIT) return "vehicle cannot roll with damage";
+    }
+
+    // A declared called shot fixes where the blow lands. A crit naming a
+    // different location contradicts it; one naming the same location grants
+    // nothing that is not already in play.
+    const critLoc = type === CRIT_TYPES.LEG_SHOT ? "leg" :
+      type === CRIT_TYPES.ARM_SHOT ? "arm" :
+      type === CRIT_TYPES.HEAD_SHOT ? "head" :
+      type === CRIT_TYPES.GEAR_SHOT ? "gear" : null;
+    if (!critLoc) return null;
+    const calledLoc = ctx.isHeadShot ? "head" : ctx.isLegShot ? "leg" :
+      ctx.isArmShot ? "arm" : ctx.isGearShot ? "gear" : null;
+    if (!calledLoc) return null;
+    return calledLoc === critLoc
+      ? `called ${calledLoc} shot already in effect`
+      : `called ${calledLoc} shot declared`;
+  }
+
+  function applyCritDefault(critResult, ctx) {
+    if (!critResult) return critResult;
+    const reason = critIsInappropriate(critResult.type, ctx);
+    if (!reason) return critResult;
+
+    let type = critResult.type;
+    for (let i = 0; i < 4 && critIsInappropriate(type, ctx); i++) {
+      const next = CRIT_DEFAULTS[type];
+      if (!next) break;
+      type = next;
+    }
+    if (type === critResult.type) return critResult;
+    return {
+      roll: critResult.roll, type,
+      desc: `(${critResult.roll}) ${CRIT_DESCS[type] || type}`,
+      substitutedFrom: critResult.desc, substitutedReason: reason
+    };
+  }
+
+  function applyFumbleDefault(fumbleResult, ctx) {
+    if (!fumbleResult || !ctx.atkIsVehicle) return fumbleResult;
+    const bodily = [FUMBLE_TYPES.LEG_STRAIN, FUMBLE_TYPES.ARM_STRAIN, FUMBLE_TYPES.MUSCLE_STRAIN_ATK];
+    if (!bodily.includes(fumbleResult.type)) return fumbleResult;
+    let type = fumbleResult.type;
+    for (let i = 0; i < 4 && bodily.includes(type); i++) {
+      const next = FUMBLE_DEFAULTS[type];
+      if (!next) break;
+      type = next;
+    }
+    if (type === fumbleResult.type) return fumbleResult;
+    return {
+      roll: fumbleResult.roll, type,
+      desc: `(${fumbleResult.roll}) default result - see 4.7.6`,
+      substitutedFrom: fumbleResult.desc, substitutedReason: "vehicle attacker"
+    };
+  }
+
   function rollCriticalTable() {
     const r = randomInteger(20);
     let type, desc;
@@ -5816,10 +5972,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       desc = `(${r}) Leg Shot - EN+7 save at -1/Hit or lose leg; AG save or fall`;
     } else if (r === 7) {
       type = CRIT_TYPES.AVOID_LIGHT_ARMOR;
-      desc = `(${r}) Avoid Light Armor - bypasses partial armor coverage`;
+      desc = `(${r}) Avoid Light Armor - bypasses Light partial coverage and Light cover`;
     } else if (r === 8) {
       type = CRIT_TYPES.AVOID_HEAVY_ARMOR;
-      desc = `(${r}) Avoid Heavy Armor - bypasses partial armor coverage`;
+      desc = `(${r}) Avoid Armor - bypasses Light or Heavy partial coverage and cover`;
     } else if (r === 9) {
       type = CRIT_TYPES.MUSCLE_STRAIN_TARGET;
       desc = `(${r}) Muscle Strain - target takes 1 Hit to torso`;
@@ -5976,14 +6132,33 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Reverse map: penalty number -> type (for when sheet sends numeric value)
     // Note: -3 is ambiguous (Arm/Leg/Light/Gear), default to generic "Called"
-    const penaltyToType = { "0": "None", "-6": "Head", "-3": "Called" };
+    const penaltyToType = { "0": "None", "-6": "Head", "-9": "Head Avoid Helmet", "-3": "Called" };
     
     // Try name lookup first, then penalty reverse-lookup, then use raw input
     let calledShotType = calledShotMap[calledShotInput.toLowerCase()];
     if (!calledShotType) {
       calledShotType = penaltyToType[calledShotInput] || (calledShotInput === "0" ? "None" : calledShotInput);
     }
-    // ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
+    
+    // Roll20 collapses roll queries that share a prompt label: it asks once and
+    // substitutes the single answer everywhere that label appears. Both
+    // called_mod_query and called_type_query prompted "Called Shot", and the
+    // mod query comes first in the roll button, so calledtype received the
+    // NUMBER. -6 reverse-mapped to Head so head shots appeared to work, while
+    // -3 is ambiguous across Arm/Leg/Avoid Light/Gear and degraded to generic
+    // "Called" -- and an Avoid Heavy Armor shot silently became a head shot.
+    // initQuerySettings now keeps only one of the two live at a time.
+    const calledLooksNumeric = /^-?\d+$/.test(calledShotInput) && calledShotInput !== "0";
+    if (calledLooksNumeric) {
+      ch("MP", `/w gm <b>MP:</b> Called shot type arrived as "${esc(calledShotInput)}" instead of a name - this sheet's query settings are stale. Open the character sheet to refresh them.`);
+    }
+
+    // The penalty rides in the sheet's hitmod only while called_mod_query is
+    // live. When the sheet sends 0 the engine owns it.
+    const calledIR = inlineTotal(msg, fields.called);
+    const calledNumeric = calledIR ? calledIR.total : num(fields.called, 0);
+    const calledPenaltyInMacroMod = calledNumeric !== 0;
+    ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
     
     // Get penalty: if input was numeric, use it directly; otherwise lookup by type
     const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6, "Head Avoid Helmet": -9 };
@@ -6377,9 +6552,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isAreaAttack) {
       targetTotal = baseToHit + 6;
     } else {
-      // Note: calledShotPenalty is already included in macroMod (from sheet's hitmod field)
-      // Do NOT add it again here - it's extracted separately only for hover display
-      targetTotal = baseToHit + defStatusBonus - effDefValue;
+      // Under the API the sheet sends called_mod_query as 0 and the engine owns
+      // the penalty. Stale sheets still bake it into hitmod, so only add it
+      // when it isn't already there.
+      targetTotal = baseToHit + defStatusBonus - effDefValue +
+        (calledPenaltyInMacroMod ? 0 : calledShotPenalty);
     }
 
     if (atkChgCost > 0 && num(atkChgRaw, 0) <= 0) {
@@ -6447,11 +6624,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let critResult = null;
     let fumbleResult = null;
 
+    const defaultCtx = {
+      defIsVehicle: isVehicleMode(defChar.id), atkIsVehicle: atkIsVehicle,
+      isHeadShot, isLegShot, isArmShot, isGearShot
+    };
+
     if (nat === 20) {
       if (confirm > targetTotal) {
         isFumble = true;
         outcome = "FUMBLE";
-        fumbleResult = rollFumbleTable();
+        fumbleResult = applyFumbleDefault(rollFumbleTable(), defaultCtx);
       } else {
         outcome = "MISS";
       }
@@ -6459,7 +6641,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (confirm <= targetTotal) {
         isCrit = true;
         outcome = "CRIT";
-        critResult = rollCriticalTable();
+        critResult = applyCritDefault(rollCriticalTable(), defaultCtx);
       } else {
         outcome = "HIT";
       }
@@ -6690,6 +6872,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // --- Crit / Fumble / Called Shot Results ---
     if (isCrit && critResult) {
       html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#f1c40f;">CRIT: ${esc(critResult.desc)}</div>`;
+      if (critResult.substitutedFrom) {
+        html += `<div style="color:#889; font-size:10px; padding:0 10px;">4.7.6 default: ${esc(critResult.substitutedFrom)} - ${esc(critResult.substitutedReason)}</div>`;
+      }
       if (critResult.type === CRIT_TYPES.HEAD_SHOT) {
         const hasProtectedBrain = (num(getAttr(defChar.id, "willpower_protected_brain"), 0) === 1);
         if (hasProtectedBrain) html += `<div style="color:#8be9fd; font-size:11px; font-weight:bold; padding:0 10px;">PROTECTED BRAIN - Head Shot negated!</div>`;
@@ -6709,6 +6894,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (isFumble && fumbleResult) {
       html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#c0392b;">FUMBLE: ${esc(fumbleResult.desc)}</div>`;
+      if (fumbleResult.substitutedFrom) {
+        html += `<div style="color:#889; font-size:10px; padding:0 10px;">4.7.6 default: ${esc(fumbleResult.substitutedFrom)} - ${esc(fumbleResult.substitutedReason)}</div>`;
+      }
       if (fumbleResult.type === FUMBLE_TYPES.OFF_BALANCE_ATK && atkTok) html += applyOffBalance(atkTok, atkChar.get("name"));
       if ([FUMBLE_TYPES.MUSCLE_STRAIN_ATK, FUMBLE_TYPES.LEG_STRAIN, FUMBLE_TYPES.ARM_STRAIN].includes(fumbleResult.type) && atkTok) {
         const atkHits0 = getResource(atkTok, atkCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
@@ -8782,15 +8970,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isArmShot = rec && rec.isArmShot;
     const isGearShot = rec && rec.isGearShot;
     
-    // A declared head shot supersedes a crit-table LOCATION result (rows 1-2
-    // Gear, 5-6 Leg, 10-11 Arm): one blow lands in one place, and the attacker
-    // paid -6 to choose it. Those rows are purely a location assignment, so
-    // they are discarded rather than layered.
-    const critLocName = critType === CRIT_TYPES.LEG_SHOT ? "leg" :
-      critType === CRIT_TYPES.ARM_SHOT ? "arm" :
-      critType === CRIT_TYPES.GEAR_SHOT ? "gear" : null;
-    const dropCritLoc = !!isHeadShot && !!critLocName;
-    
     // Death Touch (p.53): penetrating damage may NOT be rolled with. Apply only.
     if (rec && rec.isDeathTouch && !defIsVeh) {
       buttons = `${btnDanger(`Apply (Death Touch)`, `!mp apply --id ${rollId} --mode noroll`)}`;
@@ -8826,14 +9005,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     if (!defIsVeh) {
-      if (!dropCritLoc && (critType === CRIT_TYPES.LEG_SHOT || isLegShot)) {
+      if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
         buttons += `<br/>${btn(`Leg Shot Saves`, `!mp limbsave --id ${rollId} --limb leg`)}`;
-      } else if (!dropCritLoc && (critType === CRIT_TYPES.ARM_SHOT || isArmShot)) {
+      } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
         buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
       } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
         buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
-      } else if (dropCritLoc) {
-        buttons += `<br/><i>(Head shot declared - crit ${critLocName} result superseded)</i>`;
       }
     }
     
@@ -8890,15 +9067,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isArmShot = rec && rec.isArmShot;
     const isGearShot = rec && rec.isGearShot;
     
-    // A declared head shot supersedes a crit-table LOCATION result (rows 1-2
-    // Gear, 5-6 Leg, 10-11 Arm): one blow lands in one place, and the attacker
-    // paid -6 to choose it. Those rows are purely a location assignment, so
-    // they are discarded rather than layered.
-    const critLocName = critType === CRIT_TYPES.LEG_SHOT ? "leg" :
-      critType === CRIT_TYPES.ARM_SHOT ? "arm" :
-      critType === CRIT_TYPES.GEAR_SHOT ? "gear" : null;
-    const dropCritLoc = !!isHeadShot && !!critLocName;
-    
     // Death Touch (p.53): penetrating damage may NOT be rolled with. Apply only.
     if (rec && rec.isDeathTouch && !defIsVeh) {
       buttons = `${btnDanger(`Apply (Death Touch)`, `!mp apply --id ${rollId} --mode noroll`)}`;
@@ -8935,14 +9103,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     // Add limb shot saves if applicable (crit OR deliberate called shot) - not for vehicles
     if (!defIsVeh) {
-      if (!dropCritLoc && (critType === CRIT_TYPES.LEG_SHOT || isLegShot)) {
+      if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
         buttons += `<br/>${btn(`Leg Shot Saves`, `!mp limbsave --id ${rollId} --limb leg`)}`;
-      } else if (!dropCritLoc && (critType === CRIT_TYPES.ARM_SHOT || isArmShot)) {
+      } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
         buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
       } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
         buttons += `<br/><i>(+1 Hit to target's torso)</i>`;
-      } else if (dropCritLoc) {
-        buttons += `<br/><i>(Head shot declared - crit ${critLocName} result superseded)</i>`;
       }
     }
     
@@ -9618,9 +9784,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!requirePendingRole(msg, rec, "defender", `make the ${limb || "limb"} shot saves`)) return;
     if (rec.hitsTaken === undefined) return ch("MP", `${wt(msg)}<b>MP:</b> Resolve this attack's damage before making limb-shot saves.`);
     const critType = rec.critResult ? rec.critResult.type : null;
-    const validLimb = !rec.isHeadShot && (
-      (limb === "leg" && (rec.isLegShot || critType === CRIT_TYPES.LEG_SHOT)) ||
-      (limb === "arm" && (rec.isArmShot || critType === CRIT_TYPES.ARM_SHOT)));
+    const validLimb = (limb === "leg" && (rec.isLegShot || critType === CRIT_TYPES.LEG_SHOT)) ||
+      (limb === "arm" && (rec.isArmShot || critType === CRIT_TYPES.ARM_SHOT));
     if (!validLimb) return ch("MP", `${wt(msg)}<b>MP:</b> That limb save does not belong to this attack.`);
     const phase = `limb_${limb}`;
     if (!requireOpenResolution(msg, rec, phase, `${limb === "leg" ? "Leg" : "Arm"} shot saves`)) return;
@@ -9633,16 +9798,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     markResolution(rec, phase, msg);
     
     // EN+7 save at -1 per Hit taken
+    // 3.0.1: a saving roll of 1 always succeeds, a roll of 20 always fails.
+    // Without this a heavy hit drives the AG target number to zero or below
+    // and the defender cannot succeed at all.
     const enSave = getAttrNum(defChar.id, "endurance_save", 10);
     const enTN = enSave + 7 - hitsTaken;
     const enRoll = randomInteger(20);
-    const enPass = (enRoll !== 20) && (enRoll <= enTN);
+    const enPass = (enRoll === 1) || ((enRoll !== 20) && (enRoll <= enTN));
     
     // AG save at -1 per Hit taken
     const agSave = getAttrNum(defChar.id, "agility_save", 10);
     const agTN = agSave - hitsTaken;
     const agRoll = randomInteger(20);
-    const agPass = (agRoll !== 20) && (agRoll <= agTN);
+    const agPass = (agRoll === 1) || ((agRoll !== 20) && (agRoll <= agTN));
     
     const limbName = limb === "leg" ? "Leg" : "Arm";
     const loseEffect = limb === "leg" ? "loses use of leg" : "loses use of arm";
