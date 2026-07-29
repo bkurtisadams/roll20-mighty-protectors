@@ -1,4 +1,41 @@
-/* Mighty Protectors Roll20 API Engine v2.128.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.130.0 - 2026-07-29
+ * v2.130.0: MODEL PARTIAL COVERAGE (4.14.2.4). Avoid Armor crits, the -3/-6
+ *   avoid-armor called shots and Head Avoid Helmet all bypassed ALL protection.
+ *   RAW is narrower: crit row 7 avoids armor offering only LIGHT Partial
+ *   Coverage, row 8 avoids LIGHT OR HEAVY, and armor without the Partial
+ *   Coverage Modifier cannot be avoided at all. Full-coverage armor now keeps
+ *   protecting through an avoid result.
+ *   No new data model was needed. The sheet already has a per-row
+ *   prot_coverage select (full / heavy / light) and the engine already read it
+ *   for area-effect penetration; it simply never reached the avoid path.
+ *   sumProtectionWithHardened takes an avoidTier and skips only the rows that
+ *   tier beats, returning what it skipped so the card can report it.
+ *   Because avoided rows are now excluded from the total rather than the total
+ *   being zeroed, AP and Hardened work normally against whatever armor is left
+ *   standing. bypassProt survives as the flat legacy bypass for vehicles (no
+ *   coverage field), the --noprot test flag, and pre-coverage cards, which
+ *   resolve to tier "all".
+ *   A Force Field is "a similar protective Ability" under rows 7-8, so it is
+ *   avoided only when its own row carries the modifier. Defaulting to full
+ *   coverage means fields stop being bypassed for free.
+ *   Apply-mode strings are UNCHANGED - noprot still means noprot, so old cards
+ *   still resolve and damageApplyProfile / applyModeName / allowedApplyModes
+ *   stay in sync. Only the meaning at application time narrowed.
+ *   Remaining approximation: Head Avoid Helmet (-9) resolves as partial
+ *   coverage rather than avoiding the helmet specifically, because there is no
+ *   per-piece armor model. It no longer strips full-coverage body armor.
+ * v2.129.0: Comment out the called-shot DEBUG whisper. It printed
+ *   raw / input / resolved to the GM on EVERY attack, not just called shots.
+ *   Uncomment it in the called-shot parser if a shot ever resolves to the
+ *   wrong type again.
+ *   DESIGN DECISION, not a gap: limb loss consequences (4.14.2.2 movement
+ *   halving, 4.14.2.3 carrying capacity) are deliberately NOT automated. A
+ *   failed EN+7 save sets the broken-leg or broken-shield marker and stops
+ *   there; the token icon says the limb is unusable and the GM adjudicates
+ *   movement and carrying at the table. This was implemented once (good-limb
+ *   counting via limb_lost condition records, per-character limb totals, a
+ *   !mp limbs command) and backed out as too much automation. Do not
+ *   re-implement it without asking.
  * v2.128.0: IMPLEMENT 4.14.2.9 AVOID SNARE. 4.7.2 grants +6 to hit a completely
  *   immobile target and names snared explicitly, so the bonus was correct, but
  *   the offsetting half of the trade was missing: a standard attack on a snared
@@ -1244,7 +1281,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.120.0";
+var MP_VERSION = "2.130.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -4478,6 +4515,38 @@ function generateRowID() {
   // halves roll-with capacity. cmdApply reads each as an independent substring
   // flag in that order, so the mode string is composed from the flag set rather
   // than picked from one exclusive branch.
+  // 4.14.2.4 and crit rows 7-8: only armor carrying the Partial Coverage
+  // Modifier can be avoided at all. Row 7 (Avoid Light Armor, called shot -3)
+  // avoids Light partial coverage; row 8 (Avoid Armor, called shot -6) avoids
+  // Light OR Heavy. Full-coverage armor is never avoided. Returns which
+  // prot_coverage values the attack skips:
+  //   "none"    nothing avoided
+  //   "light"   light partial coverage only
+  //   "partial" light or heavy partial coverage
+  //   "all"     every row - legacy cards and the --noprot test flag, which
+  //             predate the coverage model and mean a flat bypass
+  function avoidCoverageTier(rec, critType) {
+    if (critType === CRIT_TYPES.AVOID_LIGHT_ARMOR) return "light";
+    if (critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) return "partial";
+    const called = rec && rec.calledShotType;
+    if (called === "Avoid Light Armor") return "light";
+    if (called === "Avoid Heavy Armor") return "partial";
+    // 4.14.2.1 avoids the HELMET, not the body armor. With no per-piece model
+    // this is the closest honest approximation: a helmet is partial coverage by
+    // definition, and full-coverage armor is left standing.
+    if (called === "Head Avoid Helmet") return "partial";
+    return "all";
+  }
+
+  function coverageAvoided(cov, tier) {
+    if (!tier || tier === "none") return false;
+    if (tier === "all") return true;
+    const c = String(cov || "full").toLowerCase();
+    if (tier === "light") return c === "light";
+    if (tier === "partial") return c === "light" || c === "heavy";
+    return false;
+  }
+
   function damageApplyProfile(rec, critType) {
     const defIsVeh = !!(rec && rec.defCharId && isVehicleMode(rec.defCharId));
     const hasProtectedBrain = !defIsVeh && !!(rec && rec.defCharId) &&
@@ -4846,14 +4915,16 @@ function generateRowID() {
   // lists the attack subtype. Used by Transmutation save handling. Disintegration
   // is stricter and is handled internally: explicit subtype + Invulnerability only;
   // numeric protection, Hardened, and Adaptation are ignored.
-  function sumProtectionWithHardened(charId, protKey, atkSubtype, dedicatedOnly) {
-    if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false };
+  function sumProtectionWithHardened(charId, protKey, atkSubtype, dedicatedOnly, avoidTier) {
+    if (!protKey) return { prot: 0, hardened: 0, invuln: false, adapt: false, avoided: 0, avoidedRows: 0 };
     
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
     let totalProt = 0;
     let totalHardened = 0;
     let hasInvuln = false;
     let hasAdapt = false;
+    let avoidedProt = 0;
+    let avoidedRows = 0;
     
     // Map protKey to hardened field name
     const hardKeyMap = {
@@ -4935,6 +5006,17 @@ function generateRowID() {
         if (parsed.invuln) hasInvuln = true;
         return;
       }
+      // 4.14.2.4: only armor with the Partial Coverage Modifier can be avoided.
+      // Full-coverage rows keep protecting through an Avoid Armor result.
+      if (avoidTier && avoidTier !== "none") {
+        const covAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_coverage`);
+        const cov = covAttr ? covAttr.get("current") : "full";
+        if (coverageAvoided(cov, avoidTier)) {
+          avoidedProt += parsed.prot;
+          avoidedRows += 1;
+          return;
+        }
+      }
       totalProt += parsed.prot;
       if (parsed.invuln) hasInvuln = true;
       if (parsed.adapt) hasAdapt = true;
@@ -4949,7 +5031,8 @@ function generateRowID() {
       }
     });
     
-    return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln, adapt: hasAdapt };
+    return { prot: totalProt, hardened: totalHardened, invuln: hasInvuln, adapt: hasAdapt,
+      avoided: avoidedProt, avoidedRows: avoidedRows };
   }
 
   // Legacy function for compatibility - just returns protection total
@@ -5432,6 +5515,9 @@ function generateRowID() {
       
       // Read subtype
       const subtypeAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_subtype`);
+      // A Force Field is "a similar protective Ability" (4.7.6 rows 7-8) and is
+      // only avoidable if its own row carries the Partial Coverage Modifier.
+      const ffCovAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_coverage`);
       
       return {
         hasFF: true,
@@ -5444,6 +5530,7 @@ function generateRowID() {
         protValues: protValues,
         hardValues: hardValues,
         subtype: subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "",
+        coverage: String((ffCovAttr && ffCovAttr.get("current")) || "full").toLowerCase(),
         pr: num(prAttr ? prAttr.get("current") : "16", 16)
       };
     }
@@ -6297,7 +6384,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const calledIR = inlineTotal(msg, fields.called);
     const calledNumeric = calledIR ? calledIR.total : num(fields.called, 0);
     const calledPenaltyInMacroMod = calledNumeric !== 0;
-    ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
+    // DEBUG: called-shot query resolution. Uncomment when a called shot
+    // resolves to the wrong type or arrives as a number.
+    // ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
     
     // Get penalty: if input was numeric, use it directly; otherwise lookup by type
     const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6, "Head Avoid Helmet": -9, "Avoid Snare": -3 };
@@ -9381,16 +9470,27 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isDisintegration = isDisintegrationSubtype(rec.dmgSubtype);
     
     // Get armor protection (normal rows - NOT Force Field)
+    // 4.14.2.4: an Avoid Armor result skips only rows whose Partial Coverage
+    // Modifier it beats. Vehicles have no coverage field, so they keep the old
+    // flat bypass. Legacy cards and --noprot resolve to tier "all".
+    const applyCritType = rec.critResult ? rec.critResult.type : null;
+    const avoidsProt = mode.includes("noprot");
+    const avoidTier = avoidsProt ? avoidCoverageTier(rec, applyCritType) : "none";
     const protData = defIsVehicle
       ? getVehicleProtection(defChar.id, protKey, rec.dmgSubtype)
-      : sumProtectionWithHardened(defChar.id, protKey, rec.dmgSubtype);
+      : sumProtectionWithHardened(defChar.id, protKey, rec.dmgSubtype, false, avoidTier);
     let armorProt = protData.prot;
     let armorHardened = protData.hardened;
     const hasInvuln = protData.invuln;
     const hasAdapt = protData.adapt;
     
-    // Avoid Armor crits bypass protection entirely
-    const bypassProt = mode.includes("noprot");
+    // Rows the attack actually avoids are already excluded from armorProt, so
+    // bypassProt now means only the flat legacy bypass (vehicles, --noprot,
+    // pre-coverage cards). Partial avoidance leaves AP and Hardened to work
+    // normally against whatever armor is still standing.
+    const bypassProt = avoidsProt && (defIsVehicle || avoidTier === "all");
+    const avoidedProt = num(protData.avoided, 0);
+    const avoidedRows = num(protData.avoidedRows, 0);
     
     // ---- STEP 1: FORCE FIELD (applied first, before armor) ----
     // Vehicle defenders store their FF as a repeating_vehprotection row named "Force Field".
@@ -9415,7 +9515,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Claim the damage phase immediately before the first possible mutation.
     markResolution(rec, "damage", msg);
 
-    if (ffData && !bypassProt) {
+    if (ffData && !(bypassProt || coverageAvoided(ffData.coverage, avoidTier))) {
       const atkSub = (rec.dmgSubtype || "").trim().toLowerCase();
       
       // Disintegration can only be blocked by dedicated Invulnerability.
@@ -9736,6 +9836,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (ffCollapsed) protHover += ` [COLLAPSED, overflow ${ffOverflow}]`;
     }
     protHover += `&#10;Armor: ${Math.floor(armorProt)}`;
+    if (avoidedRows > 0) {
+      protHover += `&#10;Avoided (partial coverage): ${Math.floor(avoidedProt)} across ${avoidedRows} row(s)`;
+    }
     if (rawAP > 0 || armorHardened > 0) {
       if (rawAP > 0) {
         protHover += `&#10;AP: ${rawAP === Infinity ? 'ALL' : rawAP}`;
@@ -9785,6 +9888,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       adaptIndicator = ` <span style="color:#16a085;" title="AP bypassed Adaptation">[Adapt bypassed]</span>`;
     }
     
+    // Partial coverage indicator (4.14.2.4)
+    let coverIndicator = "";
+    if (avoidsProt && !bypassProt) {
+      const tierLabel = avoidTier === "light" ? "Light partial coverage" : "partial coverage";
+      if (avoidedRows > 0) {
+        coverIndicator = ` <span style="color:#e67e22;" title="Avoided ${Math.floor(avoidedProt)} protection across ${avoidedRows} row(s) with ${tierLabel}">[avoided ${Math.floor(avoidedProt)}]</span>`;
+      } else if (armorProt > 0 || (ffData && !coverageAvoided(ffData.coverage, avoidTier))) {
+        coverIndicator = ` <span style="color:#889;" title="4.14.2.4: armor without the Partial Coverage Modifier cannot be avoided">[no ${tierLabel} to avoid]</span>`;
+      }
+    }
+
     // AP indicator
     let apIndicator = "";
     if (rawAP > 0 && !bypassProt) {
@@ -9832,8 +9946,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       dmgLine += ` = ${afterFF}`;
     }
     
-    if (effectiveProt > 0 || bypassProt) {
-      dmgLine += ` - <span title="${protHover}">${Math.floor(effectiveProt)}</span> armor${apIndicator}`;
+    if (effectiveProt > 0 || bypassProt || (avoidsProt && avoidedRows > 0)) {
+      dmgLine += ` - <span title="${protHover}">${Math.floor(effectiveProt)}</span> armor${apIndicator}${coverIndicator}`;
     } else if (effectiveProt < 0) {
       dmgLine += ` + <span style="color:#e67e22;" title="Negative protection: target is vulnerable to this damage type">${-Math.floor(effectiveProt)} (vulnerable)</span>`;
     }
@@ -10001,7 +10115,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     msg_out += `</div>`;
     
-    // Apply status markers
+    // Apply status markers. The icon says the limb is unusable; 4.14.2.2
+    // movement halving and 4.14.2.3 carrying capacity are adjudicated at the
+    // table by design, not tracked here.
     if (!enPass) {
       if (limb === "leg") {
         setMarker(defTok, "broken-leg", true);
@@ -12664,11 +12780,11 @@ function cmdStance(msg, args) {
         return testReset(msg, args);
       default:
         return ch("MP", `/w gm <b>Test Commands:</b><br/>
-          <code>!mp test crit [type] [--damage N] [--called TYPE]</code> - Force crit (types: headshot, solid, precise, armor, leg, arm, gear, free, muscle, offbal, other). --called applies a declared called shot (head, helmet, arm, leg, light, heavy, gear) so the 4.7.6 Default column can be exercised.<br/>
+          <code>!mp test crit [type] [--damage N] [--called TYPE]</code> - Force crit (types: headshot, solid, precise, armor, leg, arm, gear, free, muscle, offbal, other). --called applies a declared called shot (head, helmet, arm, leg, light, heavy, gear, snare) so the 4.7.6 Default column can be exercised.<br/>
           <code>!mp test fumble [type] [--push N]</code> - Force fumble on the SELECTED token and apply its effect (types: wrong, offbal, leg, opening, muscle, arm, stuck, lost, gear, other). --push adds the pushing bonus before Muscle Strain is halved.<br/>
           <code>!mp test grapple [TOHIT] [lock] [remote] [gripdice]</code> - Grapple test harness (select 2 tokens: grappler, target)<br/>
           <code>!mp test siphon [PTS]</code> - Siphon PTS points using attacker's Siphon row config (select 2 tokens: attacker, target)<br/>
-          <code>!mp test damage N [type] [--ap:N] [--headshot]</code> - Apply N damage (AP tests vs target's Hardened)<br/>
+          <code>!mp test damage N [type] [--ap:N] [--headshot] [--noprot] [--avoid light|armor|helmet]</code> - Apply N damage (AP tests vs target's Hardened; --avoid tests 4.14.2.4 partial coverage, --noprot is a flat bypass)<br/>
           <code>!mp test save BC MOD REC [dtype]</code> - Test save attack (dtype tests target's Invuln +8)<br/>
           <code>!mp test snare BP [MAX]</code> - Apply snare to selected token<br/>
           <code>!mp test senseloss</code> - Vision-loss model self-test (select 1 token; non-destructive)<br/>
@@ -13053,6 +13169,11 @@ function cmdStance(msg, args) {
     const protKey = typeToProtKey(dmgType);
     const ignoreProt = (args.noprot === "1");
     const isHeadshot = (args.headshot === "1");
+    // --avoid light|armor|helmet exercises 4.14.2.4 without waiting on a crit.
+    const avoidArg = String(args.avoid || "").toLowerCase();
+    const avoidCalled = avoidArg === "light" ? "Avoid Light Armor"
+      : (avoidArg === "armor" || avoidArg === "heavy") ? "Avoid Heavy Armor"
+      : avoidArg === "helmet" ? "Head Avoid Helmet" : "";
     
     // Parse AP value
     let apValue = 0;
@@ -13099,7 +13220,9 @@ function cmdStance(msg, args) {
       snType: "",
       causesKB: true,
       isPushing: false, pushAmount: 0,
-      isHeadShot: isHeadshot,
+      isHeadShot: isHeadshot || avoidCalled === "Head Avoid Helmet",
+      isAvoidArmor: !!avoidCalled,
+      calledShotType: avoidCalled || "None",
       created: Date.now()
     };
 
@@ -13128,14 +13251,19 @@ function cmdStance(msg, args) {
     html += `<br/><span style="color:#333; font-size:11px;">Raw: ${rawDamage} | Type: ${dmgType}${apLabel}${isHeadshot ? " | HEADSHOT x2" : ""}${targetInfo}</span>`;
     html += `</div>`;
 
-    let mode = "noroll";
-    if (isHeadshot) mode = "headshot";
+    // Derive mode strings from the same profile cmdApply validates against,
+    // so the buttons cannot drift out of the allowedApplyModes whitelist.
+    const testRec = state.MP_Engine.pending[rollId];
+    const testProf = damageApplyProfile(testRec, null);
+    const modeApply = applyModeName(testProf.parts, null);
+    const modeRwMax = applyModeName(testProf.rwParts, "rwmax");
+    const modeRwCustom = applyModeName(testProf.rwParts, "rw");
 
     const dmgIsVeh = isVehicleMode(char.id);
-    const buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode ${mode}`)} ` +
+    const buttons = `${btnDanger(`Apply`, `!mp apply --id ${rollId} --mode ${modeApply}`)} ` +
       (dmgIsVeh ? "" :
-        `${btn(`RW Max`, `!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rwmax" : "rollwithmax"}`)} ` +
-        `${btn(`RW Custom`, `!mp apply --id ${rollId} --mode ${isHeadshot ? "headshot_rw" : "rollwithcustom"} --amt ?{Divert to Power|0}`)} `) +
+        `${btn(`RW Max`, `!mp apply --id ${rollId} --mode ${modeRwMax}`)} ` +
+        `${btn(`RW Custom`, `!mp apply --id ${rollId} --mode ${modeRwCustom} --amt ?{Divert to Power|0}`)} `) +
       `${btn(`KB`, `!mp kb --id ${rollId}`)}`;
 
     ch("MP", "/w gm " + html + buttons);
@@ -13601,7 +13729,7 @@ function cmdStance(msg, args) {
   // -------------------------
   // Usage: !mp atk N --atk TOKEN_ID --target TOKEN_ID [--mod N] [--push N] [--called TYPE]
   // Called types: None, Head, Helmet (Head Avoid Helmet, -9), Arm, Leg, Light (Avoid Light Armor), Heavy (Avoid Heavy Armor), Gear, Snare (Avoid Snare, -3)
-  // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0} --called ?{Called|None|Head|Helmet|Arm|Leg|Light|Heavy|Gear}
+  // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0} --called ?{Called|None|Head|Helmet|Arm|Leg|Light|Heavy|Gear|Snare}
   // Triggers existing mpattack roll template handler
 
   function findAttackRowByIndex(charId, atkIndex) {
@@ -13998,6 +14126,7 @@ function cmdStance(msg, args) {
           // Check for flags
           for (let i = 3; i < testParts.length; i++) {
             if (testParts[i] === "--noprot") testArgs.noprot = "1";
+            if (testParts[i] === "--avoid") testArgs.avoid = testParts[i + 1] || "armor";
             if (testParts[i] === "--headshot") testArgs.headshot = "1";
             if (testParts[i].startsWith("--ap")) {
               // --ap or --ap:N
