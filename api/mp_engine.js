@@ -1,4 +1,18 @@
-/* Mighty Protectors Roll20 API Engine v2.125.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.126.0 - 2026-07-29
+ * v2.126.0: MAKE THE STRAIN ROWS TESTABLE. Muscle Strain needs a natural 1 that
+ *   confirms and then rolls exactly 9, or a natural 20 that fails confirm and
+ *   rolls 9-10 -- roughly 1 in 300-400 attacks each, so v2.125.0 shipped
+ *   unverifiable at the table. testForceCrit now posts the strain child card
+ *   for crit row 9, and testForceFumble applies its result instead of only
+ *   printing a label: Off Balance via applyOffBalance, Muscle Strain via the
+ *   child record, Leg/Arm Strain as the flat 1 Hit with the footnote. It reads
+ *   the SELECTED token as the fumbler and takes --push N so the pushing bonus
+ *   can be checked landing inside the halving rather than after it. With no
+ *   token selected it prints and applies nothing, as before.
+ *   testForceFumble applying nothing is why the bundled 1-Hit strain bug
+ *   survived as long as it did; every fumble row was unverifiable.
+ *   The strain child record is extracted into postStrainCard() and shared by
+ *   the attack handler and both test commands, so the three paths cannot drift.
  * v2.125.0: MUSCLE STRAIN PER RAW. Crit row 9 and fumble rows 9-10 were both
  *   implemented as a flat 1 Hit deduction with no protection and no roll-with.
  *   RAW is the strainer's OWN Base HTH damage, plus the pushing bonus if they
@@ -5997,6 +6011,34 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return { hth, raw, dmg: Math.max(0, Math.ceil(raw / 2)) };
   }
 
+  // Strain damage resolves through the normal pipeline so protection and
+  // roll-with apply. Shared by the attack handler and both test commands.
+  function postStrainCard(strainId, tokenId, charId, name, playerid, dmg) {
+    if (!(dmg > 0)) return;
+    state.MP_Engine.pending[strainId] = {
+      rollId: strainId,
+      playerid: playerid,
+      atkCharId: null,
+      atkName: "Muscle Strain",
+      defTokenId: tokenId,
+      defCharId: charId,
+      defName: name,
+      damageTotal: dmg,
+      dmgTypeStr: "Kinetic",
+      dmgSubtype: "blunt",
+      protKey: "kinetic",
+      atkAP: 0,
+      causesKB: false,
+      created: Date.now()
+    };
+    const rec = state.MP_Engine.pending[strainId];
+    const html = `<div style="background:#2c2c3e; border:2px solid #ff6b6b; padding:6px 8px; color:#eaeaea;">` +
+      `<b>Muscle Strain</b> - ${esc(name)} takes <b>${dmg}</b> Blunt Kinetic` +
+      `<div style="font-size:10px; color:#889;">Protection and roll-with apply.</div></div>`;
+    chPendingCard("MP", html, rec,
+      { attacker: "", defender: buildStandardAttackButtonsAfterAF(strainId, null, false, rec) });
+  }
+
   function rollCriticalTable() {
     const r = randomInteger(20);
     let type, desc;
@@ -7039,29 +7081,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Muscle Strain resolves through the normal pipeline so protection and
     // roll-with apply (4.7.6 rows 9 / 9-10).
-    if (strainPending && strainPending.dmg > 0) {
-      state.MP_Engine.pending[strainPending.id] = {
-        rollId: strainPending.id,
-        playerid: strainPending.playerid,
-        atkCharId: null,
-        atkName: "Muscle Strain",
-        defTokenId: strainPending.tokenId,
-        defCharId: strainPending.charId,
-        defName: strainPending.name,
-        damageTotal: strainPending.dmg,
-        dmgTypeStr: "Kinetic",
-        dmgSubtype: "blunt",
-        protKey: "kinetic",
-        atkAP: 0,
-        causesKB: false,
-        created: Date.now()
-      };
-      const strainRec = state.MP_Engine.pending[strainPending.id];
-      const strainHtml = `<div style="background:#2c2c3e; border:2px solid #ff6b6b; padding:6px 8px; color:#eaeaea;">` +
-        `<b>Muscle Strain</b> - ${esc(strainPending.name)} takes <b>${strainPending.dmg}</b> Blunt Kinetic` +
-        `<div style="font-size:10px; color:#889;">Protection and roll-with apply.</div></div>`;
-      chPendingCard("MP", strainHtml, strainRec,
-        { attacker: "", defender: buildStandardAttackButtonsAfterAF(strainPending.id, null, false, strainRec) });
+    if (strainPending) {
+      postStrainCard(strainPending.id, strainPending.tokenId, strainPending.charId,
+        strainPending.name, strainPending.playerid, strainPending.dmg);
     }
   }
 
@@ -12571,7 +12593,7 @@ function cmdStance(msg, args) {
       default:
         return ch("MP", `/w gm <b>Test Commands:</b><br/>
           <code>!mp test crit [type] [--damage N] [--called TYPE]</code> - Force crit (types: headshot, solid, precise, armor, leg, arm, gear, free, muscle, offbal, other). --called applies a declared called shot (head, helmet, arm, leg, light, heavy, gear) so the 4.7.6 Default column can be exercised.<br/>
-          <code>!mp test fumble [type]</code> - Force fumble<br/>
+          <code>!mp test fumble [type] [--push N]</code> - Force fumble on the SELECTED token and apply its effect (types: wrong, offbal, leg, opening, muscle, arm, stuck, lost, gear, other). --push adds the pushing bonus before Muscle Strain is halved.<br/>
           <code>!mp test grapple [TOHIT] [lock] [remote] [gripdice]</code> - Grapple test harness (select 2 tokens: grappler, target)<br/>
           <code>!mp test siphon [PTS]</code> - Siphon PTS points using attacker's Siphon row config (select 2 tokens: attacker, target)<br/>
           <code>!mp test damage N [type] [--ap:N] [--headshot]</code> - Apply N damage (AP tests vs target's Hardened)<br/>
@@ -12860,6 +12882,13 @@ function cmdStance(msg, args) {
     const buttons = buildStandardAttackButtons(rollId, critResult, true, state.MP_Engine.pending[rollId]);
 
     ch("MP", "/w gm " + html + buttons);
+
+    // Crit row 9: the TARGET strains themselves, no pushing bonus.
+    if (critResult.type === CRIT_TYPES.MUSCLE_STRAIN_TARGET && !isVehicleMode(char.id)) {
+      const ms = rollMuscleStrain(char.id, 0);
+      ch("MP", `/w gm <b>Muscle Strain:</b> Base HTH ${esc(ms.hth)} = ${ms.raw}, halved = <b>${ms.dmg}</b>`);
+      postStrainCard("strain_" + rollId, tok.id, char.id, char.get("name"), msg.playerid, ms.dmg);
+    }
   }
 
   function testForceFumble(msg, args) {
@@ -12898,7 +12927,41 @@ function cmdStance(msg, args) {
     html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;">💥 ${esc(fumbleResult.desc)}</span>`;
     html += `</div>`;
 
-    ch("MP", "/w gm " + html);
+    // The fumbler is the selected token. Without one the result is printed but
+    // nothing is applied, which is how this command behaved before.
+    const tok = getSelectedToken(msg);
+    const char = tok ? getCharFromToken(tok) : null;
+    if (!char) {
+      return ch("MP", "/w gm " + html +
+        `<div style="font-size:10px; color:#889;">Select the fumbling token to apply effects.</div>`);
+    }
+
+    const fName = char.get("name");
+    const pushBonus = num(args.push, 0);
+    let applied = "";
+    let strainDmg = 0;
+
+    if (fumbleResult.type === FUMBLE_TYPES.OFF_BALANCE_ATK) {
+      applied = applyOffBalance(tok, fName);
+    } else if (fumbleResult.type === FUMBLE_TYPES.MUSCLE_STRAIN_ATK && !isVehicleMode(char.id)) {
+      const ms = rollMuscleStrain(char.id, pushBonus);
+      strainDmg = ms.dmg;
+      applied = `<br/><span style="color:#ff6b6b;"><b>${esc(fName)}</b> strains: Base HTH ${esc(ms.hth)}` +
+        `${pushBonus > 0 ? ` + push ${pushBonus}` : ""} = ${ms.raw}, halved = <b>${ms.dmg}</b></span>`;
+    } else if (fumbleResult.type === FUMBLE_TYPES.LEG_STRAIN || fumbleResult.type === FUMBLE_TYPES.ARM_STRAIN) {
+      // Table footnote: no protection, no roll-with. Flat 1 Hit.
+      const limbTxt = fumbleResult.type === FUMBLE_TYPES.LEG_STRAIN ? "leg" : "arm";
+      const h0 = getResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR);
+      setResource(tok, char.id, CFG.HITS_BAR, CFG.HITS_ATTR, Math.max(0, h0 - 1));
+      applied = `<br/><span style="color:#ff6b6b;"><b>${esc(fName)}</b> takes 1 Hit to a random ${limbTxt}` +
+        ` - no protection, no roll-with. Hits: ${h0}&rarr;${Math.max(0, h0 - 1)}</span>`;
+    }
+
+    ch("MP", "/w gm " + html + applied);
+    if (strainDmg > 0) {
+      postStrainCard("strainf_" + String(Date.now()) + "_" + randomInteger(999999),
+        tok.id, char.id, fName, msg.playerid, strainDmg);
+    }
   }
 
   function testDamage(msg, args) {
@@ -13851,7 +13914,10 @@ function cmdStance(msg, args) {
             if (testParts[i] === "--damage") testArgs.damage = testParts[i + 1] || "10";
           }
         } else if (testArgs.subcmd === "fumble") {
-          testArgs.type = testParts[3] || "";
+          testArgs.type = (testParts[3] && !testParts[3].startsWith("--")) ? testParts[3] : "";
+          for (let i = 3; i < testParts.length; i++) {
+            if (testParts[i] === "--push") testArgs.push = testParts[i + 1] || "0";
+          }
         } else if (testArgs.subcmd === "damage") {
           testArgs.amount = testParts[3] || "10";
           testArgs.dtype = testParts[4] || "kinetic";
