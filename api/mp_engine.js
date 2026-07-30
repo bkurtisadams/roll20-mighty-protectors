@@ -1,4 +1,22 @@
-/* Mighty Protectors Roll20 API Engine v2.135.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.136.0 - 2026-07-29
+ * v2.136.0: GAME-TIME CONTROL PANEL + CALENDAR-AWARE ADVANCE. !mp time now
+ *   opens a GM control card with one-click round/minute/hour/day/week/month/
+ *   year buttons, a custom amount+unit query, and a set-date/time query. The
+ *   typed command still accepts the old syntax, now adding month(s), year(s),
+ *   mo, and yr aliases. Calendar months/years use clamped UTC date arithmetic
+ *   (Jan 31 + 1 month becomes Feb 28/29 rather than spilling into March).
+ *   FIX: !mp time advance N rounds now routes through advanceRound(N), keeping
+ *   currentRound, recoveries, round durations, acquisition pruning, and active
+ *   per-round costs synchronized with the ten-second clock. Date/time setting
+ *   now rejects impossible dates and invalid hours instead of letting the JS
+ *   Date constructor silently normalize them. The handout and chat clock use
+ *   a configurable twelve-name calendar; set display aliases persistently with
+ *   !mp time calendar months Name1|Name2|...|Name12, inspect them with
+ *   !mp time calendar, or restore Gregorian labels with calendar reset. Month
+ *   aliases change display names only; the underlying month lengths remain the
+ *   normal Gregorian lengths used by the existing timestamp clock. Month/year
+ *   duration expiries now use the same clamped calendar arithmetic instead of
+ *   fixed 30-day/365-day approximations.
  * v2.135.0: PROFILE-AWARE PERCEPTION RANGE (3.0.2.5 / 4.7.3.1). Every
  *   perception/acquisition path with a specific subject now uses actual range
  *   × observer Profile ÷ subject Profile before looking up the range
@@ -1365,7 +1383,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.135.0";
+var MP_VERSION = "2.136.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1431,6 +1449,14 @@ MP.Engine = (function () {
     // Game clock handout (persistent player-visible panel)
     CLOCK_HANDOUT: true,
     CLOCK_HANDOUT_NAME: "⏱ Game Time",
+    // Calendar display. Month names may be overridden persistently through
+    // !mp time calendar months Name1|...|Name12. Aliases do not change month
+    // lengths; the game clock intentionally remains an absolute UTC timestamp.
+    CALENDAR_MONTHS: [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ],
+    CALENDAR_WEEKDAYS: ["Sun-Day", "Moon-Day", "Twos-Day", "Winds-Day", "Thirst-Day", "Fry-Day", "Sadder-Day"],
     // Phase-of-day boundaries (fixed hours, 24h). [startHour, label, icon-hint]
     DAY_PHASES: [
       { start: 5, end: 7, label: "Dawn · first light", color: "#f5c99a" },
@@ -1644,6 +1670,13 @@ MP.Engine = (function () {
   if (!state.MP_Engine.gameClock) state.MP_Engine.gameClock = { ms: Date.UTC(2519, 6, 14, 8, 0, 0), combatStartMs: null, combatStartRound: 0, roundAnchor: null, topId: null, leftAnchor: false };
   // One-time migration from the v2.83.0 placeholder default
   if (state.MP_Engine.gameClock.ms === Date.UTC(2519, 0, 1, 8, 0, 0)) state.MP_Engine.gameClock.ms = Date.UTC(2519, 6, 14, 8, 0, 0);
+  // Persistent calendar display aliases. The timestamp remains Gregorian/UTC;
+  // only the month labels are replaced, which preserves every existing timed
+  // effect and game-time arithmetic path.
+  if (!state.MP_Engine.calendar) state.MP_Engine.calendar = {};
+  if (!Array.isArray(state.MP_Engine.calendar.monthNames) || state.MP_Engine.calendar.monthNames.length !== 12) {
+    delete state.MP_Engine.calendar.monthNames;
+  }
   // Ensure bleeding registry exists (4.8.4.2): { tokenId: { charId, lastMs } }
   if (!state.MP_Engine.bleeds) state.MP_Engine.bleeds = {};
   // Ensure pendingArea exists for existing state
@@ -4205,8 +4238,8 @@ MP.Engine = (function () {
         roundsRemaining: ticks,
         expiresMs: (ticks === 0 && rec.durNum > 0 && rec.durUnit && rec.durUnit !== "perm" && TIME_UNITS[rec.durUnit + (rec.durNum === 1 ? "" : "s")] !== undefined)
           ? state.MP_Engine.gameClock.ms + rec.durNum * (TIME_UNITS[rec.durUnit + (rec.durNum === 1 ? "" : "s")] || 60) * 1000
-          : ((ticks === 0 && rec.durNum > 0 && rec.durUnit === "month") ? state.MP_Engine.gameClock.ms + rec.durNum * 2592000000
-          : ((ticks === 0 && rec.durNum > 0 && rec.durUnit === "year") ? state.MP_Engine.gameClock.ms + rec.durNum * 31536000000 : null)),
+          : ((ticks === 0 && rec.durNum > 0 && rec.durUnit === "month") ? shiftCalendarMs(state.MP_Engine.gameClock.ms, rec.durNum, "month")
+          : ((ticks === 0 && rec.durNum > 0 && rec.durUnit === "year") ? shiftCalendarMs(state.MP_Engine.gameClock.ms, rec.durNum, "year") : null)),
         unitLabel: unitLabel,
         escape: rec.durEscape || "",
         marker: marker,
@@ -14804,7 +14837,7 @@ function cmdStance(msg, args) {
           <code>!mp offbal</code> - Apply Off Balance to selected token (<b>GM</b>)<br/>
           <code>!mp range</code> - Check range between two selected tokens<br/>
           <code>!mp round | +N | set N | show</code> - Round controls (<b>GM</b>)<br/>
-          <code>!mp time show | advance N sec|min|hour|day|week|round | set YYYY-MM-DD HH:MM</code> - Game clock (<b>GM</b>)<br/>
+          <code>!mp time</code> - Game-time control panel; typed advance supports sec|min|hour|day|week|month|year|round, plus date/time set and calendar month aliases (<b>GM</b>)<br/>
           <b>Status and Setup:</b><br/>
           <code>!mp status</code> - Live selected-token control card<br/>
           <code>!mp stat</code> - Detailed selected-token status<br/>
@@ -15650,18 +15683,57 @@ function cmdStance(msg, args) {
   const TIME_UNITS = {
     s: 1, sec: 1, second: 1, seconds: 1,
     min: 60, minute: 60, minutes: 60,
-    h: 3600, hour: 3600, hours: 3600,
+    h: 3600, hr: 3600, hrs: 3600, hour: 3600, hours: 3600,
     d: 86400, day: 86400, days: 86400,
-    w: 604800, week: 604800, weeks: 604800,
-    r: 0, round: 0, rounds: 0
+    w: 604800, wk: 604800, wks: 604800, week: 604800, weeks: 604800
   };
 
-  function advanceClock(seconds) {
+  const ROUND_UNITS = { r: true, rnd: true, rnds: true, round: true, rounds: true };
+  const MONTH_UNITS = { mo: true, mon: true, month: true, months: true };
+  const YEAR_UNITS = { y: true, yr: true, yrs: true, year: true, years: true };
+
+  function calendarMonthNames() {
+    const custom = state.MP_Engine.calendar && state.MP_Engine.calendar.monthNames;
+    return (Array.isArray(custom) && custom.length === 12) ? custom : CFG.CALENDAR_MONTHS;
+  }
+
+  function calendarWeekdayNames() {
+    return CFG.CALENDAR_WEEKDAYS;
+  }
+
+  function daysInUtcMonth(year, monthIndex) {
+    return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  }
+
+  // Shift an absolute game timestamp by whole calendar months/years while
+  // preserving UTC time and clamping the day to the target month's last day.
+  function shiftCalendarMs(baseMs, amount, unit) {
+    const d = new Date(baseMs);
+    const whole = Math.trunc(amount);
+    const monthDelta = MONTH_UNITS[unit] ? whole : 0;
+    const yearDelta = YEAR_UNITS[unit] ? whole : 0;
+    const targetMonthNumber = d.getUTCMonth() + monthDelta;
+    const targetYear = d.getUTCFullYear() + yearDelta + Math.floor(targetMonthNumber / 12);
+    const targetMonth = ((targetMonthNumber % 12) + 12) % 12;
+    const targetDay = Math.min(d.getUTCDate(), daysInUtcMonth(targetYear, targetMonth));
+    return Date.UTC(targetYear, targetMonth, targetDay,
+      d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds());
+  }
+
+  // Central clock movement. Forward movement fires every game-time sweep;
+  // backward corrections only move the display, matching the old set command.
+  function moveGameClockTo(nextMs, announce) {
     const before = state.MP_Engine.gameClock.ms;
-    state.MP_Engine.gameClock.ms += seconds * 1000;
-    runGameTimeSweep();
-    announcePhaseCrossings(before, state.MP_Engine.gameClock.ms);
+    state.MP_Engine.gameClock.ms = nextMs;
+    if (nextMs > before) {
+      runGameTimeSweep();
+      if (announce !== false) announcePhaseCrossings(before, nextMs);
+    }
     updateClockHandout();
+  }
+
+  function advanceClock(seconds) {
+    moveGameClockTo(state.MP_Engine.gameClock.ms + seconds * 1000, true);
   }
 
   // Phase of day for a given hour (fixed boundaries, CFG.DAY_PHASES)
@@ -15705,8 +15777,8 @@ function cmdStance(msg, args) {
     const h = getClockHandout();
     if (!h) return;
     const d = new Date(state.MP_Engine.gameClock.ms);
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const days = calendarWeekdayNames();
+    const months = calendarMonthNames();
     const p2 = x => String(x).padStart(2, "0");
     const phase = phaseForHour(d.getUTCHours());
     const gc = state.MP_Engine.gameClock;
@@ -15726,7 +15798,8 @@ function cmdStance(msg, args) {
     const body = `<div style="font-family:Arial,sans-serif; color:#eaeaea; background:#1e1e38; padding:12px; border-radius:6px;">` +
       `<div style="font-size:13px; color:#c8b8ff; letter-spacing:0.03em; margin-bottom:6px;">🕐 GAME TIME</div>` +
       `<div style="font-size:26px; font-weight:bold; color:#fff;">${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}<span style="font-size:18px; color:#b9b3d6;">:${p2(d.getUTCSeconds())}</span></div>` +
-      `<div style="font-size:14px; color:#b9b3d6; margin-top:2px;">${days[d.getUTCDay()]}, ${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}</div>` +
+      `<div style="font-size:14px; color:#b9b3d6; margin-top:2px;">${esc(days[d.getUTCDay()])}, ${d.getUTCDate()} ${esc(months[d.getUTCMonth()])} ${d.getUTCFullYear()}</div>` +
+      `<div style="font-size:10px; color:#716b91; margin-top:1px;">${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}</div>` +
       `<div style="margin-top:10px; color:${phase.color}; font-size:13px;">☀ ${esc(phase.label)}</div>` +
       combatBlock + `</div>`;
     h.set("notes", body);
@@ -15975,9 +16048,11 @@ function cmdStance(msg, args) {
 
   function fmtGameClock() {
     const d = new Date(state.MP_Engine.gameClock.ms);
-    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const days = calendarWeekdayNames();
+    const months = calendarMonthNames();
     const p2 = x => String(x).padStart(2, "0");
-    return `${days[d.getUTCDay()]} ${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
+    return `${days[d.getUTCDay()]} ${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} ` +
+      `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
   }
 
   function fmtElapsed(seconds) {
@@ -15986,9 +16061,89 @@ function cmdStance(msg, args) {
     return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   }
 
-  function clockCard(title, extra) {
+  function clockCard(title, extra, controls) {
     return `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">` +
-      `<b>\ud83d\udd50 ${title}</b><br/>${fmtGameClock()}${extra || ""}</div>`;
+      `<b>🕐 ${title}</b><br/>${esc(fmtGameClock())}${extra || ""}${controls || ""}</div>`;
+  }
+
+  function timeControlButtons() {
+    const d = new Date(state.MP_Engine.gameClock.ms);
+    const p2 = x => String(x).padStart(2, "0");
+    const dateDefault = `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
+    const timeDefault = `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
+    const customCmd = `!mp time advance ?{Amount|1} ?{Unit|Minutes,min|Hours,hour|Days,day|Weeks,week|Months,month|Years,year|Rounds,round|Seconds,sec}`;
+    const setCmd = `!mp time set ?{Date YYYY-MM-DD|${dateDefault}} ?{Time HH:MM|${timeDefault}}`;
+    return `<div style="margin-top:7px; padding-top:6px; border-top:1px solid #4a4070;">` +
+      `<span style="color:#8a84a8; font-size:11px;">Advance game time</span><br/>` +
+      btn(`+1 Round`, `!mp time advance 1 round`) +
+      btn(`+1 Minute`, `!mp time advance 1 minute`) +
+      btn(`+10 Minutes`, `!mp time advance 10 minutes`) +
+      btn(`+1 Hour`, `!mp time advance 1 hour`) +
+      btn(`+6 Hours`, `!mp time advance 6 hours`) +
+      btn(`+1 Day`, `!mp time advance 1 day`) +
+      btn(`+1 Week`, `!mp time advance 1 week`) +
+      btn(`+1 Month`, `!mp time advance 1 month`) +
+      btn(`+1 Year`, `!mp time advance 1 year`) +
+      `<br/>` + btn(`Custom…`, customCmd) + btn(`Set Date/Time…`, setCmd) + btn(`Calendar Names`, `!mp time calendar`) +
+      `</div>`;
+  }
+
+  function timePanel(title, extra) {
+    return clockCard(title || "Game Time", extra || "", timeControlButtons());
+  }
+
+  function timeUsage() {
+    return `<b>MP:</b> Usage: <code>!mp time</code> | ` +
+      `<code>!mp time advance N sec|min|hour|day|week|month|year|round</code> | ` +
+      `<code>!mp time set YYYY-MM-DD [HH:MM]</code> | <code>!mp time calendar</code>`;
+  }
+
+  function parseClockSet(dateText, timeText) {
+    const dm = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(dateText || "");
+    const tm = /^(\d{1,2}):(\d{2})$/.exec(timeText || "08:00");
+    if (!dm || !tm) return null;
+    const year = parseInt(dm[1], 10);
+    const month = parseInt(dm[2], 10);
+    const day = parseInt(dm[3], 10);
+    const hour = parseInt(tm[1], 10);
+    const minute = parseInt(tm[2], 10);
+    if (month < 1 || month > 12 || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+    const maxDay = daysInUtcMonth(year, month - 1);
+    if (day < 1 || day > maxDay) return null;
+    return Date.UTC(year, month - 1, day, hour, minute, 0);
+  }
+
+  function calendarNamesCard(extra) {
+    const names = calendarMonthNames();
+    return `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070; max-width:420px;">` +
+      `<b>📅 Calendar Month Names</b>${extra || ""}<br/>` +
+      `<span style="color:#b9b3d6; font-size:11px;">${names.map((n, i) => `${i + 1}. ${esc(n)}`).join(" · ")}</span>` +
+      `<div style="margin-top:7px; padding-top:6px; border-top:1px solid #4a4070; font-size:11px; color:#8a84a8;">` +
+      `Set twelve display names with:<br/><code>!mp time calendar months Name1|Name2|...|Name12</code><br/>` +
+      `These are aliases for the existing twelve Gregorian month slots and lengths.</div>` +
+      btn(`Reset Names`, `!mp time calendar reset`) + btn(`Back to Clock`, `!mp time`) + `</div>`;
+  }
+
+  function cmdTimeCalendar(msg, parts) {
+    const action = (parts[3] || "show").toLowerCase();
+    if (action === "show") return ch("MP", `/w gm ${calendarNamesCard()}`);
+    if (action === "reset") {
+      delete state.MP_Engine.calendar.monthNames;
+      updateClockHandout();
+      return ch("MP", `/w gm ${calendarNamesCard(`<br/><span style="color:#2ecc71;">Gregorian month names restored.</span>`)}`);
+    }
+    if (action === "months" || action === "names") {
+      const m = /^!mp\s+time\s+(?:calendar|cal)\s+(?:months|names)\s+(.+)$/i.exec(msg.content || "");
+      if (!m) return ch("MP", `/w gm <b>MP:</b> Supply 12 names separated by vertical bars: <code>Name1|Name2|...|Name12</code>`);
+      const names = m[1].split("|").map(s => s.trim()).filter(Boolean);
+      if (names.length !== 12) {
+        return ch("MP", `/w gm <b>MP:</b> Calendar needs exactly 12 non-empty month names; received ${names.length}.`);
+      }
+      state.MP_Engine.calendar.monthNames = names;
+      updateClockHandout();
+      return ch("MP", `/w gm ${calendarNamesCard(`<br/><span style="color:#2ecc71;">Custom month names saved.</span>`)}`);
+    }
+    return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp time calendar</code> | <code>!mp time calendar months Name1|...|Name12</code> | <code>!mp time calendar reset</code>`);
   }
 
   // Shared round advance: rounds, clock, duration ticks, recovery prompts.
@@ -16008,8 +16163,8 @@ function cmdStance(msg, args) {
       });
     }
     let report = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">`;
-    report += `<b>\u2694\ufe0f Round ${newRound}</b> <span style="color:#8a84a8; font-size:11px;">${fmtGameClock()}</span><br/>`;
-    report += `<span style="color:#f4d03f;">\u23f1\ufe0f Check active durations - deduct PR/charges as needed</span>`;
+    report += `<b>⚔️ Round ${newRound}</b> <span style="color:#8a84a8; font-size:11px;">${esc(fmtGameClock())}</span><br/>`;
+    report += `<span style="color:#f4d03f;">⏱️ Check active durations - deduct PR/charges as needed</span>`;
     report += durFrag;
     report += recFrag;
     report += invFrag;
@@ -16017,35 +16172,54 @@ function cmdStance(msg, args) {
     return report;
   }
 
-  // GM: !mp time | advance N unit | set YYYY-MM-DD [HH:MM]
+  // GM: !mp time | advance N unit | set YYYY-MM-DD [HH:MM] | calendar
   function cmdTime(msg, args) {
-    const parts = msg.content.split(/\s+/);
+    const parts = msg.content.trim().split(/\s+/);
     const sub = (parts[2] || "show").toLowerCase();
-    if (sub === "show") {
-      return ch("MP", `/w gm ${clockCard("Game Time")}`);
+    if (sub === "show" || sub === "panel") {
+      return ch("MP", `/w gm ${timePanel("Game Time")}`);
     }
-    if (sub === "advance" || sub === "adv") {
+    if (sub === "calendar" || sub === "cal") {
+      return cmdTimeCalendar(msg, parts);
+    }
+    if (sub === "advance" || sub === "adv" || sub === "+") {
       const n = parseFloat(parts[3]);
       const unitKey = (parts[4] || "min").toLowerCase();
-      if (isNaN(n) || n <= 0 || !(unitKey in TIME_UNITS)) {
-        return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp time advance N sec|min|hour|day|week|round</code>`);
+      const isRound = !!ROUND_UNITS[unitKey];
+      const isMonth = !!MONTH_UNITS[unitKey];
+      const isYear = !!YEAR_UNITS[unitKey];
+      const isFixed = TIME_UNITS[unitKey] !== undefined;
+      if (!Number.isFinite(n) || n <= 0 || (!isRound && !isMonth && !isYear && !isFixed)) {
+        return ch("MP", `/w gm ${timeUsage()}`);
       }
-      const mult = TIME_UNITS[unitKey] || CFG.SECONDS_PER_ROUND;
-      advanceClock(Math.round(n * mult));
+      if ((isRound || isMonth || isYear) && !Number.isInteger(n)) {
+        return ch("MP", `/w gm <b>MP:</b> Rounds, months, and years must use a whole-number amount.`);
+      }
+
+      if (isRound) {
+        const roundReport = advanceRound(n);
+        return ch("MP", `/w gm ${roundReport}${timePanel("Game Time", `<br/><span style="color:#8a84a8;">Advanced ${n} round${n === 1 ? "" : "s"}</span>`)}`);
+      }
+      if (isMonth || isYear) {
+        const nextMs = shiftCalendarMs(state.MP_Engine.gameClock.ms, n, unitKey);
+        moveGameClockTo(nextMs, true);
+      } else {
+        advanceClock(Math.round(n * TIME_UNITS[unitKey]));
+      }
       checkRequirementsDue();
-      return ch("MP", `/w gm ${clockCard("Game Time", `<br/><span style="color:#8a84a8;">Advanced ${n} ${esc(unitKey)}</span>`)}`);
+      const label = isMonth ? `month${n === 1 ? "" : "s"}` : isYear ? `year${n === 1 ? "" : "s"}` : unitKey;
+      return ch("MP", `/w gm ${timePanel("Game Time", `<br/><span style="color:#8a84a8;">Advanced ${n} ${esc(label)}</span>`)}`);
     }
     if (sub === "set") {
-      const dm = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(parts[3] || "");
-      const tm = /^(\d{1,2}):(\d{2})$/.exec(parts[4] || "");
-      if (!dm) return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp time set YYYY-MM-DD [HH:MM]</code>`);
-      const hh = tm ? parseInt(tm[1], 10) : 8;
-      const mm = tm ? parseInt(tm[2], 10) : 0;
-      state.MP_Engine.gameClock.ms = Date.UTC(parseInt(dm[1], 10), parseInt(dm[2], 10) - 1, parseInt(dm[3], 10), hh, mm, 0);
-      updateClockHandout();
-      return ch("MP", `/w gm ${clockCard("Game Time Set")}`);
+      const targetMs = parseClockSet(parts[3], parts[4] || "08:00");
+      if (targetMs === null) {
+        return ch("MP", `/w gm <b>MP:</b> Invalid date/time. Use a real date as <code>!mp time set YYYY-MM-DD [HH:MM]</code>.`);
+      }
+      moveGameClockTo(targetMs, true);
+      checkRequirementsDue();
+      return ch("MP", `/w gm ${timePanel("Game Time Set")}`);
     }
-    return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp time</code> | <code>!mp time advance N unit</code> | <code>!mp time set YYYY-MM-DD [HH:MM]</code>`);
+    return ch("MP", `/w gm ${timeUsage()}`);
   }
 
   // --- Turn Tracker integration ---
