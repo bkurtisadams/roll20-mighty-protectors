@@ -7358,7 +7358,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (prDeducted > 0) costParts.push(`PR:-${prDeducted}`);
       if (chgDeducted > 0) {
         const chgHover = chgRemaining >= 0 ? ` title="${chgRemaining} charges remaining"` : "";
-        costParts.push(`<span${chgHover}>Chg:-${chgDeducted}c</span>`);
+        const chgLeft = chgRemaining >= 0 ? ` (${chgRemaining})` : "";
+        const chgLow = (chgRemaining >= 0 && chgRemaining <= 1) ? ` style="color:#ff6b6b; font-weight:bold;"` : "";
+        costParts.push(`<span${chgHover}${chgLow}>Chg:-${chgDeducted}c${chgLeft}</span>`);
       }
       costStr = ` · <span style="color:#f0c040;">${costParts.join(", ")}</span>`;
     }
