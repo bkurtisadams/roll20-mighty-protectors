@@ -1,4 +1,18 @@
-/* Mighty Protectors Roll20 API Engine v2.138.0 - 2026-07-31
+/* Mighty Protectors Roll20 API Engine v2.140.0 - 2026-08-01
+ * v2.140.0: !mp test damage --sub:SUBTYPE. The test damage command now
+ *   accepts a damage sub-type flag (e.g. !mp test damage 10 energy
+ *   --sub:radiation) and sets dmgSubtype on the pending record, so
+ *   subtype-specific protection and Adaptation rows match exactly as they
+ *   do on real attack cards. The test card shows the subtype on the type
+ *   line, passes it to the protection preview, and now flags Adapt 1/2
+ *   alongside Invuln 1/4. Help text updated.
+ * v2.139.0: FIX AP BYPASS VS ADAPTATION WHEN INVULNERABILITY PRESENT.
+ *   Per 2.9, unused Armor Piercing after Armor immunizes that many damage
+ *   points from Invulnerability's reduction. The adaptation step subtracted
+ *   (afterArmor - leftoverAP) from the bypass when Invulnerability was also
+ *   active, wrongly halving AP-immunized points (10 dmg, 2 armor, AP 6,
+ *   invuln+adapt resolved to 2 instead of 4). Bypass now carries through
+ *   both fractions unchanged, matching the adapt-only path.
  * v2.138.0: AMERICAN-STYLE GAME CLOCK DISPLAY. Game-time cards, notices,
  *   timer expirations, and the persistent clock handout now display the
  *   weekday and 12-hour time first, followed by the month-first date in
@@ -10012,7 +10026,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       } else if (leftoverAP === Infinity) {
         // penetrating unchanged
       } else {
-        const leftoverAfterInvuln = Math.max(0, leftoverAP - (hasInvuln ? (afterArmor - leftoverAP) : 0));
+        const leftoverAfterInvuln = leftoverAP;
         if (leftoverAfterInvuln >= penetrating) {
           // penetrating unchanged
         } else {
@@ -13148,7 +13162,7 @@ function cmdStance(msg, args) {
           <code>!mp test fumble [type] [--push N]</code> - Force fumble on the SELECTED token and apply its effect (types: wrong, offbal, leg, opening, muscle, arm, stuck, lost, gear, other). --push adds the pushing bonus before Muscle Strain is halved.<br/>
           <code>!mp test grapple [TOHIT] [lock] [remote] [gripdice]</code> - Grapple test harness (select 2 tokens: grappler, target)<br/>
           <code>!mp test siphon [PTS]</code> - Siphon PTS points using attacker's Siphon row config (select 2 tokens: attacker, target)<br/>
-          <code>!mp test damage N [type] [--ap:N] [--headshot] [--noprot] [--avoid light|armor|helmet]</code> - Apply N damage (AP tests vs target's Hardened; --avoid tests 4.14.2.4 partial coverage, --noprot is a flat bypass)<br/>
+          <code>!mp test damage N [type] [--sub:SUBTYPE] [--ap:N] [--headshot] [--noprot] [--avoid light|armor|helmet]</code> - Apply N damage (--sub:radiation etc. matches subtype-specific protection/Adaptation rows; AP tests vs target's Hardened; --avoid tests 4.14.2.4 partial coverage, --noprot is a flat bypass)<br/>
           <code>!mp test save BC MOD REC [dtype]</code> - Test save attack (dtype tests target's Invuln +8)<br/>
           <code>!mp test snare BP [MAX]</code> - Apply snare to selected token<br/>
           <code>!mp test senseloss</code> - Vision-loss model self-test (select 1 token; non-destructive)<br/>
@@ -13533,6 +13547,7 @@ function cmdStance(msg, args) {
 
     const rawDamage = num(args.amount, 10);
     const dmgType = (args.dtype || "kinetic").toLowerCase();
+    const dmgSubtype = (args.sub || "").trim().toLowerCase();
     const protKey = typeToProtKey(dmgType);
     const ignoreProt = (args.noprot === "1");
     const isHeadshot = (args.headshot === "1");
@@ -13576,6 +13591,7 @@ function cmdStance(msg, args) {
       fumbleResult: null,
       damageTotal: rawDamage,
       dmgTypeStr: dmgType.charAt(0).toUpperCase() + dmgType.slice(1),
+      dmgSubtype: dmgSubtype,
       protKey: protKey,
       atkType: "std",
       atkAP: apValue,
@@ -13601,8 +13617,8 @@ function cmdStance(msg, args) {
       apLabel = ` | AP: ${apValue}`;
     }
     
-    // Get target's protection info (includes invuln)
-    const protData = sumProtectionWithHardened(char.id, protKey);
+    // Get target's protection info (includes invuln/adapt), subtype-aware
+    const protData = sumProtectionWithHardened(char.id, protKey, dmgSubtype);
     
     let targetInfo = ` | Target Prot: ${protData.prot}`;
     if (protData.hardened > 0) {
@@ -13611,11 +13627,14 @@ function cmdStance(msg, args) {
     if (protData.invuln) {
       targetInfo += ` | <span style="color:#d35400;">Invuln ¼</span>`;
     }
+    if (protData.adapt) {
+      targetInfo += ` | <span style="color:#27ae60;">Adapt ½</span>`;
+    }
 
     let html = `<div style="background:#8be9fd; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
     html += `<span style="color:#000; font-weight:bold; font-size:14px;">🧪 TEST DAMAGE</span> `;
     html += `<span style="color:#000;">vs ${esc(char.get("name"))}</span>`;
-    html += `<br/><span style="color:#333; font-size:11px;">Raw: ${rawDamage} | Type: ${dmgType}${apLabel}${isHeadshot ? " | HEADSHOT x2" : ""}${targetInfo}</span>`;
+    html += `<br/><span style="color:#333; font-size:11px;">Raw: ${rawDamage} | Type: ${dmgType}${dmgSubtype ? "/" + esc(dmgSubtype) : ""}${apLabel}${isHeadshot ? " | HEADSHOT x2" : ""}${targetInfo}</span>`;
     html += `</div>`;
 
     // Derive mode strings from the same profile cmdApply validates against,
@@ -14495,6 +14514,10 @@ function cmdStance(msg, args) {
             if (testParts[i] === "--noprot") testArgs.noprot = "1";
             if (testParts[i] === "--avoid") testArgs.avoid = testParts[i + 1] || "armor";
             if (testParts[i] === "--headshot") testArgs.headshot = "1";
+            if (testParts[i].startsWith("--sub")) {
+              const subParts = testParts[i].split(":");
+              testArgs.sub = subParts[1] || "";
+            }
             if (testParts[i].startsWith("--ap")) {
               // --ap or --ap:N
               const apParts = testParts[i].split(":");
