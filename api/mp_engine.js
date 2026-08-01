@@ -1,4 +1,17 @@
-/* Mighty Protectors Roll20 API Engine v2.140.0 - 2026-08-01
+/* Mighty Protectors Roll20 API Engine v2.141.0 - 2026-08-01
+ * v2.141.0: PASSIVE SCAN CLOSED-BARRIER FIX. !mp scan no longer treats every
+ *   character token behind a closed door or sight-blocking wall as an
+ *   automatically available sound/odor stimulus. During the page-wide passive
+ *   sweep, a non-Penetrating sense cannot discover a contact through a blocking
+ *   barrier; vision was already blocked, and ordinary hearing/scent now remain
+ *   silent instead of turning the map into token radar. Opening the door makes
+ *   the contact eligible on the next Scan. Penetrating senses still cross the
+ *   barrier, subject to their listed blocking material and GM adjudication.
+ *   Targeted !mp perceive checks now use the same Roll20 barrier/environment
+ *   resolver: vision cannot pass a closed door, while an explicitly adjudicated
+ *   audible stimulus may be heard through it at the existing -3 dampening
+ *   modifier. Environment loss, Amplified Sense, and the applied modifier are
+ *   shown on the Perception card.
  * v2.140.0: !mp test damage --sub:SUBTYPE. The test damage command now
  *   accepts a damage sub-type flag (e.g. !mp test damage 10 energy
  *   --sub:radiation) and sets dmgSubtype on the pending record, so
@@ -1422,7 +1435,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.138.0";
+var MP_VERSION = "2.141.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -2117,10 +2130,12 @@ MP.Engine = (function () {
   // therefore reproduce the environmental parts of Dynamic Lighting needed
   // by MP: illumination and blocking barriers. Token rotation/FOV settings
   // are deliberately excluded because MP has no persistent character-facing
-  // procedure. Walls block sight and most special senses; they impose generic
-  // interference on sound/odor. Penetrating may ignore them, with the listed
-  // blocking material left to GM adjudication because Roll20 walls do not
-  // expose material data. Windows remain transparent to sight.
+  // procedure. Walls block sight and most special senses. For a specific,
+  // adjudicated stimulus they impose generic interference on sound/odor; the
+  // page-wide passive Scan does not infer such a stimulus through a barrier.
+  // Penetrating may ignore barriers, with the listed blocking material left to
+  // GM adjudication because Roll20 walls do not expose material data. Windows
+  // remain transparent to sight.
 
   function mpBool(v) {
     return v === true || v === 1 || v === "1" || v === "true";
@@ -2509,7 +2524,7 @@ MP.Engine = (function () {
     return null;
   }
 
-  function roll20SenseEnvironment(atkTokId, defTokId, senseKey, senseObj) {
+  function roll20SenseEnvironment(atkTokId, defTokId, senseKey, senseObj, options) {
     const atkTok = getObj("graphic", atkTokId);
     const defTok = getObj("graphic", defTokId);
     if (!atkTok || !defTok) {
@@ -2532,6 +2547,7 @@ MP.Engine = (function () {
       barriers
     );
     const penetrating = !!(senseObj && senseObj.pen);
+    const passiveSweep = !!(options && options.passiveSweep);
     const observerSig =
       `${Math.round(num(atkTok.get("left"), 0))},` +
       `${Math.round(num(atkTok.get("top"), 0))}`;
@@ -2589,6 +2605,22 @@ MP.Engine = (function () {
     }
 
     if (blocked && !penetrating) {
+      // A page-wide Scan has no specific sound, odor, or other stimulus to
+      // test. Do not infer one merely because a character token exists behind
+      // a closed door/wall. Targeted perception and attack acquisition retain
+      // the normal sense-specific interference rules below because the table
+      // has already identified a subject or stimulus to adjudicate.
+      if (passiveSweep) {
+        return {
+          usable: false,
+          obscured: false,
+          levelLoss: 0,
+          checkMod: 0,
+          reason: "blocked from passive scan by barrier",
+          sig: `wall:1;passive:1;sense:${senseKey};obs:${observerSig}`
+        };
+      }
+
       const interference = barrierSenseInterference(senseKey);
       if (!interference) {
         return {
@@ -2669,7 +2701,7 @@ MP.Engine = (function () {
     return !!senseObj;
   }
 
-  function observationLevel(atkTokId, defTokId, defCharId, atkCharId, rangeInches, rangePenalty) {
+  function observationLevel(atkTokId, defTokId, defCharId, atkCharId, rangeInches, rangePenalty, options) {
     const atkVision = visionLossInfo(atkTokId, atkCharId);
     const senses = atkCharId ? getCharacterSenses(atkCharId) : defaultSenses();
     const defConds =
@@ -2720,7 +2752,7 @@ MP.Engine = (function () {
     }
 
     const visReach = senseReach(vis, rangeInches, inScore);
-    const visEnv = roll20SenseEnvironment(atkTokId, defTokId, "visible", vis);
+    const visEnv = roll20SenseEnvironment(atkTokId, defTokId, "visible", vis, options);
     const visNaturalLoss = Math.max(0, num(visEnv.levelLoss, 0) - num(vis.amp, 0));
     const visBeforeEnvironment = visLevel;
     visLevel = Math.max(0, visLevel - visNaturalLoss);
@@ -2768,7 +2800,7 @@ MP.Engine = (function () {
 
       const reach = senseReach(sense, rangeInches, inScore);
       if (!reach.usable) return;
-      const env = roll20SenseEnvironment(atkTokId, defTokId, k, sense);
+      const env = roll20SenseEnvironment(atkTokId, defTokId, k, sense, options);
       if (!env.usable) return;
 
       const envLoss = Math.max(0, num(env.levelLoss, 0) - num(sense.amp, 0));
@@ -2840,7 +2872,9 @@ MP.Engine = (function () {
         atkTokId,
         senseKey: null,
         envSig: (visEnv && visEnv.sig) || `none:${blockedWhy}`,
-        rangeSensitive: true
+        rangeSensitive: true,
+        passiveBarrierBlocked:
+          !!(options && options.passiveSweep && !visEnv.usable && visEnv.reason === "blocked by barrier")
       };
     }
 
@@ -3028,7 +3062,9 @@ MP.Engine = (function () {
       if (!key) return ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(obsName)}</b> has no usable senses.`);
     }
     const s = senses[key];
-    const lvlLabel = s.lvl >= 3 ? "Analytical" : (s.lvl === 2 ? "Full" : "Basic");
+    let effectiveSenseLevel = s.lvl;
+    let environmentNote = "";
+    let environmentMod = 0;
 
     // optional subject: --target or 2nd selected token (sneaking opposition)
     let subjTok = args.target ? getObj("graphic", args.target) : (sel.length > 1 && sel[1] !== obsTok ? sel[1] : null);
@@ -3056,6 +3092,21 @@ MP.Engine = (function () {
         const why = !s.rng ? "no range (contact only, 1\")" : `beyond IN/2 = ${reach.cap}\"`;
         return ch("MP", `${wt(msg)}<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b>'s ${esc(s.label || key)} can't reach the subject at ${Math.round(rd.inches)}\" (${why}).</div>`);
       }
+      const env = roll20SenseEnvironment(obsTok.id, subjTok.id, key, s);
+      if (!env.usable) {
+        return ch("MP", `${wt(msg)}<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b>'s ${esc(s.label || key)} cannot perceive the subject (${esc(env.reason || "blocked by the environment")}).</div>`);
+      }
+
+      const envLoss = Math.max(0, num(env.levelLoss, 0) - num(s.amp, 0));
+      effectiveSenseLevel = Math.max(0, num(s.lvl, 0) - envLoss);
+      if (effectiveSenseLevel <= 0) {
+        return ch("MP", `${wt(msg)}<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b>'s ${esc(s.label || key)} is reduced to None by ${esc(env.reason || "the environment")}.</div>`);
+      }
+      environmentMod = num(env.checkMod, 0);
+      if (env.reason) {
+        environmentNote = `${env.reason}${envLoss ? `; sense level -${envLoss}` : ""}`;
+      }
+
       rngMod = Math.min(0, num(rd.penalty, 0) + num(reach.bonus, 0));
       if (num(rd.penalty, 0) !== 0 || rd.profileAdjusted) {
         const offset = reach.bonus
@@ -3065,10 +3116,11 @@ MP.Engine = (function () {
       }
     }
     const discMod = (obsTok && hasDiscomfort(obsTok.id)) ? -3 : 0;
-    const mod = num(args.mod, 0) + num(s.chk, 0) + oppMod + rngMod + discMod;
-    const sneakGate = !!oppNote && s.lvl === 1;
+    const mod = num(args.mod, 0) + num(s.chk, 0) + oppMod + rngMod + environmentMod + discMod;
+    const sneakGate = !!oppNote && effectiveSenseLevel === 1;
     const perceptionUse = obsTok ? claimPerceptionCheck(obsTok.id) : { isFree: true };
-    const acq = rollAcquisition(obsChar.id, s.lvl, undefined, mod, sneakGate);
+    const acq = rollAcquisition(obsChar.id, effectiveSenseLevel, undefined, mod, sneakGate);
+    const lvlLabel = effectiveSenseLevel >= 3 ? "Analytical" : (effectiveSenseLevel === 2 ? "Full" : "Basic");
 
     const detail = {
       "-": "perceives nothing",
@@ -3084,6 +3136,7 @@ MP.Engine = (function () {
     if (num(s.chk, 0)) modBits.push(`${s.chk > 0 ? "+" : ""}${s.chk} chk`);
     if (oppNote) modBits.push(oppNote.trim());
     if (rngNote) modBits.push(rngNote.trim());
+    if (environmentMod) modBits.push(`${environmentMod} barrier/environment`);
     if (discMod) modBits.push(`${discMod} discomfort`);
 
     let out = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
@@ -3092,6 +3145,9 @@ MP.Engine = (function () {
     if (subjTok && obsTok) {
       const profileData = calculateRangeWithProfile(obsTok, subjTok, obsChar.id, subjChar ? subjChar.id : null);
       out += `<span style="font-size:11px; color:#8a84a8;">Range: ${esc(profileRangeText(profileData))}; modifier ${profileData.penalty}${s.rad || s.tele ? ` before sense offsets` : ""}</span><br/>`;
+      if (environmentNote) {
+        out += `<span style="font-size:11px; color:#8a84a8;">Environment: ${esc(environmentNote)}${environmentMod ? ` (${environmentMod})` : ""}</span><br/>`;
+      }
     }
     out += `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (${modBits.join(", ")}) = ${acq.tn}-` : ""} · rolled <b>${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}</b>${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}<br/>`;
     out += `<b>[${acq.tier}]</b> ${esc(detail)}${critNote}`;
@@ -3295,10 +3351,28 @@ MP.Engine = (function () {
 
       const tokName = tok.get("name") || tokChar.get("name") || "Unknown";
       const rangeData = calculateRangeWithProfile(obsTok, tok, obsChar.id, tokChar.id);
-      const obs = observationLevel(obsTok.id, tok.id, tokChar.id, obsChar.id, rangeData.inches, rangeData.penalty);
+      const obs = observationLevel(
+        obsTok.id,
+        tok.id,
+        tokChar.id,
+        obsChar.id,
+        rangeData.inches,
+        rangeData.penalty,
+        { passiveSweep: true }
+      );
       const bearing = scanBearingLabel(compassBearing(obsTok, tok));
       const locateBtn = btn("Locate", `!mp locate --atk ${obsTok.id} --target ${tok.id}`);
       const atkBtn = btn("Attack", `!mp atk ?{Attack row|1} --atk ${obsTok.id} --target ${tok.id}`);
+      const acqKey = obsTok.id + "|" + tok.id;
+
+      // A passive Scan cannot reveal even an anonymous presence solely from a
+      // token hidden behind a closed door/wall. Level-0 acquisition normally
+      // permits a critical "?" result, so barrier-hidden contacts must be
+      // removed before rolling rather than merely reduced to sense level None.
+      if (obs.passiveBarrierBlocked) {
+        delete state.MP_Engine.acquired[acqKey];
+        return;
+      }
 
       if (!obs.needsRoll) {
         contacts.push({
@@ -3310,7 +3384,6 @@ MP.Engine = (function () {
         return;
       }
 
-      const acqKey = obsTok.id + "|" + tok.id;
       const acqMod = num(obs.oppMod, 0) + num(obs.chkMod, 0) + num(obs.rngMod, 0) + disc + situational;
       const acq = rollAcquisition(obsChar.id, obs.level, [d1, d2], acqMod, obs.sneakGate);
 
@@ -14867,7 +14940,7 @@ function cmdStance(msg, args) {
           <code>!mp sneak | --off</code> - Sneaking on selected tokens<br/>
           <code>!mp sensepanel</code> - Senses control panel (<b>GM</b>)<br/>
           <code>!mp perceive [--sense KEY] [--mod N]</code> - Perception check; second selected token is the subject<br/>
-          <code>!mp scan [--mod N]</code> - 3.1.5 sweep of the whole page (best sense per target); located contacts get player-only Locate and Attack buttons. First scan/round is the free check. GM tip: add a token action macro named Scan with body <code>!mp scan</code> (visible whenever a token is selected)<br/>
+          <code>!mp scan [--mod N]</code> - 3.1.5 passive sweep of the page (best sense per target); closed doors/walls hide contacts unless a sense is Penetrating. Located contacts get player-only Locate and Attack buttons. First scan/round is the free check. GM tip: add a token action macro named Scan with body <code>!mp scan</code> (visible whenever a token is selected)<br/>
           <code>!mp willcheck --mod N [--present] [--phobia] [--stimulus "x"]</code> - Compulsion/Phobia save (<b>GM</b>)<br/>
           <code>!mp discomfort | --off</code> - Special Requirement penalty<br/>
           <code>!mp require --interval 7d --consequence discomfort --name "x" | --met | --off | list</code> - Requirement clock (<b>GM</b>)<br/>
