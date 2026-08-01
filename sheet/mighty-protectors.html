@@ -1,4 +1,9 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.78 - Timed charge guidance
+<!-- Mighty Protectors Roll20 Character Sheet v44.79 - Panel field widths
+        v44.79: Widen panel fields. Dur quantity 28px to 38px on attack,
+          protection, and ability panels; Dur unit selects 58px to 80px on all
+          three panels; protection Chg 28px to 38px with maxlength 4; Dmg Type
+          44px to 60px; protection main-row type columns (Kin/Eng/Bio/Ent/Psy/
+          Oth) 34px to 42px.
         v44.78: Ability Charges and Duration tooltips now explain MP Engine
           v2.137.0 timed-charge behavior: changing Use to On spends the first
           finite charge, and campaign-time advances renew the ability at each
@@ -1092,8 +1097,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <div class="sheet-panel-field">
             <label title="Duration: How long the effect lasts">Dur:</label>
-            <input type="text" name="attr_attack_duration_num" maxlength="4" style="width:28px !important;" title="Duration quantity" />
-            <select name="attr_attack_duration_unit" style="width:58px !important;" title="Duration unit">
+            <input type="text" name="attr_attack_duration_num" maxlength="4" style="width:38px !important;" title="Duration quantity" />
+            <select name="attr_attack_duration_unit" style="width:80px !important;" title="Duration unit">
               <option value="" selected>--</option>
               <option value="round">Round</option>
               <option value="minute">Minute</option>
@@ -1382,12 +1387,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <col style="width:40px;" />
           <col style="width:36px;" />
           <col style="width:50px;" />
-          <col style="width:34px;" />
-          <col style="width:34px;" />
-          <col style="width:34px;" />
-          <col style="width:34px;" />
-          <col style="width:34px;" />
-          <col style="width:34px;" />
+          <col style="width:42px;" />
+          <col style="width:42px;" />
+          <col style="width:42px;" />
+          <col style="width:42px;" />
+          <col style="width:42px;" />
+          <col style="width:42px;" />
           <col style="width:26px;" />
           <col />
         </colgroup>
@@ -1542,7 +1547,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <div class="sheet-panel-field">
             <label>Dmg Type:</label>
-            <select name="attr_prot_dmgtype" title="Ability Field damage type" style="width:44px !important;">
+            <select name="attr_prot_dmgtype" title="Ability Field damage type" style="width:60px !important;">
               <option value="Kinetic" selected>Kin</option>
               <option value="Energy">Eng</option>
               <option value="Biochemical">Bio</option>
@@ -1557,12 +1562,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <div class="sheet-panel-field">
             <label>Chg:</label>
-            <input type="text" name="attr_prot_charges" maxlength="3" style="width:28px !important;" title="Charges remaining (-1 = unlimited)" />
+            <input type="text" name="attr_prot_charges" maxlength="4" style="width:38px !important;" title="Charges remaining (-1 = unlimited)" />
           </div>
           <div class="sheet-panel-field">
             <label title="Duration: How long the effect lasts">Dur:</label>
-            <input type="text" name="attr_prot_duration_num" maxlength="4" style="width:28px !important;" title="Duration quantity" />
-            <select name="attr_prot_duration_unit" style="width:58px !important;" title="Duration unit">
+            <input type="text" name="attr_prot_duration_num" maxlength="4" style="width:38px !important;" title="Duration quantity" />
+            <select name="attr_prot_duration_unit" style="width:80px !important;" title="Duration unit">
               <option value="" selected>--</option>
               <option value="round">Round</option>
               <option value="minute">Minute</option>
@@ -1800,8 +1805,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <div class="sheet-panel-field">
             <label>Dur:</label>
-            <input type="text" name="attr_ability_duration_num" maxlength="4" style="width:28px !important;" title="Duration quantity. With finite Charges, this is how long each spent charge keeps the ability On before the next charge is required." />
-            <select name="attr_ability_duration_unit" style="width:58px !important;" title="Duration unit. MP Engine v2.137.0+ supports rounds, minutes, hours, days, weeks, calendar months, and calendar years for timed charge renewal.">
+            <input type="text" name="attr_ability_duration_num" maxlength="4" style="width:38px !important;" title="Duration quantity. With finite Charges, this is how long each spent charge keeps the ability On before the next charge is required." />
+            <select name="attr_ability_duration_unit" style="width:80px !important;" title="Duration unit. MP Engine v2.137.0+ supports rounds, minutes, hours, days, weeks, calendar months, and calendar years for timed charge renewal.">
               <option value="" selected>--</option>
               <option value="round">Round</option>
               <option value="minute">Minute</option>
