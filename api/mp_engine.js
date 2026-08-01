@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.137.0 - 2026-07-31
+/* Mighty Protectors Roll20 API Engine v2.138.0 - 2026-07-31
+ * v2.138.0: AMERICAN-STYLE GAME CLOCK DISPLAY. Game-time cards, notices,
+ *   timer expirations, and the persistent clock handout now display the
+ *   weekday and 12-hour time first, followed by the month-first date in
+ *   parentheses: Winds Day 2:30 PM (Jan-You-Ary 1, 2526). Seconds appear
+ *   only when the campaign timestamp is between exact minutes, preserving
+ *   ten-second combat-round precision without cluttering narrative time.
+ *   The handout uses the same layout and removes its duplicate ISO date.
+ *   Gamma World weekday labels now use spaces rather than hyphens.
  * v2.137.0: TIMED ABILITY CHARGES. Repeating ability rows now connect their
  *   On/Held/Off state, Charges, and Duration fields to the campaign clock.
  *   Turning a finite-charge ability On spends one activation charge and arms
@@ -1400,7 +1408,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.137.0";
+var MP_VERSION = "2.138.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1473,7 +1481,7 @@ MP.Engine = (function () {
       "January", "February", "March", "April", "May", "June",
       "July", "August", "September", "October", "November", "December"
     ],
-    CALENDAR_WEEKDAYS: ["Sun-Day", "Moon-Day", "Twos-Day", "Winds-Day", "Thirst-Day", "Fry-Day", "Sadder-Day"],
+    CALENDAR_WEEKDAYS: ["Sun Day", "Moon Day", "Twos Day", "Winds Day", "Thirst Day", "Fry Day", "Sadder Day"],
     // Phase-of-day boundaries (fixed hours, 24h). [startHour, label, icon-hint]
     DAY_PHASES: [
       { start: 5, end: 7, label: "Dawn · first light", color: "#f5c99a" },
@@ -15777,14 +15785,25 @@ function cmdStance(msg, args) {
     return null;
   }
 
+  function fmtGameTime12(date, showSeconds) {
+    const p2 = x => String(x).padStart(2, "0");
+    const hour24 = date.getUTCHours();
+    const hour12 = hour24 % 12 || 12;
+    const seconds = date.getUTCSeconds();
+    const includeSeconds = showSeconds === true || (showSeconds !== false && seconds !== 0);
+    return `${hour12}:${p2(date.getUTCMinutes())}${includeSeconds ? `:${p2(seconds)}` : ""} ${hour24 < 12 ? "AM" : "PM"}`;
+  }
+
+  function fmtGameDateAmerican(date) {
+    const months = calendarMonthNames();
+    return `${months[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
+  }
+
   function fmtGameTimestamp(ms) {
     const d = new Date(ms);
     if (!Number.isFinite(d.getTime())) return "invalid game time";
     const days = calendarWeekdayNames();
-    const months = calendarMonthNames();
-    const p2 = x => String(x).padStart(2, "0");
-    return `${days[d.getUTCDay()]} ${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} ` +
-      `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
+    return `${days[d.getUTCDay()]} ${fmtGameTime12(d)} (${fmtGameDateAmerican(d)})`;
   }
 
   function abilityTimerKey(charId, rowId) {
@@ -16149,8 +16168,6 @@ function cmdStance(msg, args) {
     if (!h) return;
     const d = new Date(state.MP_Engine.gameClock.ms);
     const days = calendarWeekdayNames();
-    const months = calendarMonthNames();
-    const p2 = x => String(x).padStart(2, "0");
     const phase = phaseForHour(d.getUTCHours());
     const gc = state.MP_Engine.gameClock;
     const inCombat = gc.combatStartMs !== null;
@@ -16168,9 +16185,8 @@ function cmdStance(msg, args) {
 
     const body = `<div style="font-family:Arial,sans-serif; color:#eaeaea; background:#1e1e38; padding:12px; border-radius:6px;">` +
       `<div style="font-size:13px; color:#c8b8ff; letter-spacing:0.03em; margin-bottom:6px;">🕐 GAME TIME</div>` +
-      `<div style="font-size:26px; font-weight:bold; color:#fff;">${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}<span style="font-size:18px; color:#b9b3d6;">:${p2(d.getUTCSeconds())}</span></div>` +
-      `<div style="font-size:14px; color:#b9b3d6; margin-top:2px;">${esc(days[d.getUTCDay()])}, ${d.getUTCDate()} ${esc(months[d.getUTCMonth()])} ${d.getUTCFullYear()}</div>` +
-      `<div style="font-size:10px; color:#716b91; margin-top:1px;">${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}</div>` +
+      `<div style="font-size:25px; font-weight:bold; color:#fff;">${esc(days[d.getUTCDay()])} ${esc(fmtGameTime12(d))}</div>` +
+      `<div style="font-size:14px; color:#b9b3d6; margin-top:2px;">(${esc(fmtGameDateAmerican(d))})</div>` +
       `<div style="margin-top:10px; color:${phase.color}; font-size:13px;">☀ ${esc(phase.label)}</div>` +
       combatBlock + `</div>`;
     h.set("notes", body);
