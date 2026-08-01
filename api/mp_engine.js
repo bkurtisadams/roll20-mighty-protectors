@@ -1,4 +1,21 @@
-/* Mighty Protectors Roll20 API Engine v2.136.0 - 2026-07-29
+/* Mighty Protectors Roll20 API Engine v2.137.0 - 2026-07-31
+ * v2.137.0: TIMED ABILITY CHARGES. Repeating ability rows now connect their
+ *   On/Held/Off state, Charges, and Duration fields to the campaign clock.
+ *   Turning a finite-charge ability On spends one activation charge and arms
+ *   its paid interval. Every forward !mp time / round advance processes all
+ *   crossed renewal boundaries in one sweep; each boundary spends another
+ *   charge while the ability remains On. If no charge is available, the API
+ *   switches the ability Off at the exact game-time boundary where its last
+ *   paid interval ended. Large jumps are calculated directly for fixed units
+ *   rather than simulated round by round. Hours, minutes, days, weeks, rounds,
+ *   calendar months, and calendar years are supported. Blank Charges remain
+ *   manual; -1 remains unlimited. Active timers persist in state, survive API
+ *   restarts, can be inspected/resynced with !mp abilitytime, and are cancelled
+ *   when an ability is Held, Off, broken, or removed. Existing On abilities are
+ *   adopted on startup without spending a migration charge. Also fixes repeat
+ *   hits with non-round Duration: fixed and calendar expirations now extend
+ *   cumulatively instead of incorrectly reporting 0 rounds and retaining the
+ *   original expiry.
  * v2.136.0: GAME-TIME CONTROL PANEL + CALENDAR-AWARE ADVANCE. !mp time now
  *   opens a GM control card with one-click round/minute/hour/day/week/month/
  *   year buttons, a custom amount+unit query, and a set-date/time query. The
@@ -1383,7 +1400,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.136.0";
+var MP_VERSION = "2.137.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1677,6 +1694,9 @@ MP.Engine = (function () {
   if (!Array.isArray(state.MP_Engine.calendar.monthNames) || state.MP_Engine.calendar.monthNames.length !== 12) {
     delete state.MP_Engine.calendar.monthNames;
   }
+  // Timed ability charge registry. Each record is keyed by character +
+  // repeating-row ID and stores the next campaign-clock renewal boundary.
+  if (!state.MP_Engine.timedAbilities) state.MP_Engine.timedAbilities = {};
   // Ensure bleeding registry exists (4.8.4.2): { tokenId: { charId, lastMs } }
   if (!state.MP_Engine.bleeds) state.MP_Engine.bleeds = {};
   // Ensure pendingArea exists for existing state
@@ -4224,9 +4244,19 @@ MP.Engine = (function () {
     let snippet;
     if (existing) {
       existing.roundsRemaining = num(existing.roundsRemaining, 0) + ticks;
+      if (ticks === 0 && existing.expiresMs && rec.durNum > 0) {
+        const extendedMs = addGameDuration(existing.expiresMs, rec.durNum, rec.durUnit);
+        if (extendedMs) existing.expiresMs = extendedMs;
+      }
       setMarker(defTok, marker, true);
-      snippet = `<br/><span style="color:#f4d03f; font-weight:bold;">⏱ DURATION extended</span>` +
-        `<br/><span style="font-size:11px;">${esc(rec.atkName)} — ${existing.roundsRemaining} round(s) of effect remain (cumulative)</span>`;
+      snippet = `<br/><span style="color:#f4d03f; font-weight:bold;">⏱ DURATION extended</span>`;
+      if (ticks > 0) {
+        snippet += `<br/><span style="font-size:11px;">${esc(rec.atkName)} — ${existing.roundsRemaining} round(s) of effect remain (cumulative)</span>`;
+      } else if (existing.expiresMs) {
+        snippet += `<br/><span style="font-size:11px;">${esc(rec.atkName)} — now expires ${esc(fmtGameTimestamp(existing.expiresMs))} (cumulative)</span>`;
+      } else {
+        snippet += `<br/><span style="font-size:11px;">${esc(rec.atkName)} — duration extended; track the new expiry manually</span>`;
+      }
     } else {
       conds.push({
         type: "duration",
@@ -4236,10 +4266,9 @@ MP.Engine = (function () {
         protKey: rec.protKey || null,
         damageExpr: rec.durDamageExpr || "",
         roundsRemaining: ticks,
-        expiresMs: (ticks === 0 && rec.durNum > 0 && rec.durUnit && rec.durUnit !== "perm" && TIME_UNITS[rec.durUnit + (rec.durNum === 1 ? "" : "s")] !== undefined)
-          ? state.MP_Engine.gameClock.ms + rec.durNum * (TIME_UNITS[rec.durUnit + (rec.durNum === 1 ? "" : "s")] || 60) * 1000
-          : ((ticks === 0 && rec.durNum > 0 && rec.durUnit === "month") ? shiftCalendarMs(state.MP_Engine.gameClock.ms, rec.durNum, "month")
-          : ((ticks === 0 && rec.durNum > 0 && rec.durUnit === "year") ? shiftCalendarMs(state.MP_Engine.gameClock.ms, rec.durNum, "year") : null)),
+        expiresMs: (ticks === 0 && rec.durNum > 0)
+          ? addGameDuration(state.MP_Engine.gameClock.ms, rec.durNum, rec.durUnit)
+          : null,
         unitLabel: unitLabel,
         escape: rec.durEscape || "",
         marker: marker,
@@ -14630,6 +14659,10 @@ function cmdStance(msg, args) {
       case "time":
         if (gmOnly(msg)) return;
         return cmdTime(msg, args);
+      case "abilitytime":
+      case "abilitytimers":
+        if (gmOnly(msg)) return;
+        return cmdAbilityTime(msg, args);
       case "bleed":
         if (gmOnly(msg)) return;
         return cmdBleed(msg, args);
@@ -14838,6 +14871,7 @@ function cmdStance(msg, args) {
           <code>!mp range</code> - Check range between two selected tokens<br/>
           <code>!mp round | +N | set N | show</code> - Round controls (<b>GM</b>)<br/>
           <code>!mp time</code> - Game-time control panel; typed advance supports sec|min|hour|day|week|month|year|round, plus date/time set and calendar month aliases (<b>GM</b>)<br/>
+          <code>!mp abilitytime [sync|clear]</code> - Inspect or resync automatic ability charge timers (<b>GM</b>)<br/>
           <b>Status and Setup:</b><br/>
           <code>!mp status</code> - Live selected-token control card<br/>
           <code>!mp stat</code> - Detailed selected-token status<br/>
@@ -15720,6 +15754,343 @@ function cmdStance(msg, args) {
       d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds());
   }
 
+  // Add a sheet/API Duration to an absolute campaign timestamp. Returns null
+  // for missing, invalid, or permanent durations. This is shared by attack
+  // Duration expiry and timed ability charge renewal.
+  function addGameDuration(baseMs, amount, unit) {
+    const n = parseFloat(amount);
+    const u = String(unit || "").trim().toLowerCase();
+    if (!Number.isFinite(n) || n <= 0 || !u || u === "perm" || u === "permanent") return null;
+    if (ROUND_UNITS[u]) return baseMs + n * CFG.SECONDS_PER_ROUND * 1000;
+    if (MONTH_UNITS[u]) return Number.isInteger(n) ? shiftCalendarMs(baseMs, n, "month") : null;
+    if (YEAR_UNITS[u]) return Number.isInteger(n) ? shiftCalendarMs(baseMs, n, "year") : null;
+    if (TIME_UNITS[u] !== undefined) return baseMs + n * TIME_UNITS[u] * 1000;
+    return null;
+  }
+
+  function fixedGameDurationMs(amount, unit) {
+    const n = parseFloat(amount);
+    const u = String(unit || "").trim().toLowerCase();
+    if (!Number.isFinite(n) || n <= 0) return null;
+    if (ROUND_UNITS[u]) return n * CFG.SECONDS_PER_ROUND * 1000;
+    if (TIME_UNITS[u] !== undefined) return n * TIME_UNITS[u] * 1000;
+    return null;
+  }
+
+  function fmtGameTimestamp(ms) {
+    const d = new Date(ms);
+    if (!Number.isFinite(d.getTime())) return "invalid game time";
+    const days = calendarWeekdayNames();
+    const months = calendarMonthNames();
+    const p2 = x => String(x).padStart(2, "0");
+    return `${days[d.getUTCDay()]} ${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} ` +
+      `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
+  }
+
+  function abilityTimerKey(charId, rowId) {
+    return `${charId}:${rowId}`;
+  }
+
+  function abilityAttr(rowId, field) {
+    return `repeating_abilities_${rowId}_ability_${field}`;
+  }
+
+  function readTimedAbility(charId, rowId) {
+    return {
+      charId: charId,
+      rowId: rowId,
+      name: getAttr(charId, abilityAttr(rowId, "name")) || "Unnamed Ability",
+      state: getAttr(charId, abilityAttr(rowId, "state")) || "Off",
+      broken: getAttr(charId, abilityAttr(rowId, "broken")) === "1",
+      chargesRaw: String(getAttr(charId, abilityAttr(rowId, "charges")) || "").trim(),
+      durationNum: num(getAttr(charId, abilityAttr(rowId, "duration_num")), 0),
+      durationUnit: String(getAttr(charId, abilityAttr(rowId, "duration_unit")) || "").trim().toLowerCase()
+    };
+  }
+
+  function setTimedAbilityOff(charId, rowId) {
+    setAttr(charId, abilityAttr(rowId, "state"), "Off");
+    setAttr(charId, abilityAttr(rowId, "state_active"), "0");
+    setAttr(charId, abilityAttr(rowId, "state_held"), "0");
+    setAttr(charId, abilityAttr(rowId, "active"), "0");
+    setAttr(charId, abilityAttr(rowId, "duration_active"), "0");
+  }
+
+  function cancelTimedAbility(charId, rowId) {
+    delete state.MP_Engine.timedAbilities[abilityTimerKey(charId, rowId)];
+    const activeAttr = findObjs({ _type: "attribute", _characterid: charId, name: abilityAttr(rowId, "duration_active") })[0];
+    if (activeAttr) activeAttr.set("current", "0");
+  }
+
+  // Arm an ability when it enters the On state. The activation charge covers
+  // the first complete interval. Startup adoption and duration edits call this
+  // with consumeCharge=false so they never invent an extra expenditure.
+  function armTimedAbility(charId, rowId, options) {
+    const opts = options || {};
+    const consumeCharge = opts.consumeCharge !== false;
+    const silent = opts.silent === true;
+    const data = readTimedAbility(charId, rowId);
+    const key = abilityTimerKey(charId, rowId);
+
+    if (data.state !== "Active" || data.broken) {
+      cancelTimedAbility(charId, rowId);
+      if (data.broken && data.state === "Active") setTimedAbilityOff(charId, rowId);
+      return false;
+    }
+
+    const hasCharges = data.chargesRaw !== "";
+    const chargeValue = hasCharges ? Math.floor(num(data.chargesRaw, 0)) : null;
+    const unlimited = hasCharges && chargeValue === -1;
+    const nextDueMs = addGameDuration(state.MP_Engine.gameClock.ms, data.durationNum, data.durationUnit);
+
+    // Blank charges preserve the sheet's prior manual behavior. Duration Active
+    // is only a visual indicator here; no automatic expenditure is attempted.
+    if (!hasCharges) {
+      delete state.MP_Engine.timedAbilities[key];
+      return false;
+    }
+
+    if (!unlimited && consumeCharge && chargeValue <= 0) {
+      setTimedAbilityOff(charId, rowId);
+      delete state.MP_Engine.timedAbilities[key];
+      if (!silent) {
+        ch("MP", `/w gm <b>MP:</b> ⚠️ <b>${esc(data.name)}</b> could not activate: no charges remain.`);
+      }
+      return false;
+    }
+
+    let remaining = chargeValue;
+    if (!unlimited && consumeCharge) {
+      remaining = chargeValue - 1;
+      setAttr(charId, abilityAttr(rowId, "charges"), remaining);
+    }
+
+    if (!nextDueMs) {
+      delete state.MP_Engine.timedAbilities[key];
+      setAttr(charId, abilityAttr(rowId, "duration_active"), data.durationUnit === "perm" ? "1" : "0");
+      if (!silent && consumeCharge) {
+        const remainText = unlimited ? "unlimited charges" : `${remaining} charge${remaining === 1 ? "" : "s"} remaining`;
+        ch("MP", `/w gm <b>MP:</b> 🔋 <b>${esc(data.name)}</b> activated; ${esc(remainText)}. No finite Duration is configured, so no renewal timer was created.`);
+      }
+      return false;
+    }
+
+    state.MP_Engine.timedAbilities[key] = {
+      charId: charId,
+      rowId: rowId,
+      name: data.name,
+      durationNum: data.durationNum,
+      durationUnit: data.durationUnit,
+      nextDueMs: nextDueMs,
+      startedMs: state.MP_Engine.gameClock.ms,
+      unlimited: unlimited
+    };
+    setAttr(charId, abilityAttr(rowId, "duration_active"), "1");
+
+    if (!silent && consumeCharge) {
+      const char = getObj("character", charId);
+      const owner = char ? char.get("name") : "Character";
+      const remainText = unlimited ? "∞ charges" : `${remaining} charge${remaining === 1 ? "" : "s"} remaining`;
+      ch("MP", `/w gm <div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;">` +
+        `🔋 <b>${esc(owner)} — ${esc(data.name)}</b> activated<br/>` +
+        `<span style="font-size:11px; color:#b9b3d6;">${esc(remainText)} · current charge lasts until ${esc(fmtGameTimestamp(nextDueMs))}</span></div>`);
+    }
+    return true;
+  }
+
+  function advanceCalendarTimer(rec, nowMs, charges) {
+    let next = rec.nextDueMs;
+    let spent = 0;
+    let offAt = null;
+    let safety = 0;
+    while (next <= nowMs && safety++ < 10000) {
+      if (!rec.unlimited && charges <= 0) { offAt = next; break; }
+      if (!rec.unlimited) { charges -= 1; spent += 1; }
+      const advanced = addGameDuration(next, rec.durationNum, rec.durationUnit);
+      if (!advanced || advanced <= next) { offAt = next; break; }
+      next = advanced;
+    }
+    return { nextDueMs: next, charges: charges, spent: spent, offAt: offAt };
+  }
+
+  // Spend all renewal charges crossed by a forward time jump. Fixed units use
+  // arithmetic, so a year-long jump over one-round intervals is still cheap.
+  function processTimedAbilities() {
+    const nowMs = state.MP_Engine.gameClock.ms;
+    const reg = state.MP_Engine.timedAbilities || {};
+    const notices = [];
+
+    Object.keys(reg).forEach(key => {
+      const rec = reg[key];
+      const char = rec && getObj("character", rec.charId);
+      if (!rec || !char) { delete reg[key]; return; }
+
+      const data = readTimedAbility(rec.charId, rec.rowId);
+      if (data.state !== "Active" || data.broken) {
+        cancelTimedAbility(rec.charId, rec.rowId);
+        return;
+      }
+
+      // A blanked charge field opts this row back out of automation at the next
+      // campaign-time sweep, even if its former renewal boundary is still ahead.
+      if (data.chargesRaw === "") {
+        cancelTimedAbility(rec.charId, rec.rowId);
+        notices.push(`<b>${esc(char.get("name"))} — ${esc(data.name)}</b>: timer cancelled because Charges is blank.`);
+        return;
+      }
+      if (!Number.isFinite(rec.nextDueMs) || rec.nextDueMs > nowMs) return;
+
+      let charges = Math.floor(num(data.chargesRaw, 0));
+      rec.unlimited = charges === -1;
+      let result;
+      const intervalMs = fixedGameDurationMs(rec.durationNum, rec.durationUnit);
+
+      if (intervalMs) {
+        const dueCount = Math.floor((nowMs - rec.nextDueMs) / intervalMs) + 1;
+        if (rec.unlimited) {
+          result = { nextDueMs: rec.nextDueMs + dueCount * intervalMs, charges: -1, spent: 0, offAt: null };
+        } else {
+          charges = Math.max(0, charges);
+          const spent = Math.min(charges, dueCount);
+          charges -= spent;
+          result = {
+            nextDueMs: rec.nextDueMs + spent * intervalMs,
+            charges: charges,
+            spent: spent,
+            offAt: spent < dueCount ? rec.nextDueMs + spent * intervalMs : null
+          };
+          if (!result.offAt) result.nextDueMs = rec.nextDueMs + dueCount * intervalMs;
+        }
+      } else {
+        result = advanceCalendarTimer(rec, nowMs, Math.max(0, charges));
+      }
+
+      if (!rec.unlimited && result.spent > 0) {
+        setAttr(rec.charId, abilityAttr(rec.rowId, "charges"), result.charges);
+      }
+
+      if (result.offAt !== null) {
+        setTimedAbilityOff(rec.charId, rec.rowId);
+        delete reg[key];
+        const spentText = result.spent > 0 ? ` Used ${result.spent} renewal charge${result.spent === 1 ? "" : "s"} during the time jump.` : "";
+        notices.push(`⏱ <b>${esc(char.get("name"))} — ${esc(data.name)}</b> switched Off at ${esc(fmtGameTimestamp(result.offAt))}: no charge remained for the next interval.${spentText}`);
+      } else {
+        rec.nextDueMs = result.nextDueMs;
+        rec.name = data.name;
+        rec.unlimited = rec.unlimited;
+        if (result.spent > 0) {
+          notices.push(`🔋 <b>${esc(char.get("name"))} — ${esc(data.name)}</b> used ${result.spent} renewal charge${result.spent === 1 ? "" : "s"}; ${result.charges} remain. Next due ${esc(fmtGameTimestamp(result.nextDueMs))}.`);
+        }
+      }
+    });
+
+    if (notices.length) {
+      ch("MP", `/w gm <div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;"><b>⏱ Timed Ability Charges</b><br/>${notices.join("<br/>")}</div>`);
+    }
+  }
+
+  function syncTimedAbilitiesFromSheet() {
+    const stateAttrs = (findObjs({ _type: "attribute" }) || []).filter(a =>
+      /^repeating_abilities_.+_ability_state$/.test(a.get("name")) && a.get("current") === "Active");
+    const activeKeys = {};
+
+    stateAttrs.forEach(a => {
+      const match = a.get("name").match(/^repeating_abilities_(.+)_ability_state$/);
+      const charId = a.get("_characterid");
+      if (!match || !charId) return;
+      const rowId = match[1];
+      const key = abilityTimerKey(charId, rowId);
+      activeKeys[key] = true;
+      const existing = state.MP_Engine.timedAbilities[key];
+      const data = readTimedAbility(charId, rowId);
+      if (!existing || num(existing.durationNum, 0) !== data.durationNum || String(existing.durationUnit || "") !== data.durationUnit) {
+        armTimedAbility(charId, rowId, { consumeCharge: false, silent: true });
+      }
+    });
+
+    Object.keys(state.MP_Engine.timedAbilities).forEach(key => {
+      if (activeKeys[key]) return;
+      const rec = state.MP_Engine.timedAbilities[key];
+      if (rec) cancelTimedAbility(rec.charId, rec.rowId);
+      else delete state.MP_Engine.timedAbilities[key];
+    });
+  }
+
+  function parseAbilityAttribute(attr) {
+    if (!attr) return null;
+    const match = String(attr.get("name") || "").match(/^repeating_abilities_(.+)_ability_(state|duration_num|duration_unit)$/);
+    if (!match) return null;
+    const charId = attr.get("_characterid");
+    return charId ? { charId: charId, rowId: match[1], field: match[2] } : null;
+  }
+
+  function onAbilityAttributeChange(attr, prev) {
+    const info = parseAbilityAttribute(attr);
+    if (!info) return;
+    if (info.field === "state") {
+      const before = prev ? String(prev.current || "") : "";
+      const after = String(attr.get("current") || "");
+      if (after === "Active" && before !== "Active") {
+        armTimedAbility(info.charId, info.rowId, { consumeCharge: true, silent: false });
+      } else if (after !== "Active") {
+        cancelTimedAbility(info.charId, info.rowId);
+      }
+      return;
+    }
+
+    // Editing Duration while On restarts the already-paid interval from the
+    // current campaign time, but does not spend another activation charge.
+    if (getAttr(info.charId, abilityAttr(info.rowId, "state")) === "Active") {
+      armTimedAbility(info.charId, info.rowId, { consumeCharge: false, silent: true });
+    }
+  }
+
+  function onAbilityAttributeDestroy(attr) {
+    if (!attr) return;
+    const match = String(attr.get("name") || "").match(/^repeating_abilities_(.+)_ability_state$/);
+    const charId = attr.get("_characterid");
+    if (match && charId) delete state.MP_Engine.timedAbilities[abilityTimerKey(charId, match[1])];
+  }
+
+  function cmdAbilityTime(msg) {
+    const parts = msg.content.trim().split(/\s+/);
+    const sub = (parts[2] || "show").toLowerCase();
+    if (sub === "sync" || sub === "resync") {
+      syncTimedAbilitiesFromSheet();
+      processTimedAbilities();
+    } else if (sub === "clear") {
+      if ((parts[3] || "").toLowerCase() !== "yes") {
+        return ch("MP", `/w gm <div style="background:#2b2038; color:#eaeaea; padding:6px; border:2px solid #b06ad9;"><b>Clear all timed ability records?</b><br/><span style="font-size:11px; color:#c9bfd8;">Abilities will remain On, but their charge renewals will stop until they are toggled or resynced.</span><br/>${btn("Confirm Clear", "!mp abilitytime clear yes")}${btn("Cancel", "!mp abilitytime")}</div>`);
+      }
+      Object.keys(state.MP_Engine.timedAbilities).forEach(key => {
+        const rec = state.MP_Engine.timedAbilities[key];
+        if (rec) {
+          const activeAttr = findObjs({ _type: "attribute", _characterid: rec.charId, name: abilityAttr(rec.rowId, "duration_active") })[0];
+          if (activeAttr) activeAttr.set("current", "0");
+        }
+      });
+      state.MP_Engine.timedAbilities = {};
+    } else if (sub !== "show" && sub !== "list") {
+      return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp abilitytime</code> | <code>!mp abilitytime sync</code> | <code>!mp abilitytime clear</code>`);
+    }
+
+    const records = Object.keys(state.MP_Engine.timedAbilities).map(k => state.MP_Engine.timedAbilities[k]).filter(Boolean);
+    let body = `<div style="background:#1e1e38; color:#eaeaea; padding:6px; border:2px solid #4a4070;"><b>🔋 Timed Ability Charges</b>`;
+    if (!records.length) {
+      body += `<br/><span style="font-size:11px; color:#b9b3d6;">No automatic ability timers are active.</span>`;
+    } else {
+      records.sort((a, b) => a.nextDueMs - b.nextDueMs).forEach(rec => {
+        const char = getObj("character", rec.charId);
+        const data = readTimedAbility(rec.charId, rec.rowId);
+        const chargeText = data.chargesRaw === "-1" ? "∞" : (data.chargesRaw || "manual");
+        body += `<br/>• <b>${esc(char ? char.get("name") : "Missing Character")} — ${esc(data.name || rec.name)}</b>` +
+          `<br/><span style="font-size:11px; color:#b9b3d6; padding-left:8px;">Charges ${esc(chargeText)} · next due ${esc(fmtGameTimestamp(rec.nextDueMs))}</span>`;
+      });
+    }
+    body += `<div style="margin-top:6px;">${btn("Resync", "!mp abilitytime sync")}${btn("Clear Timers", "!mp abilitytime clear")}${btn("Back to Clock", "!mp time")}</div></div>`;
+    return ch("MP", `/w gm ${body}`);
+  }
+
   // Central clock movement. Forward movement fires every game-time sweep;
   // backward corrections only move the display, matching the old set command.
   function moveGameClockTo(nextMs, announce) {
@@ -15810,6 +16181,7 @@ function cmdStance(msg, args) {
     checkSiphonExpiry();
     tickBleeds();
     expireDurations();
+    processTimedAbilities();
     Object.keys(state.MP_Engine.conditions).forEach(tokId => checkAbsorptionExpiry(tokId));
   }
 
@@ -16047,12 +16419,7 @@ function cmdStance(msg, args) {
   }
 
   function fmtGameClock() {
-    const d = new Date(state.MP_Engine.gameClock.ms);
-    const days = calendarWeekdayNames();
-    const months = calendarMonthNames();
-    const p2 = x => String(x).padStart(2, "0");
-    return `${days[d.getUTCDay()]} ${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} ` +
-      `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}`;
+    return fmtGameTimestamp(state.MP_Engine.gameClock.ms);
   }
 
   function fmtElapsed(seconds) {
@@ -16084,7 +16451,7 @@ function cmdStance(msg, args) {
       btn(`+1 Week`, `!mp time advance 1 week`) +
       btn(`+1 Month`, `!mp time advance 1 month`) +
       btn(`+1 Year`, `!mp time advance 1 year`) +
-      `<br/>` + btn(`Custom…`, customCmd) + btn(`Set Date/Time…`, setCmd) + btn(`Calendar Names`, `!mp time calendar`) +
+      `<br/>` + btn(`Custom…`, customCmd) + btn(`Set Date/Time…`, setCmd) + btn(`Calendar Names`, `!mp time calendar`) + btn(`Ability Timers`, `!mp abilitytime`) +
       `</div>`;
   }
 
@@ -16333,6 +16700,18 @@ function cmdStance(msg, args) {
   on("chat:message", onChat);
   on("change:campaign:initiativepage", onTrackerPageChange);
   on("change:campaign:turnorder", onTurnorderChange);
+  on("change:attribute", onAbilityAttributeChange);
+  on("add:attribute", function(attr) {
+    const info = parseAbilityAttribute(attr);
+    if (info && info.field === "state" && attr.get("current") === "Active") {
+      setTimeout(function() {
+        if (!state.MP_Engine.timedAbilities[abilityTimerKey(info.charId, info.rowId)]) {
+          armTimedAbility(info.charId, info.rowId, { consumeCharge: false, silent: true });
+        }
+      }, 100);
+    }
+  });
+  on("destroy:attribute", onAbilityAttributeDestroy);
 
   // On ready: migrate any wall-clock siphon expiries (pre-v2.84.0) to game
   // time, run one game-time sweep, and resync the tracker Round entry.
@@ -16348,6 +16727,7 @@ function cmdStance(msg, args) {
       });
     });
     state.MP_Engine.loadedAt = Date.now();
+    syncTimedAbilitiesFromSheet();
     runGameTimeSweep();
     updateClockHandout();
     if (Campaign().get("initiativepage")) {

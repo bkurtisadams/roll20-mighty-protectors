@@ -1,4 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.77 - Normal sense baselines
+<!-- Mighty Protectors Roll20 Character Sheet v44.78 - Timed charge guidance
+        v44.78: Ability Charges and Duration tooltips now explain MP Engine
+          v2.137.0 timed-charge behavior: changing Use to On spends the first
+          finite charge, and campaign-time advances renew the ability at each
+          Duration boundary until its charges run out. Blank remains manual and
+          -1 remains unlimited. The Duration Active tooltip identifies the flag
+          as API-managed when timed charge tracking is in use.
         v44.77: Selecting one of the six default human senses in a Heightened/
           Diminished Sense row now seeds its printed MP baseline (Full Ranged
           vision; Basic Ranged Global hearing/scent; Basic Global touch; Basic
@@ -1774,7 +1780,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <div class="sheet-panel-field">
             <label>Chg:</label>
-            <input type="text" name="attr_ability_charges" maxlength="3" style="width:28px !important;" title="Charges remaining (-1 = unlimited)" />
+            <input type="text" name="attr_ability_charges" maxlength="3" style="width:28px !important;" title="Charges remaining (-1 = unlimited; blank = manual). With MP Engine v2.137.0+, changing Use to On spends one finite charge; a finite Duration renews charges automatically as campaign time advances." />
           </div>
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_ability_gear" value="1" title="Gear-based (can be broken/disarmed)" />
@@ -1794,8 +1800,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <div class="sheet-panel-field">
             <label>Dur:</label>
-            <input type="text" name="attr_ability_duration_num" maxlength="4" style="width:28px !important;" title="Duration quantity" />
-            <select name="attr_ability_duration_unit" style="width:58px !important;" title="Duration unit">
+            <input type="text" name="attr_ability_duration_num" maxlength="4" style="width:28px !important;" title="Duration quantity. With finite Charges, this is how long each spent charge keeps the ability On before the next charge is required." />
+            <select name="attr_ability_duration_unit" style="width:58px !important;" title="Duration unit. MP Engine v2.137.0+ supports rounds, minutes, hours, days, weeks, calendar months, and calendar years for timed charge renewal.">
               <option value="" selected>--</option>
               <option value="round">Round</option>
               <option value="minute">Minute</option>
@@ -1812,7 +1818,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Row 1.25: Duration Details -->
         <div class="sheet-panel-row" style="margin-top:4px;">
           <div class="sheet-panel-field">
-            <input type="checkbox" name="attr_ability_duration_active" value="1" class="sheet-ability-dur-active-flag" title="Duration effect currently active" />
+            <input type="checkbox" name="attr_ability_duration_active" value="1" class="sheet-ability-dur-active-flag" title="Duration effect currently active. MP Engine v2.137.0+ sets this automatically while a timed charge interval is running." />
             <label title="Duration effect currently active" style="color:#50fa7b;">Active</label>
           </div>
           <div class="sheet-panel-field">
