@@ -1,9 +1,10 @@
 <!-- Mighty Protectors Roll20 Character Sheet v44.79 - Panel field widths
-        v44.79: Widen panel fields. Dur quantity 28px to 38px on attack,
-          protection, and ability panels; Dur unit selects 58px to 80px on all
-          three panels; protection Chg 28px to 38px with maxlength 4; Dmg Type
-          44px to 60px; protection main-row type columns (Kin/Eng/Bio/Ent/Psy/
-          Oth) 34px to 42px.
+        v44.79: Widen dropdown-panel fields only (no table colgroup changes).
+          Dur quantity 28px to 38px and Dur unit selects 58px to 80px on the
+          attack, protection, and ability panels; protection Chg 28px to 38px
+          with maxlength 4; protection Dmg Type 44px to 60px; protection panel
+          Hardened Kin/Eng/Bio/Ent/Psy/Oth 24px to 34px with maxlength 3 so
+          fractional values like 1/2 and 1/4 can be entered.
         v44.78: Ability Charges and Duration tooltips now explain MP Engine
           v2.137.0 timed-charge behavior: changing Use to On spends the first
           finite charge, and campaign-time advances renew the ability at each
@@ -1387,12 +1388,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <col style="width:40px;" />
           <col style="width:36px;" />
           <col style="width:50px;" />
-          <col style="width:42px;" />
-          <col style="width:42px;" />
-          <col style="width:42px;" />
-          <col style="width:42px;" />
-          <col style="width:42px;" />
-          <col style="width:42px;" />
+          <col style="width:34px;" />
+          <col style="width:34px;" />
+          <col style="width:34px;" />
+          <col style="width:34px;" />
+          <col style="width:34px;" />
+          <col style="width:34px;" />
           <col style="width:26px;" />
           <col />
         </colgroup>
@@ -1652,27 +1653,27 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <div class="sheet-panel-field">
             <label title="Hardened vs Kinetic">Kin</label>
-            <input type="text" name="attr_prot_hard_kinetic" value="0" maxlength="2" style="width:24px !important;" title="Hardened points vs Kinetic damage" />
+            <input type="text" name="attr_prot_hard_kinetic" value="0" maxlength="3" style="width:34px !important;" title="Hardened points vs Kinetic damage" />
           </div>
           <div class="sheet-panel-field">
             <label title="Hardened vs Energy">Eng</label>
-            <input type="text" name="attr_prot_hard_energy" value="0" maxlength="2" style="width:24px !important;" title="Hardened points vs Energy damage" />
+            <input type="text" name="attr_prot_hard_energy" value="0" maxlength="3" style="width:34px !important;" title="Hardened points vs Energy damage" />
           </div>
           <div class="sheet-panel-field">
             <label title="Hardened vs Biochemical">Bio</label>
-            <input type="text" name="attr_prot_hard_bio" value="0" maxlength="2" style="width:24px !important;" title="Hardened points vs Biochemical damage" />
+            <input type="text" name="attr_prot_hard_bio" value="0" maxlength="3" style="width:34px !important;" title="Hardened points vs Biochemical damage" />
           </div>
           <div class="sheet-panel-field">
             <label title="Hardened vs Entropy">Ent</label>
-            <input type="text" name="attr_prot_hard_entropy" value="0" maxlength="2" style="width:24px !important;" title="Hardened points vs Entropy damage" />
+            <input type="text" name="attr_prot_hard_entropy" value="0" maxlength="3" style="width:34px !important;" title="Hardened points vs Entropy damage" />
           </div>
           <div class="sheet-panel-field">
             <label title="Hardened vs Psychic">Psy</label>
-            <input type="text" name="attr_prot_hard_psychic" value="0" maxlength="2" style="width:24px !important;" title="Hardened points vs Psychic damage" />
+            <input type="text" name="attr_prot_hard_psychic" value="0" maxlength="3" style="width:34px !important;" title="Hardened points vs Psychic damage" />
           </div>
           <div class="sheet-panel-field">
             <label title="Hardened vs Other">Oth</label>
-            <input type="text" name="attr_prot_hard_other" value="0" maxlength="2" style="width:24px !important;" title="Hardened points vs Other damage" />
+            <input type="text" name="attr_prot_hard_other" value="0" maxlength="3" style="width:34px !important;" title="Hardened points vs Other damage" />
           </div>
         </div>
 
