@@ -1,4 +1,11 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.79 - Panel field widths
+<!-- Mighty Protectors Roll20 Character Sheet v44.80 - Sheet widening
+        v44.80: Widen sheet to better use the character dialog. Container
+          max-width 680px to 740px (half the available dialog gap, leaving
+          buffer for the scrollbar and popout variance). Profile 45px to
+          60px, Weight 55px to 70px, weight multiplier 28px to 38px, final
+          weight display min-width 30px to 50px, Carry 120px to 180px.
+          Attack/Protection Notes, Ability name, and Legal Status widen
+          automatically via flexible columns; no colgroup changes.
         v44.79: Widen dropdown-panel fields only (no table colgroup changes).
           Dur quantity 28px to 38px and Dur unit selects 58px to 80px on the
           attack, protection, and ability panels; protection Chg 28px to 38px
@@ -295,7 +302,7 @@ v43.02: Ability Field reactive protection now handled by API (2.2.4 rules)
 v43.01: Hardened values now have separate input fields in the Protection settings panel.
 This allows different hardened values per damage type (e.g., 5 Kinetic prot with 3 Hardened). -->
 
-<div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:680px; box-sizing:border-box;">
+<div tabindex="0" style="background:#1a1428; color:#eaeaea; font-family:Arial,sans-serif; font-size:12px; padding:4px; max-width:740px; box-sizing:border-box;">
 
   <!-- COMPACT MODE TOGGLE -->
   <input type="checkbox" name="attr_compact_mode" class="sheet-compact-toggle"
@@ -576,19 +583,19 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
       <span style="color:#888; font-size:10px;" title="Profile affects range penalties">Profile</span>
       <input type="text" name="attr_profile" value="1"
-        style="width:45px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px; text-overflow:ellipsis; overflow:hidden; box-sizing:border-box;"
+        style="width:60px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; font-size:11px; text-overflow:ellipsis; overflow:hidden; box-sizing:border-box;"
         title="Click to see full value. Profile affects range penalties." />
 
       <span style="color:#aaa; font-size:10px;">Weight</span>
       <input type="text" name="attr_weight" value="0"
-        style="width:55px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" 
+        style="width:70px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box;" 
         title="Base weight in lbs" />
       <span style="color:#888; font-size:10px;" title="Weight multiplier">×</span>
       <input type="text" name="attr_weight_mult" value="1"
-        style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
+        style="width:38px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center; box-sizing:border-box;"
         title="Weight multiplier (Size, Density)" />
       <span style="color:#888; font-size:10px;">=</span>
-      <span name="attr_effective_weight" style="color:#f4d03f; font-size:10px; min-width:30px;">0</span>
+      <span name="attr_effective_weight" style="color:#f4d03f; font-size:10px; min-width:50px;">0</span>
 
       <!-- MASS BUTTON -->
       <button type="roll" class="mp-labellink" name="roll_mass"
@@ -676,7 +683,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
              <input type="text" name="attr_hth_damage" readonly style="width:70px; flex-shrink:1; min-width:50px; background:#1e1e38; color:#f4d03f; border:1px solid #4a4070; padding:2px; text-align:center; font-weight:bold;" title="Hand-to-Hand damage dice" />
             <button type="roll" class="mp-labellink sheet-mp-rollbtn" name="roll_hth" value="&{template:default} {{name=@{character_name} rolls HTH Damage}} {{Damage=[[@{hth_damage}+?{Push damage|0}]]}} {{Push=[[?{Push damage|0}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:2px 0; background:#e63946; color:#fff; border:1px solid #2a2040;" title="Roll HTH Damage">HTH</button>
             <span style="color:#aaa; font-size:10px;">Carry:</span>
-            <input type="text" name="attr_carry_capacity" readonly style="width:120px; flex-shrink:1; min-width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="Carrying capacity in pounds" />
+            <input type="text" name="attr_carry_capacity" readonly style="width:180px; flex-shrink:1; min-width:80px; background:#1e1e38; color:#aaa; border:1px solid #4a4070; padding:2px; text-align:center;" title="Carrying capacity in pounds" />
           </div>
         </td>
       </tr>
