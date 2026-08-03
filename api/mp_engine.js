@@ -2692,13 +2692,15 @@ MP.Engine = (function () {
     return Math.min(0, num(rangePenalty, 0) + num(senseBonus, 0));
   }
 
-  function senseCanAcquireCombatTarget(senseKey, senseObj, rangeInches) {
-    // Time and flavor do not locate ordinary combatants. Touch can locate a
-    // subject only in contact range; senseReach enforces the same limit, but
-    // this explicit check prevents Time/Taste from winning a fallback tie.
+  function senseCanAcquireCombatTarget(senseKey, senseObj) {
+    if (!senseObj || senseObj.removed || senseObj.lvl <= 0) return false;
+
+    // These senses do not normally locate combat targets.
     if (senseKey === "time" || senseKey === "flavors") return false;
-    if (senseKey === "shapes" && rangeInches != null && rangeInches > 1) return false;
-    return !!senseObj;
+
+    // Range legality is handled by senseReach(). This allows a Shapes/Touch
+    // sense with the Ranged modifier to operate beyond contact distance.
+    return true;
   }
 
   function observationLevel(atkTokId, defTokId, defCharId, atkCharId, rangeInches, rangePenalty, options) {
@@ -7367,86 +7369,81 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         }
     }
 
-    // --- TOOLTIP BREAKDOWN GENERATION ---
+// --- COMPACT TO-HIT BREAKDOWN ---
     const bcLabel = atkTypeCode === "M" ? "IN" : (atkTypeCode === "E" ? "CL" : "AG");
     const baseChance = atkSave + 3;
-    let hoverBreakdown = `${bcLabel} ${atkSave} + 3 = ${baseChance}-`;
-    if (atkMod !== 0) hoverBreakdown += `&#10;Atk Mod: ${atkMod >= 0 ? '+' : ''}${atkMod}`;
-    
-    if (abilityTohitBonus !== 0) {
-      if (abilityTohitTargeted > 0 && abilityTohitGlobal > 0) {
-        hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitBonus} (+${abilityTohitGlobal} all, +${abilityTohitTargeted} this)`;
-      } else if (abilityTohitTargeted > 0) {
-        hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitTargeted} (this atk)`;
-      } else {
-        hoverBreakdown += `&#10;Ht.Exp: +${abilityTohitGlobal}`;
-      }
-    }
-    
-    if (aimVal !== 0) hoverBreakdown += `&#10;Aim: ${aimVal > 0 ? '+' : ''}${aimVal}`;
-    if (multiVal !== 0) hoverBreakdown += `&#10;Multi-Action: ${multiVal}`;
-    if (otherVal !== 0) hoverBreakdown += `&#10;Other: ${otherVal > 0 ? '+' : ''}${otherVal}`;
 
-    // Vehicle weapons carry their to-hit bonus in macroMod (hitmod); itemize it for the card.
-    if (atkIsVehicle) {
-      const vWpnMod = num(fields.wpnmod, 0);
-      const vTargBonus = num(fields.targbonus, 0);
-      if (vWpnMod !== 0) hoverBreakdown += `&#10;Wpn +To-Hit: ${vWpnMod >= 0 ? '+' : ''}${vWpnMod}`;
-      if (vTargBonus !== 0) hoverBreakdown += `&#10;Targeting: ${vTargBonus >= 0 ? '+' : ''}${vTargBonus}`;
-    }
+    const fmtMod = (value) => {
+      const n = num(value, 0);
+      return `${n > 0 ? "+" : ""}${n}`;
+    };
 
-    // The sheet sends hitmod as aim+multi+other+called_mod AND sends those
-    // four again as display fields, so the subtotal itemizes them rather than
-    // macroMod. !mp atk sends its --mod in hitmod with none of those fields,
-    // so a macro modifier was itemized nowhere and dropped out of the subtotal,
-    // leaving the breakdown short of the To-Hit it sat next to. Itemize
-    // whatever part of macroMod the display fields do not already account for.
     const itemizedMacroMod = aimVal + multiVal + otherVal + calledNumeric;
     const macroModResidual = atkIsVehicle ? 0 : (macroMod - itemizedMacroMod);
-    if (macroModResidual !== 0) {
-      hoverBreakdown += `&#10;Macro Mod: ${macroModResidual >= 0 ? '+' : ''}${macroModResidual}`;
-    }
 
-    const subtotal = baseChance + atkMod + abilityTohitBonus + aimVal + multiVal + otherVal +
-      macroModResidual + (atkIsVehicle ? macroMod : 0);
-    hoverBreakdown += `&#10;─────────`;
-    hoverBreakdown += `&#10;Subtotal: ${subtotal}-`;
-    
-    if (effDefValue !== 0) hoverBreakdown += `&#10;${defTypeLabel}: -${effDefValue}`;
-    if (defStatusBonus !== 0) hoverBreakdown += `&#10;Target ${defStatusLabel} [4.7.2]${defStatusNoDef && defValue !== 0 ? ` (def ${defValue} → 0)` : ""}`;
-    if (atkStancePenalty !== 0) hoverBreakdown += `&#10;Stance: ${atkStancePenalty}`;
-    if (atkRestraintPenalty !== 0) hoverBreakdown += `&#10;Restraint: ${atkRestraintPenalty}${atkRestraintLabel}`;
-    if (acqHover) hoverBreakdown += acqHover;
-    if (obs.extraToHit) hoverBreakdown += `&#10;Depth/weakness: ${obs.extraToHit}`;
-    if (atkDiscomfortPenalty) hoverBreakdown += `&#10;Discomfort: ${atkDiscomfortPenalty}`;
-    if (defPerceptionPenalty !== 0) hoverBreakdown += `&#10;Tgt perception: ${defPerceptionPenalty} def (${esc(defPerceptionNote)}; ${defBase + defMod} → ${defValue})`;
-    
-    // Range penalty tooltip
-    if (rangeData && typeof rangeData.inches === "number") {
-      const adjR = rangeData.profileAdjusted ? rangeData.adjustedInches : rangeData.inches;
-      let profNote = "";
-      if (rangeData.profileAdjusted) {
-        const atkP = rangeData.atkProfile !== undefined ? rangeData.atkProfile : 1;
-        const defP = rangeData.defProfile !== undefined ? rangeData.defProfile : 1;
-        if (atkP !== 1 && defP !== 1) profNote = ` (AtkProf:${atkP}, TgtProf:${defP})`;
-        else if (atkP !== 1) profNote = ` (AtkProf:${atkP})`;
-        else if (defP !== 1) profNote = ` (TgtProf:${defP})`;
+    const calcRows = [];
+    const addCalcRow = (label, value, detail) => {
+      calcRows.push({ label, value: `${value}${detail ? ` (${detail})` : ""}` });
+    };
+
+    addCalcRow("Base", `${bcLabel} save ${atkSave}+3 = ${baseChance}-`);
+    if (!isAreaAttack) addCalcRow(defTypeLabel, effDefValue);
+    if (atkMod !== 0) addCalcRow("Attack", fmtMod(atkMod));
+    if (abilityTohitBonus !== 0) addCalcRow("Expertise", fmtMod(abilityTohitBonus));
+    if (atkIsVehicle) {
+      if (macroMod !== 0) addCalcRow("Attack mods", fmtMod(macroMod));
+    } else {
+      if (aimVal !== 0) addCalcRow("Aim", fmtMod(aimVal));
+      if (multiVal !== 0) addCalcRow("Multi", fmtMod(multiVal));
+      if (otherVal !== 0) addCalcRow("Other", fmtMod(otherVal));
+      if (macroModResidual !== 0) addCalcRow("Mod", fmtMod(macroModResidual));
+    }
+    if (atkStancePenalty !== 0) addCalcRow("Stance", fmtMod(atkStancePenalty));
+    if (atkRestraintPenalty !== 0) addCalcRow("Restraint", fmtMod(atkRestraintPenalty));
+    if (atkVisionPenalty !== 0) {
+      const senseName = String(obs.label || "sense").replace(/\s*\([^)]*\)\s*$/, "").trim();
+      let senseResult = "";
+      if (acqTierForCard === "-3") senseResult = "rough loc";
+      else if (acqTierForCard === "?") senseResult = "unlocated";
+      addCalcRow("Sense", fmtMod(atkVisionPenalty), `${senseName}${senseResult ? `, ${senseResult}` : ""}`);
+    }
+    if (atkDiscomfortPenalty !== 0) addCalcRow("Discomfort", fmtMod(atkDiscomfortPenalty));
+    if (rangePenalty !== 0) addCalcRow("Range", fmtMod(rangePenalty));
+    if (isAreaAttack) {
+      addCalcRow("Area", "+6");
+    } else {
+      if (defStatusBonus !== 0) {
+        const statusName = String(defStatusLabel || "Target").replace(/\s*\([^)]*\).*$/, "").trim();
+        addCalcRow(statusName ? statusName.charAt(0).toUpperCase() + statusName.slice(1) : "Target", fmtMod(defStatusBonus));
       }
-      const cleanAdjHover = adjR.toFixed(1).replace(/\.0$/, '');
-      hoverBreakdown += `&#10;Range: ${rangePenalty} (${cleanAdjHover}&quot;${profNote})`;
+      if (calledShotPenalty !== 0) addCalcRow("Called", fmtMod(calledShotPenalty));
     }
-    
-    // Called Shot Penalty
-    if (calledShotPenalty !== 0) {
-        if (calledShotType === "Called") {
-            hoverBreakdown += `&#10;Called: ${calledShotPenalty}`;
-        } else {
-            hoverBreakdown += `&#10;Called (${calledShotType}): ${calledShotPenalty}`;
-        }
-    }
+    addCalcRow("Final", `${targetTotal}-`);
 
-    hoverBreakdown += `&#10;─────────`;
-    hoverBreakdown += `&#10;Final: ${targetTotal}-`;
+    // Hover: every line a signed to-hit delta so the column sums to Final.
+    // Defense shows raw value and applied sign; range inches hover-only.
+    const rangeInchesTxt = (rangeData && typeof rangeData.inches === "number")
+      ? `${(rangeData.profileAdjusted ? rangeData.adjustedInches : rangeData.inches).toFixed(1).replace(/\.0$/, "")}&quot;`
+      : "";
+    const hoverBreakdown = calcRows
+      .map(row => {
+        if (row.label === defTypeLabel) return `${defTypeLabel} ${effDefValue}: ${fmtMod(-effDefValue)}`;
+        if (row.label === "Range" && rangeInchesTxt) return `Range: ${row.value} (${rangeInchesTxt})`;
+        if (row.label === "Final") return `─────&#10;Final: ${row.value}`;
+        return `${row.label}: ${row.value}`;
+      })
+      .join("&#10;");
+
+    const compactBreakdownHtml = calcRows.map(row => {
+      const isFinal = row.label === "Final";
+      return (
+        `<div style="display:flex; justify-content:space-between; gap:8px;` +
+        `${isFinal ? " border-top:1px solid #3a3a5a; margin-top:3px; padding-top:3px;" : ""}">` +
+        `<span style="color:${isFinal ? "#f0c040" : "#aaa"};">${esc(row.label)}:</span>` +
+        `<b style="color:${isFinal ? "#f0c040" : "#eee"}; text-align:right;">${esc(row.value)}</b>` +
+        `</div>`
+      );
+    }).join("");
 
     // --- GENERATE HTML (Dark Theme Card) ---
     const outcomeLabels = {
