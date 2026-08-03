@@ -14192,15 +14192,42 @@ function cmdStance(msg, args) {
   // Triggers existing mpattack roll template handler
 
   function findAttackRowByIndex(charId, atkIndex) {
+    // Resolve by DISPLAY position, not the stored attack_num attribute.
+    // attack_num is written by the sheet renumber worker and two API import
+    // paths and goes stale after row deletion/reorder; the number the player
+    // counts on the sheet is visual position (_reporder order, unlisted rows
+    // after in creation order).
     const attrs = findObjs({ _type: "attribute", _characterid: charId });
-    const numAttr = attrs.find(a => {
-      const name = a.get("name").toLowerCase();
-      if (!name.startsWith("repeating_attacks_") || !name.endsWith("_attack_num")) return false;
-      return a.get("current") === String(atkIndex);
+    const seen = {};
+    const created = [];
+    attrs.forEach(a => {
+      const m = a.get("name").match(/^repeating_attacks_([^_]+)_/i);
+      if (m && !seen[m[1].toLowerCase()]) {
+        seen[m[1].toLowerCase()] = m[1];
+        created.push(m[1]);
+      }
     });
-    if (!numAttr) return null;
-    const match = numAttr.get("name").match(/repeating_attacks_([^_]+)_attack_num/i);
-    return match ? match[1] : null;
+    if (!created.length) return null;
+    let ordered = created;
+    const repAttr = attrs.find(a => a.get("name") === "_reporder_repeating_attacks");
+    if (repAttr) {
+      // Roll20 stores _reporder row ids lowercased.
+      const rep = String(repAttr.get("current") || "").split(",")
+        .map(s => s.trim().toLowerCase()).filter(Boolean);
+      const inRep = rep.map(id => seen[id]).filter(Boolean);
+      const rest = created.filter(id => rep.indexOf(id.toLowerCase()) === -1);
+      ordered = inRep.concat(rest);
+    }
+    const rowId = ordered[atkIndex - 1] || null;
+    if (rowId) {
+      const numAttr = attrs.find(a =>
+        a.get("name").toLowerCase() === `repeating_attacks_${rowId.toLowerCase()}_attack_num`);
+      const stored = numAttr ? numAttr.get("current") : "";
+      if (stored && stored !== String(atkIndex)) {
+        ch("MP", `/w gm <b>MP:</b> attack_num on row ${atkIndex} is stale (stored "${esc(stored)}") — resolved by sheet position. Open the sheet to resync numbering.`);
+      }
+    }
+    return rowId;
   }
 
   function cmdQuickAttack(msg, args) {
