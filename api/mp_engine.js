@@ -7012,6 +7012,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let atkVisionPenalty = 0;
     let acqNote = "";
     let acqHover = "";
+    let acqTierForCard = "";
     if (obs.needsRoll && atkTok) {
       // v2.91.1: ACQUIRE ONCE (4.6 RAW: "re-roll to acquire any target which
       // has moved, started sneaking, become invisible, etc."). A successful
@@ -7028,6 +7029,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
       if (cached && cached.sig === acqSig) {
         atkVisionPenalty = cached.toHitMod + num(obs.extraToHit, 0);
+        acqTierForCard = cached.tier;
         acqHover = `&#10;Acquired [${cached.tier}]: ${cached.toHitMod} (${obs.label}, held from round ${cached.round})`;
         acqNote = `<div style="background:#1e3a2f; border:1px solid #2e6b4a; padding:3px 8px; font-size:11px; color:#eee;">Already acquired by ${obs.label}: <b style="color:#2ecc71;">[${cached.tier}] ${esc(cached.label)}</b>${cached.toHitMod !== 0 ? ` (${cached.toHitMod} to hit)` : ""} ${cached.why ? ` <span style="color:#f4d03f;">(${esc(cached.why)})</span>` : ""} — held from round ${cached.round} (re-rolls when the target moves or concealment changes)<br/>${btn(`Why this sense?`, `!mp sight --obs ${atkTok.id} --target ${defTokenId}`)}</div>`;
         ch("MP", `${wt(msg)}` + acqNote);
@@ -7040,6 +7042,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const acqMod = num(obs.oppMod, 0) + num(obs.chkMod, 0) + num(obs.rngMod, 0) + acqDisc;
         const acq = rollAcquisition(atkCharId, obs.level, undefined, acqMod, obs.sneakGate);
         atkVisionPenalty = acq.toHitMod + num(obs.extraToHit, 0);
+        acqTierForCard = acq.tier;
         const modParts = [];
         if (obs.oppMod) modParts.push(`${obs.oppMod} sneak`);
         if (obs.chkMod) modParts.push(`${obs.chkMod > 0 ? "+" : ""}${obs.chkMod} chk`);
