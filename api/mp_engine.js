@@ -1,4 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.141.0 - 2026-08-01
+/* Mighty Protectors Roll20 API Engine v2.142.0 - 2026-08-04
+ * v2.142.0: FLASH FUMBLE AND CONDITION CLEANUP. A fumbled initial Flash
+ *   save now creates the existing permanent Blinded condition instead of
+ *   freezing the attack's ordinary 1-3 level dazzle. Blinded explicitly
+ *   reduces visible-light sense to None, while Protected Sense continues to
+ *   mitigate ordinary Flash loss. Flash cards, status output, and the
+ *   deterministic Flash self-test now distinguish dazzle from blindness and
+ *   report the actual number of levels lost. Removed unused facing,
+ *   controller/whisper, and protection wrapper helpers; removed the orphaned
+ *   Feared condition remnants; cleaned stale call arguments; and removed
+ *   unconditional recovery-debug console noise.
  * v2.141.0: PASSIVE SCAN CLOSED-BARRIER FIX. !mp scan no longer treats every
  *   character token behind a closed door or sight-blocking wall as an
  *   automatically available sound/odor stimulus. During the page-wide passive
@@ -1435,7 +1445,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.141.0";
+var MP_VERSION = "2.142.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1751,7 +1761,6 @@ MP.Engine = (function () {
     transmuted: "chemical-bolt",
     poisoned: "skull",
     damaging_poison: "three-leaves",
-    feared: "screaming",
     duration: "stopwatch",
     darkness: "ninja-mask",
     glare: "aura",
@@ -1947,27 +1956,34 @@ MP.Engine = (function () {
   function visionLossInfo(tokId, charId) {
     const conds = (state.MP_Engine.conditions && state.MP_Engine.conditions[tokId]) || [];
     let dazzle = 0, darkness = 0, glare = 0;
+    let blinded = false, permanentBlindness = false;
     conds.forEach(c => {
       if (c.type === "darkness") darkness += num(c.senseLevels, 0);
       else if (c.type === "glare") glare += num(c.senseLevels, 0);
-      else if (c.type === "dazzled" || c.type === "blinded") {
+      else if (c.type === "blinded") {
+        blinded = true;
+        if (c.permanent) permanentBlindness = true;
+      } else if (c.type === "dazzled") {
         // Legacy dazzled conditions (pre-2.89) had no senseLevels; treat as 2.
         dazzle += (c.senseLevels != null) ? num(c.senseLevels, 0) : 2;
       }
     });
     // v2.92.0: sense rows supply the base level and Amplified/Protected
     // ranks. Amp negates dampening (Darkness); Prot negates overload
-    // (Glare, Flash dazzle). Darkness & Glare still cancel first.
+    // (Glare, Flash dazzle). Darkness & Glare still cancel first. A condition
+    // explicitly recorded as Blinded is total sense loss, not mitigated dazzle.
     const vis = charId ? getCharacterSenses(charId).visible : defaultSenses().visible;
     const base = vis.lvl;
     const net = darkness - glare;
     const dampening = Math.max(0, Math.max(0, net) - num(vis.amp, 0));
     const overload = Math.max(0, Math.max(0, -net) + dazzle - num(vis.prot, 0));
-    const lost = dampening + overload;
+    const calculatedLoss = dampening + overload;
+    const lost = blinded ? Math.max(1, base, calculatedLoss) : calculatedLoss;
     const env = Math.abs(net); // for cause display
-    const effective = Math.max(0, base - lost);
+    const effective = blinded ? 0 : Math.max(0, base - lost);
     const effLabel = effective >= 3 ? "Analytical" : (effective === 2 ? "Full" : (effective === 1 ? "Basic" : "BLIND"));
     const causes = [];
+    if (blinded) causes.push(permanentBlindness ? "Permanent blindness" : "Blindness");
     if (dazzle) causes.push(`Dazzle ${dazzle}`);
     if (darkness) causes.push(`Darkness ${darkness}`);
     if (glare) causes.push(`Glare ${glare}`);
@@ -1975,7 +1991,7 @@ MP.Engine = (function () {
     if (charId && vis.amp) causes.push(`Amp ${vis.amp}`);
     if (charId && vis.prot) causes.push(`Prot ${vis.prot}`);
     if (charId && vis.removed) causes.push(`BLIND (Diminished Sense)`);
-    return { dazzle, darkness, glare, env, lost, base, effective, effLabel, causes, vis };
+    return { dazzle, blinded, permanentBlindness, darkness, glare, env, lost, base, effective, effLabel, causes, vis };
   }
 
   // To-hit penalty for a vision-impaired attacker. Basic vision: -3
@@ -2172,18 +2188,6 @@ MP.Engine = (function () {
     if (width >= 359.999) return true;
     const facing = normDeg(num(sourceTok.get("rotation"), 0) + num(centerOffset, 0));
     return angleDelta(facing, tokenBearingDeg(sourceTok, targetTok)) <= width / 2;
-  }
-
-  function senseFacesTarget(sourceTok, targetTok, senseKey, senseObj) {
-    if (!sourceTok || !targetTok) return false;
-
-    // MP does not track persistent character facing. Ordinary characters may
-    // turn their head/body freely while perceiving or attacking; Roll20 token
-    // rotation and Limit Field of Vision are display aids, not combat state.
-    // Global senses still matter narratively for passive awareness/surprise,
-    // but target acquisition never rejects a known subject for being "behind"
-    // the token artwork.
-    return true;
   }
 
   function rotateLocalPoint(x, y, degrees) {
@@ -2798,7 +2802,7 @@ MP.Engine = (function () {
       if (k === "visible") return;
       const sense = senses[k];
       if (!sense || sense.removed || sense.lvl <= 0) return;
-      if (!senseCanAcquireCombatTarget(k, sense, rangeInches)) return;
+      if (!senseCanAcquireCombatTarget(k, sense)) return;
 
       const reach = senseReach(sense, rangeInches, inScore);
       if (!reach.usable) return;
@@ -4126,7 +4130,8 @@ MP.Engine = (function () {
     const levels = Math.max(1, Math.min(3, num(parts[3], 2)));
 
     const snapshot = JSON.parse(JSON.stringify(state.MP_Engine.conditions[tokId] || []));
-    const markerBefore = tok.get("status_" + CONDITION_MARKERS.dazzled);
+    const dazzleMarkerBefore = tok.get("status_" + CONDITION_MARKERS.dazzled);
+    const blindMarkerBefore = tok.get("status_" + CONDITION_MARKERS.blinded);
     const results = [];
     const check = (name, cond) => results.push(`${cond ? "✅" : "❌"} ${name}`);
 
@@ -4157,6 +4162,8 @@ MP.Engine = (function () {
     let conds = state.MP_Engine.conditions[tokId] || [];
     let c0 = conds.find(c => c.type === "dazzled");
     check(`forced fail => dazzled, senseLevels ${levels}`, !!c0 && c0.senseLevels === levels && !c0.permanent);
+    check(`description reports -${levels} vision level${levels === 1 ? "" : "s"}`,
+      !!c0 && c0.effectDesc.indexOf(`-${levels} level${levels === 1 ? "" : "s"}`) !== -1);
     check(`recTN = base ${baseSave} - 30 - 12 = ${baseSave - 42}`, !!c0 && c0.recTN === baseSave - 42);
     let vis = visionLossInfo(tokId);
     check(`vision reflects loss (eff=${vis.effective})`, vis.effective === Math.max(0, 2 - levels));
@@ -4167,17 +4174,20 @@ MP.Engine = (function () {
     check(`re-apply refreshes, no duplicate (count=${conds.filter(c => c.type === "dazzled").length})`,
       conds.filter(c => c.type === "dazzled").length === 1);
 
-    // 4. Fumble (roll 20): permanent
+    // 4. Fumble (roll 20): permanent blindness, regardless of Protected Sense
     state.MP_Engine.conditions[tokId] = [];
     fakeArea.saveMod = 0;
     resolveAreaSave(fakeArea, tokId, 20);
     conds = state.MP_Engine.conditions[tokId] || [];
-    c0 = conds.find(c => c.type === "dazzled");
-    check(`fumble (roll 20) => PERMANENT`, !!c0 && c0.permanent === true);
+    c0 = conds.find(c => c.type === "blinded");
+    check(`fumble (roll 20) => PERMANENT BLINDED`, !!c0 && c0.permanent === true);
+    vis = visionLossInfo(tokId, char.id);
+    check(`fumble leaves effective vision at None (eff=${vis.effective})`, vis.effective === 0);
 
     // Restore
     state.MP_Engine.conditions[tokId] = snapshot;
-    setMarker(tok, CONDITION_MARKERS.dazzled, markerBefore === true);
+    setMarker(tok, CONDITION_MARKERS.dazzled, dazzleMarkerBefore === true);
+    setMarker(tok, CONDITION_MARKERS.blinded, blindMarkerBefore === true);
 
     const passCount = results.filter(r => r.startsWith("✅")).length;
     ch("MP", `/w gm <b style="color:#c88fff;">TEST FLASH</b> (${levels} level(s)) — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
@@ -4639,24 +4649,6 @@ function generateRowID() {
     return `/w "${name}" `;
   }
 
-  // Return whisper prefix for a stored player ID (from pending records)
-  function wtId(playerId) {
-    if (!playerId || playerIsGM(playerId)) return "/w gm ";
-    const player = getObj("player", playerId);
-    if (!player) return "/w gm ";
-    const name = player.get("_displayname");
-    return `/w "${name}" `;
-  }
-
-  // Check if character has a specific (non-ALL) player controller
-  function hasPlayerController(charId) {
-    if (!charId) return false;
-    const char = getObj("character", charId);
-    if (!char) return false;
-    const cb = (char.get("controlledby") || "").split(",");
-    return cb.some(id => { const t = id.trim(); return t && t !== "all"; });
-  }
-
   // Whisper to character's non-GM player controllers, then /w gm copy.
   // API whispers to players are invisible to the GM, so the GM copy is
   // always sent explicitly. GM controllers are skipped to avoid duplicates.
@@ -4710,30 +4702,6 @@ function generateRowID() {
     if (msg && msg.playerid && !playerIsGM(msg.playerid)) {
       const target = wt(msg);
       if (target !== "/w gm ") ch(who, target + content);
-    }
-    ch(who, "/w gm " + content);
-  }
-
-  // Send to player if non-GM, plus a /w gm copy (API whispers to players
-  // are invisible to the GM)
-  function chBothId(who, content, playerId) {
-    if (playerId && !playerIsGM(playerId)) {
-      const target = wtId(playerId);
-      if (target !== "/w gm ") ch(who, target + content);
-    }
-    ch(who, "/w gm " + content);
-  }
-
-  // Send to all unique non-GM players (GM sees whispers), /w gm fallback if none
-  function chPlayers(who, content, playerIds) {
-    const sent = new Set();
-    for (const pid of playerIds) {
-      if (!pid || playerIsGM(pid)) continue;
-      const target = wtId(pid);
-      if (target !== "/w gm " && !sent.has(target)) {
-        ch(who, target + content);
-        sent.add(target);
-      }
     }
     ch(who, "/w gm " + content);
   }
@@ -5323,16 +5291,6 @@ function generateRowID() {
   // Legacy function for compatibility - just returns protection total
   function sumProtection(charId, protKey, atkSubtype) {
     return sumProtectionWithHardened(charId, protKey, atkSubtype).prot;
-  }
-
-  // Get total hardened for a specific damage type
-  function sumHardened(charId, protKey, atkSubtype) {
-    return sumProtectionWithHardened(charId, protKey, atkSubtype).hardened;
-  }
-  
-  // Check if character has invulnerability for a damage type (from protection rows)
-  function hasInvulnerability(charId, protKey, atkSubtype) {
-    return sumProtectionWithHardened(charId, protKey, atkSubtype).invuln;
   }
 
   // Get Absorption or Reflection data for a character and damage type
@@ -7657,7 +7615,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // --- Area attacks: send normal card then delegate to area handler ---
     if (isAreaAttack) {
       chCardBody("MP", html, [atkCharId]);
-      handleAreaAttack(msg, uniqueRollId, state.MP_Engine.pending[uniqueRollId], defTok, atkTok);
+      handleAreaAttack(uniqueRollId, state.MP_Engine.pending[uniqueRollId], defTok);
       return;
     }
 
@@ -7665,7 +7623,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let buttonGroups = { attacker: "", defender: "" };
     if (outcome === "HIT" || outcome === "CRIT") {
       if (isSaveAttack) {
-        buttons = buildSaveAttackButtons(uniqueRollId, critResult, pushAmount, noDamage);
+        buttons = buildSaveAttackButtons(uniqueRollId, critResult, pushAmount);
         buttonGroups.defender = buttons;
       } else if (isSnareAttack) {
         buttons = buildSnareAttackButtons(uniqueRollId, critResult, pushAmount);
@@ -7709,7 +7667,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // AREA EFFECT HANDLING
   // -------------------------
 
-  function handleAreaAttack(msg, rollId, rec, targetTok, atkTok) {
+  function handleAreaAttack(rollId, rec, targetTok) {
     const outcome = rec.outcome;
     const pageId = targetTok.get("_pageid");
     const page = getObj("page", pageId);
@@ -8147,14 +8105,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> saves (${tn}-, rolled ${d20})${isSenseLoss ? " \u2014 vision unaffected" : " \u2014 no effect"}</span>`;
     }
 
-    const condType = isSenseLoss ? "dazzled"
-      : (isDamagingPoison ? "damaging_poison"
-        : inferConditionType(areaRec.atkName, areaRec.saveBC, areaRec.damageType, rawCondDamage));
+    const levels = isSenseLoss ? Math.max(1, Math.min(3, num(areaRec.senseLoss, 2))) : 0;
+    const isPermanent = isFumble && isSenseLoss;
+    const condType = isPermanent ? "blinded"
+      : (isSenseLoss ? "dazzled"
+        : (isDamagingPoison ? "damaging_poison"
+          : inferConditionType(areaRec.atkName, areaRec.saveBC, areaRec.damageType, rawCondDamage)));
     const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
     const hasDamage = conditionDealsDamage(condType);
     const condDamage = hasDamage ? rawCondDamage : 0;
-    const levels = isSenseLoss ? Math.max(1, Math.min(3, num(areaRec.senseLoss, 2))) : 0;
-    const isPermanent = isFumble && isSenseLoss;
     const recTN = baseSave + num(areaRec.saveMod, 0) + num(areaRec.recMod, 0)
       + protForSave + invulnForSave + adaptForSave + vulnSaveMod + discomfort;
 
@@ -8173,8 +8132,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       marker: marker,
       created: Date.now(),
       permanent: isPermanent,
-      senseLevels: isSenseLoss ? levels : ((condType === "dazzled" || condType === "blinded") ? 2 : 0),
-      effectDesc: getConditionDesc(condType, areaRec.atkName),
+      senseLevels: (isSenseLoss && !isPermanent) ? levels : ((condType === "dazzled") ? 2 : 0),
+      effectDesc: getConditionDesc(condType, areaRec.atkName, levels),
       damage: condDamage,
       dmgType: hasDamage ? (areaRec.damageType || "Biochemical") : null,
       protKey: hasDamage ? areaRec.protKey : null
@@ -8185,7 +8144,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     setMarker(tok, marker, true);
 
     let out = `<br/><span style="color:#e94560;">\u2717 <b>${esc(tokData.name)}</b> FAILS (${tn}-, rolled ${d20}${isFumble ? " FUMBLE" : ""})`;
-    if (isSenseLoss) {
+    if (isPermanent) {
+      out += ` \u2014 <b style="color:#ff6b6b;">PERMANENTLY BLINDED</b></span>`;
+    } else if (isSenseLoss) {
       const visNow = visionLossInfo(tokId, tokData.charId);
       out += ` \u2014 loses ${levels} vision level(s), now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
     } else {
@@ -9819,7 +9780,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return buttons;
   }
 
-  function buildSaveAttackButtons(rollId, critResult, pushAmount, noDamage) {
+  function buildSaveAttackButtons(rollId, critResult, pushAmount) {
     const critType = critResult ? critResult.type : null;
     let critMod = 0;
     
@@ -10976,16 +10937,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let damageButtons = "";  // For Damaging Poison immediate damage
     
     if (!pass) {
-      // Determine condition type and marker
-      // We already calculated isDamagingPoison and rawCondDamage above
-      // v2.89.1: sense-loss attacks (Flash) always produce a dazzled condition
-      const condType = isSenseLossAttack ? "dazzled"
-        : (isDamagingPoison ? "damaging_poison" : inferConditionType(rec.atkName, rec.saveBC, rec.dmgTypeStr, rawCondDamage));
-      const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
-      
       // Check for fumble = permanent effect (Flash: fumbled initial save =
       // permanently blinded). Laser DAZZLE shots have no permanence rule.
       const isPermanent = isFumble && !rec.isDazzleShot && (isSenseLossAttack || atkNameLower.includes("flash"));
+
+      // Ordinary sense loss is Dazzled; a permanent Flash fumble is Blinded.
+      const condType = isPermanent ? "blinded"
+        : (isSenseLossAttack ? "dazzled"
+          : (isDamagingPoison ? "damaging_poison" : inferConditionType(rec.atkName, rec.saveBC, rec.dmgTypeStr, rawCondDamage)));
+      const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
       
       // For Damaging Poison, use the damage value
       const hasDamage = conditionDealsDamage(condType);
@@ -11005,11 +10965,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         marker: marker,
         created: Date.now(),
         permanent: isPermanent,
-        effectDesc: getConditionDesc(condType, rec.atkName),
         // v2.89.1: levels of visible-light sense lost — from the attack row's
         // Sense Loss field (Flash 1/2/3); legacy save attacks default to 2.
-        senseLevels: isSenseLossAttack ? num(rec.senseLoss, 0)
-          : ((condType === "dazzled" || condType === "blinded") ? 2 : 0),
+        senseLevels: (isSenseLossAttack && !isPermanent)
+          ? Math.max(1, Math.min(3, num(rec.senseLoss, 2)))
+          : ((condType === "dazzled") ? 2 : 0),
+        effectDesc: getConditionDesc(condType, rec.atkName, num(rec.senseLoss, 2)),
         // For damaging conditions (Damaging Poison)
         damage: condDamage,
         dmgType: hasDamage ? rec.dmgTypeStr : null,
@@ -11039,9 +11000,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Build status line
       const condLabel = condType.replace(/_/g, " ").toUpperCase();
       statusLine = `<br/><span style="color:#e94560; font-weight:bold;">⚠️ ${condLabel}!</span>`;
-      if (isSenseLossAttack) {
+      if (isPermanent) {
+        statusLine += `<br/><span style="font-size:11px; color:#ff6b6b;"><b>Visible-light sense reduced to None.</b></span>`;
+      } else if (isSenseLossAttack) {
         const visNow = visionLossInfo(rec.defTokenId, rec.defCharId);
-        statusLine += `<br/><span style="font-size:11px;">Loses <b>${num(rec.senseLoss, 0)}</b> level(s) of vision — now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
+        statusLine += `<br/><span style="font-size:11px;">Loses <b>${Math.max(1, Math.min(3, num(rec.senseLoss, 2)))}</b> level(s) of vision — now <b style="color:${visNow.effective === 0 ? '#ff6b6b' : '#f4d03f'};">${visNow.effLabel}</b></span>`;
       }
       
       // For Damaging Poison: apply damage immediately on failed save
@@ -11117,17 +11080,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
   
   // Get human-readable condition description
-  function getConditionDesc(condType, atkName) {
+  function getConditionDesc(condType, atkName, senseLevels) {
     switch (condType) {
       case "paralyzed": return "Paralyzed - immobile, cannot act";
       case "mind_control": return "Mind Controlled - must obey commands";
       case "emotion_control": return "Emotion Controlled - strong imposed emotion";
-      case "dazzled": return "Dazzled - vision impaired (-2 levels)";
+      case "dazzled": {
+        const n = Math.max(1, num(senseLevels, 2));
+        return `Dazzled - visible-light sense impaired (-${n} level${n === 1 ? "" : "s"})`;
+      }
       case "blinded": return "Blinded - cannot see";
       case "transmuted": return "Transmuted - form altered";
       case "poisoned": return "Poisoned - paralytic effect";
       case "damaging_poison": return "Damaging Poison/Venom - takes damage each failed save";
-      case "feared": return "Feared - strong fear imposed";
       case "darkness": return "In Darkness field - vision dampened";
       case "glare": return "In Glare field - vision overloaded";
       case "invisible": return "Invisible - undetectable by sight (PR 1/round)";
@@ -11141,8 +11106,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   function cmdRecover(msg, args) {
     const tokId = args.target;
     const condIdx = resolveCondRef(state.MP_Engine.conditions[tokId] || [], args);
-    
-    log(`MP cmdRecover: tokId="${tokId}", cid="${args.cid || ""}", condIdx=${condIdx}`);
     
     // Legacy support: allow --bc and --tn for manual recovery rolls
     const manualBC = args.bc;
@@ -11158,8 +11121,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Get condition if using indexed system
     const conditions = state.MP_Engine.conditions[tokId] || [];
-    log(`MP cmdRecover: conditions.length=${conditions.length}`);
-    
     let cond = null;
     let tn = manualTN;
     let bc = manualBC;
@@ -11167,7 +11128,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     if (condIdx >= 0 && condIdx < conditions.length) {
       cond = conditions[condIdx];
-      log(`MP cmdRecover: Found cond type="${cond.type}", marker="${cond.marker}", recTN=${cond.recTN}`);
       if (cond.permanent) {
         return ch("MP", `/w gm <b>MP:</b> This condition is <b>PERMANENT</b> and cannot be recovered from naturally.`);
       }
@@ -11179,7 +11139,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       bc = cond.saveBC;
       recTime = cond.recTime;
     } else if (!manualBC || manualTN <= 0) {
-      log(`MP cmdRecover: No condition found at index ${condIdx}`);
       return ch("MP", `/w gm <b>MP:</b> No condition found or invalid parameters.`);
     }
 
@@ -11195,20 +11154,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (pass && cond) {
       // Remove the condition
-      log(`MP Recovery: PASSED! Removing condition at index ${condIdx}`);
       conditions.splice(condIdx, 1);
       state.MP_Engine.conditions[tokId] = conditions;
-      log(`MP Recovery: After splice, conditions.length=${conditions.length}`);
-      log(`MP Recovery: state.MP_Engine.conditions[tokId].length=${state.MP_Engine.conditions[tokId].length}`);
-      
       // Remove marker if no other conditions use it
       const markerStillUsed = conditions.some(c => c.marker === cond.marker);
-      log(`MP Recovery: Clearing condition. marker="${cond.marker}", markerStillUsed=${markerStillUsed}`);
       if (!markerStillUsed && cond.marker) {
-        log(`MP Recovery: Removing marker "${cond.marker}" from token ${tokId}`);
         setMarker(tok, cond.marker, false);
-        // Verify against the aggregate the client renders, not the virtual boolean.
-        log(`MP Recovery: After set, statusmarkers=${tok.get("statusmarkers")}`);
       }
       
       msg_out += `<br/><span style="color:#27ae60;">Condition cleared!</span>`;
@@ -12521,7 +12472,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const tokConds = state.MP_Engine.conditions[tokId] || [];
       const dazIdx = tokConds.findIndex(c => (c.type === "dazzled" || c.type === "blinded") && !c.permanent);
       if (dazIdx >= 0) html += `${btn(`Recovery Roll`, `!mp recover --target ${tokId} ${condRefArgs(tokConds[dazIdx], dazIdx)}`)} `;
-      if (tokConds.some(c => c.type === "dazzled" && c.permanent)) html += `<span style="color:#ff6b6b; font-size:11px;">PERMANENT dazzle </span>`;
+      const permanentVisionCond = tokConds.find(c => (c.type === "dazzled" || c.type === "blinded") && c.permanent);
+      if (permanentVisionCond) {
+        html += `<span style="color:#ff6b6b; font-size:11px;">${permanentVisionCond.type === "blinded" ? "PERMANENT blindness" : "PERMANENT dazzle"} </span>`;
+      }
       if (vis.darkness > 0) html += `${btnDanger(`Clear Darkness`, `!mp darkness --off --target ${tokId}`)} `;
       if (vis.glare > 0) html += `${btnDanger(`Clear Glare`, `!mp glare --off --target ${tokId}`)}`;
       html += `</div>`;
@@ -14793,7 +14747,7 @@ function cmdStance(msg, args) {
       case "abilitytime":
       case "abilitytimers":
         if (gmOnly(msg)) return;
-        return cmdAbilityTime(msg, args);
+        return cmdAbilityTime(msg);
       case "bleed":
         if (gmOnly(msg)) return;
         return cmdBleed(msg, args);
@@ -15091,11 +15045,11 @@ function cmdStance(msg, args) {
         data.story = '';
       }
 
-      finishExport(char, charId, allAttrs, a, data, msg);
+      finishExport(char, allAttrs, a, data);
     });
   }
 
-  function finishExport(char, charId, allAttrs, a, data, msg) {
+  function finishExport(char, allAttrs, a, data) {
 
     // BCs
     data.stats = {};
