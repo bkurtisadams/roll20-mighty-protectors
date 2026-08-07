@@ -1285,6 +1285,14 @@
   box-shadow: 0 0 4px rgba(128, 64, 192, 0.5) !important;
 }
 
+/* Attack: Broken state - hide the Roll button */
+.charsheet input.sheet-atk-broken-flag2 {
+  display: none !important;
+}
+.charsheet input.sheet-atk-broken-flag2:checked ~ button[name="roll_attack"] {
+  display: none !important;
+}
+
 /* Protection: Broken state - red strikethrough */
 
 /* When protection is broken, dim the entire row */

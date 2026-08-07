@@ -962,6 +962,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <input type="hidden" name="attr_attack_num" />
             <input type="hidden" name="attr_attack_is_physical" value="1" />
             <input type="hidden" name="attr_attack_is_mental" value="0" />
+            <input type="checkbox" name="attr_attack_broken" value="1" class="sheet-atk-broken-flag2" />
             <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{hitmod=[[0+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[0+@{attack_tohit_num}-((@{target|Target|physical_def|0}*@{attack_is_physical})+(@{target|Target|mental_def|0}*@{attack_is_mental}))-@{target|Target|bar3|0}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[0+@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_cost}}} {{ch=@{attack_charges}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def|0}*@{attack_is_physical})+(@{target|Target|mental_def|0}*@{attack_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3|0}]]}} {{deftype=@{attack_atk_full}}} {{rngmod=[[0+@{range_query}]]}} {{aim=[[0+@{aim_query}]]}} {{multi=[[0+@{multi_query}]]}} {{other=[[0+@{other_query}]]}} {{called=[[0+@{called_mod_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
@@ -3970,7 +3971,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // and BEFORE the "ABILITY MODIFIER SYSTEM" section.
 
   on("sheet:opened", function() {
-    getAttrs(["migrated_v42", "migrated_from_old"], function(v) {
+    getAttrs(["migrated_v42", "migrated_from_old", "use_api"], function(v) {
       if (v.migrated_v42 === "1") return;
       
       var alreadyMigratedRepeating = (v.migrated_from_old === "1");
@@ -4202,6 +4203,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       ids.forEach(function(id) {
         var prefix = "repeating_abilities_" + id + "_ability_";
         attrList.push(prefix + "state");
+        attrList.push(prefix + "broken");
         attrList.push(prefix + "st_mod");
         attrList.push(prefix + "en_mod");
         attrList.push(prefix + "ag_mod");
@@ -4239,9 +4241,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         ids.forEach(function(id) {
           var prefix = "repeating_abilities_" + id + "_ability_";
           var state = values[prefix + "state"] || "Off";
+          var broken = values[prefix + "broken"] === "1";
 
-          // Only Active state applies modifiers (Held and Off do not)
-          if (state === "Active") {
+          // Only Active state applies modifiers (Held, Off, and Broken do not)
+          if (state === "Active" && !broken) {
             sums.st += parseInt(values[prefix + "st_mod"]) || 0;
             sums.en += parseInt(values[prefix + "en_mod"]) || 0;
             sums.ag += parseInt(values[prefix + "ag_mod"]) || 0;
@@ -4456,10 +4459,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         }
       });
 
-      getAttrs(["leap_base", "leap_mult"], function(lv) {
-        var base = parseFloat((lv.leap_base || "0").replace(/,/g, '')) || 0;
+      var leapBase = parseFloat((carryValues[stIdx] / effectiveWeight).toFixed(1)) || 0;
+      getAttrs(["leap_mult"], function(lv) {
         var mult = parseInt(lv.leap_mult) || 1;
-        setAttrs({ leap_total: formatNumber((base * mult).toFixed(1)) });
+        setAttrs({ leap_total: formatNumber((leapBase * mult).toFixed(1)) });
       });
       
       calcIPTotals();
@@ -5610,7 +5613,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   });
 
   // Protection: FF accum change → recalc remaining capacity
-  on("change:repeating_protection:prot_ff_accum change:repeating_protection:prot_gear change:repeating_protection:prot_kinetic change:repeating_protection:prot_energy change:repeating_protection:prot_bio change:repeating_protection:prot_entropy change:repeating_protection:prot_psychic change:repeating_protection:prot_other change:power_score", function(eventInfo) {
+  on("change:repeating_protection:prot_mode change:repeating_protection:prot_ff_accum change:repeating_protection:prot_gear change:repeating_protection:prot_kinetic change:repeating_protection:prot_energy change:repeating_protection:prot_bio change:repeating_protection:prot_entropy change:repeating_protection:prot_psychic change:repeating_protection:prot_other change:power_score", function(eventInfo) {
     var src = eventInfo.sourceAttribute || "";
     var rowPrefix = "";
     var match = src.match(/^(repeating_protection_[^_]+)/);
@@ -5618,7 +5621,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       rowPrefix = match[1];
     } else {
       // power_score changed - update all FF rows
-      getSectionIDs("protection", function(ids) {
+      getSectionIDs("repeating_protection", function(ids) {
         ids.forEach(function(id) {
           var rp = "repeating_protection_" + id;
           getAttrs([rp + "_prot_mode", rp + "_prot_ff_accum", rp + "_prot_gear",
@@ -6014,6 +6017,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           attrList.push("repeating_abilities_" + id + "_ability_linked_group");
           attrList.push("repeating_abilities_" + id + "_ability_multi_group");
           attrList.push("repeating_abilities_" + id + "_ability_state");
+          attrList.push("repeating_abilities_" + id + "_ability_broken");
         });
         
         getAttrs(attrList, function(values) {
@@ -6027,14 +6031,16 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             var otherLinked = (values[otherPrefix + "linked_group"] || "").trim().toUpperCase();
             var otherMulti = (values[otherPrefix + "multi_group"] || "").trim().toUpperCase();
             var otherState = values[otherPrefix + "state"] || "Off";
+            var otherBroken = values[otherPrefix + "broken"] === "1";
             
-            // LINKED: same group = same state
+            // LINKED: same group = same state (broken rows only ever propagate to Off)
             if (linkedGroup && otherLinked === linkedGroup) {
-              if (otherState !== newState) {
-                updates[otherPrefix + "state"] = newState;
+              var targetState = (otherBroken && newState !== "Off") ? "Off" : newState;
+              if (otherState !== targetState) {
+                updates[otherPrefix + "state"] = targetState;
                 // Also update the CSS flag checkboxes
-                updates[otherPrefix + "state_active"] = (newState === "Active") ? "1" : "0";
-                updates[otherPrefix + "state_held"] = (newState === "Held") ? "1" : "0";
+                updates[otherPrefix + "state_active"] = (targetState === "Active") ? "1" : "0";
+                updates[otherPrefix + "state_held"] = (targetState === "Held") ? "1" : "0";
               }
             }
             
@@ -6156,7 +6162,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   function calcVehicle(resetCurrent) {
     getSectionIDs("repeating_vehsystems", function(ids) {
-      var base = ["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver","vehicle_hits","vehicle_hits_max","vehicle_power","vehicle_power_max"];
+      var base = ["vehicle_base_cp","vehicle_ag","vehicle_in","vehicle_cl","vehicle_maneuver","vehicle_wontexplode","vehicle_hits","vehicle_hits_max","vehicle_power","vehicle_power_max"];
       var gfields = ["st","en","ag","in","cl","power","hits","pdef","mdef"];
       ids.forEach(function(id){ gfields.forEach(function(f){ base.push("repeating_vehsystems_" + id + "_vsys_g_" + f); }); });
       getAttrs(base, function(v) {
@@ -6193,14 +6199,16 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var turnRate = Math.max(1, baseTurnRate + turnRateAdj);
 
       // Explosion based on total CP (calculated later in calcVehicleTotals, use base for now)
+      var wontExplode = (v.vehicle_wontexplode === "1");
       var totalCP = parseFloat(bcp);
       var explD8 = 1 + Math.floor(totalCP / 5);
       var explExtra = (totalCP % 5 !== 0) ? "+1d4" : "";
-      var explosion = explD8 + "d8" + explExtra;
-      var explRoll = explD8 + "d8" + explExtra;
+      var explosion = wontExplode ? "—" : (explD8 + "d8" + explExtra);
+      var explRoll = wontExplode ? "0" : (explD8 + "d8" + explExtra);
 
       var explArea = Math.ceil(profile);
       if (explArea % 2 === 0) explArea += 1;
+      if (wontExplode) explArea = 0;
 
       var initIdx = Math.max(0, Math.min(cl, hthTable.length - 1));
       var initDie = hthTable[initIdx];
@@ -6239,12 +6247,15 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_carry: carryStr,
         vehicle_hth: hthVal,
         vehicle_hth_roll: makeRollable(hthVal)
-      }, {silent: true});
-      recalcVehAttacks();
+      }, {silent: true}, function() {
+        recalcVehAttacks();
+      });
 
       // Only set current hits/power if they haven't been set yet or vehicle size changed
       if (resetCurrent) {
-        setAttrs({ vehicle_hits: hits, vehicle_power: power }, {silent: true});
+        setAttrs({ vehicle_hits: hits, vehicle_power: power }, {silent: true}, function() {
+          recalcVehProtRemaining();
+        });
       } else {
         var curH = v.vehicle_hits;
         var curP = v.vehicle_power;
@@ -6253,7 +6264,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var updates = {};
         if (curH === undefined || curH === "" || curH === null || parseInt(curH) === oldHitsMax) updates.vehicle_hits = hits;
         if (curP === undefined || curP === "" || curP === null || parseInt(curP) === oldPowerMax) updates.vehicle_power = power;
-        if (Object.keys(updates).length > 0) setAttrs(updates, {silent: true});
+        if (Object.keys(updates).length > 0) {
+          setAttrs(updates, {silent: true}, function() {
+            if (updates.vehicle_power !== undefined) recalcVehProtRemaining();
+          });
+        }
       }
       });
     });
