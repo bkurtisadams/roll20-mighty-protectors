@@ -4401,8 +4401,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var hitsBase = hpSTTable[stIdx] + hpENTable[enIdx] + hpAGTable[agIdx] + hpCLTable[clIdx];
       var powerBase = st + en + ag + inv;
       
-      var ipBase = Math.ceil(inv / 2);
-      
       // Power/Hits mod fields now contain ability bonuses directly
       var powerMod = parseInt(values.power_mod) || 0;
       var hitsMod = parseInt(values.hits_mod) || 0;
@@ -4432,7 +4430,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         carry_capacity: carryDisplay[stIdx],
         hth_damage: hthTable[stIdx],
         healing_rate: (healTable[enIdx] / 10).toFixed(1),
-        invention_points_base: ipBase,
         effective_weight: formatNumber(effectiveWeight),
         leap_base: formatNumber((carryValues[stIdx] / effectiveWeight).toFixed(1)),
         power_base: powerBase,
@@ -4448,7 +4445,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         updates.hits_score = newHitsMax;
       }
       
-      setAttrs(updates);
+      setAttrs(updates, {}, function() {
+        // intelligence_score committed - recompute IPs (calcBaseIPs chains calcIPTotals)
+        calcBaseIPs();
+      });
 
       var moveVal = Math.round((st + en + ag) / 3);
       getAttrs(["move", "move_mod"], function(mv) {
@@ -4464,8 +4464,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var mult = parseInt(lv.leap_mult) || 1;
         setAttrs({ leap_total: formatNumber((leapBase * mult).toFixed(1)) });
       });
-      
-      calcIPTotals();
     });
   }
 
@@ -5093,43 +5091,22 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var full = typeMap[v[eventInfo.sourceAttribute]] || "Kinetic";
       var update = {};
       update[rowPrefix + "_attack_dmgtype_full"] = full;
-      setAttrs(update);
+      setAttrs(update, { silent: true });
     });
   });
 
+  // Row indexing only (rowid/num/idx). Type/damage meta is handled by the
+  // targeted attack_atk / attack_dmgtype handlers and healed on sheet:opened.
   function syncAttackRowMeta() {
     getSectionIDs("repeating_attacks", function(ids) {
       if (!ids || !ids.length) return;
-      const atkAttrs = [];
-      ids.forEach(function(id) {
-        atkAttrs.push("repeating_attacks_" + id + "_attack_atk");
-        atkAttrs.push("repeating_attacks_" + id + "_attack_dmgtype");
+      const updates = {};
+      ids.forEach(function(id, index) {
+        updates["repeating_attacks_" + id + "_attack_rowid"] = id;
+        updates["repeating_attacks_" + id + "_attack_num"] = String(index + 1);
+        updates["repeating_attacks_" + id + "_attack_idx"] = String(index);
       });
-      getAttrs(atkAttrs, function(values) {
-        const typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
-        const dmgMap = {
-          "K": "Kinetic", "Kin": "Kinetic", "Kinetic": "Kinetic",
-          "E": "Energy", "Eng": "Energy", "Energy": "Energy",
-          "B": "Biochemical", "Bio": "Biochemical", "Biochemical": "Biochemical",
-          "Ent": "Entropy", "Entropy": "Entropy",
-          "P": "Psychic", "Psy": "Psychic", "Psychic": "Psychic",
-          "O": "Other", "Oth": "Other", "Other": "Other"
-        };
-        const updates = {};
-        ids.forEach(function(id, index) {
-          updates["repeating_attacks_" + id + "_attack_rowid"] = id;
-          updates["repeating_attacks_" + id + "_attack_num"] = String(index + 1);
-          updates["repeating_attacks_" + id + "_attack_idx"] = String(index);
-          const code = values["repeating_attacks_" + id + "_attack_atk"] || "P";
-          updates["repeating_attacks_" + id + "_attack_atk_full"] = typeMap[code] || "Physical";
-          updates["repeating_attacks_" + id + "_attack_is_physical"] = (code === "P") ? "1" : "0";
-          updates["repeating_attacks_" + id + "_attack_is_mental"] = (code === "M" || code === "E") ? "1" : "0";
-          // Sync damage type full name
-          const dmgCode = values["repeating_attacks_" + id + "_attack_dmgtype"] || "Kinetic";
-          updates["repeating_attacks_" + id + "_attack_dmgtype_full"] = dmgMap[dmgCode] || "Kinetic";
-        });
-        setAttrs(updates, { silent: true });
-      });
+      setAttrs(updates, { silent: true });
     });
   }
 
@@ -5145,7 +5122,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       // Set flags for target defense lookup (P=physical, M/E=mental)
       update[rowPrefix + "_attack_is_physical"] = (code === "P") ? "1" : "0";
       update[rowPrefix + "_attack_is_mental"] = (code === "M" || code === "E") ? "1" : "0";
-      setAttrs(update);
+      setAttrs(update, { silent: true });
     });
   });
 
@@ -5224,20 +5201,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   on("change:use_security change:intelligence_save change:cool_save change:ep_earned", function() {
     calcSecurityClearance();
-  });
-
-  function calcInventingPts() {
-    getAttrs(["invention_points_base", "ip_mod"], function(v) {
-      var base = parseInt(v.invention_points_base) || 0;
-      // ip_mod now contains ability inventing bonus directly
-      var ipMod = parseInt(v.ip_mod) || 0;
-      setAttrs({ invention_points: base + ipMod });
-    });
-  }
-
-  on("change:invention_points_base", function() {
-    calcInventingPts();
-    calcIPTotals();
   });
 
   /* ===== Heightened/Diminished Sense workers (v44.60) ===== */
@@ -5537,9 +5500,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // Attack: Type dropdown → indicator text + type flag
   on("change:repeating_attacks:attack_activation", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_activation", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_attack_broken"], function(v) {
+    getAttrs([eventInfo.sourceAttribute], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
-      var broken = v[rowPrefix + "_attack_broken"] === "1";
       var update = {};
       update[rowPrefix + "_attack_activation_ind"] = type;
       update[rowPrefix + "_attack_activation_c"] = (type === "C") ? "1" : "0";
@@ -5550,12 +5512,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // Attack: State dropdown → state flag
   on("change:repeating_attacks:attack_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_attack_activation", rowPrefix + "_attack_broken"], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_attack_broken"], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
-      var type = v[rowPrefix + "_attack_activation"] || "V";
       var broken = v[rowPrefix + "_attack_broken"] === "1";
       var update = {};
-      update[rowPrefix + "_attack_state_on"] = (state === "Active") ? "1" : "0";
+      update[rowPrefix + "_attack_state_on"] = (state === "Active" && !broken) ? "1" : "0";
       setAttrs(update, { silent: true });
     });
   });
@@ -5565,9 +5526,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // Protection: Type dropdown → indicator text + type flag
   on("change:repeating_protection:prot_activation", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_prot_activation", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_prot_broken"], function(v) {
+    getAttrs([eventInfo.sourceAttribute], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
-      var broken = v[rowPrefix + "_prot_broken"] === "1";
       var update = {};
       update[rowPrefix + "_prot_activation_ind"] = type;
       update[rowPrefix + "_prot_activation_c"] = (type === "C") ? "1" : "0";
@@ -5578,12 +5538,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // Protection: State dropdown → state flag
   on("change:repeating_protection:prot_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_prot_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_prot_activation", rowPrefix + "_prot_broken"], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_prot_broken"], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
-      var type = v[rowPrefix + "_prot_activation"] || "V";
       var broken = v[rowPrefix + "_prot_broken"] === "1";
       var update = {};
-      update[rowPrefix + "_prot_state_on"] = (state === "Active") ? "1" : "0";
+      update[rowPrefix + "_prot_state_on"] = (state === "Active" && !broken) ? "1" : "0";
       setAttrs(update, { silent: true });
     });
   });
@@ -5671,9 +5630,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // Sync Type dropdown → type indicator
   on("change:repeating_abilities:ability_type", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_type", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_ability_broken"], function(v) {
+    getAttrs([eventInfo.sourceAttribute], function(v) {
       var type = v[eventInfo.sourceAttribute] || "V";
-      var broken = v[rowPrefix + "_ability_broken"] === "1";
       var update = {};
       update[rowPrefix + "_ability_type_ind"] = type;
       update[rowPrefix + "_ability_type_c"] = (type === "C") ? "1" : "0";
@@ -5684,16 +5642,15 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // Sync State dropdown → checkboxes for CSS coloring + recalc
   on("change:repeating_abilities:ability_state", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_ability_state", "");
-    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_ability_type", rowPrefix + "_ability_broken"], function(v) {
+    getAttrs([eventInfo.sourceAttribute, rowPrefix + "_ability_broken"], function(v) {
       var state = v[eventInfo.sourceAttribute] || "Off";
-      var type = v[rowPrefix + "_ability_type"] || "V";
       var broken = v[rowPrefix + "_ability_broken"] === "1";
       var update = {};
-      // Set checkboxes for CSS styling
-      update[rowPrefix + "_ability_state_active"] = (state === "Active") ? "1" : "0";
-      update[rowPrefix + "_ability_state_held"] = (state === "Held") ? "1" : "0";
+      // Set checkboxes for CSS styling (broken rows never render Active/Held)
+      update[rowPrefix + "_ability_state_active"] = (state === "Active" && !broken) ? "1" : "0";
+      update[rowPrefix + "_ability_state_held"] = (state === "Held" && !broken) ? "1" : "0";
       // Legacy compatibility
-      update[rowPrefix + "_ability_active"] = (state === "Active") ? "1" : "0";
+      update[rowPrefix + "_ability_active"] = (state === "Active" && !broken) ? "1" : "0";
       setAttrs(update, { silent: true }, function() {
         recalcAbilityBonuses();
       });
@@ -5776,13 +5733,13 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           var broken = values["repeating_protection_" + id + "_prot_broken"] === "1";
           updates["repeating_protection_" + id + "_prot_activation_ind"] = type;
           updates["repeating_protection_" + id + "_prot_activation_c"] = (type === "C") ? "1" : "0";
-          updates["repeating_protection_" + id + "_prot_state_on"] = (state === "Active") ? "1" : "0";
+          updates["repeating_protection_" + id + "_prot_state_on"] = (state === "Active" && !broken) ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
       });
     });
 
-    // Sync attack Type and State on sheet open
+    // Sync attack Type, State, and derived meta on sheet open
     getSectionIDs("repeating_attacks", function(ids) {
       if (!ids || !ids.length) return;
       var attrList = [];
@@ -5790,8 +5747,19 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         attrList.push("repeating_attacks_" + id + "_attack_activation");
         attrList.push("repeating_attacks_" + id + "_attack_state");
         attrList.push("repeating_attacks_" + id + "_attack_broken");
+        attrList.push("repeating_attacks_" + id + "_attack_atk");
+        attrList.push("repeating_attacks_" + id + "_attack_dmgtype");
       });
       getAttrs(attrList, function(values) {
+        var typeMap = { P: "Physical", M: "Mental", E: "Emotion" };
+        var dmgMap = {
+          "K": "Kinetic", "Kin": "Kinetic", "Kinetic": "Kinetic",
+          "E": "Energy", "Eng": "Energy", "Energy": "Energy",
+          "B": "Biochemical", "Bio": "Biochemical", "Biochemical": "Biochemical",
+          "Ent": "Entropy", "Entropy": "Entropy",
+          "P": "Psychic", "Psy": "Psychic", "Psychic": "Psychic",
+          "O": "Other", "Oth": "Other", "Other": "Other"
+        };
         var updates = {};
         ids.forEach(function(id) {
           var type = values["repeating_attacks_" + id + "_attack_activation"] || "V";
@@ -5799,7 +5767,13 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           var broken = values["repeating_attacks_" + id + "_attack_broken"] === "1";
           updates["repeating_attacks_" + id + "_attack_activation_ind"] = type;
           updates["repeating_attacks_" + id + "_attack_activation_c"] = (type === "C") ? "1" : "0";
-          updates["repeating_attacks_" + id + "_attack_state_on"] = (state === "Active") ? "1" : "0";
+          updates["repeating_attacks_" + id + "_attack_state_on"] = (state === "Active" && !broken) ? "1" : "0";
+          var code = values["repeating_attacks_" + id + "_attack_atk"] || "P";
+          updates["repeating_attacks_" + id + "_attack_atk_full"] = typeMap[code] || "Physical";
+          updates["repeating_attacks_" + id + "_attack_is_physical"] = (code === "P") ? "1" : "0";
+          updates["repeating_attacks_" + id + "_attack_is_mental"] = (code === "M" || code === "E") ? "1" : "0";
+          var dmgCode = values["repeating_attacks_" + id + "_attack_dmgtype"] || "Kinetic";
+          updates["repeating_attacks_" + id + "_attack_dmgtype_full"] = dmgMap[dmgCode] || "Kinetic";
         });
         setAttrs(updates, { silent: true });
       });
@@ -5823,9 +5797,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           var broken = values[prefix + "broken"] === "1";
           updates[prefix + "type_ind"] = type;
           updates[prefix + "type_c"] = (type === "C") ? "1" : "0";
-          updates[prefix + "state_active"] = (state === "Active") ? "1" : "0";
-          updates[prefix + "state_held"] = (state === "Held") ? "1" : "0";
-          updates[prefix + "active"] = (state === "Active") ? "1" : "0";
+          updates[prefix + "state_active"] = (state === "Active" && !broken) ? "1" : "0";
+          updates[prefix + "state_held"] = (state === "Held" && !broken) ? "1" : "0";
+          updates[prefix + "active"] = (state === "Active" && !broken) ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
       });
