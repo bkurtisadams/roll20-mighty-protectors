@@ -173,7 +173,11 @@
   height: 48px;
   margin: 0 8px 0 0;
 }
-.charsheet .sheet-arc-hex { position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: #23203a; box-shadow: inset 0 0 0 1px rgba(139,233,253,0.45); }
+/* Hex outline: inset box-shadow doesn't follow clip-path (it hugs the rectangular box,
+   then gets clipped - only top/bottom edges survive). Layer instead: outer hex is the
+   stroke color, ::before is the same hex inset by 1px carrying the fill. */
+.charsheet .sheet-arc-hex { position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: rgba(139,233,253,0.55); }
+.charsheet .sheet-arc-hex::before { content: ""; position: absolute; inset: 1px; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: #23203a; }
 .charsheet .sheet-arc-clip { position: absolute; inset: 0; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); overflow: hidden; }
 .charsheet .sheet-arc-wedge { position: absolute; inset: 0; transform-origin: 50% 50%; transition: transform .12s; background: transparent; }
 .charsheet .sheet-arc-front { position: absolute; top: -2px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid #8be9fd; }
