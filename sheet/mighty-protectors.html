@@ -6172,14 +6172,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var turnRateAdj = Math.round(maneuver / 5);
       var turnRate = Math.max(1, baseTurnRate + turnRateAdj);
 
-      // Explosion based on total CP (calculated later in calcVehicleTotals, use base for now)
+      // Explosion damage is computed in calcVehicleTotals from overall cost (RAW).
+      // Area is profile-driven, so it stays here.
       var wontExplode = (v.vehicle_wontexplode === "1");
-      var totalCP = parseFloat(bcp);
-      var explD8 = 1 + Math.floor(totalCP / 5);
-      var explExtra = (totalCP % 5 !== 0) ? "+1d4" : "";
-      var explosion = wontExplode ? "—" : (explD8 + "d8" + explExtra);
-      var explRoll = wontExplode ? "0" : (explD8 + "d8" + explExtra);
-
       var explArea = Math.ceil(profile);
       if (explArea % 2 === 0) explArea += 1;
       if (wontExplode) explArea = 0;
@@ -6213,8 +6208,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         vehicle_mental_def: mentDef,
         vehicle_power_max: power,
         vehicle_turn_rate: turnRate,
-        vehicle_explosion: explosion,
-        vehicle_explosion_roll: explRoll,
         vehicle_explosion_area: explArea,
         vehicle_init_die: initDie,
         vehicle_init_roll: initRoll,
@@ -6255,7 +6248,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     } else {
       calcVehicle(false);
     }
-    recalcAllVehSystems(); calcVehicleTotals(); updateBaseLabel();
+    recalcAllVehSystems(function() { calcVehicleTotals(); });
+    updateBaseLabel();
   });
   on("sheet:opened", function() { calcVehicle(false); calcVehicleTotals(); recalcAllVehSystems(); updateBaseLabel(); updateVehicleLayoutColors(); });
 
@@ -6507,7 +6501,20 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   // Auto-populate a single system row from its spaces value
   // PTs = base CPs from spaces + hi/lo tech + row cost adjustment
-  function populateVehSystemRow(rowId) {
+  function populateVehSystemRow(rowId, done) {
+    // Row deletion fires change events for the dying row's attributes; writing
+    // back to a deleted rowid recreates it as a ghost. Verify the row still
+    // exists before doing anything.
+    getSectionIDs("repeating_vehsystems", function(liveIds) {
+      if (liveIds.indexOf(rowId) === -1) {
+        if (done) done();
+        return;
+      }
+      populateVehSystemRowUnchecked(rowId, done);
+    });
+  }
+
+  function populateVehSystemRowUnchecked(rowId, done) {
     var prefix = "repeating_vehsystems_" + rowId + "_";
     getAttrs([prefix + "vsys_spaces", prefix + "vsys_cost", prefix + "vsys_mod_integral", prefix + "vsys_mod_open", prefix + "vsys_bulky_cp", prefix + "vsys_delicate_cp", "vehicle_hilotech"], function(v) {
       var spaces = parseInt(v[prefix + "vsys_spaces"]) || 0;
@@ -6550,16 +6557,31 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         }
         updates[prefix + "vsys_profile"] = "x" + sysProfile;
       }
-      setAttrs(updates, {silent: true});
+      setAttrs(updates, {silent: true}, function() {
+        if (done) done();
+      });
     });
   }
 
-  // Recalc ALL system rows (used on sheet:opened)
-  function recalcAllVehSystems() {
+  // Recalc ALL system rows (used on sheet:opened); done fires after every row commits
+  function recalcAllVehSystems(done) {
     getSectionIDs("repeating_vehsystems", function(ids) {
-      ids.forEach(function(id) { populateVehSystemRow(id); });
+      if (!ids.length) {
+        recalcVehAttacks();
+        if (done) done();
+        return;
+      }
+      var remaining = ids.length;
+      ids.forEach(function(id) {
+        populateVehSystemRowUnchecked(id, function() {
+          remaining--;
+          if (remaining === 0) {
+            recalcVehAttacks();
+            if (done) done();
+          }
+        });
+      });
     });
-    recalcVehAttacks();
   }
 
   // Per-system attack to-hit: relevant vehicle save + 3 + per-weapon mod + sum of Targeting rows.
@@ -6641,22 +6663,19 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // When spaces changes on any row, populate that row + recalc totals
   on("change:repeating_vehsystems:vsys_spaces", function(eventInfo) {
     var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_vsys_spaces", "");
-    populateVehSystemRow(rowId);
-    calcVehicleTotals();
+    populateVehSystemRow(rowId, calcVehicleTotals);
   });
 
   // When cost adj changes, recalc that row's PTs + totals
   on("change:repeating_vehsystems:vsys_cost", function(eventInfo) {
     var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace("_vsys_cost", "");
-    populateVehSystemRow(rowId);
-    calcVehicleTotals();
+    populateVehSystemRow(rowId, calcVehicleTotals);
   });
 
   // When a build modifier toggles, recalc that row's CP/Hits
   on("change:repeating_vehsystems:vsys_mod_integral change:repeating_vehsystems:vsys_mod_open change:repeating_vehsystems:vsys_bulky_cp change:repeating_vehsystems:vsys_delicate_cp", function(eventInfo) {
     var rowId = eventInfo.sourceAttribute.replace("repeating_vehsystems_", "").replace(/_vsys_(mod_integral|mod_open|bulky_cp|delicate_cp)$/, "");
-    populateVehSystemRow(rowId);
-    calcVehicleTotals();
+    populateVehSystemRow(rowId, calcVehicleTotals);
   });
 
   // When any per-system stat grant changes, recompute the vehicle's BCs/Power/Hits
@@ -6670,7 +6689,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   });
 
   // Sum spaces used, remaining, and total cost from all system rows
-  // TOTAL COST = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + Base Adj + sum(system Cost column)
+  // TOTAL COST = Base CPs + Hi/Lo Tech + Maneuver + Won't Explode + Base Adj + sum(system Cost adj column)
+  // RAW: system spaces GENERATE ability CPs (already paid for by base cost) - vsys_cp is
+  // generated value, NOT cost. Only per-system cost adjustments add to overall cost.
   function calcVehicleTotals() {
     getSectionIDs("repeating_vehsystems", function(ids) {
       var attrs = ["vehicle_base_cp", "vehicle_spaces", "vehicle_maneuver", "vehicle_wontexplode", "vehicle_hilotech", "vehicle_base_mode"];
@@ -6692,10 +6713,23 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var baseAdj = (v.vehicle_base_mode === "1") ? -15 : 0;
         var maxSpaces = parseInt(v.vehicle_spaces) || 0;
         var totalCost = baseCost + hilotech + maneuver + wontExplode + baseAdj + totalSysCost;
+        // Explosion: 1d8 + 1d8 per 5 CPs of overall cost, +1d4 if not an exact multiple (RAW)
+        var explosion, explRoll;
+        if (v.vehicle_wontexplode === "1") {
+          explosion = "—";
+          explRoll = "0";
+        } else {
+          var explD8 = Math.max(1, 1 + Math.floor(totalCost / 5));
+          var explExtra = (totalCost % 5 !== 0) ? "+1d4" : "";
+          explosion = explD8 + "d8" + explExtra;
+          explRoll = explosion;
+        }
         setAttrs({
           vehicle_spaces_used: totalSpaces,
           vehicle_spaces_remaining: maxSpaces - totalSpaces,
-          vehicle_total_cost: totalCost
+          vehicle_total_cost: totalCost,
+          vehicle_explosion: explosion,
+          vehicle_explosion_roll: explRoll
         }, {silent: true});
       });
     });
