@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.143.0 - 2026-08-10
+/* Mighty Protectors Roll20 API Engine v2.144.0 - 2026-08-10
+ * v2.144.0: PERCEPTION AUDIT FIXES. !mp perceive now routes the visible
+ *   sense through visionLossInfo, so Blinded/Dazzled/Darkness/Glare
+ *   conditions cap both the default best-sense pick and the rolled sense
+ *   level (previously the command used the raw sheet level). Amplified
+ *   Sense ranks are now a shared pool: ranks spent negating a Darkness
+ *   condition are no longer reused against environmental dim light or
+ *   darkness in observationLevel.
  * v2.143.0: DYNAMIC-LIGHTING-LAYER LIGHT SOURCES. roll20Illumination now
  *   counts light emitted by tokens on the Dynamic Lighting ("walls") layer,
  *   the standard placement for fixed room lighting. Previously such sources
@@ -1450,7 +1457,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.143.0";
+var MP_VERSION = "2.144.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -2766,7 +2773,11 @@ MP.Engine = (function () {
 
     const visReach = senseReach(vis, rangeInches, inScore);
     const visEnv = roll20SenseEnvironment(atkTokId, defTokId, "visible", vis, options);
-    const visNaturalLoss = Math.max(0, num(visEnv.levelLoss, 0) - num(vis.amp, 0));
+    // Amplified negates a total number of dampening ranks; ranks already
+    // spent against a Darkness condition (visionLossInfo) are not reused
+    // against environmental dim light/darkness.
+    const ampSpent = Math.min(num(vis.amp, 0), Math.max(0, num(atkVision.darkness, 0) - num(atkVision.glare, 0)));
+    const visNaturalLoss = Math.max(0, num(visEnv.levelLoss, 0) - Math.max(0, num(vis.amp, 0) - ampSpent));
     const visBeforeEnvironment = visLevel;
     visLevel = Math.max(0, visLevel - visNaturalLoss);
 
@@ -3063,19 +3074,23 @@ MP.Engine = (function () {
     const obsName = obsChar.get("name");
 
     const senses = getCharacterSenses(obsChar.id);
+    // Blinded/Dazzled/Darkness/Glare conditions cap the visible sense for
+    // this check, matching the attack pipeline (visionLossInfo).
+    const obsVision = visionLossInfo(obsTok ? obsTok.id : null, obsChar.id);
+    const senseCheckLevel = k => (k === "visible" ? Math.min(senses[k].lvl, obsVision.effective) : senses[k].lvl);
     let key = (args.sense || args.detects || "").toLowerCase();
-    if (!key || !senses[key] || senses[key].removed || senses[key].lvl <= 0) {
+    if (!key || !senses[key] || senses[key].removed || senseCheckLevel(key) <= 0) {
       // default: best available sense overall (vision first if usable)
       key = null;
       Object.keys(senses).forEach(k => {
         const s = senses[k];
-        if (s.removed || s.lvl <= 0) return;
-        if (!key || s.lvl > senses[key].lvl || (k === "visible" && s.lvl === senses[key].lvl)) key = k;
+        if (s.removed || senseCheckLevel(k) <= 0) return;
+        if (!key || senseCheckLevel(k) > senseCheckLevel(key) || (k === "visible" && senseCheckLevel(k) === senseCheckLevel(key))) key = k;
       });
       if (!key) return ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(obsName)}</b> has no usable senses.`);
     }
     const s = senses[key];
-    let effectiveSenseLevel = s.lvl;
+    let effectiveSenseLevel = senseCheckLevel(key);
     let environmentNote = "";
     let environmentMod = 0;
 
