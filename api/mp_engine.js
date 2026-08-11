@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.142.0 - 2026-08-04
+/* Mighty Protectors Roll20 API Engine v2.143.0 - 2026-08-10
+ * v2.143.0: DYNAMIC-LIGHTING-LAYER LIGHT SOURCES. roll20Illumination now
+ *   counts light emitted by tokens on the Dynamic Lighting ("walls") layer,
+ *   the standard placement for fixed room lighting. Previously such sources
+ *   were skipped, so a visibly lit room evaluated as total darkness and
+ *   dropped the observer to crude acquisition (-3 to hit).
  * v2.142.0: FLASH FUMBLE AND CONDITION CLEANUP. A fumbled initial Flash
  *   save now creates the existing permanent Blinded condition instead of
  *   freezing the attack's ordinary 1-3 level dazzle. Blinded explicitly
@@ -1445,7 +1450,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.142.0";
+var MP_VERSION = "2.143.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -2474,7 +2479,9 @@ MP.Engine = (function () {
     findObjs({ _type: "graphic", _pageid: objectPageId(target) }).forEach(src => {
       if (best === "bright") return;
       const layer = src.get("layer");
-      if (layer !== "objects" && layer !== "map" && layer !== "foreground") return;
+      // "walls" = Dynamic Lighting layer; Roll20 renders light from tokens
+      // placed there, and it is the normal home for fixed room lighting.
+      if (layer !== "objects" && layer !== "map" && layer !== "foreground" && layer !== "walls") return;
 
       const emitsBright = mpBool(src.get("emits_bright_light"));
       const emitsLow = mpBool(src.get("emits_low_light"));
