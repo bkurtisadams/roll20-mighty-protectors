@@ -13,6 +13,10 @@
  *   Mental/Emotional (atkTypeCode carried through pending -> pendingArea);
  *   shield block is suppressed and refused vs M/E areas. Applies to the
  *   escape buttons, areaescape, arearollnpcs, and areaforceall.
+ *   (4) Wakeup vs unlinked tokens: the sheet Wake button now routes through
+ *   !mp wakeup --charid instead of a local roll vs @{hits_score}, and
+ *   cmdWakeup resolves the token from --charid/selection, so mook tokens
+ *   wake against their own bar hits rather than the shared sheet value.
  * v2.144.0: PERCEPTION AUDIT FIXES. !mp perceive now routes the visible
  *   sense through visionLossInfo, so Blinded/Dazzled/Darkness/Glare
  *   conditions cap both the default best-sense pick and the rolled sense
@@ -12301,11 +12305,27 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // -------------------------
 
   function cmdWakeup(msg, args) {
-    const tokId = args.target;
-    const tok = getObj("graphic", tokId);
+    // Resolve the token: --target wins; else a selected token representing
+    // --charid; else the char's unique token on the page; else 1st selected.
+    // Matters for unlinked/mook tokens - the sheet's local Wake roll could
+    // only read @{hits_score}, but the real hits live on the token bar and
+    // getResource reads the bar first.
+    let tok = args.target ? getObj("graphic", args.target) : null;
+    if (!tok) {
+      const sel = (msg.selected || []).filter(s => s._type === "graphic").map(s => getObj("graphic", s._id)).filter(Boolean);
+      if (args.charid) {
+        tok = sel.find(t => t.get("represents") === args.charid) || null;
+        if (!tok) {
+          const cands = findObjs({ _type: "graphic", represents: args.charid }).filter(t => t.get("_pageid") === (sel[0] ? sel[0].get("_pageid") : t.get("_pageid")));
+          if (cands.length === 1) tok = cands[0];
+        }
+      }
+      if (!tok && sel.length) tok = sel[0];
+    }
+    const tokId = tok ? tok.id : null;
     const char = getCharFromToken(tok);
 
-    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Target missing.`);
+    if (!tok || !char) return ch("MP", `${wt(msg)}<b>MP:</b> Select the token, then <code>!mp wakeup</code> (or pass --target TOKID).`);
     if (!requireControl(msg, char.id, "make this wake-up roll")) return;
 
     if (isVehicleMode(char.id)) {
@@ -14980,7 +15000,7 @@ function cmdStance(msg, args) {
           <code>!mp bleed list | start | stop --target TOKID</code> - Bleeding controls (<b>GM</b>)<br/>
           <code>!mp medical success|crit|fumble</code> - Apply Medical result to selected patient (<b>GM</b>)<br/>
           <code>!mp dailyheal</code> - Apply daily rest healing to selected token (<b>GM</b>)<br/>
-          <code>!mp wakeup --target TOKID</code> - Attempt to wake an unconscious target<br/>
+          <code>!mp wakeup [--target TOKID]</code> - Wake-up roll for selected/target token (reads token bar hits)<br/>
           <code>!mp restore</code> - Restore selected token(s) and clear conditions (<b>GM</b>)<br/>
           <b>Snare and Grapple:</b><br/>
           <code>!mp grapple --atk TOKID --def TOKID</code><br/>
