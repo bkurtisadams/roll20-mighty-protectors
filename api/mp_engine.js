@@ -1,4 +1,18 @@
-/* Mighty Protectors Roll20 API Engine v2.144.0 - 2026-08-10
+/* Mighty Protectors Roll20 API Engine v2.145.0 - 2026-08-12
+ * v2.145.0: SNARE/RESTRAINT RULINGS + MENTAL AREA ESCAPES.
+ *   (1) Grapnel intercept (author ruling, supersedes 4.14.2.9): a standard
+ *   attack on a snared target only hits the snare on a FUMBLE, and taking
+ *   that hit is a GM option (button; replaces the fumble-table result if
+ *   used). The "Avoid Snare" called shot is removed from the engine maps
+ *   and the sheet query - no called shot is needed to shoot past a snare.
+ *   (2) 4.7.2 status bonuses retiered per 3.0.2.6 and made additive:
+ *   snared/grappled +3, fully restrained (locked hold / limbs bound) +6,
+ *   prone +3, unconscious/paralyzed +6 no-def - and they STACK (grappled +
+ *   paralyzed = +9, no def). Calc row shows "Tgt status" when stacked.
+ *   (3) 4.7.5.2 leap clear now keys off mental_def when the area attack is
+ *   Mental/Emotional (atkTypeCode carried through pending -> pendingArea);
+ *   shield block is suppressed and refused vs M/E areas. Applies to the
+ *   escape buttons, areaescape, arearollnpcs, and areaforceall.
  * v2.144.0: PERCEPTION AUDIT FIXES. !mp perceive now routes the visible
  *   sense through visionLossInfo, so Blinded/Dazzled/Darkness/Glare
  *   conditions cap both the default best-sense pick and the rolled sense
@@ -1457,7 +1471,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.144.0";
+var MP_VERSION = "2.145.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -6682,8 +6696,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       "avoid heavy armor": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
       "gear": "Gear", "dazzle": "Dazzle",
       "head avoid helmet": "Head Avoid Helmet", "helmet": "Head Avoid Helmet",
-      "headhelmet": "Head Avoid Helmet", "avoidhelmet": "Head Avoid Helmet",
-      "avoid snare": "Avoid Snare", "avoidsnare": "Avoid Snare", "snare": "Avoid Snare"
+      "headhelmet": "Head Avoid Helmet", "avoidhelmet": "Head Avoid Helmet"
     };
     
     // Reverse map: penalty number -> type (for when sheet sends numeric value)
@@ -6719,7 +6732,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // ch("MP", `/w gm <b>DEBUG:</b> raw=[${esc(calledShotRaw)}] input=[${esc(calledShotInput)}] resolved=[${esc(calledShotType)}]`);
     
     // Get penalty: if input was numeric, use it directly; otherwise lookup by type
-    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6, "Head Avoid Helmet": -9, "Avoid Snare": -3 };
+    const calledShotPenalties = { "None": 0, "Head": -6, "Arm": -3, "Leg": -3, "Avoid Light Armor": -3, "Avoid Heavy Armor": -6, "Gear": -3, "Called": -3, "Dazzle": -6, "Head Avoid Helmet": -9 };
     let calledShotPenalty = calledShotPenalties[calledShotType];
     if (calledShotPenalty === undefined) {
       // Input might be raw number like "-6" or "-3"
@@ -6736,10 +6749,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isAvoidArmor = calledShotType === "Avoid Light Armor" || calledShotType === "Avoid Heavy Armor" ||
       calledShotType === "Head Avoid Helmet";
     const isGearShot = calledShotType === "Gear";
-    // 4.14.2.9: shoots past the snare to the target underneath. Costs the
-    // called shot penalty and grants nothing else - it only avoids the
-    // intercept below.
-    const isAvoidSnare = calledShotType === "Avoid Snare";
     // v2.90.1: Laser dazzle called shot (Light Control A) - -6 to hit, no
     // damage, ignores protection (goggles block entirely, GM-adjudicated).
     // On hit the victim rolls the row's EN save vs the Laser CP table's
@@ -7148,9 +7157,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     const defValue = defBase + defMod + defPerceptionPenalty;
 
-    // 4.7.2 Surprised & Immobile Targets (v2.106.0): the defender's own status
-    // grants the attacker a bonus and may negate defenses. Auto-detected from
-    // engine state: prone (back-pain marker) = +3; snared/grappled = +6;
+    // 4.7.2 Surprised & Immobile Targets (v2.106.0, retiered v2.145.0): the
+    // defender's own status grants the attacker a bonus and may negate
+    // defenses. Auto-detected from engine state: prone (back-pain marker) =
+    // +3; snared/grappled = +3, fully restrained = +6 (3.0.2.6 tiering);
     // unconscious/incapacitated/paralyzed = +6 AND no defenses (no effort to
     // defend). Physical attacks only — prone/restraint don't hinder mental or
     // emotional defense. Area attacks skip this (already +6/no-def at the
@@ -7166,17 +7176,27 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const defSnRec = state.MP_Engine.snares[defTokenId];
       const defRestrained = !!defSnRec || defTok.get("status_cobweb") === true || defTok.get("status_grab") === true;
       const defProne = defTok.get("status_back-pain") === true;
+      // Bonuses stack (house ruling): a grappled + paralyzed target is +9.
+      // Restraint tiering mirrors 3.0.2.6: snared/grappled is the -3 band so
+      // +3 to be hit; fully restrained (locked hold or limbs bound) is the
+      // -9 band so +6.
+      const statusParts = [];
       if (defOut || defParalyzed) {
-        defStatusBonus = 6;
+        defStatusBonus += 6;
         defStatusNoDef = true;
-        defStatusLabel = defParalyzed ? "paralyzed (+6, no def)" : "unconscious/incap (+6, no def)";
-      } else if (defRestrained) {
-        defStatusBonus = 6;
-        defStatusLabel = (defSnRec && defSnRec.type === "Grapple") ? "grappled (+6)" : "snared (+6)";
-      } else if (defProne) {
-        defStatusBonus = 3;
-        defStatusLabel = "prone (+3)";
+        statusParts.push(defParalyzed ? "paralyzed (+6, no def)" : "unconscious/incap (+6, no def)");
       }
+      if (defRestrained) {
+        const defFully = !!(defSnRec && (defSnRec.locked || defSnRec.limbsRestrained));
+        defStatusBonus += defFully ? 6 : 3;
+        const restraintName = (defSnRec && defSnRec.type === "Grapple") ? "grappled" : "snared";
+        statusParts.push(defFully ? "fully restrained (+6)" : `${restraintName} (+3)`);
+      }
+      if (defProne) {
+        defStatusBonus += 3;
+        statusParts.push("prone (+3)");
+      }
+      defStatusLabel = statusParts.join(" + ");
     }
     const effDefValue = defStatusNoDef ? 0 : defValue;
 
@@ -7283,13 +7303,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       outcome = "HIT";
     }
 
-    // 4.14.2.9 Avoid Snare: without the called shot, a standard attack on a
-    // snared target hits the snare instead. Damage is compared to the break
-    // point (4.10); no accumulation, so it breaks or it holds. Keyed on a real
-    // snare record with a break point - 4.11 has no grapple equivalent and a
-    // hand-badged cobweb has nothing to roll against.
+    // Grapnel (author ruling, supersedes 4.14.2.9): a standard attack on a
+    // snared target only hits the snare if the attacker fumbles, and even
+    // then it's optional ("may hit the grapnel instead"). No called shot is
+    // needed to avoid the snare. On a fumble vs a snare record with a break
+    // point, the card shows damage vs BP; breaking it is a GM button, not
+    // automatic, and the rolled fumble-table result stands unless the GM
+    // takes the snare hit instead.
     let snareHit = null;
-    if ((outcome === "HIT" || outcome === "CRIT") && !isAvoidSnare && !isAreaAttack &&
+    if (outcome === "FUMBLE" && !isAreaAttack &&
         !isSaveAttack && !isSnareAttack && !doGrapple && !isDazzleShot && !noDamage) {
       const interSn = state.MP_Engine.snares[defTokenId];
       if (interSn && num(interSn.bp, 0) > 0) {
@@ -7298,10 +7320,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           type: interSn.type || "Snare",
           broke: damageTotal >= num(interSn.bp, 0)
         };
-        if (snareHit.broke) {
-          delete state.MP_Engine.snares[defTokenId];
-          setMarker(defTok, "cobweb", false);
-        }
       }
     }
 
@@ -7310,7 +7328,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       rollId: uniqueRollId, playerid: originalPlayerId, atkCharId, atkName, defTokenId, 
       defCharId: defChar.id, defName, rowId, nat, roll, confirm, targetTotal,
       outcome, isCrit, isFumble, critResult, fumbleResult,
-      damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType,
+      damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType, atkTypeCode,
       atkAP, isSaveAttack, saveBC, saveMod, recMod, recTime, noDamage, saveDamage,
       senseLoss, isDazzleShot,
       snBP, snMaxBP, snType, causesKB,
@@ -7396,7 +7414,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       addCalcRow("Area", "+6");
     } else {
       if (defStatusBonus !== 0) {
-        const statusName = String(defStatusLabel || "Target").replace(/\s*\([^)]*\).*$/, "").trim();
+        const statusName = defStatusLabel.indexOf(" + ") >= 0
+          ? "Tgt status"
+          : String(defStatusLabel || "Target").replace(/\s*\([^)]*\).*$/, "").trim();
         addCalcRow(statusName ? statusName.charAt(0).toUpperCase() + statusName.slice(1) : "Target", fmtMod(defStatusBonus));
       }
       if (calledShotPenalty !== 0) addCalcRow("Called", fmtMod(calledShotPenalty));
@@ -7527,7 +7547,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `<span style="color:#f4d03f; cursor:help;" title="4.6 target acquisition: ${esc(defPerceptionNote)}">Tgt perception ${defPerceptionPenalty}</span> `;
     }
     if (defStatusBonus !== 0) {
-      html += `<span style="color:#e94560; font-weight:bold; cursor:help;" title="4.7.2 Surprised &amp; Immobile Targets: +3 prone/unaware/off-balance, +6 completely immobile (no defenses if making no effort to defend)">Tgt ${esc(defStatusLabel)}</span> `;
+      html += `<span style="color:#e94560; font-weight:bold; cursor:help;" title="4.7.2 Surprised &amp; Immobile Targets: +3 prone/unaware/off-balance, +3 snared/grappled, +6 fully restrained, +6 unconscious/paralyzed (no defenses). Bonuses stack.">Tgt ${esc(defStatusLabel)}</span> `;
     }
     html += `<span style="color:#aaa; cursor:help;" title="Change stance: !mp stance [def | full | offbal | normal]&#10;A = attacker's to-hit penalty, D = defender's bonus to defense">Stance: A:<b style="color:${modColor(atkStancePenalty)};">${atkStancePenalty}</b> D:<b style="color:${modColor(defMod)};">${defMod > 0 ? '+' : ''}${defMod}</b></span> `;
     html += `<span style="color:#aaa;">Rng: <b style="color:${modColor(rangePenalty)};">${rangePenalty}</b></span> `;
@@ -7595,7 +7615,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           "Avoid Heavy Armor": "AVOID HEAVY ARMOR (-6)", "Gear": "GEAR SHOT (-3)",
           "Head Avoid Helmet": "HEAD SHOT, HELMET AVOIDED (-9) - Hits DOUBLED, armor bypassed!",
           "Called": "CALLED SHOT (-3)",
-          "Avoid Snare": "AVOID SNARE (-3) - shot past the snare",
           "Dazzle": "DAZZLE SHOT (-6) - no damage, ignores protection, EN save vs blind (goggles block)"
         };
         html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#e67e22;">${labels[calledShotType] || `CALLED SHOT: ${calledShotType}`}</div>`;
@@ -7623,12 +7642,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     if (snareHit) {
-      html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#e67e22;">HITS THE SNARE (4.14.2.9) - no called shot to avoid it</div>`;
-      html += `<div style="font-size:11px; padding:0 10px;">Damage <b>${damageTotal}</b> vs ${esc(snareHit.type)} BP <b>${snareHit.bp}</b> - ` +
+      html += `<div style="border-top:1px solid #333; padding:4px 10px; font-size:11px; font-weight:bold; color:#e67e22;">FUMBLE vs SNARED TARGET - attacker may hit the ${esc(snareHit.type).toLowerCase()} instead</div>`;
+      html += `<div style="font-size:11px; padding:0 10px 4px;">Damage <b>${damageTotal}</b> vs ${esc(snareHit.type)} BP <b>${snareHit.bp}</b> - ` +
         (snareHit.broke
-          ? `<b style="color:#27ae60">SNARE BREAKS</b> - ${esc(defName)} is free`
-          : `<b style="color:#e94560">snare holds</b>`) +
-        `<br/><i>${esc(defName)} takes no damage.</i></div>`;
+          ? `<b style="color:#27ae60">would BREAK</b> - ${esc(defName)} freed if taken. ` +
+            `${btnDanger(`Hit ${snareHit.type} - Break It`, `!mp snareclear --target ${defTokenId}`)}`
+          : `<b style="color:#e94560">${esc(snareHit.type).toLowerCase()} would hold</b> - no effect either way`) +
+        `<br/><i>GM: taking the snare hit replaces the fumble-table result.</i></div>`;
     }
 
     // --- Close card ---
@@ -7652,8 +7672,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         buttonGroups.attacker = buttons;
       } else if (doGrapple) {
         buttonGroups = grappleGroups || { attacker: "", defender: "" };
-      } else if (snareHit) {
-        markResolution(state.MP_Engine.pending[uniqueRollId], "damage", msg);
       } else {
         const pendingRec = state.MP_Engine.pending[uniqueRollId];
         buttons = buildStandardAttackButtons(uniqueRollId, critResult, causesKB, pendingRec);
@@ -7767,6 +7785,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       atkCharId: rec.atkCharId,
       damage: rec.damageTotal,
       damageType: rec.dmgTypeStr,
+      atkTypeCode: rec.atkTypeCode || "P",
       dmgSubtype: rec.dmgSubtype,
       protKey: rec.protKey,
       atkAP: rec.atkAP,
@@ -7828,15 +7847,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `<div style="padding:6px 10px;">`;
       html += `<span style="color:#f1c40f; font-weight:bold;">Tokens in area: ${tokensInArea.length}</span>`;
       
-      // List tokens with escape buttons
+      // List tokens with escape buttons. 4.7.5.2's "Defense" follows the
+      // attack type (4.7.1): mental_def vs mental/emotional area attacks.
+      const areaIsMental = rec.atkTypeCode === "M" || rec.atkTypeCode === "E";
       tokensInArea.forEach(t => {
         const distToEdge = calculateDistanceToEdge(t.distance, rec.areaRadius);
-        const baseDef = getAttrNum(t.charId, "physical_def", 0);
+        const baseDef = getAttrNum(t.charId, areaIsMental ? "mental_def" : "physical_def", 0);
         const escapeTN = baseDef + 9 - (3 * distToEdge);
         const escapeTNProne = escapeTN + 6;
         
-        // Check for shield
-        const shield = getShieldData(t.charId);
+        // Check for shield (physical attacks only - shields don't block M/E)
+        const shield = areaIsMental ? null : getShieldData(t.charId);
         const shieldTN = shield ? (9 + baseDef + shield.defense) : 0;
         
         html += `<br/><b style="color:#fff;">${esc(t.name)}</b> <span style="color:#aab;">(${distToEdge}" to edge)</span>`;
@@ -7888,8 +7909,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const char = getObj("character", tokData.charId);
     if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Token or character not found.`);
     
-    // Calculate escape TN: Defense + 9 - (3 * distance to edge) + 6 if prone
-    const baseDef = getAttrNum(tokData.charId, "physical_def", 0);
+    // Calculate escape TN: Defense + 9 - (3 * distance to edge) + 6 if prone.
+    // Defense follows the attack type: mental_def vs mental/emotional areas.
+    const escIsMental = areaRec.atkTypeCode === "M" || areaRec.atkTypeCode === "E";
+    const baseDef = getAttrNum(tokData.charId, escIsMental ? "mental_def" : "physical_def", 0);
     const distToEdge = tokData.distToEdge;
     let escapeTN = baseDef + 9 - (3 * distToEdge);
     if (isProne) escapeTN += 6;
@@ -7942,6 +7965,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const char = getObj("character", tokData.charId);
     if (!char) return ch("MP", `/w gm <b>MP:</b> Character not found.`);
     
+    if (areaRec.atkTypeCode === "M" || areaRec.atkTypeCode === "E") {
+      return ch("MP", `${wt(msg)}<b>MP:</b> Shields can't block mental/emotional area attacks.`);
+    }
     const shield = getShieldData(tokData.charId);
     if (!shield) return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} has no active shield.`);
     
@@ -13423,8 +13449,7 @@ function cmdStance(msg, args) {
       "headhelmet": "Head Avoid Helmet", "arm": "Arm", "leg": "Leg",
       "light": "Avoid Light Armor", "avoidlight": "Avoid Light Armor",
       "heavy": "Avoid Heavy Armor", "avoidheavy": "Avoid Heavy Armor",
-      "gear": "Gear", "dazzle": "Dazzle",
-      "snare": "Avoid Snare", "avoidsnare": "Avoid Snare"
+      "gear": "Gear", "dazzle": "Dazzle"
     };
     const calledRawTest = String(args.called || "None").trim();
     const calledTypeTest = calledMapTest[calledRawTest.toLowerCase()] || calledRawTest;
@@ -14163,7 +14188,7 @@ function cmdStance(msg, args) {
   // QUICK ATTACK COMMAND
   // -------------------------
   // Usage: !mp atk N --atk TOKEN_ID --target TOKEN_ID [--mod N] [--push N] [--called TYPE]
-  // Called types: None, Head, Helmet (Head Avoid Helmet, -9), Arm, Leg, Light (Avoid Light Armor), Heavy (Avoid Heavy Armor), Gear, Snare (Avoid Snare, -3)
+  // Called types: None, Head, Helmet (Head Avoid Helmet, -9), Arm, Leg, Light (Avoid Light Armor), Heavy (Avoid Heavy Armor), Gear
   // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0} --called ?{Called|None|Head|Helmet|Arm|Leg|Light|Heavy|Gear|Snare}
   // Triggers existing mpattack roll template handler
 
@@ -14275,8 +14300,7 @@ function cmdStance(msg, args) {
       "avoidlight": "Avoid Light Armor", "light": "Avoid Light Armor",
       "avoidheavy": "Avoid Heavy Armor", "heavy": "Avoid Heavy Armor",
       "gear": "Gear", "dazzle": "Dazzle",
-      "helmet": "Head Avoid Helmet", "headhelmet": "Head Avoid Helmet",
-      "snare": "Avoid Snare", "avoidsnare": "Avoid Snare"
+      "helmet": "Head Avoid Helmet", "headhelmet": "Head Avoid Helmet"
     };
     const calledType = calledMap[calledRaw.toLowerCase()] || calledRaw;
 
