@@ -17,6 +17,36 @@
  *   !mp wakeup --charid instead of a local roll vs @{hits_score}, and
  *   cmdWakeup resolves the token from --charid/selection, so mook tokens
  *   wake against their own bar hits rather than the shared sheet value.
+ *   (5) 3.1.5 OBVIOUSNESS GATE on target acquisition. A visible target
+ *   that isn't sneaking/invisible/blurred, within sense reach, with no
+ *   negative perception-range mod (attacker not inside a Darkness field)
+ *   is auto-acquired without a 4.6 roll: Full+ vision auto-IDs; effective
+ *   Basic vision (dim light, Nearsighted, Dazzled-to-Basic) auto-acquires
+ *   at "-3" crude - a flat targeting penalty, deterministic, no free-check
+ *   consumed, nothing cached. Fixes "attacking blind (-6)" against a
+ *   plainly visible adjacent target on one bad IN save in dim light.
+ *   Symmetric on the defender side: obvious attacker crudely perceived =
+ *   flat -3 defense, no roll. The 4.6 table still rolls for genuinely
+ *   contested perception (stealth, invisibility, Darkness fields, range,
+ *   reach checks, non-visual fallback senses). Scan reports auto-crude
+ *   contacts as "[-3] crude targeting" instead of "clearly visible";
+ *   Locate and !mp perceive (an explicit check) are unchanged.
+ *   (6) TELESCOPIC EXTENDS REACH. Telescopic magnification (x4 per rank)
+ *   now multiplies a ranged sense's IN/2" reach cap in senseReach - both
+ *   the non-radiating usability cap and the radiating automatic zone
+ *   before the IN+6 check route. Previously sense_tele on a non-radiating
+ *   ranged sense (e.g. Motion) was dead CP: the bonus was returned but
+ *   the cap ignored it, so a low-IN creature's motion sense was unusable
+ *   past 1" regardless of Telescopic ranks.
+ *   (7) !mp test vision - GM self-test for the acquisition/vision pipeline.
+ *   Select observer then target. Part A: forced-roll checks of the 4.6
+ *   table rows, sneak gate, tier effects, defense penalties, senseReach
+ *   caps (incl. Telescopic x4/rank) and range-mod clamping. Part B: live
+ *   observationLevel scenarios on the real map - illumination report with
+ *   a legacy-light-fields warning, obviousness gate (auto-ID / auto "-3"
+ *   under Dazzled 1), Darkness-field disqualification, sneaking (Full
+ *   silent vs Basic crit-gated), invisible fallback, and blur. Snapshots
+ *   and restores both tokens' conditions; writes no acquisition cache.
  * v2.144.0: PERCEPTION AUDIT FIXES. !mp perceive now routes the visible
  *   sense through visionLossInfo, so Blinded/Dazzled/Darkness/Glare
  *   conditions cap both the default best-sense pick and the rolled sense
@@ -2699,7 +2729,12 @@ MP.Engine = (function () {
     if (rangeInches == null) return { usable: true, bonus: num(s.tele, 0), capped: false, requiresCheck: false };
     if (!s.rng) return { usable: rangeInches <= 1, bonus: 0, capped: rangeInches > 1, requiresCheck: false };
 
-    const cap = Math.max(1, Math.floor(num(inScore, 10) / 2));
+    const mag = Math.pow(4, Math.max(0, Math.floor(num(s.tele, 0) / 2)));
+    // Telescopic magnification (x4 per rank, RAW table) extends the IN/2"
+    // reach; the +2/rank task-bonus half applies vs range penalties via
+    // perceptionRangeModifier as before. Without this, sense_tele was dead
+    // CP on a non-radiating ranged sense (bonus returned, cap unchanged).
+    const cap = Math.max(1, Math.floor(num(inScore, 10) / 2)) * mag;
     if (s.rad) {
       // Ranged senses can operate normally to IN/2. Beyond that, a radiating
       // stimulus remains detectable only through the alternate IN+6
@@ -2807,6 +2842,18 @@ MP.Engine = (function () {
       const lvlLabel = visLevel >= 3 ? "Analytical" : (visLevel === 2 ? "Full" : "Basic");
       const envNote = visEnv.reason ? `, ${visEnv.reason}` : "";
       const visRngMod = acqRangeMod(vis, visReach);
+      // v2.145.0: 3.1.5 obviousness gate. No roll to perceive what's obvious
+      // to sight: a visible target that isn't sneaking/invisible/blurred,
+      // within reach, with no negative perception-range mod, while the
+      // attacker isn't inside a Darkness field, is auto-acquired. Full+
+      // vision auto-IDs; effective Basic (dim light, Nearsighted, etc.)
+      // auto-acquires at "-3" crude - a flat targeting penalty, no dice.
+      // The 4.6 table still rolls whenever perception is genuinely
+      // contested (stealth, invisibility, Darkness, range, reach checks).
+      const visObvious = visLevel >= 1 && !inv && !sneaking &&
+        !visReach.requiresCheck && visRngMod >= 0 &&
+        num(atkVision.darkness, 0) <= 0;
+      const visAutoTier = visObvious ? (visLevel >= 2 ? "ID" : "-3") : null;
       candidates.push({
         key: "visible",
         sense: vis,
@@ -2819,14 +2866,15 @@ MP.Engine = (function () {
         chkMod: num(vis.chk, 0) + num(visEnv.checkMod, 0),
         rngMod: visRngMod,
         extraToHit: visExtraToHit,
-        needsRoll:
+        autoTier: visAutoTier,
+        needsRoll: visAutoTier ? false : (
           visLevel <= 1 ||
           atkVision.lost > 0 ||
           visNaturalLoss > 0 ||
           !!inv ||
           !!visReach.requiresCheck ||
           visRngMod < 0 ||
-          (rangeWeak && visLevel <= 1),
+          (rangeWeak && visLevel <= 1)),
         env: visEnv,
         reach: visReach,
         rangeSensitive: rangeWeak || !vis.rad,
@@ -2868,6 +2916,7 @@ MP.Engine = (function () {
         chkMod: num(sense.chk, 0) + num(env.checkMod, 0),
         rngMod: senseRngMod,
         extraToHit: 0,
+        autoTier: null,
         needsRoll: level <= 1 || envLoss > 0 || !!env.obscured || !!reach.requiresCheck || senseRngMod < 0,
         env,
         reach,
@@ -2906,6 +2955,7 @@ MP.Engine = (function () {
         chkMod: 0,
         rngMod: 0,
         extraToHit: 0,
+        autoTier: null,
         needsRoll: true,
         inv,
         sneaking,
@@ -2942,6 +2992,7 @@ MP.Engine = (function () {
       chkMod: best.chkMod,
       rngMod: best.rngMod,
       extraToHit: best.extraToHit,
+      autoTier: best.autoTier || null,
       needsRoll: best.needsRoll,
       inv,
       sneaking,
@@ -3421,11 +3472,14 @@ MP.Engine = (function () {
       }
 
       if (!obs.needsRoll) {
+        const autoCrude = obs.autoTier === "-3";
         contacts.push({
           distance: num(rangeData.inches, 0),
           html:
-            `<b>${esc(tokName)}</b> — ${esc(scanDistanceLabel(rangeData.inches, "ID"))}, ${esc(bearing)} ` +
-            `· clearly visible ${locateBtn}${atkBtn}`
+            `<b>${esc(tokName)}</b> — ${esc(scanDistanceLabel(rangeData.inches, autoCrude ? "-3" : "ID"))}, ${esc(bearing)} ` +
+            (autoCrude
+              ? `· <b style="color:#f4d03f;">[-3]</b> crude targeting (-3 to hit; obvious, no roll) by ${esc(obs.label)} ${locateBtn}${atkBtn}`
+              : `· clearly visible ${locateBtn}${atkBtn}`)
         });
         return;
       }
@@ -4045,6 +4099,160 @@ MP.Engine = (function () {
 
     const passCount = results.filter(r => r.startsWith("✅")).length;
     ch("MP", `/w gm <b style="color:#c88fff;">TEST SENSELOSS</b> — ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
+  }
+
+  // Self-test: !mp test vision (GM, select 2 tokens: observer first, target
+  // second). Non-destructive - snapshots and restores both tokens' condition
+  // lists; observationLevel never writes the acquire-once cache. Part A is
+  // pure logic with forced rolls (no map dependence); Part B runs live
+  // scenarios through observationLevel on the real page, so illumination,
+  // range, and reach reflect the actual map and sheet builds.
+  function testVision(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (sel.length < 2) return ch("MP", `/w gm <b>MP:</b> Select 2 tokens (observer first, target second), then run <code>!mp test vision</code>.`);
+    const obsTok = getObj("graphic", sel[0]._id);
+    const tgtTok = getObj("graphic", sel[1]._id);
+    const obsChar = getCharFromToken(obsTok);
+    const tgtChar = getCharFromToken(tgtTok);
+    if (!obsTok || !tgtTok || !obsChar || !tgtChar) return ch("MP", `/w gm <b>MP:</b> Both tokens must be linked to characters.`);
+
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "✅" : "❌"} ${name}`);
+    const info = (name) => results.push(`ℹ️ ${name}`);
+    const blindPen = num(state.MP_Engine.blindPenalty, -6);
+
+    // ---- Part A: table + reach logic, forced rolls ----
+    results.push(`<b>— 4.6 table (forced rolls) —</b>`);
+    // rollAcquisition forced d20s: 0 = auto-success, 21 = auto-fail,
+    // [1,0] = confirmed crit, [20,21] = confirmed fumble, [20,0] = saved 20.
+    let a = rollAcquisition(obsChar.id, 1, [21], 0, false);
+    check(`Basic fail => "?" (got ${a.tier})`, a.tier === "?");
+    a = rollAcquisition(obsChar.id, 1, [0], 0, false);
+    check(`Basic success => "-3" (got ${a.tier})`, a.tier === "-3");
+    a = rollAcquisition(obsChar.id, 1, [1, 0], 0, false);
+    check(`Basic crit => "ID" (got ${a.tier})`, a.tier === "ID");
+    a = rollAcquisition(obsChar.id, 1, [20, 21], 0, false);
+    check(`Basic fumble => "-" (got ${a.tier})`, a.tier === "-");
+    a = rollAcquisition(obsChar.id, 2, [21], 0, false);
+    check(`Full fail => "ID" (got ${a.tier})`, a.tier === "ID");
+    a = rollAcquisition(obsChar.id, 2, [0], 0, false);
+    check(`Full success => "+" (got ${a.tier})`, a.tier === "+");
+    a = rollAcquisition(obsChar.id, 2, [20, 21], 0, false);
+    check(`Full fumble => "-3" (got ${a.tier})`, a.tier === "-3");
+    a = rollAcquisition(obsChar.id, 3, [1, 0], 0, false);
+    check(`Analytical crit => "++" (got ${a.tier})`, a.tier === "++");
+    a = rollAcquisition(obsChar.id, 0, [0], 0, false);
+    check(`None success => "-" (got ${a.tier})`, a.tier === "-");
+    a = rollAcquisition(obsChar.id, 0, [1, 0], 0, false);
+    check(`None crit => "?" (got ${a.tier})`, a.tier === "?");
+    a = rollAcquisition(obsChar.id, 1, [0], 0, true);
+    check(`3.1.5.1 sneak gate: Basic success => "-" gated (got ${a.tier})`, a.tier === "-" && a.gated);
+    a = rollAcquisition(obsChar.id, 1, [1, 0], 0, true);
+    check(`3.1.5.1 sneak gate: Basic crit => "ID" (got ${a.tier})`, a.tier === "ID");
+
+    results.push(`<b>— tier effects —</b>`);
+    check(`"-" blocks attack`, acqTierEffect("-").blocked === true);
+    check(`"?" to-hit ${blindPen}`, acqTierEffect("?").toHitMod === blindPen);
+    check(`"-3" to-hit -3`, acqTierEffect("-3").toHitMod === -3);
+    check(`"ID" to-hit 0`, acqTierEffect("ID").toHitMod === 0);
+    check(`defense: "-" => ${blindPen}, "?"/"-3" => -3, ID => 0`,
+      acqDefensePenalty("-") === blindPen && acqDefensePenalty("?") === -3 &&
+      acqDefensePenalty("-3") === -3 && acqDefensePenalty("ID") === 0);
+
+    results.push(`<b>— senseReach (IN 10) —</b>`);
+    const nr = { rng: 0, rad: 0, tele: 0 };
+    check(`non-ranged: contact only (1" ok, 2" not)`,
+      senseReach(nr, 1, 10).usable && !senseReach(nr, 2, 10).usable);
+    const rn = { rng: 1, rad: 0, tele: 0 };
+    check(`ranged non-radiating: cap IN/2 (5" ok, 6" not)`,
+      senseReach(rn, 5, 10).usable && !senseReach(rn, 6, 10).usable);
+    const rt = { rng: 1, rad: 0, tele: 4 };
+    check(`Telescopic +4 (x16): cap 80 (80" ok, 81" not)`,
+      senseReach(rt, 80, 10).usable && !senseReach(rt, 81, 10).usable);
+    const rr = { rng: 1, rad: 1, tele: 0 };
+    const rrNear = senseReach(rr, 4, 10), rrFar = senseReach(rr, 40, 10);
+    check(`ranged radiating: usable anywhere, IN+6 check beyond cap`,
+      rrNear.usable && !rrNear.requiresCheck && rrFar.usable && rrFar.requiresCheck && rrFar.bonus === 6);
+    check(`perceptionRangeModifier caps at 0 (pen -1 + tele 2 => 0; pen -5 + 2 => -3)`,
+      perceptionRangeModifier(-1, 2) === 0 && perceptionRangeModifier(-5, 2) === -3);
+
+    // ---- Part B: live scenarios on the real map ----
+    const snapObs = JSON.parse(JSON.stringify(state.MP_Engine.conditions[obsTok.id] || []));
+    const snapTgt = JSON.parse(JSON.stringify(state.MP_Engine.conditions[tgtTok.id] || []));
+    if (!state.MP_Engine.conditions) state.MP_Engine.conditions = {};
+
+    const rd = calculateRangeWithProfile(obsTok, tgtTok, obsChar.id, tgtChar.id);
+    const runObs = () => observationLevel(obsTok.id, tgtTok.id, tgtChar.id, obsChar.id, rd.inches, rd.penalty);
+
+    results.push(`<b>— live: ${esc(obsChar.get("name"))} → ${esc(tgtChar.get("name"))} —</b>`);
+    const page = getObj("page", obsTok.get("_pageid"));
+    const lum = roll20Illumination(obsTok, tgtTok, page, roll20BarrierSegments(obsTok.get("_pageid")));
+    info(`illumination at target: <b>${esc(lum.level)}</b>${lum.source ? ` (${esc(lum.source)})` : ""} · range ${rd.inches}" (pen ${rd.penalty})`);
+    // Legacy-lighting trap: UDL page but emitters configured on legacy fields.
+    if (page && mpBool(page.get("dynamic_lighting_enabled"))) {
+      const legacyLit = findObjs({ _type: "graphic", _pageid: obsTok.get("_pageid") })
+        .filter(t => num(t.get("light_radius"), 0) > 0 && !mpBool(t.get("emits_bright_light")) && !mpBool(t.get("emits_low_light")));
+      if (legacyLit.length) {
+        results.push(`⚠️ ${legacyLit.length} token(s) emit LEGACY light (light_radius) the engine ignores: ${legacyLit.slice(0, 3).map(t => esc(t.get("name") || "unnamed")).join(", ")}${legacyLit.length > 3 ? "…" : ""} — reconfigure with UDL fields`);
+      }
+    }
+
+    // B1 baseline: clean conditions both sides.
+    state.MP_Engine.conditions[obsTok.id] = [];
+    state.MP_Engine.conditions[tgtTok.id] = [];
+    let o = runObs();
+    info(`baseline: sense=${esc(o.label)} lvl=${o.level} needsRoll=${o.needsRoll} autoTier=${o.autoTier || "-"}`);
+    if (o.senseKey === "visible" && lum.level !== "dim" && lum.level !== "dark") {
+      check(`bright/unknown light: obvious target auto-IDs (no roll)`, o.autoTier === "ID" && !o.needsRoll);
+    } else if (o.senseKey === "visible" && lum.level === "dim") {
+      check(`dim light: obvious target auto-crude "-3" (no roll)`, o.autoTier === "-3" && !o.needsRoll);
+    } else {
+      info(`baseline not vision-in-light (${esc(o.label)}) — gate checks skipped`);
+    }
+
+    // B2 dazzled 1 => effective Basic, still obvious => auto "-3".
+    if (o.senseKey === "visible" && (lum.level === "bright" || lum.level === "unknown")) {
+      state.MP_Engine.conditions[obsTok.id] = [{ type: "dazzled", senseLevels: 1, marker: "bleeding-eye" }];
+      o = runObs();
+      check(`Dazzled 1 (=> Basic) vs obvious target: auto "-3", no roll (got needsRoll=${o.needsRoll}, autoTier=${o.autoTier || "-"})`,
+        o.autoTier === "-3" && !o.needsRoll);
+    }
+
+    // B3 Darkness field 1 on observer: gate disqualified, table rolls.
+    state.MP_Engine.conditions[obsTok.id] = [{ type: "darkness", senseLevels: 1, marker: "ninja-mask", environmental: true }];
+    o = runObs();
+    check(`Darkness field 1: gate off, rolls the table (needsRoll=${o.needsRoll}, autoTier=${o.autoTier || "-"})`,
+      o.needsRoll === true && !o.autoTier);
+
+    // B4 target sneaking: never auto; Full vision still silent (3.1.5.1
+    // gates Basic senses only), Basic-effective vision rolls with the gate.
+    state.MP_Engine.conditions[obsTok.id] = [];
+    state.MP_Engine.conditions[tgtTok.id] = [{ type: "sneaking", marker: CONDITION_MARKERS.sneaking }];
+    o = runObs();
+    check(`sneaking target: no autoTier (got ${o.autoTier || "-"}; sneaking=${o.sneaking})`, !o.autoTier && o.sneaking);
+    state.MP_Engine.conditions[obsTok.id] = [{ type: "dazzled", senseLevels: 1, marker: "bleeding-eye" }];
+    o = runObs();
+    check(`sneaking target vs Basic-effective vision: rolls with crit gate (needsRoll=${o.needsRoll}, sneakGate=${o.sneakGate})`,
+      o.needsRoll === true && o.sneakGate === true);
+
+    // B5 invisible target: vision drops, fallback sense must roll.
+    state.MP_Engine.conditions[obsTok.id] = [];
+    state.MP_Engine.conditions[tgtTok.id] = [{ type: "invisible", blur: false, sneaking: false }];
+    o = runObs();
+    check(`invisible target: vision unusable, fallback ${esc(o.label)} rolls (senseKey=${o.senseKey}, needsRoll=${o.needsRoll})`,
+      o.senseKey !== "visible" && o.needsRoll === true);
+    state.MP_Engine.conditions[tgtTok.id] = [{ type: "invisible", blur: true, sneaking: false }];
+    o = runObs();
+    check(`blurred target: no autoTier, rolls (needsRoll=${o.needsRoll}, autoTier=${o.autoTier || "-"})`,
+      o.needsRoll === true && !o.autoTier);
+
+    // Restore
+    state.MP_Engine.conditions[obsTok.id] = snapObs;
+    state.MP_Engine.conditions[tgtTok.id] = snapTgt;
+
+    const passCount = results.filter(r => r.startsWith("✅")).length;
+    const failCount = results.filter(r => r.startsWith("❌")).length;
+    ch("MP", `/w gm <b style="color:#c88fff;">TEST VISION</b> — ${passCount} passed, ${failCount} failed<br/>` + results.join("<br/>"));
   }
 
   // An opaque tint is painted over the token AND its marker icons, so badges
@@ -7006,7 +7214,22 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let acqNote = "";
     let acqHover = "";
     let acqTierForCard = "";
-    if (obs.needsRoll && atkTok) {
+    if (!obs.needsRoll && obs.autoTier && atkTok) {
+      // v2.145.0: 3.1.5 obvious target - no acquisition roll, no free-check
+      // consumed, nothing cached (the result is deterministic from the
+      // environment). ID is silent; "-3" (effective Basic vision, e.g. dim
+      // light) is a flat crude-targeting penalty with a card note.
+      acqTierForCard = obs.autoTier;
+      if (obs.autoTier === "-3") {
+        atkVisionPenalty = -3 + num(obs.extraToHit, 0);
+        acqHover = `&#10;Acquired [-3]: ${atkVisionPenalty} (${obs.label}, obvious target - crude targeting, no roll per 3.1.5)`;
+        acqNote = `<div style="background:#3a2f14; border:1px solid #6b5a1e; padding:3px 8px; font-size:11px; color:#eee;">Acquire by ${obs.label}: <b style="color:#f4d03f;">[-3] crude targeting</b> (${atkVisionPenalty} to hit) — obvious target, no roll (3.1.5)</div>`;
+        ch("MP", `${wt(msg)}` + acqNote);
+      } else if (num(obs.extraToHit, 0) !== 0) {
+        atkVisionPenalty = num(obs.extraToHit, 0);
+        acqHover = `&#10;Sense: ${atkVisionPenalty} (${obs.label})`;
+      }
+    } else if (obs.needsRoll && atkTok) {
       // v2.91.1: ACQUIRE ONCE (4.6 RAW: "re-roll to acquire any target which
       // has moved, started sneaking, become invisible, etc."). A successful
       // acquisition persists for this attacker/defender pair until the
@@ -7112,7 +7335,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         defRangeData.penalty
       );
 
-      if (defObservation.needsRoll) {
+      if (!defObservation.needsRoll && defObservation.autoTier === "-3") {
+        // 3.1.5 obvious attacker, crudely perceived (dim light etc.):
+        // flat -3 defense per the 4.6 "-3" tier, no roll, not cached.
+        defPerceptionPenalty = -3;
+        defPerceptionNote = `${defObservation.label}: [-3] crude (obvious, no roll)`;
+      } else if (defObservation.needsRoll) {
         if (!state.MP_Engine.acquired) state.MP_Engine.acquired = {};
         const defAcqKey = defTokenId + "|" + atkTok.id;
         const defAcqSig = acqSignature(atkTok, defObservation, defRangeData.inches);
@@ -13235,6 +13463,8 @@ function cmdStance(msg, args) {
         return testStatus(msg, args);
       case "senseloss":
         return testSenseLoss(msg, args);
+      case "vision":
+        return testVision(msg, args);
       case "flash":
         return testFlash(msg, args);
       case "areapoison":
@@ -13261,6 +13491,7 @@ function cmdStance(msg, args) {
           <code>!mp test save BC MOD REC [dtype]</code> - Test save attack (dtype tests target's Invuln +8)<br/>
           <code>!mp test snare BP [MAX]</code> - Apply snare to selected token<br/>
           <code>!mp test senseloss</code> - Vision-loss model self-test (select 1 token; non-destructive)<br/>
+          <code>!mp test vision</code> - Full acquisition/vision pipeline self-test (select observer then target; non-destructive)<br/>
           <code>!mp test flash [LEVELS]</code> - Flash save/condition self-test (select 1 token; non-destructive)<br/>
           <code>!mp test acquire</code> - 4.6 target-acquisition table self-test (select 1 token)<br/>
           <code>!mp test invis</code> - Invisibility/observation self-test (select 2 tokens: observer, target)<br/>
