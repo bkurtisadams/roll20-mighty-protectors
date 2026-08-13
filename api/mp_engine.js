@@ -1,4 +1,23 @@
-/* Mighty Protectors Roll20 API Engine v2.145.0 - 2026-08-12
+/* Mighty Protectors Roll20 API Engine v2.146.0 - 2026-08-13
+ * v2.146.0: SAVE/SNARE ATTACK CARD REDESIGN. Non-damage attacks (Flash,
+ *   Mind Control, Emotional Control, Paralysis Ray, Transmutation, Grapnel,
+ *   Ice Blast...) no longer show a meaningless "0 DAMAGE":
+ *   - 4th grid cell: no-damage save attacks show the RESOLVED save TN
+ *     ("EN 4-", hover = full math); snare attacks show the Snare BP;
+ *     damaging save hybrids keep the Damage cell. Grip cell unchanged.
+ *   - New effect strip under the number grid (color keyed by effect
+ *     family): save spec with the TN assembly spelled out, recovery mod +
+ *     interval, duration, recurring damage for damaging saves; snare
+ *     strips restate the v2.145 restraint rulings and fumble-only line
+ *     hits, with BP/max and snare type.
+ *   - Type line reads "Effect: Non-damage" for these attacks.
+ *   - Make Save / Save + Roll-With button labels carry the resolved TN.
+ *   - saveTNPreview(rec) mirrors cmdSave's TN assembly (base save,
+ *     protection/invuln/adaptation with the poison/sense-loss/transmutation
+ *     gates, attack save mod, Solid Hit, push, vulnerability) minus
+ *     roll-with and GM overrides; the save resolution card stays
+ *     authoritative.
+ * -- v2.145.0 - 2026-08-12
  * v2.145.0: SNARE/RESTRAINT RULINGS + MENTAL AREA ESCAPES.
  *   (1) Grapnel intercept (author ruling, supersedes 4.14.2.9): a standard
  *   attack on a snared target only hits the snare on a FUMBLE, and taking
@@ -1505,7 +1524,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.145.0";
+var MP_VERSION = "2.146.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7726,11 +7745,22 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#889; margin-top:3px;">To-Hit</div>`;
     html += `</td>`;
 
-    // Damage (grapple deals none per 4.11 - show grip dice instead)
+    // 4th cell: Grip for grapples (4.11), Snare BP for snare attacks, the
+    // resolved Save TN for no-damage save attacks, Damage otherwise. "0
+    // DAMAGE" on a Paralysis Ray told the table nothing happened.
+    const savePrev = isSaveAttack ? saveTNPreview(state.MP_Engine.pending[uniqueRollId]) : null;
     html += `<td style="width:25%; text-align:center; padding:8px 4px 6px;">`;
     if (doGrapple) {
       html += `<div title="Grip dice - used for Squeeze and Break Free" style="font-size:20px; font-weight:bold; color:#8be9fd; line-height:1.1; padding:6px 0;">${esc(grappleGripDisplay)}</div>`;
       html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#8be9fd; margin-top:3px;">Grip</div>`;
+    } else if (isSnareAttack) {
+      const bpDisp = snBP || "?";
+      const bpBig = /^\d+$/.test(bpDisp) && bpDisp.length <= 3;
+      html += `<div title="Break Point of the snare once applied${snMaxBP > 0 ? ` (max ${snMaxBP})` : ""}" style="font-size:${bpBig ? 28 : 18}px; font-weight:bold; color:#e67e22; line-height:1.1; padding:${bpBig ? 2 : 8}px 0;">${esc(bpDisp)}</div>`;
+      html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#e67e22; margin-top:3px;">Snare BP</div>`;
+    } else if (isSaveAttack && noDamage && savePrev) {
+      html += `<div title="${esc(savePrev.hover)}" style="font-size:24px; font-weight:bold; color:#bd93f9; line-height:1.1; padding:4px 0;">${esc(saveBC)} ${savePrev.tn}-</div>`;
+      html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#bd93f9; margin-top:3px;">Save</div>`;
     } else {
       html += `<div title="${esc(damageBreakdown)}" style="font-size:28px; font-weight:bold; color:#ff6b6b; line-height:1.1; padding:2px 0;">${damageTotal}</div>`;
       html += `<div style="font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#ff6b6b; margin-top:3px;">Damage</div>`;
@@ -7738,6 +7768,57 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `</td>`;
 
     html += `</tr></table>`;
+
+    // --- Effect Strip: what a hit means for save/snare attacks ---
+    if ((isSaveAttack || isSnareAttack) && !doGrapple) {
+      const nmL = String(weaponName || "").toLowerCase();
+      let fxColor = "#8be9fd";
+      let consequence = "suffer the effect";
+      if (isSnareAttack) {
+        fxColor = "#e67e22";
+      } else if (senseLoss > 0) {
+        fxColor = "#f4d03f";
+        consequence = `be Dazzled ${senseLoss}${senseLoss >= 2 ? " (blind)" : ""}`;
+      } else if (nmL.indexOf("paralys") >= 0) {
+        fxColor = "#bd93f9";
+        consequence = "be paralyzed (+6 to be hit, no defenses)";
+      } else if (nmL.indexOf("mind control") >= 0) {
+        fxColor = "#c88fff";
+        consequence = "obey the attacker";
+      } else if (nmL.indexOf("emotion") >= 0) {
+        fxColor = "#c88fff";
+        consequence = "feel the chosen emotion";
+      } else if (nmL.indexOf("transmut") >= 0) {
+        fxColor = "#bd93f9";
+        consequence = "be transmuted";
+      } else if (nmL.indexOf("poison") >= 0 || nmL.indexOf("venom") >= 0) {
+        fxColor = "#7ec27e";
+        consequence = "be poisoned";
+      } else if (saveBC === "IN" || saveBC === "CL") {
+        fxColor = "#c88fff";
+      }
+      html += `<div style="padding:5px 10px 6px; font-size:11px; color:#ccc; border-bottom:1px solid #2a2a4a; border-left:4px solid ${fxColor}; background:#141428;">`;
+      if (isSnareAttack) {
+        html += `<span style="font-size:11px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; color:${fxColor}; display:block; margin-bottom:2px;">${esc(snType || "Snare")} — snared on hit</span>`;
+        html += `Target immobilized, limbs free <span style="color:#889;">(+3 to be hit; called-shot snare binds limbs: fully restrained, +6)</span><br/>`;
+        html += `Break: <b style="color:#fff;">ST vs BP ${esc(snBP || "?")}</b>${snMaxBP > 0 ? ` <span style="color:#889;">(max ${snMaxBP})</span>` : ""} · line hit only on attacker <b style="color:#fff;">fumble</b>`;
+      } else {
+        html += `<span style="font-size:11px; font-weight:bold; text-transform:uppercase; letter-spacing:1px; color:${fxColor}; display:block; margin-bottom:2px;">${esc(weaponName)} — save or ${esc(consequence)}</span>`;
+        if (savePrev) {
+          html += `Save: <b style="color:#fff;" title="${esc(savePrev.hover)}">${esc(saveBC)} ${esc(savePrev.mathStr)} = ${savePrev.tn}-</b> <span style="color:#889;">(+ roll-with)</span><br/>`;
+        } else {
+          html += `Save: <b style="color:#e94560;">BC not set</b> <span style="color:#889;">(set Save BC on the attack row)</span><br/>`;
+        }
+        html += `Recovery: <b style="color:#fff;">${esc(saveBC)} ${recMod > 0 ? "+" : ""}${recMod}</b> per <b style="color:#fff;">${esc(recTime)}</b>`;
+        if (hasDuration && durNum > 0) {
+          html += ` · Duration: <b style="color:#fff;">${durNum} ${esc(durUnit || "round")}${durNum === 1 ? "" : "s"}</b>`;
+        }
+        if (!noDamage && saveDamage > 0) {
+          html += ` · Fail: <b style="color:#ff6b6b;">${saveDamage} recurring</b>`;
+        }
+      }
+      html += `</div>`;
+    }
 
     // --- Attack Properties + Cost Row ---
     const prStr = atkPR > 0 ? ` PR:<span style="color:#ddd; font-weight:bold;">${atkPR}</span>` : "";
@@ -7756,7 +7837,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     html += `<div style="padding:5px 10px; font-size:12px; color:#aab; background:#16213e; border-bottom:1px solid #2a2a4a; text-align:center;">`;
     const dmgTypeHover = dmgSubtype ? ` title="Subtype: ${esc(dmgSubtype)}"` : "";
-    html += `Type: <span style="color:#ddd; font-weight:bold;"${dmgTypeHover}>${esc(dmgTypeStr)}</span>`;
+    if (isSnareAttack || (isSaveAttack && noDamage)) {
+      html += `Effect: <span style="color:#ddd; font-weight:bold;"${dmgTypeHover}>Non-damage</span>`;
+    } else {
+      html += `Type: <span style="color:#ddd; font-weight:bold;"${dmgTypeHover}>${esc(dmgTypeStr)}</span>`;
+    }
     html += ` · KB: <span style="color:#ddd; font-weight:bold;">${causesKB ? "Yes" : "No"}</span>`;
     if (isSiphonAttack) {
       const sipLabel = siphonDrain === "power" ? "Power" : (siphonDrain === "ability" ? `${esc(siphonCat || "Ability")} CPs` : (siphonDrain === "bc" ? `${esc(siphonBC || "BC")}` : "Hits"));
@@ -10081,10 +10166,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Check if defender is a vehicle (no roll-with)
     const saveRec = state.MP_Engine.pending[rollId];
     const saveDefIsVeh = saveRec && saveRec.defCharId && isVehicleMode(saveRec.defCharId);
-    
-    let buttons = `${btn(`Make Save${modLabel}`, `!mp save --id ${rollId} --critmod ${critMod} --pushmod ${pushMod}`)} `;
+
+    // Show the resolved TN on the button (preview already folds in crit/push).
+    const prev = saveTNPreview(saveRec);
+    const tnLabel = prev ? ` (${prev.tn}-)` : modLabel;
+
+    let buttons = `${btn(`Make Save${tnLabel}`, `!mp save --id ${rollId} --critmod ${critMod} --pushmod ${pushMod}`)} `;
     if (!saveDefIsVeh) {
-      buttons += `${btn(`Save + Roll-With${modLabel}`, `!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod} --pushmod ${pushMod}`)}`;
+      buttons += `${btn(`Save + Roll-With${tnLabel}`, `!mp save --id ${rollId} --rollwith ?{Power to spend|0} --critmod ${critMod} --pushmod ${pushMod}`)}`;
     }
     
     return buttons;
@@ -11068,6 +11157,55 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       case "CL": return "cool_save";
       default: return null;
     }
+  }
+
+  // Preview of the save TN shown on the attack card 4th cell, effect strip,
+  // and Make Save button label. Mirrors cmdSave's assembly exactly minus
+  // roll-with and the GM weight/base-save overrides; the save resolution
+  // card remains authoritative. Returns null when the BC isn't set/valid.
+  function saveTNPreview(rec) {
+    if (!rec) return null;
+    const defChar = getObj("character", rec.defCharId);
+    const saveAttr = bcToSaveAttr(rec.saveBC);
+    if (!defChar || !saveAttr) return null;
+    const saveDefIsVeh = isVehicleMode(defChar.id);
+    const baseSave = saveDefIsVeh
+      ? getAttrNum(defChar.id, "vehicle_" + saveAttr, 10)
+      : getAttrNum(defChar.id, saveAttr, 10);
+    const isTransmutation = String(rec.dmgSubtype || "").trim().toLowerCase() === "transmutation";
+    const protData = saveDefIsVeh
+      ? getVehicleProtection(defChar.id, rec.protKey, rec.dmgSubtype)
+      : sumProtectionWithHardened(defChar.id, rec.protKey, rec.dmgSubtype, isTransmutation);
+    const prot = isTransmutation ? 0 : protData.prot;
+    const invulnBonus = protData.invuln ? 8 : 0;
+    const adaptBonus = (!isTransmutation && protData.adapt) ? 5 : 0;
+    const atkNameLower = String(rec.atkName || "").toLowerCase();
+    const hasPoisonInName = atkNameLower.includes("poison") || atkNameLower.includes("venom");
+    const rawCondDamage = rec.saveDamage || rec.damageTotal || 0;
+    const isDamagingPoison = hasPoisonInName && rawCondDamage > 0 && !atkNameLower.includes("paralytic");
+    const isSenseLossAttack = num(rec.senseLoss, 0) > 0;
+    const protForSave = (isDamagingPoison || isSenseLossAttack || isTransmutation) ? 0 : Math.floor(prot);
+    const invulnForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : invulnBonus;
+    const adaptForSave = (isDamagingPoison || isSenseLossAttack || isTransmutation) ? 0 : adaptBonus;
+    const critMod = (rec.critResult && rec.critResult.type === CRIT_TYPES.SOLID_HIT) ? -3 : 0;
+    const pushMod = num(rec.pushAmount, 0) > 0 ? -num(rec.pushAmount, 0) : 0;
+    const vulnData = (!rec.noDamageType && rec.dmgTypeStr) ? getVulnerabilityMods(defChar.id, rec.dmgTypeStr, rec.dmgSubtype) : { dmgMod: 0 };
+    const vulnSaveMod = (vulnData && vulnData.dmgMod) ? -Math.abs(num(vulnData.dmgMod, 0)) : 0;
+    const saveMod = num(rec.saveMod, 0);
+    const tn = baseSave + protForSave + invulnForSave + adaptForSave + saveMod + critMod + pushMod + vulnSaveMod;
+    const parts = [`${rec.saveBC} save ${baseSave}`];
+    if (protForSave) parts.push(`prot +${protForSave}`);
+    if (invulnForSave) parts.push(`invuln +${invulnForSave}`);
+    if (adaptForSave) parts.push(`adapt +${adaptForSave}`);
+    if (saveMod) parts.push(`atk save mod ${saveMod > 0 ? "+" : ""}${saveMod}`);
+    if (critMod) parts.push(`Solid Hit ${critMod}`);
+    if (pushMod) parts.push(`push ${pushMod}`);
+    if (vulnSaveMod) parts.push(`vulnerability ${vulnSaveMod}`);
+    return {
+      tn,
+      mathStr: parts.join(", "),
+      hover: `${parts.join(" ")} = ${tn}- (roll-with can add more)`
+    };
   }
 
   // Transmutation (p.77): non-character targets resist with physical weight.
