@@ -9985,11 +9985,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Vehicle targets: no roll-with, no head shot, no limb shots
     const defIsVeh = rec && rec.defCharId && isVehicleMode(rec.defCharId);
     
-    // Check if defender has Protected Brain (negates head shots)
-    const hasProtectedBrain = !defIsVeh && rec && rec.defCharId && 
-      (num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1);
-    
-    const isHeadShot = rec && rec.isHeadShot;
     const isLegShot = rec && rec.isLegShot;
     const isArmShot = rec && rec.isArmShot;
     const isGearShot = rec && rec.isGearShot;
@@ -10041,6 +10036,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isGearShot) {
       buttons += `<br/><i>(Compare damage to Gear breakpoint)</i>`;
     }
+    
+    // Head Shot resolution is decided in damageApplyProfile; mirror it here so
+    // the GM sees the negation before pressing Apply.
+    if (!defIsVeh && (critType === CRIT_TYPES.HEAD_SHOT || (rec && rec.isHeadShot)) && prof.hasProtectedBrain) {
+      buttons += `<br/><span style="color:#8be9fd; font-weight:bold;">[HEAD SHOT NEGATED - Protected Brain]</span>`;
+    }
+    
     if (rec && kbButton) rec.buttonGroups = { attacker: kbButton, defender: buttons.replace(kbButton, "") };
     
     return buttons;
@@ -10050,99 +10052,34 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // BUTTON BUILDERS
   // -------------------------
 
-  function buildStandardAttackButtons(rollId, critResult, causesKB, rec) {
-    const critType = critResult ? critResult.type : null;
-    let buttons = "";
-    let kbButton = "";
-    if (rec) rec.buttonGroups = null;
-    
-    // Vehicle target detection
+    function buildStandardAttackButtons(rollId, critResult, causesKB, rec) {
     const defIsVeh = rec && rec.defCharId && isVehicleMode(rec.defCharId);
-    
-    // Check if defender has an active Ability Field (not for vehicles)
+
+    // Ability Field intercept: the target's field resolves first, then the
+    // attack-type button routes back through buildStandardAttackButtonsAfterAF.
     if (!defIsVeh && rec && rec.defCharId) {
       const afData = getAbilityFieldData(rec.defCharId);
       if (afData) {
-        // Target has an active Ability Field - show attack type selection buttons
-        buttons = `<div style="color:#e67e22; font-weight:bold; margin-bottom:4px;">🔥 Target has ${esc(afData.name)} active! (${afData.damage} ${afData.dmgType})</div>`;
+        let buttons = `<div style="color:#e67e22; font-weight:bold; margin-bottom:4px;">🔥 Target has ${esc(afData.name)} active! (${afData.damage} ${afData.dmgType})</div>`;
         buttons += `<div style="font-size:10px; color:#666; margin-bottom:4px;">Select attack type to resolve Ability Field:</div>`;
         buttons += `${btn(`Projectile`, `!mp afield --id ${rollId} --type projectile`)} `;
         buttons += `${btn(`Non-Projectile`, `!mp afield --id ${rollId} --type nonproject`)} `;
         buttons += `${btn(`Melee Weapon`, `!mp afield --id ${rollId} --type melee`)} `;
         buttons += `${btn(`Unarmed/HTH`, `!mp afield --id ${rollId} --type unarmed`)}`;
-        
-        // Store AF data in pending record for later resolution
-        state.MP_Engine.pending[rollId].afData = afData;
-        state.MP_Engine.pending[rollId].critResult = critResult;
-        state.MP_Engine.pending[rollId].causesKB = causesKB;
-        rec.buttonGroups = { attacker: buttons, defender: "" };
-        
+
+        const pend = state.MP_Engine.pending[rollId];
+        if (pend) {
+          pend.afData = afData;
+          pend.critResult = critResult;
+          pend.causesKB = causesKB;
+        }
+        if (rec) rec.buttonGroups = { attacker: buttons, defender: "" };
+
         return buttons;
       }
     }
-    
-    // Check if defender has Protected Brain (negates head shots)
-    const hasProtectedBrain = !defIsVeh && rec && rec.defCharId && 
-      (num(getAttr(rec.defCharId, "willpower_protected_brain"), 0) === 1);
-    
-    // Called shot info from pending record
-    const isHeadShot = rec && rec.isHeadShot;
-    const isLegShot = rec && rec.isLegShot;
-    const isArmShot = rec && rec.isArmShot;
-    const isGearShot = rec && rec.isGearShot;
-    
-    // Death Touch (p.53): penetrating damage may NOT be rolled with. Apply only.
-    if (rec && rec.isDeathTouch && !defIsVeh) {
-      buttons = `${btnDanger(`Apply (Death Touch)`, `!mp apply --id ${rollId} --mode noroll`)}`;
-      return buttons;
-    }
-    
-    const prof = damageApplyProfile(rec, critType);
-    buttons = `${btnDanger(applyModeLabel(`Apply`, prof.tags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.parts, null)}`)}`;
-    if (!prof.defIsVeh) {
-      buttons += ` ${btn(applyModeLabel(`RW Max`, prof.rwTags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.rwParts, "rwmax")}`)} `;
-      buttons += `${btn(applyModeLabel(`RW Custom`, prof.rwTags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.rwParts, "rw")} --amt ?{Divert to Power|0}`)}`;
-    }
-    
-    if (causesKB) {
-      kbButton = ` ${btn(`KB`, `!mp kb --id ${rollId}`)}`;
-      buttons += kbButton;
-    }
-    
-    // Check for Absorption or Reflection (requires saved action)
-    if (rec && rec.defCharId && rec.protKey) {
-      const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
-      if (absRef) {
-        if (absRef.mode === "absorption") {
-          const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
-          buttons += `<br/><span style="color:#9b59b6; font-weight:bold;">🔮 Absorption available${limitNote}</span>`;
-          buttons += ` ${btn(`Absorb (¼ dmg, saved action)`, `!mp absorb --id ${rollId}`)}`;
-        } else if (absRef.mode === "reflection") {
-          const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
-          buttons += `<br/><span style="color:#e67e22; font-weight:bold;">🔄 Reflection available${limitNote}</span>`;
-          buttons += ` ${btn(`Reflect (¼ dmg, saved action)`, `!mp reflect --id ${rollId}`)}`;
-        }
-      }
-    }
-    
-    // Add limb shot saves if applicable (crit OR deliberate called shot) - not for vehicles
-    if (!defIsVeh) {
-      if (critType === CRIT_TYPES.LEG_SHOT || isLegShot) {
-        buttons += `<br/>${btn(`Leg Shot Saves`, `!mp limbsave --id ${rollId} --limb leg`)}`;
-      } else if (critType === CRIT_TYPES.ARM_SHOT || isArmShot) {
-        buttons += `<br/>${btn(`Arm Shot Saves`, `!mp limbsave --id ${rollId} --limb arm`)}`;
-      } else if (critType === CRIT_TYPES.MUSCLE_STRAIN_TARGET) {
-        buttons += `<br/><i>(Muscle Strain: Base HTH \u00f72 round up, protection and roll-with apply)</i>`;
-      }
-    }
-    
-    // Gear shot info
-    if (isGearShot) {
-      buttons += `<br/><i>(Compare damage to Gear breakpoint)</i>`;
-    }
-    if (rec && kbButton) rec.buttonGroups = { attacker: kbButton, defender: buttons.replace(kbButton, "") };
-    
-    return buttons;
+
+    return buildStandardAttackButtonsAfterAF(rollId, critResult, causesKB, rec);
   }
 
   function buildSaveAttackButtons(rollId, critResult, pushAmount) {
@@ -16508,7 +16445,6 @@ function cmdStance(msg, args) {
       } else {
         rec.nextDueMs = result.nextDueMs;
         rec.name = data.name;
-        rec.unlimited = rec.unlimited;
         if (result.spent > 0) {
           notices.push(`🔋 <b>${esc(char.get("name"))} — ${esc(data.name)}</b> used ${result.spent} renewal charge${result.spent === 1 ? "" : "s"}; ${result.charges} remain. Next due ${esc(fmtGameTimestamp(result.nextDueMs))}.`);
         }

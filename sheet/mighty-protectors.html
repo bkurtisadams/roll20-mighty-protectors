@@ -5887,9 +5887,20 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // ==================== BROKEN GEAR HANDLERS ====================
   // When Broken is checked, force State to Off and prevent reactivation
 
+  // Roll20 row IDs use the Firebase pushID alphabet, which includes "_",
+  // so sourceAttribute.split("_")[2] truncates any ID containing one.
+  function rowIdFrom(srcAttr, section, suffix) {
+    var head = "repeating_" + section + "_";
+    var tail = "_" + suffix;
+    var s = srcAttr || "";
+    if (s.indexOf(head) !== 0 || s.slice(-tail.length) !== tail) return "";
+    return s.slice(head.length, s.length - tail.length);
+  }
+
   on("change:repeating_attacks:attack_broken", function(eventInfo) {
     if (eventInfo.newValue === "1") {
-      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      const rowId = rowIdFrom(eventInfo.sourceAttribute, "attacks", "attack_broken");
+      if (!rowId) return;
       setAttrs({
         ["repeating_attacks_" + rowId + "_attack_state"]: "Off",
         ["repeating_attacks_" + rowId + "_attack_state_on"]: "0"
@@ -5899,7 +5910,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   on("change:repeating_protection:prot_broken", function(eventInfo) {
     if (eventInfo.newValue === "1") {
-      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      const rowId = rowIdFrom(eventInfo.sourceAttribute, "protection", "prot_broken");
+      if (!rowId) return;
       setAttrs({
         ["repeating_protection_" + rowId + "_prot_state"]: "Off",
         ["repeating_protection_" + rowId + "_prot_state_on"]: "0"
@@ -5909,7 +5921,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   on("change:repeating_abilities:ability_broken", function(eventInfo) {
     if (eventInfo.newValue === "1") {
-      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      const rowId = rowIdFrom(eventInfo.sourceAttribute, "abilities", "ability_broken");
+      if (!rowId) return;
       setAttrs({
         ["repeating_abilities_" + rowId + "_ability_state"]: "Off",
         ["repeating_abilities_" + rowId + "_ability_state_active"]: "0",
@@ -5922,7 +5935,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   // Prevent reactivation while broken
   on("change:repeating_attacks:attack_state", function(eventInfo) {
     if (eventInfo.newValue === "Active") {
-      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      const rowId = rowIdFrom(eventInfo.sourceAttribute, "attacks", "attack_state");
+      if (!rowId) return;
       getAttrs(["repeating_attacks_" + rowId + "_attack_broken"], function(v) {
         if (v["repeating_attacks_" + rowId + "_attack_broken"] === "1") {
           setAttrs({
@@ -5936,7 +5950,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   on("change:repeating_protection:prot_state", function(eventInfo) {
     if (eventInfo.newValue === "Active") {
-      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      const rowId = rowIdFrom(eventInfo.sourceAttribute, "protection", "prot_state");
+      if (!rowId) return;
       getAttrs(["repeating_protection_" + rowId + "_prot_broken"], function(v) {
         if (v["repeating_protection_" + rowId + "_prot_broken"] === "1") {
           setAttrs({
@@ -5950,7 +5965,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   on("change:repeating_abilities:ability_state", function(eventInfo) {
     if (eventInfo.newValue === "Active") {
-      const rowId = eventInfo.sourceAttribute.split("_")[2];
+      const rowId = rowIdFrom(eventInfo.sourceAttribute, "abilities", "ability_state");
+      if (!rowId) return;
       getAttrs(["repeating_abilities_" + rowId + "_ability_broken"], function(v) {
         if (v["repeating_abilities_" + rowId + "_ability_broken"] === "1") {
           setAttrs({
@@ -5973,7 +5989,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     if (eventInfo.sourceType === "sheetworker") return;
     
     var srcAttr = eventInfo.sourceAttribute;
-    var rowId = srcAttr.split("_")[2];
+    var rowId = rowIdFrom(srcAttr, "abilities", "ability_state");
+    if (!rowId) return;
     var newState = eventInfo.newValue;
     var prefix = "repeating_abilities_" + rowId + "_ability_";
     
