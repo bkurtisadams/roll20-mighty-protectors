@@ -1,4 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.80 - Sheet widening
+<!-- Mighty Protectors Roll20 Character Sheet v44.81 - Sheet maintenance
+        v44.81: Replace the developer-only orphan-row cleanup controls with a
+          player-facing Sheet Check button backed by MP Engine v2.147.0. The
+          maintenance card identifies known legacy vehicle-system data, requires
+          confirmation before deleting it, and never auto-deletes current repeating
+          rows. A Find Hidden Ability Row flow lists rows by name/state/CP and requires
+          separate confirmation, replacing the orphan-ID text box / F12-console workflow.
         v44.80: Widen sheet to better use the character dialog. Container
           max-width 680px to 740px (half the available dialog gap, leaving
           buffer for the scrollbar and popout variance). Profile 45px to
@@ -1701,8 +1707,6 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
       <span style="color:#f4d03f; font-weight:bold; font-size:11px;">Abilities / Weaknesses <span style="color:#555; font-size:9px;">(neg CPs = weakness)</span></span>
       <div style="display:flex; gap:4px; align-items:center;">
-        <input type="text" name="attr_cleanup_orphan_id" placeholder="orphan ID" style="width:80px; font-size:8px; background:#222; color:#ff6b6b; border:1px solid #444; padding:1px 3px;" title="Paste orphan row ID here (from console), then click 🧹 to remove" />
-        <button type="action" name="act_cleanup_orphans" style="background:#555; color:#ff6b6b; border:1px solid #666; padding:0 4px; font-size:8px;" title="Diagnose orphaned ability rows (check F12 console)">🧹</button>
         <button type="roll" name="roll_abw_summary" value="&{template:mpabw} {{name=@{character_name}}} {{body=@{abw_summary}}}" style="background:#333; color:#f4d03f; border:1px solid #444; padding:0 4px; font-size:9px;" title="Send all abilities to chat">All</button>
       </div>
     </div>
@@ -3332,6 +3336,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   </div><!-- END VEHICLE CONTENT -->
 
+  <!-- SHEET-WIDE MAINTENANCE (character + vehicle modes) -->
+  <div class="sheet-maintenance-bar" style="background:#15152a; border:1px solid #2a2040; border-radius:4px; margin-top:3px; padding:4px 6px; display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+    <span style="color:#777; font-size:9px;">Sheet tools</span>
+    <button type="roll" name="roll_sheet_maintenance" value="!mp maintenance --charid @{character_id}" style="background:#3d5a80; color:#fff; border:1px solid #2a2a4a; border-radius:3px; padding:1px 7px; font-size:9px; font-weight:bold; cursor:pointer;" title="Check this sheet for known obsolete data left by older sheet versions. Current attacks, protection, abilities, careers, and vehicle rows are never deleted automatically.">Check Sheet</button>
+  </div>
 
 </div> <!-- Main container -->
 
@@ -5810,85 +5819,11 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     calcBaseIPs();
   });
 
-  // ==================== ORPHAN CLEANUP ====================
-  // Removes orphaned repeating row data that Roll20 sometimes leaves behind
-  
-  on("clicked:cleanup_orphans", function() {
-    console.log("=== ORPHAN CLEANUP DIAGNOSTIC ===");
-    console.log("This tool helps identify orphaned ability rows.");
-    console.log("Orphaned rows have data but are invisible in the UI.");
-    console.log("");
-    
-    // Get all ability IDs that Roll20 thinks exist
-    getSectionIDs("repeating_abilities", function(allIds) {
-      console.log("Roll20 reports", allIds.length, "ability rows:");
-      
-      // Build attribute list to check each row
-      var attrList = ["cleanup_orphan_id"];
-      allIds.forEach(function(id) {
-        attrList.push("repeating_abilities_" + id + "_ability_name");
-        attrList.push("repeating_abilities_" + id + "_ability_state");
-        attrList.push("repeating_abilities_" + id + "_ability_weight_mod");
-        attrList.push("repeating_abilities_" + id + "_ability_profile_mod");
-      });
-      
-      getAttrs(attrList, function(values) {
-        var orphanIdToRemove = (values.cleanup_orphan_id || "").trim();
-        
-        console.log("");
-        console.log("=== ALL ABILITY ROWS ===");
-        allIds.forEach(function(id, idx) {
-          var name = values["repeating_abilities_" + id + "_ability_name"] || "(no name)";
-          var state = values["repeating_abilities_" + id + "_ability_state"] || "Off";
-          var weight = values["repeating_abilities_" + id + "_ability_weight_mod"] || "";
-          var profile = values["repeating_abilities_" + id + "_ability_profile_mod"] || "";
-          
-          var mods = [];
-          if (weight) mods.push("W:" + weight);
-          if (profile) mods.push("P:" + profile);
-          var modStr = mods.length ? " [" + mods.join(", ") + "]" : "";
-          
-          console.log((idx + 1) + ". " + name + " (" + state + ")" + modStr);
-          console.log("   ID: " + id);
-        });
-        
-        console.log("");
-        console.log("=== TO REMOVE AN ORPHAN ===");
-        console.log("1. Count the visible ability rows in your sheet");
-        console.log("2. If Roll20 reports MORE rows than visible, some are orphaned");
-        console.log("3. Identify the orphan by name (it won't be visible)");
-        console.log("4. Copy its ID from above");
-        console.log("5. Paste into the cleanup_orphan_id attribute and click 🧹 again");
-        console.log("   Or run in API console: removeRepeatingRow('repeating_abilities_ID_HERE')");
-        
-        // If user provided an orphan ID, try to remove it
-        if (orphanIdToRemove) {
-          console.log("");
-          console.log("=== ATTEMPTING REMOVAL ===");
-          console.log("Orphan ID to remove: " + orphanIdToRemove);
-          
-          // Clean the ID (remove any prefix if user pasted the full attribute name)
-          var cleanId = orphanIdToRemove.replace("repeating_abilities_", "").replace(/_ability_.*/, "");
-          
-          if (allIds.indexOf(cleanId) !== -1) {
-            console.log("Found matching ID, removing: repeating_abilities_" + cleanId);
-            removeRepeatingRow("repeating_abilities_" + cleanId);
-            setAttrs({ cleanup_orphan_id: "" }, { silent: true });
-            console.log("Removal attempted. Refresh the sheet to verify.");
-          } else {
-            console.log("ERROR: ID not found in ability rows. Check the ID and try again.");
-            console.log("Available IDs:", allIds);
-          }
-        }
-      });
-    });
-  });
-
   // ==================== BROKEN GEAR HANDLERS ====================
   // When Broken is checked, force State to Off and prevent reactivation
 
-  // Roll20 row IDs use the Firebase pushID alphabet, which includes "_",
-  // so sourceAttribute.split("_")[2] truncates any ID containing one.
+  // Extract the repeating-row ID defensively from the known section and field
+  // suffix instead of relying on positional underscore splitting.
   function rowIdFrom(srcAttr, section, suffix) {
     var head = "repeating_" + section + "_";
     var tail = "_" + suffix;

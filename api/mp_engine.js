@@ -1,4 +1,13 @@
-/* Mighty Protectors Roll20 API Engine v2.146.0 - 2026-08-13
+/* Mighty Protectors Roll20 API Engine v2.147.0 - 2026-08-23
+ * v2.147.0: PLAYER-FACING SHEET MAINTENANCE. New !mp maintenance command
+ *   scans a controlled character for known obsolete sheet data and reports a
+ *   compact private health card instead of requiring F12-console diagnostics or
+ *   raw repeating-row IDs. The first recognized cleanup target is the retired
+ *   repeating_veh_systems section (current section: repeating_vehsystems), plus
+ *   the old cleanup_orphan_id helper attribute. Cleanup requires a second
+ *   confirmation click and re-scans immediately before deletion. Current attacks,
+ *   protection, abilities, careers, vehicle systems/protection/key rows are never
+ *   auto-deleted; unknown repeating data is reported and left untouched.
  * v2.146.0: SAVE/SNARE ATTACK CARD REDESIGN. Non-damage attacks (Flash,
  *   Mind Control, Emotional Control, Paralysis Ray, Transmutation, Grapnel,
  *   Ice Blast...) no longer show a meaningless "0 DAMAGE":
@@ -1524,7 +1533,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.146.0";
+var MP_VERSION = "2.147.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -14481,6 +14490,295 @@ function cmdStance(msg, args) {
   }
 
   // -------------------------
+  // SHEET MAINTENANCE (v2.147.0)
+  // -------------------------
+  // Player-facing replacement for the old sheet-worker/F12 orphan-row tool.
+  // Only explicitly known obsolete data is removable. Current repeating sections
+  // and unrecognized data are report-only so maintenance cannot guess-delete rows.
+
+  const MAINT_CURRENT_SECTIONS = [
+    { prefix: "repeating_attacks_", label: "Attacks" },
+    { prefix: "repeating_protection_", label: "Protection" },
+    { prefix: "repeating_abilities_", label: "Abilities" },
+    { prefix: "repeating_careers_", label: "Careers" },
+    { prefix: "repeating_vehsystems_", label: "Vehicle Systems" },
+    { prefix: "repeating_vehprotection_", label: "Vehicle Protection" },
+    { prefix: "repeating_vehkey_", label: "Vehicle Key" }
+  ];
+
+  const MAINT_LEGACY_GROUPS = [
+    {
+      key: "veh_systems",
+      prefix: "repeating_veh_systems_",
+      reporderNames: ["_reporder_repeating_veh_systems"],
+      label: "Legacy Vehicle Systems",
+      explanation: "data from the retired repeating_veh_systems section; the current sheet uses repeating_vehsystems"
+    }
+  ];
+
+  function maintenanceRowIds(attrs, prefix) {
+    const ids = new Set();
+    (attrs || []).forEach(a => {
+      const n = String(a.get("name") || "");
+      if (n.indexOf(prefix) !== 0) return;
+      const rest = n.slice(prefix.length);
+      const cut = rest.indexOf("_");
+      if (cut > 0) ids.add(rest.slice(0, cut));
+    });
+    return ids;
+  }
+
+  function scanSheetMaintenance(charId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const current = {};
+    MAINT_CURRENT_SECTIONS.forEach(sec => {
+      current[sec.label] = maintenanceRowIds(attrs, sec.prefix).size;
+    });
+
+    const legacy = MAINT_LEGACY_GROUPS.map(group => {
+      const fields = attrs.filter(a => String(a.get("name") || "").indexOf(group.prefix) === 0);
+      const reporders = attrs.filter(a => group.reporderNames.indexOf(String(a.get("name") || "")) !== -1);
+      return {
+        key: group.key,
+        label: group.label,
+        explanation: group.explanation,
+        rows: maintenanceRowIds(fields, group.prefix).size,
+        fields: fields.length,
+        objects: fields.concat(reporders)
+      };
+    });
+
+    // The old sheet-only cleanup widget stored a raw ID here. It has no purpose
+    // once the maintenance API is installed and is safe to remove if present.
+    const obsoleteHelper = attrs.filter(a => String(a.get("name") || "") === "cleanup_orphan_id");
+
+    const recognized = a => {
+      const n = String(a.get("name") || "");
+      if (MAINT_CURRENT_SECTIONS.some(sec => n.indexOf(sec.prefix) === 0)) return true;
+      if (MAINT_LEGACY_GROUPS.some(group => n.indexOf(group.prefix) === 0 || group.reporderNames.indexOf(n) !== -1)) return true;
+      if (n === "cleanup_orphan_id") return true;
+      return false;
+    };
+    const unknownRepeating = attrs.filter(a => {
+      const n = String(a.get("name") || "");
+      return n.indexOf("repeating_") === 0 && !recognized(a);
+    });
+
+    const cleanupObjects = [];
+    legacy.forEach(g => g.objects.forEach(o => cleanupObjects.push(o)));
+    obsoleteHelper.forEach(o => cleanupObjects.push(o));
+
+    return {
+      current,
+      legacy,
+      obsoleteHelperCount: obsoleteHelper.length,
+      unknownRepeatingCount: unknownRepeating.length,
+      cleanupObjects
+    };
+  }
+
+  function resolveMaintenanceCharacter(msg, args) {
+    let char = args.charid ? getObj("character", args.charid) : null;
+    if (!char) {
+      const tok = getSelectedToken(msg);
+      char = tok ? getCharFromToken(tok) : null;
+    }
+    return char;
+  }
+
+  function maintenanceAbilityRows(charId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const ids = Array.from(maintenanceRowIds(attrs, "repeating_abilities_"));
+    const byLower = {};
+    ids.forEach(id => { byLower[id.toLowerCase()] = id; });
+
+    let ordered = ids.slice();
+    const reporder = attrs.find(a => String(a.get("name") || "") === "_reporder_repeating_abilities");
+    if (reporder) {
+      const listed = String(reporder.get("current") || "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+      const first = listed.map(id => byLower[id]).filter(Boolean);
+      const rest = ids.filter(id => listed.indexOf(id.toLowerCase()) === -1);
+      ordered = first.concat(rest);
+    }
+
+    const attrValue = (rowId, field, dflt) => {
+      const want = `repeating_abilities_${rowId}_ability_${field}`.toLowerCase();
+      const a = attrs.find(x => String(x.get("name") || "").toLowerCase() === want);
+      return a ? String(a.get("current") || "") : (dflt || "");
+    };
+
+    return ordered.map((id, idx) => ({
+      id,
+      index: idx + 1,
+      name: attrValue(id, "name", "(unnamed ability)"),
+      state: attrValue(id, "state", "Off"),
+      cp: attrValue(id, "cp", "0")
+    }));
+  }
+
+  function maintenanceFindAbilityRow(charId, rowId) {
+    if (!rowId) return null;
+    const target = String(rowId).toLowerCase();
+    return maintenanceAbilityRows(charId).find(r => r.id.toLowerCase() === target) || null;
+  }
+
+  function maintenanceRemoveAbilityRow(charId, rowId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
+    const rowPrefix = `repeating_abilities_${rowId}_`.toLowerCase();
+    let removed = 0;
+    attrs.forEach(a => {
+      const n = String(a.get("name") || "").toLowerCase();
+      if (n.indexOf(rowPrefix) === 0) {
+        try { a.remove(); removed++; } catch (e) { log("MP maintenance ability-row cleanup failed: " + e); }
+      }
+    });
+
+    const reporder = attrs.find(a => String(a.get("name") || "") === "_reporder_repeating_abilities");
+    if (reporder) {
+      const target = String(rowId).toLowerCase();
+      const next = String(reporder.get("current") || "").split(",")
+        .map(x => x.trim()).filter(Boolean)
+        .filter(id => id.toLowerCase() !== target);
+      reporder.set("current", next.join(","));
+    }
+    return removed;
+  }
+
+  function maintenanceAbilityListCard(char) {
+    const rows = maintenanceAbilityRows(char.id);
+    let html = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:7px 9px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:320px;">`;
+    html += `<div style="font-weight:bold; font-size:14px; color:#8be9fd; margin-bottom:4px;">🔎 Find Hidden Ability Row: ${esc(char.get("name") || "Character")}</div>`;
+    html += `<div style="background:#2b2b3d; border:1px solid #555; border-radius:4px; padding:5px 6px; color:#ccc; font-size:10px; margin-bottom:6px;">These are all Ability rows Roll20 currently stores. If a row appears here but <b>does not appear on the sheet</b>, review it for removal. Leave visible rows alone.</div>`;
+    if (!rows.length) {
+      html += `<div style="color:#b9f6ca;">No Ability rows are stored.</div>`;
+    } else {
+      rows.forEach(r => {
+        html += `<div style="border-top:1px solid #333; padding:4px 0; display:flex; align-items:center; justify-content:space-between; gap:6px;">`;
+        html += `<span style="min-width:0;"><b>${r.index}. ${esc(r.name)}</b><br/><span style="color:#999; font-size:9px;">${esc(r.state)} • ${esc(r.cp)} CP</span></span>`;
+        html += `<span>${btn("Review", `!mp maintenance --charid ${char.id} --action abilityconfirm --row ${r.id}`)}</span>`;
+        html += `</div>`;
+      });
+    }
+    html += `<div style="margin-top:6px;">${btn("Back to Sheet Check", `!mp maintenance --charid ${char.id}`)}</div>`;
+    html += `</div>`;
+    return html;
+  }
+
+  function maintenanceAbilityConfirmCard(char, row) {
+    let html = `<div style="background:#1a1a2e; border:2px solid #b8860b; border-radius:6px; padding:7px 9px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px;">`;
+    html += `<div style="font-weight:bold; font-size:14px; color:#ffe7a3; margin-bottom:5px;">Remove Ability Row?</div>`;
+    html += `<div style="margin-bottom:5px;"><b>${esc(row.name)}</b><br/><span style="color:#aaa; font-size:10px;">${esc(row.state)} • ${esc(row.cp)} CP</span></div>`;
+    html += `<div style="background:#3b2c10; border:1px solid #b8860b; border-radius:4px; padding:5px 6px; color:#ffe7a3; font-size:10px; margin-bottom:6px;">Only remove this if it is a stale/hidden row that does not appear on the sheet. This action deletes that stored Ability row.</div>`;
+    html += `${btnDanger("Yes, Remove Row", `!mp maintenance --charid ${char.id} --action abilityremove --row ${row.id} --confirm yes`)} ${btn("Cancel", `!mp maintenance --charid ${char.id} --action abilities`)}`;
+    html += `</div>`;
+    return html;
+  }
+
+  function maintenanceCard(char, report, mode, removedCount) {
+    const charId = char.id;
+    const charName = char.get("name") || "Character";
+    const cur = report.current;
+    const summaryBits = [
+      `${cur.Attacks || 0} attacks`,
+      `${cur.Protection || 0} protection`,
+      `${cur.Abilities || 0} abilities`,
+      `${cur["Vehicle Systems"] || 0} vehicle systems`
+    ];
+
+    let html = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:7px 9px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px;">`;
+    html += `<div style="font-weight:bold; font-size:14px; color:#8be9fd; margin-bottom:4px;">🔧 Sheet Maintenance: ${esc(charName)}</div>`;
+    html += `<div style="color:#aaa; font-size:10px; margin-bottom:6px;">${summaryBits.join(" • ")}</div>`;
+
+    if (removedCount) {
+      html += `<div style="background:#17351f; border:1px solid #2e7d32; border-radius:4px; padding:5px 6px; margin-bottom:5px; color:#b9f6ca;"><b>✓ Cleanup complete.</b> Removed ${removedCount} obsolete stored field${removedCount === 1 ? "" : "s"}.</div>`;
+    }
+
+    const removable = report.legacy.filter(g => g.objects.length > 0);
+    if (!removable.length && report.obsoleteHelperCount === 0) {
+      html += `<div style="background:#17351f; border:1px solid #2e7d32; border-radius:4px; padding:5px 6px; color:#b9f6ca;"><b>✓ No known obsolete sheet data found.</b></div>`;
+    } else if (mode === "confirm") {
+      html += `<div style="background:#3b2c10; border:1px solid #b8860b; border-radius:4px; padding:5px 6px; margin-bottom:5px; color:#ffe7a3;"><b>Confirm cleanup</b><br/>Only data from retired sheet fields listed below will be removed. Current sheet rows are not touched.</div>`;
+      removable.forEach(g => {
+        html += `<div style="margin:3px 0;"><b>${esc(g.label)}:</b> ${g.rows} row${g.rows === 1 ? "" : "s"}, ${g.fields} stored field${g.fields === 1 ? "" : "s"}<br/><span style="color:#aaa; font-size:10px;">${esc(g.explanation)}</span></div>`;
+      });
+      if (report.obsoleteHelperCount) {
+        html += `<div style="margin:3px 0;"><b>Old maintenance helper:</b> ${report.obsoleteHelperCount} stored field${report.obsoleteHelperCount === 1 ? "" : "s"}</div>`;
+      }
+      html += `<div style="margin-top:6px;">${btnDanger("Yes, Clean Up", `!mp maintenance --charid ${charId} --action cleanup --confirm yes`)} ${btn("Cancel", `!mp maintenance --charid ${charId}`)}</div>`;
+    } else {
+      removable.forEach(g => {
+        html += `<div style="background:#3b2c10; border:1px solid #b8860b; border-radius:4px; padding:5px 6px; margin-bottom:5px; color:#ffe7a3;"><b>⚠ ${esc(g.label)} found:</b> ${g.rows} row${g.rows === 1 ? "" : "s"} (${g.fields} stored field${g.fields === 1 ? "" : "s"}).<br/><span style="color:#ccc; font-size:10px;">${esc(g.explanation)}.</span></div>`;
+      });
+      if (report.obsoleteHelperCount) {
+        html += `<div style="color:#ccc; font-size:10px; margin-bottom:4px;">An old orphan-cleanup helper field can also be removed.</div>`;
+      }
+      html += `<div style="margin-top:5px;">${btn("Review Cleanup", `!mp maintenance --charid ${charId} --action confirm`)}</div>`;
+    }
+
+    if (report.unknownRepeatingCount > 0) {
+      html += `<div style="background:#2b2b3d; border:1px solid #555; border-radius:4px; padding:5px 6px; margin-top:6px; color:#ccc;"><b>Review note:</b> ${report.unknownRepeatingCount} stored repeating field${report.unknownRepeatingCount === 1 ? "" : "s"} do not match the current sheet sections. They were <b>left untouched</b> because the engine cannot safely determine whether they are obsolete.</div>`;
+    }
+
+    if ((cur.Abilities || 0) > 0) {
+      html += `<div style="margin-top:6px;">${btn("Find Hidden Ability Row", `!mp maintenance --charid ${charId} --action abilities`)}</div>`;
+    }
+    html += `<div style="color:#777; font-size:9px; margin-top:6px;">Safety rule: current rows are never auto-deleted. Manual Ability-row removal always requires a separate confirmation.</div>`;
+    html += `</div>`;
+    return html;
+  }
+
+  function cmdMaintenance(msg, args) {
+    const char = resolveMaintenanceCharacter(msg, args);
+    if (!char) return ch("MP", `${wt(msg)}<b>MP:</b> Open the sheet and click <b>Check Sheet</b>, or select a linked token and use <code>!mp maintenance</code>.`);
+    if (!requireControl(msg, char.id, "check or clean that sheet")) return;
+
+    const action = String(args.action || "scan").toLowerCase();
+    let report = scanSheetMaintenance(char.id);
+
+    if (action === "abilities") {
+      return ch("MP", wt(msg) + maintenanceAbilityListCard(char));
+    }
+
+    if (action === "abilityconfirm" || action === "abilityremove") {
+      const row = maintenanceFindAbilityRow(char.id, args.row);
+      if (!row) return ch("MP", `${wt(msg)}<b>MP:</b> That Ability row no longer exists. Run <b>Check Sheet</b> again.`);
+      if (action === "abilityconfirm" || String(args.confirm || "").toLowerCase() !== "yes") {
+        return ch("MP", wt(msg) + maintenanceAbilityConfirmCard(char, row));
+      }
+      const removedFields = maintenanceRemoveAbilityRow(char.id, row.id);
+      const afterRows = maintenanceAbilityRows(char.id);
+      let result = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:7px 9px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px;">`;
+      result += `<div style="color:#b9f6ca; font-weight:bold;">✓ Removed ${esc(row.name)}</div>`;
+      result += `<div style="color:#aaa; font-size:10px; margin:4px 0;">Deleted ${removedFields} stored field${removedFields === 1 ? "" : "s"}. ${afterRows.length} Ability row${afterRows.length === 1 ? "" : "s"} remain.</div>`;
+      result += `${btn("Review Ability Rows", `!mp maintenance --charid ${char.id} --action abilities`)} ${btn("Back to Sheet Check", `!mp maintenance --charid ${char.id}`)}`;
+      result += `</div>`;
+      return ch("MP", wt(msg) + result);
+    }
+
+    if (action === "cleanup") {
+      if (String(args.confirm || "").toLowerCase() !== "yes") {
+        return ch("MP", wt(msg) + maintenanceCard(char, report, "confirm", 0));
+      }
+      // Re-scan at click time so an old confirmation card cannot remove anything
+      // except data that is still recognized as safely obsolete now.
+      report = scanSheetMaintenance(char.id);
+      const doomed = report.cleanupObjects.slice();
+      let removed = 0;
+      doomed.forEach(a => {
+        try { a.remove(); removed++; } catch (e) { log("MP maintenance cleanup failed: " + e); }
+      });
+      const after = scanSheetMaintenance(char.id);
+      return ch("MP", wt(msg) + maintenanceCard(char, after, "scan", removed));
+    }
+
+    if (action === "confirm") {
+      return ch("MP", wt(msg) + maintenanceCard(char, report, "confirm", 0));
+    }
+
+    return ch("MP", wt(msg) + maintenanceCard(char, report, "scan", 0));
+  }
+
+  // -------------------------
   // COMMAND PARSING
   // -------------------------
 
@@ -15137,6 +15435,7 @@ function cmdStance(msg, args) {
 
       case "escape": return cmdEscape(msg, args);
       case "wakeup": return cmdWakeup(msg, args);
+      case "maintenance": return cmdMaintenance(msg, args);
       case "status": return cmdStatus(msg, args);
       case "stat": return testStatus(msg, args);  // Detailed status with protections, roll-with cap
       case "restore":
@@ -15307,6 +15606,7 @@ function cmdStance(msg, args) {
           <code>!mp medical success|crit|fumble</code> - Apply Medical result to selected patient (<b>GM</b>)<br/>
           <code>!mp dailyheal</code> - Apply daily rest healing to selected token (<b>GM</b>)<br/>
           <code>!mp wakeup [--target TOKID]</code> - Wake-up roll for selected/target token (reads token bar hits)<br/>
+          <code>!mp maintenance [--charid ID]</code> - Check a controlled sheet for known obsolete data; cleanup requires confirmation<br/>
           <code>!mp restore</code> - Restore selected token(s) and clear conditions (<b>GM</b>)<br/>
           <b>Snare and Grapple:</b><br/>
           <code>!mp grapple --atk TOKID --def TOKID</code><br/>
