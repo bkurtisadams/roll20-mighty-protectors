@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.147.0 - 2026-08-23
+/* Mighty Protectors Roll20 API Engine v2.148.0 - 2026-08-25
+ * v2.148.0: PARTY REST / POWER RECOVERY. New GM-only !mp rest N unit
+ *   command advances the shared campaign clock once while all selected character
+ *   tokens rest simultaneously. Each selected character restores 1 Power per
+ *   full minute elapsed, capped at that token/character's maximum Power. Rest
+ *   never spills into Hits and vehicle-mode tokens are skipped. Fixed time units
+ *   share the game-clock aliases (sec/min/hour/day/week); durations under one full
+ *   minute are rejected because they cannot restore Power. Ordinary !mp time
+ *   advancement remains recovery-neutral.
  * v2.147.0: PLAYER-FACING SHEET MAINTENANCE. New !mp maintenance command
  *   scans a controlled character for known obsolete sheet data and reports a
  *   compact private health card instead of requiring F12-console diagnostics or
@@ -1533,7 +1541,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.147.0";
+var MP_VERSION = "2.148.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -15414,6 +15422,9 @@ function cmdStance(msg, args) {
       case "time":
         if (gmOnly(msg)) return;
         return cmdTime(msg, args);
+      case "rest":
+        if (gmOnly(msg)) return;
+        return cmdRest(msg, args);
       case "abilitytime":
       case "abilitytimers":
         if (gmOnly(msg)) return;
@@ -15628,6 +15639,7 @@ function cmdStance(msg, args) {
           <code>!mp range</code> - Check range between two selected tokens<br/>
           <code>!mp round | +N | set N | show</code> - Round controls (<b>GM</b>)<br/>
           <code>!mp time</code> - Game-time control panel; typed advance supports sec|min|hour|day|week|month|year|round, plus date/time set and calendar month aliases (<b>GM</b>)<br/>
+          <code>!mp rest N sec|min|hour|day|week</code> - Selected characters rest simultaneously; advances game time once and restores 1 Power/full minute, capped at max (<b>GM</b>)<br/>
           <code>!mp abilitytime [sync|clear]</code> - Inspect or resync automatic ability charge timers (<b>GM</b>)<br/>
           <b>Status and Setup:</b><br/>
           <code>!mp status</code> - Live selected-token control card<br/>
@@ -17301,6 +17313,85 @@ function cmdStance(msg, args) {
     report += invFrag;
     report += `</div>`;
     return report;
+  }
+
+  // GM: !mp rest N sec|min|hour|day|week
+  // Selected characters rest simultaneously. The campaign clock advances once,
+  // then each character restores 1 Power per FULL minute elapsed, capped at max.
+  // This is intentionally separate from Healing Rate / daily healing: rest never
+  // restores Hits, and plain !mp time advancement never grants rest recovery.
+  function cmdRest(msg, args) {
+    const parts = msg.content.trim().split(/\s+/);
+    const amount = parseFloat(parts[2]);
+    const unitKey = (parts[3] || "min").toLowerCase();
+    const secondsPerUnit = TIME_UNITS[unitKey];
+
+    if (!Number.isFinite(amount) || amount <= 0 || secondsPerUnit === undefined) {
+      return ch("MP", `/w gm <b>MP:</b> Usage: <code>!mp rest N sec|min|hour|day|week</code>. Select the characters who are resting.`);
+    }
+
+    const elapsedSeconds = Math.round(amount * secondsPerUnit);
+    const recovery = Math.floor(elapsedSeconds / 60);
+    if (recovery < 1) {
+      return ch("MP", `/w gm <b>MP:</b> Rest must last at least one full minute to restore Power (1 Power per minute).`);
+    }
+
+    const tokenIds = [];
+    if (msg.selected && msg.selected.length) {
+      msg.selected.forEach(sel => {
+        if (sel._type === "graphic" && !tokenIds.includes(sel._id)) tokenIds.push(sel._id);
+      });
+    }
+    if (!tokenIds.length) {
+      return ch("MP", `/w gm <b>MP:</b> Select one or more character tokens before using <code>!mp rest</code>.`);
+    }
+
+    const resters = [];
+    const skipped = [];
+    tokenIds.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      const char = getCharFromToken(tok);
+      if (!tok || !char) {
+        skipped.push("Unlinked token");
+        return;
+      }
+      const name = char.get("name") || tok.get("name") || "Character";
+      if (isVehicleMode(char.id)) {
+        skipped.push(`${name} (vehicle mode)`);
+        return;
+      }
+      resters.push({ tok, char, name });
+    });
+
+    if (!resters.length) {
+      return ch("MP", `/w gm <b>MP:</b> None of the selected tokens are eligible characters for rest Power recovery.`);
+    }
+
+    // All selected characters rest during the SAME interval, so move the shared
+    // game clock exactly once. Existing time-based effects still process normally.
+    advanceClock(elapsedSeconds);
+    checkRequirementsDue();
+
+    const lines = [];
+    const charIds = [];
+    resters.forEach(rec => {
+      const pow0 = getResource(rec.tok, rec.char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
+      const powMax = getResourceMax(rec.tok, rec.char.id, CFG.POWER_BAR, CFG.POWER_MAX_ATTR, pow0);
+      const room = Math.max(0, powMax - pow0);
+      const restored = Math.min(recovery, room);
+      const pow1 = pow0 + restored;
+      if (restored > 0) setResource(rec.tok, rec.char.id, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
+      charIds.push(rec.char.id);
+      lines.push(`<b>${esc(rec.name)}</b>: Power ${pow0}→${pow1} (+${restored})${restored < recovery ? ` <span style="color:#8a84a8;">(capped at ${powMax})</span>` : ""}`);
+    });
+
+    let html = `<div style="background:#1e1e38; color:#eaeaea; padding:7px 10px; border:2px solid #4a4070; border-radius:6px; max-width:360px;">` +
+      `<b>Rest</b><br/><span style="color:#b9b3d6;">${esc(fmtElapsed(elapsedSeconds))} elapsed · ${recovery} Power available per character</span>` +
+      `<div style="margin-top:5px;">${lines.join("<br/>")}</div>` +
+      `<div style="margin-top:5px; color:#8a84a8; font-size:11px;">Game time: ${esc(fmtGameClock())}</div>`;
+    if (skipped.length) html += `<div style="margin-top:4px; color:#c9a66b; font-size:11px;">Skipped: ${skipped.map(esc).join(", ")}</div>`;
+    html += `</div>`;
+    return chCardBody("MP", html, charIds);
   }
 
   // GM: !mp time | advance N unit | set YYYY-MM-DD [HH:MM] | calendar
