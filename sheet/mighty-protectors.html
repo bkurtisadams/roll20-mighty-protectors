@@ -1,4 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.82 - Live attack target hotfix
+<!-- Mighty Protectors Roll20 Character Sheet v44.85 - Super Speed initiative declaration
+        v44.85: Add a compact Super Speed declaration checkbox and saved extra-turns
+          field beside Initiative in full and compact views. The ordinary Initiative
+          roll macro is unchanged; MP Engine v2.151.0 watches that normal Initiative
+          chat roll and creates extra Super Speed turns as Roll20 custom tracker items.
         v44.82: Fix malformed Roll20 target attribute references in character and
           vehicle attack macros by removing invalid |0 fourth fields.
         v44.81: Replace the developer-only orphan-row cleanup controls with a
@@ -406,6 +410,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <button type="roll" class="mp-labellink sheet-compact-roll sheet-compact-init" name="roll_initiative"
           value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} + @{initiative_mod} + (@{agility_score} / 100) &{tracker}]]}}"
           title="Roll initiative for combat order">Init</button>
+        <span style="font-size:9px; color:#aaa; white-space:nowrap;">Super Speed</span>
+        <input type="checkbox" name="attr_super_speed_initiative" value="1" style="width:12px !important; height:12px; margin:0;" title="Use Super Speed for this initiative roll. The declaration clears after the roll." />
+        <input type="number" name="attr_super_speed_turns" min="0" step="1" style="width:26px !important; height:20px !important; min-height:20px !important; margin:0 !important; padding:1px 2px !important; box-sizing:border-box !important; text-align:center; background:#151528; color:#8be9fd; border:1px solid #4a4070; font-size:10px !important;" title="Number of extra turns granted by Super Speed." />
         <input type="text" name="attr_initiative_score" readonly title="Initiative dice" />
       </span>
 
@@ -814,6 +821,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <span style="color:#aaa; font-size:10px;">Initiative Modifier:</span>
             <input type="text" name="attr_initiative_mod" value="0" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Initiative modifier" />
             <button type="roll" class="mp-labellink" name="roll_initiative" value="&{template:default} {{name=@{character_name} rolls Initiative}} {{Roll=[[@{initiative_score} + @{initiative_mod} + (@{agility_score} / 100) &{tracker}]]}}" style="font-size:9px; font-weight:bold; height:16px; line-height:14px; padding:0 3px; margin:0; background:#8be9fd; color:#000; border:1px solid #2a2040;" title="Roll initiative for combat order">Initiative</button>
+            <span style="color:#aaa; font-size:10px; margin-left:4px;">Super Speed</span>
+            <input type="checkbox" name="attr_super_speed_initiative" value="1" style="width:12px; height:12px; margin:0; vertical-align:middle;" title="Use Super Speed for this initiative roll. The declaration clears after the roll." />
+            <input type="number" name="attr_super_speed_turns" min="0" step="1" style="width:28px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:2px; text-align:center;" title="Number of extra turns granted by Super Speed." />
             <input type="text" name="attr_initiative_score" style="width:80px; background:#0d0d1a; color:#f4d03f; border:1px solid #2a2040; padding:2px; text-align:center; font-weight:bold;" title="Initiative die roll (e.g., 1d10+1)" />
             <button type="action" name="act_reset_initiative" style="background:#444; color:#8be9fd; border:1px solid #555; padding:1px 4px; cursor:pointer; font-size:9px;" title="Reset to CL-based initiative">↺</button>
           </div>

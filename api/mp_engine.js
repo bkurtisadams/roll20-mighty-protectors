@@ -1,4 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.148.1 - 2026-08-25
+/* Mighty Protectors Roll20 API Engine v2.151.0 - 2026-08-26
+ * v2.151.0: SUPER SPEED INITIATIVE via custom Turn Tracker items. The existing
+ *   sheet Initiative roll and &{tracker} path remain untouched. The engine watches
+ *   the normal public Initiative roll-template message; an armed character's
+ *   Super Speed checkbox causes the engine to roll only the configured extra
+ *   initiatives, display those rolls in chat, add each cumulative result as an
+ *   id:-1 custom tracker item using the character's name, then clear the one-shot
+ *   checkbox. No PR is spent or tracked. Prior engine-created Super Speed custom
+ *   items are removed on that character's next normal initiative roll. Custom
+ *   tracker items are ignored by the round-wrap anchor so extra turns cannot be
+ *   mistaken for a new combat round.
  * v2.148.1: STARTUP / CHAT HARDENING. Register add:attribute only after
  *   Roll20 ready so existing campaign attributes do not replay through the add
  *   handler at startup. Wrap chat dispatch so attack/command exceptions are
@@ -1546,7 +1556,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.148.1";
+var MP_VERSION = "2.151.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1847,6 +1857,9 @@ MP.Engine = (function () {
   if (!state.MP_Engine.bleeds) state.MP_Engine.bleeds = {};
   // Ensure pendingArea exists for existing state
   if (!state.MP_Engine.pendingArea) state.MP_Engine.pendingArea = {};
+  // Super Speed custom tracker entries created by this engine. Kept in state so
+  // the next normal initiative roll can replace/remove the previous round's extras.
+  if (!state.MP_Engine.superSpeedTracker) state.MP_Engine.superSpeedTracker = {};
   // Ensure currentRound exists for existing state
   if (!state.MP_Engine.currentRound) state.MP_Engine.currentRound = 1;
   // Ensure undo store exists for existing state
@@ -17461,10 +17474,179 @@ function cmdStance(msg, args) {
     } catch (e) { return []; }
   }
 
-  // Signature of the turn order: the sequence of entry ids. Used to detect a
-  // wrap (top combatant coming back around = a new 10-second round).
+  // Signature of the turn order for round-wrap purposes. Custom items use id -1
+  // and can represent Super Speed extra turns; they must not become the round
+  // anchor or masquerade as the same combatant simply because all share id -1.
   function turnorderTopId(to) {
-    return to.length ? String(to[0].id) : "";
+    for (let i = 0; i < to.length; i++) {
+      if (String(to[i].id) !== "-1") return String(to[i].id);
+    }
+    return "";
+  }
+
+  function parseTurnorderValue(raw) {
+    try { return raw ? JSON.parse(raw) : []; }
+    catch (e) { return []; }
+  }
+
+  function trackerPrEqual(a, b) {
+    const na = parseFloat(a), nb = parseFloat(b);
+    if (isFinite(na) && isFinite(nb)) return Math.abs(na - nb) < 0.000001;
+    return String(a) === String(b);
+  }
+
+  function formatTrackerPr(n) {
+    return String(Math.round(Number(n) * 10000) / 10000);
+  }
+
+  // Remove only the custom entries this engine recorded for this character.
+  // This avoids deleting unrelated custom tracker items that happen to have the
+  // same display name. Returns the possibly shortened turn order.
+  function removeRecordedSuperSpeedTurns(charId, turnorder) {
+    const rec = state.MP_Engine.superSpeedTracker[charId];
+    if (!rec || !Array.isArray(rec.prs) || !rec.prs.length) return turnorder;
+    const remaining = rec.prs.slice();
+    const out = turnorder.filter(entry => {
+      if (String(entry.id) !== "-1" || String(entry.custom || "") !== String(rec.name || "")) return true;
+      if (rec.pageId && entry._pageid && String(entry._pageid) !== String(rec.pageId)) return true;
+      const idx = remaining.findIndex(pr => trackerPrEqual(entry.pr, pr));
+      if (idx < 0) return true;
+      remaining.splice(idx, 1);
+      return false;
+    });
+    delete state.MP_Engine.superSpeedTracker[charId];
+    return out;
+  }
+
+  function rollSuperSpeedExtras(charObj, tok, baseEntry, extraTurns) {
+    const charId = charObj.id;
+    const charName = charObj.get("name") || "Character";
+    const initExpr = String(getAttr(charId, "initiative_score") || "").trim();
+    const initMod = String(getAttr(charId, "initiative_mod") || "0").trim() || "0";
+    const ag = getAttrNum(charId, "agility_score", 0);
+    const tie = ag / 100;
+    const trackerBase = parseFloat(baseEntry.pr);
+
+    if (!initExpr || !isFinite(trackerBase)) {
+      return ch("MP", `/w gm <b>MP Super Speed:</b> ${esc(charName)} could not roll extra initiative because the normal initiative expression or tracker value is invalid.`);
+    }
+
+    const rollFields = [];
+    for (let i = 0; i < extraTurns; i++) {
+      rollFields.push(`{{Extra Roll ${i + 1}=[[${initExpr} + (${initMod})]]}}`);
+    }
+
+    // Visible/public on purpose: these replace the extra initiative rolls the
+    // player previously made manually in chat. The normal Initiative roll remains
+    // the first roll and is still produced by the untouched sheet button.
+    sendChat("character|" + charId, `&{template:default} {{name=${charName} rolls Super Speed Initiative}} ${rollFields.join(" ")}`, function(ops) {
+      try {
+        const msg = ops && ops[0];
+        const inline = (msg && msg.inlinerolls) || [];
+        if (inline.length < extraTurns) {
+          return ch("MP", `/w gm <b>MP Super Speed:</b> ${esc(charName)} extra initiative roll did not return all expected dice results.`);
+        }
+
+        // The real token entry already contains the ordinary roll + AG/100 tie
+        // breaker. Remove that fractional tie breaker before accumulating each
+        // extra full initiative roll, then add the same tie breaker back to each
+        // custom tracker entry.
+        let cumulative = Math.round((trackerBase - tie) * 1000000) / 1000000;
+        const phases = [cumulative];
+        const customPrs = [];
+        for (let i = 0; i < extraTurns; i++) {
+          const total = Number(inline[i] && inline[i].results && inline[i].results.total);
+          if (!isFinite(total)) throw new Error(`invalid extra initiative roll ${i + 1}`);
+          cumulative += total;
+          cumulative = Math.round(cumulative * 1000000) / 1000000;
+          phases.push(cumulative);
+          customPrs.push(formatTrackerPr(cumulative + tie));
+        }
+
+        let to = readTurnorder();
+        // A reroll can complete after another tracker edit. Clean the last set
+        // again against the freshest turnorder before appending new custom items.
+        to = removeRecordedSuperSpeedTurns(charId, to);
+        const pageId = tok.get("_pageid") || tok.get("pageid") || "";
+        customPrs.forEach(pr => {
+          const item = { id: "-1", pr: pr, custom: charName };
+          if (pageId) item._pageid = pageId;
+          to.push(item);
+        });
+        state.MP_Engine.superSpeedTracker[charId] = {
+          name: charName,
+          pageId: pageId,
+          tokenId: tok.id,
+          prs: customPrs.slice()
+        };
+        Campaign().set("turnorder", JSON.stringify(to));
+
+        sendChat("character|" + charId, `&{template:default} {{name=${charName} Super Speed Initiatives}} {{Initiatives=${phases.map(formatTrackerPr).join(" / ")}}} {{Extra Turns=${extraTurns}}}`);
+      } catch (err) {
+        log("MP ENGINE v" + MP_VERSION + " SUPER SPEED ERROR: " + (err && err.stack ? err.stack : err));
+        ch("MP", `/w gm <b>MP Super Speed error:</b> ${esc(err && err.message ? err.message : err)}`);
+      }
+    });
+  }
+
+  // The normal sheet Initiative button is intentionally untouched. Roll20 sends
+  // sheet roll-template messages through chat:message with inline-roll totals, so
+  // we can react to the existing public Initiative roll without replacing its
+  // &{tracker} behavior. This also catches a reroll that happens to equal the prior
+  // initiative number, where a turnorder-diff watcher would be unreliable.
+  function onSuperSpeedInitiativeChat(msg) {
+    if (!msg || msg.type === "api" || msg.rolltemplate !== "default") return;
+    const content = String(msg.content || "");
+    const match = /\{\{name=([^{}]*?)\s+rolls\s+Initiative\s*\}\}/i.exec(content);
+    if (!match) return;
+
+    const charName = String(match[1] || "").trim();
+    const inline = msg.inlinerolls || [];
+    const normalTotal = Number(inline[0] && inline[0].results && inline[0].results.total);
+    if (!charName || !isFinite(normalTotal)) return;
+
+    // &{tracker} has already created/updated the real token-linked entry by the
+    // time the roll-template message reaches the API. Match that entry by both
+    // represented character name and initiative total. If several tokens represent
+    // the same character, the matching tracker PR disambiguates the usual case.
+    const to = readTurnorder();
+    const candidates = [];
+    to.forEach(entry => {
+      if (String(entry.id) === "-1") return;
+      const tok = getObj("graphic", String(entry.id));
+      const charObj = getCharFromToken(tok);
+      if (!tok || !charObj || String(charObj.get("name") || "") !== charName) return;
+      candidates.push({ entry: entry, tok: tok, charObj: charObj });
+    });
+    if (!candidates.length) return;
+    const picked = candidates.find(c => trackerPrEqual(c.entry.pr, normalTotal)) || candidates[0];
+    const charObj = picked.charObj;
+    const tok = picked.tok;
+    const charId = charObj.id;
+
+    // Every ordinary initiative roll for this character replaces the previous
+    // engine-created Super Speed markers. If Super Speed is unchecked this round,
+    // this cleanup is all we do and the normal initiative path remains untouched.
+    const prior = state.MP_Engine.superSpeedTracker[charId];
+    if (prior) {
+      const fresh = removeRecordedSuperSpeedTurns(charId, readTurnorder());
+      Campaign().set("turnorder", JSON.stringify(fresh));
+    }
+
+    const armedRaw = String(getAttr(charId, "super_speed_initiative") || "").toLowerCase();
+    const armed = armedRaw === "1" || armedRaw === "on" || armedRaw === "true" || armedRaw === "yes";
+    if (!armed) return;
+
+    // One-shot declaration: the saved extra-turn count remains, but the checkbox
+    // clears immediately after this initiative roll so it must be declared again
+    // next round as required by the Super Speed rules.
+    setAttr(charId, "super_speed_initiative", "0");
+    const extraTurns = Math.max(0, Math.min(20, Math.floor(getAttrNum(charId, "super_speed_turns", 0))));
+    if (extraTurns < 1) {
+      return ch("MP", `/w gm <b>MP Super Speed:</b> ${esc(charName)} checked Super Speed but has no extra turns entered.`);
+    }
+
+    rollSuperSpeedExtras(charObj, tok, { pr: normalTotal }, extraTurns);
   }
 
   function onTrackerPageChange(obj, prev) {
@@ -17570,7 +17752,8 @@ function cmdStance(msg, args) {
       }
     }
   });
-  log("MP ENGINE v" + MP_VERSION + " CHAT HANDLER REGISTERED");
+  on("chat:message", onSuperSpeedInitiativeChat);
+  log("MP ENGINE v" + MP_VERSION + " CHAT HANDLERS REGISTERED");
   on("change:campaign:initiativepage", onTrackerPageChange);
   on("change:campaign:turnorder", onTurnorderChange);
   on("change:attribute", onAbilityAttributeChange);
