@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.152.0 - 2026-08-26
+/* Mighty Protectors Roll20 API Engine v2.153.0 - 2026-08-26
+ * v2.153.0: SUPER SPEED CHAT CLARITY. After the existing normal Initiative roll,
+ *   extra Super Speed initiative rolls remain public in chat, then a summary card
+ *   shows the individual roll sequence and the cumulative initiative phases (for
+ *   example rolls 5 + 6 + 2 => phases 5 / 11 / 13). Hidden AG/100 tracker
+ *   tie-break fractions are excluded from the displayed RAW initiative phases.
  * v2.152.0: SUPER SPEED UI FOLLOW-UP. The Super Speed checkbox is now persistent
  *   between rounds; initiative processing no longer clears the character attribute.
  *   The custom Turn Tracker automation and ordinary Initiative path are unchanged.
@@ -1559,7 +1564,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.152.0";
+var MP_VERSION = "2.153.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -17536,7 +17541,7 @@ function cmdStance(msg, args) {
 
     const rollFields = [];
     for (let i = 0; i < extraTurns; i++) {
-      rollFields.push(`{{Extra Roll ${i + 1}=[[${initExpr} + (${initMod})]]}}`);
+      rollFields.push(`{{Roll ${i + 2}=[[${initExpr} + (${initMod})]]}}`);
     }
 
     // Visible/public on purpose: these replace the extra initiative rolls the
@@ -17555,11 +17560,13 @@ function cmdStance(msg, args) {
         // extra full initiative roll, then add the same tie breaker back to each
         // custom tracker entry.
         let cumulative = Math.round((trackerBase - tie) * 1000000) / 1000000;
+        const rawRolls = [cumulative];
         const phases = [cumulative];
         const customPrs = [];
         for (let i = 0; i < extraTurns; i++) {
           const total = Number(inline[i] && inline[i].results && inline[i].results.total);
           if (!isFinite(total)) throw new Error(`invalid extra initiative roll ${i + 1}`);
+          rawRolls.push(total);
           cumulative += total;
           cumulative = Math.round(cumulative * 1000000) / 1000000;
           phases.push(cumulative);
@@ -17584,7 +17591,9 @@ function cmdStance(msg, args) {
         };
         Campaign().set("turnorder", JSON.stringify(to));
 
-        sendChat("character|" + charId, `&{template:default} {{name=${charName} Super Speed Initiatives}} {{Initiatives=${phases.map(formatTrackerPr).join(" / ")}}} {{Extra Turns=${extraTurns}}}`);
+        const rollText = rawRolls.map(formatTrackerPr).join(" + ");
+        const phaseText = phases.map(formatTrackerPr).join(" → ");
+        sendChat("character|" + charId, `&{template:default} {{name=${charName} Super Speed Initiative}} {{Rolls=${rollText}}} {{Initiatives=${phaseText}}} {{Extra Turns=${extraTurns}}}`);
       } catch (err) {
         log("MP ENGINE v" + MP_VERSION + " SUPER SPEED ERROR: " + (err && err.stack ? err.stack : err));
         ch("MP", `/w gm <b>MP Super Speed error:</b> ${esc(err && err.message ? err.message : err)}`);
