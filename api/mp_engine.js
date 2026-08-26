@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.148.0 - 2026-08-25
+/* Mighty Protectors Roll20 API Engine v2.148.1 - 2026-08-25
+ * v2.148.1: STARTUP / CHAT HARDENING. Register add:attribute only after
+ *   Roll20 ready so existing campaign attributes do not replay through the add
+ *   handler at startup. Wrap chat dispatch so attack/command exceptions are
+ *   logged and whispered to the GM instead of failing silently. Startup logs
+ *   now distinguish chat registration and ready initialization.
  * v2.148.0: PARTY REST / POWER RECOVERY. New GM-only !mp rest N unit
  *   command advances the shared campaign clock once while all selected character
  *   tokens rest simultaneously. Each selected character restores 1 Power per
@@ -1541,7 +1546,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.148.0";
+var MP_VERSION = "2.148.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -17552,25 +17557,29 @@ function cmdStance(msg, args) {
   // -------------------------
   // INIT
   // -------------------------
-  on("chat:message", onChat);
+  on("chat:message", function(msg) {
+    try {
+      return onChat(msg);
+    } catch (err) {
+      const detail = (err && err.stack) ? err.stack : String(err);
+      log("MP ENGINE v" + MP_VERSION + " CHAT ERROR: " + detail);
+      try {
+        ch("MP", `/w gm <b>MP Engine error:</b> ${esc(err && err.message ? err.message : err)}<br/><span style="font-size:10px;">Check the Mod (API) Output Console for details.</span>`);
+      } catch (reportErr) {
+        log("MP ENGINE v" + MP_VERSION + " ERROR REPORT FAILED: " + reportErr);
+      }
+    }
+  });
+  log("MP ENGINE v" + MP_VERSION + " CHAT HANDLER REGISTERED");
   on("change:campaign:initiativepage", onTrackerPageChange);
   on("change:campaign:turnorder", onTurnorderChange);
   on("change:attribute", onAbilityAttributeChange);
-  on("add:attribute", function(attr) {
-    const info = parseAbilityAttribute(attr);
-    if (info && info.field === "state" && attr.get("current") === "Active") {
-      setTimeout(function() {
-        if (!state.MP_Engine.timedAbilities[abilityTimerKey(info.charId, info.rowId)]) {
-          armTimedAbility(info.charId, info.rowId, { consumeCharge: false, silent: true });
-        }
-      }, 100);
-    }
-  });
   on("destroy:attribute", onAbilityAttributeDestroy);
 
   // On ready: migrate any wall-clock siphon expiries (pre-v2.84.0) to game
   // time, run one game-time sweep, and resync the tracker Round entry.
   on("ready", function() {
+    log("MP ENGINE v" + MP_VERSION + " READY INIT START");
     const gc = state.MP_Engine.gameClock;
     Object.keys(state.MP_Engine.siphonPools).forEach(k => {
       const rec = state.MP_Engine.siphonPools[k];
@@ -17590,9 +17599,23 @@ function cmdStance(msg, args) {
       if (!gc.topId) gc.topId = top;
       if (!gc.roundAnchor) gc.roundAnchor = top;
     }
-  });
 
-  ch("MP", `/w gm <b>MP Engine v${MP_VERSION}:</b> Loaded. Type <code>!mp help</code> for commands.`);
+    // Roll20 replays pre-existing objects as add events if add handlers are
+    // registered before ready. Register this only after initial sheet sync.
+    on("add:attribute", function(attr) {
+      const info = parseAbilityAttribute(attr);
+      if (info && info.field === "state" && attr.get("current") === "Active") {
+        setTimeout(function() {
+          if (!state.MP_Engine.timedAbilities[abilityTimerKey(info.charId, info.rowId)]) {
+            armTimedAbility(info.charId, info.rowId, { consumeCharge: false, silent: true });
+          }
+        }, 100);
+      }
+    });
+
+    log("MP ENGINE v" + MP_VERSION + " READY INIT COMPLETE");
+    ch("MP", `/w gm <b>MP Engine v${MP_VERSION}:</b> Loaded. Type <code>!mp help</code> for commands.`);
+  });
 
   return { CFG, CRIT_TYPES, FUMBLE_TYPES, CONDITION_MARKERS, rollExpr, visionLossInfo, visionAtkPenalty, rollAcquisition, observationLevel, getCharacterSenses, senseReach, getWeaknessFlags, parseIntervalSec, hasDiscomfort, parseProfileValue, profileAdjustedRange, perceptionRangeModifier, calculateRangeWithProfile };
 })();
