@@ -1,11 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.151.0 - 2026-08-26
+/* Mighty Protectors Roll20 API Engine v2.152.0 - 2026-08-26
+ * v2.152.0: SUPER SPEED UI FOLLOW-UP. The Super Speed checkbox is now persistent
+ *   between rounds; initiative processing no longer clears the character attribute.
+ *   The custom Turn Tracker automation and ordinary Initiative path are unchanged.
  * v2.151.0: SUPER SPEED INITIATIVE via custom Turn Tracker items. The existing
  *   sheet Initiative roll and &{tracker} path remain untouched. The engine watches
  *   the normal public Initiative roll-template message; an armed character's
  *   Super Speed checkbox causes the engine to roll only the configured extra
  *   initiatives, display those rolls in chat, add each cumulative result as an
- *   id:-1 custom tracker item using the character's name, then clear the one-shot
- *   checkbox. No PR is spent or tracked. Prior engine-created Super Speed custom
+ *   id:-1 custom tracker item using the character's name. No PR is spent or tracked.
+ *   Prior engine-created Super Speed custom
  *   items are removed on that character's next normal initiative roll. Custom
  *   tracker items are ignored by the round-wrap anchor so extra turns cannot be
  *   mistaken for a new combat round.
@@ -1556,7 +1559,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.151.0";
+var MP_VERSION = "2.152.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -17637,10 +17640,9 @@ function cmdStance(msg, args) {
     const armed = armedRaw === "1" || armedRaw === "on" || armedRaw === "true" || armedRaw === "yes";
     if (!armed) return;
 
-    // One-shot declaration: the saved extra-turn count remains, but the checkbox
-    // clears immediately after this initiative roll so it must be declared again
-    // next round as required by the Super Speed rules.
-    setAttr(charId, "super_speed_initiative", "0");
+    // The checkbox is a persistent character preference. Players can leave it on
+    // for characters who normally use Super Speed and uncheck it when they choose
+    // not to activate the ability for a round.
     const extraTurns = Math.max(0, Math.min(20, Math.floor(getAttrNum(charId, "super_speed_turns", 0))));
     if (extraTurns < 1) {
       return ch("MP", `/w gm <b>MP Super Speed:</b> ${esc(charName)} checked Super Speed but has no extra turns entered.`);

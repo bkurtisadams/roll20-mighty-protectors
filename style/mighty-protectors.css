@@ -1,4 +1,15 @@
-/* Mighty Protectors Character Sheet CSS v44.74 - Compact dashboard light-mode palette + Notes field fix */
+/* Mighty Protectors Character Sheet CSS v44.86 - Super Speed input spinner cleanup */
+
+/* Super Speed extra-turn count: compact field without browser spinner arrows. */
+input[name="attr_super_speed_turns"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[name="attr_super_speed_turns"]::-webkit-outer-spin-button,
+input[name="attr_super_speed_turns"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 /* ========================================
    SHEET TABS - Vehicle toggle
