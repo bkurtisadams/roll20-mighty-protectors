@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.156.1 - 2026-08-27
+/* Mighty Protectors Roll20 API Engine v2.157.0 - 2026-08-27
+ * v2.157.0: SELECTED-TOKEN INITIATIVE. New player-accessible !mp initselected
+ *   command rolls initiative publicly for every selected represented token,
+ *   replaces those selected tokens' existing real Turn Tracker entries while
+ *   preserving unrelated entries, and then reuses the existing Super Speed
+ *   extra-turn machinery. Ordinary turns remain token-linked; AG/100 remains
+ *   the hidden tracker tie breaker exactly as on the sheet Initiative button.
+ *   API-generated bulk initiative rolls are ignored by the normal sheet-roll
+ *   Super Speed watcher so extras cannot be created twice.
  * v2.156.1: ATTACK NOTES HELP CARD READABILITY. Replace Roll20-styled <code>
  *   elements with explicit dark high-contrast span chips so Notes codes and aliases
  *   remain legible in chat. No attack parsing or resolution behavior changes.
@@ -1584,7 +1592,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.156.1";
+var MP_VERSION = "2.157.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -15739,6 +15747,7 @@ function cmdStance(msg, args) {
         return cmdShowBars(msg, args);
       case "info": return cmdInfo(msg, args);
       case "attackcodes": return cmdAttackCodes(msg);
+      case "initselected": return cmdInitSelected(msg);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "hthmass":
       case "might": return cmdHTHMass(msg, args);
@@ -15872,6 +15881,7 @@ function cmdStance(msg, args) {
           <code>!mp hthmass [--push 1]</code> - Combined HTH + Mass roll for every selected token; push costs 2 PR for +2<br/>
           <code>!mp atkinfo --row ROWID</code> - Show a selected character's attack-row details<br/>
           <code>!mp attackcodes</code> - Show the Attack Notes code reference<br/>
+          <code>!mp initselected</code> - Roll initiative for all selected represented tokens and update their Turn Tracker entries<br/>
           <b>Powers and Senses:</b><br/>
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>)<br/>
           <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Darkness (<b>GM</b>)<br/>
@@ -17780,6 +17790,170 @@ function cmdStance(msg, args) {
     return out;
   }
 
+  // Merge bulk initiative results into the freshest tracker without disturbing
+  // unrelated combatants or moving an existing selected token unnecessarily.
+  // Only the selected token ids are replaced: another token that happens to share
+  // the same represented character sheet remains an independent tracker combatant.
+  // Selected tokens already present keep their tracker position, while newly
+  // selected tokens are appended. Engine-recorded Super Speed custom entries are
+  // cleaned separately before this helper is called.
+  function mergeSelectedInitiativeEntries(turnorder, results) {
+    const byTokenId = {};
+    results.forEach(r => { byTokenId[String(r.tok.id)] = r; });
+    const used = {};
+    const out = [];
+
+    (turnorder || []).forEach(entry => {
+      if (String(entry.id) === "-1") {
+        out.push(entry);
+        return;
+      }
+      const tokenId = String(entry.id);
+      const replacement = byTokenId[tokenId];
+      if (!replacement) {
+        out.push(entry);
+        return;
+      }
+      if (used[tokenId]) {
+        // Remove only a duplicate tracker row for the same selected token.
+        return;
+      }
+      const next = Object.assign({}, entry, { pr: formatTrackerPr(replacement.total) });
+      out.push(next);
+      used[tokenId] = true;
+    });
+
+    results.forEach(r => {
+      const tokenId = String(r.tok.id);
+      if (used[tokenId]) return;
+      const entry = { id: tokenId, pr: formatTrackerPr(r.total) };
+      const pageId = r.tok.get("_pageid") || r.tok.get("pageid") || "";
+      if (pageId) entry._pageid = pageId;
+      out.push(entry);
+      used[tokenId] = true;
+    });
+    return out;
+  }
+
+  function cmdInitSelected(msg) {
+    const rawSelected = (msg.selected || []).filter(s => s && s._type === "graphic");
+    if (!rawSelected.length) {
+      return ch("MP", wt(msg) + `<b>MP Initiative:</b> Select one or more represented tokens first.`);
+    }
+
+    const jobs = [];
+    const skipped = [];
+    const seenTokenIds = {};
+
+    rawSelected.forEach((sel, index) => {
+      const tokenId = String(sel._id || "");
+      if (!tokenId || seenTokenIds[tokenId]) return;
+      seenTokenIds[tokenId] = true;
+      const tok = getObj("graphic", tokenId);
+      if (!tok) {
+        skipped.push(`token ${esc(tokenId)} (not found)`);
+        return;
+      }
+      const charObj = getCharFromToken(tok);
+      if (!charObj) {
+        skipped.push(`${esc(tok.get("name") || "Token")} (not linked to a character)`);
+        return;
+      }
+
+      const charId = charObj.id;
+      const charName = charObj.get("name") || tok.get("name") || "Character";
+      const initExpr = String(getAttr(charId, "initiative_score") || "").trim();
+      const initMod = String(getAttr(charId, "initiative_mod") || "0").trim() || "0";
+      const agRaw = String(getAttr(charId, "agility_score") || "0").trim() || "0";
+      if (!initExpr) {
+        skipped.push(`${esc(charName)} (blank Initiative)`);
+        return;
+      }
+      jobs.push({ index, tok, charObj, charId, charName, initExpr, initMod, agRaw });
+    });
+
+    if (!jobs.length) {
+      const detail = skipped.length ? `<br/><span style="color:#c8c8d0;">Skipped: ${skipped.join("; ")}</span>` : "";
+      return ch("MP", wt(msg) + `<b>MP Initiative:</b> No selected token had a usable represented character and Initiative expression.${detail}`);
+    }
+
+    const results = [];
+    let pending = jobs.length;
+
+    const finish = () => {
+      if (pending > 0) return;
+      if (!results.length) {
+        const detail = skipped.length ? `<br/><span style="color:#c8c8d0;">Skipped: ${skipped.join("; ")}</span>` : "";
+        return ch("MP", wt(msg) + `<b>MP Initiative:</b> No initiative rolls completed successfully.${detail}`);
+      }
+
+      results.sort((a, b) => a.index - b.index);
+
+      // Work against the freshest tracker in case another combatant was edited
+      // while Roll20 was resolving the inline rolls. Remove only this engine's
+      // recorded Super Speed custom turns for the affected characters first.
+      let to = readTurnorder();
+      const cleanedCharIds = {};
+      results.forEach(r => {
+        if (cleanedCharIds[r.charId]) return;
+        to = removeRecordedSuperSpeedTurns(r.charId, to);
+        cleanedCharIds[r.charId] = true;
+      });
+      to = mergeSelectedInitiativeEntries(to, results);
+      Campaign().set("turnorder", JSON.stringify(to));
+
+      // Reuse the existing Super Speed implementation. If multiple selected tokens
+      // represent the same character, only the first token receives that character's
+      // custom extra-turn train because the legacy tracker record is character-keyed.
+      const superSpeedDone = {};
+      results.forEach(r => {
+        if (superSpeedDone[r.charId]) return;
+        superSpeedDone[r.charId] = true;
+        const armedRaw = String(getAttr(r.charId, "super_speed_initiative") || "").toLowerCase();
+        const armed = armedRaw === "1" || armedRaw === "on" || armedRaw === "true" || armedRaw === "yes";
+        if (!armed) return;
+        const extraTurns = Math.max(0, Math.min(20, Math.floor(getAttrNum(r.charId, "super_speed_turns", 0))));
+        if (extraTurns < 1) {
+          ch("MP", `/w gm <b>MP Super Speed:</b> ${esc(r.charName)} checked Super Speed but has no extra turns entered.`);
+          return;
+        }
+        rollSuperSpeedExtras(r.charObj, r.tok, { pr: r.total }, extraTurns);
+      });
+
+      let summary = `<b>MP Initiative:</b> ${results.length} selected token${results.length === 1 ? "" : "s"} added/updated in the Turn Tracker.`;
+      if (skipped.length) summary += `<br/><span style="color:#c8c8d0;">Skipped: ${skipped.join("; ")}</span>`;
+      return ch("MP", wt(msg) + summary);
+    };
+
+    jobs.forEach(job => {
+      // Deliberately omit &{tracker}: an API-generated chat message has no selected
+      // token context. We evaluate the exact same expression as the sheet button,
+      // then write the real token id/value into Campaign.turnorder ourselves.
+      const expr = `(${job.initExpr}) + (${job.initMod}) + ((${job.agRaw}) / 100)`;
+      sendChat("character|" + job.charId,
+        `&{template:default} {{name=${job.charName} rolls Initiative}} {{Roll=[[${expr}]]}}`,
+        function(ops) {
+          try {
+            const out = ops && ops[0];
+            const inline = (out && out.inlinerolls) || [];
+            const total = Number(inline[0] && inline[0].results && inline[0].results.total);
+            if (!isFinite(total)) {
+              skipped.push(`${esc(job.charName)} (invalid initiative roll)`);
+            } else {
+              results.push(Object.assign({}, job, { total: total }));
+            }
+          } catch (err) {
+            skipped.push(`${esc(job.charName)} (initiative error)`);
+            log("MP ENGINE v" + MP_VERSION + " INITSELECTED ERROR: " + (err && err.stack ? err.stack : err));
+          } finally {
+            pending--;
+            finish();
+          }
+        }
+      );
+    });
+  }
+
   function rollSuperSpeedExtras(charObj, tok, baseEntry, extraTurns) {
     const charId = charObj.id;
     const charName = charObj.get("name") || "Character";
@@ -17862,6 +18036,10 @@ function cmdStance(msg, args) {
   // initiative number, where a turnorder-diff watcher would be unreliable.
   function onSuperSpeedInitiativeChat(msg) {
     if (!msg || msg.type === "api" || msg.rolltemplate !== "default") return;
+    // !mp initselected posts public roll-template messages through sendChat. Those
+    // messages have playerid=API and are handled explicitly by cmdInitSelected;
+    // ignoring them here prevents duplicate Super Speed extra-turn trains.
+    if (String(msg.playerid || "").toUpperCase() === "API") return;
     const content = String(msg.content || "");
     const match = /\{\{name=([^{}]*?)\s+rolls\s+Initiative\s*\}\}/i.exec(content);
     if (!match) return;
