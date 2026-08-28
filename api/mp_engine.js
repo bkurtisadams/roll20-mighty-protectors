@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.153.0 - 2026-08-26
+/* Mighty Protectors Roll20 API Engine v2.154.0 - 2026-08-27
+ * v2.154.0: ATTACK NOTES CONFIGURATION FOLLOW-UP. The attack resolver remains
+ *   attribute-driven: sheet v44.87 Notes tags populate the same repeating attack
+ *   fields as the cog panel, so !mp atk needs no parallel Notes-only rules path.
+ *   !mp atkinfo now also reads those populated fields instead of reparsing the old
+ *   sav:/snr: Notes dialect, keeping readable aliases and new advanced tags in sync.
  * v2.153.0: SUPER SPEED CHAT CLARITY. After the existing normal Initiative roll,
  *   extra Super Speed initiative rolls remain public in chat, then a summary card
  *   shows the individual roll sequence and the cumulative initiative phases (for
@@ -13289,27 +13294,28 @@ function cmdAttackInfo(msg, args) {
     return ch("MP", `/w gm <b>Debug:</b> rowId="${esc(rowId)}" but attack_name is empty. Check that attack_rowid is being set by sheet worker.`);
   }
 
-  // Parse notes for special attacks
-  const notesLower = notes.toLowerCase();
-  let specialType = "std";
-  let saveBC = "", saveMod = 0, recMod = 0;
-  let snareType = "", bp = 0, maxBP = 0;
-
-  const savMatch = notesLower.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
-  if (savMatch) {
-    specialType = "sav";
-    saveBC = savMatch[1].toUpperCase();
-    saveMod = parseInt(savMatch[2]) || 0;
-    recMod = parseInt(savMatch[3]) || 0;
-  }
-
-  const snrMatch = notesLower.match(/snr:(grp|ice):(\d+)\/?(\d+)?/);
-  if (snrMatch) {
-    specialType = "snr";
-    snareType = snrMatch[1];
-    bp = parseInt(snrMatch[2]) || 0;
-    maxBP = parseInt(snrMatch[3]) || bp;
-  }
+  // Special attack metadata comes from the same repeating fields used by !mp atk.
+  // Sheet v44.87 Notes tags are simply an alternate editor for these attributes;
+  // atkinfo deliberately does not maintain a second Notes parser.
+  const rowSpecialType = (getAtk("attack_type") || "std").toLowerCase();
+  const isSaveInfo = getAtk("attack_is_save") === "1" || rowSpecialType === "sav";
+  const isSnareInfo = getAtk("attack_is_snare") === "1" || rowSpecialType === "snr";
+  const isGrappleInfo = getAtk("attack_is_grapple") === "1";
+  const isSiphonInfo = getAtk("attack_is_siphon") === "1";
+  const isDeathTouchInfo = getAtk("attack_is_deathtouch") === "1";
+  const specialType = isSnareInfo ? "snr" : (isSaveInfo ? "sav" : "std");
+  const saveBC = getAtk("attack_save_bc") || "";
+  const saveMod = num(getAtk("attack_save_mod"), 0);
+  const recMod = num(getAtk("attack_save_rec") || getAtk("attack_recovery"), 0);
+  const snareType = getAtk("attack_snare_type") || "";
+  const bp = getAtk("attack_bp") || "";
+  const maxBP = getAtk("attack_max_bp") || bp;
+  const autofire = getAtk("attack_autofire") || "";
+  const area = getAtk("attack_area") || "";
+  const durNum = getAtk("attack_duration_num") || "";
+  const durUnit = getAtk("attack_duration_unit") || "";
+  const isGearInfo = getAtk("attack_gear") === "1";
+  const hasImmunityInfo = getAtk("attack_immunity") === "1";
 
   // Build output
   let out = `<div style="background:#2b2b3d; border:2px solid #8be9fd; border-radius:6px; font-family:Arial,sans-serif; font-size:13px;">`;
@@ -13324,6 +13330,11 @@ function cmdAttackInfo(msg, args) {
   if (prCost) out += `<div><span style="color:#aaa;">PR Cost:</span> ${esc(prCost)}</div>`;
   if (charges) out += `<div><span style="color:#aaa;">Charges:</span> ${esc(charges)}</div>`;
   if (apRaw) out += `<div><span style="color:#bd93f9; font-weight:bold;">Armor Piercing:</span> ${apRaw === "ALL" ? "Ignores ALL protection" : "Ignores " + apRaw + " protection"}</div>`;
+  if (autofire) out += `<div><span style="color:#aaa;">Autofire:</span> ${esc(autofire)}</div>`;
+  if (area) out += `<div><span style="color:#aaa;">Area:</span> ${esc(area)}" diameter</div>`;
+  if (durUnit) out += `<div><span style="color:#aaa;">Duration:</span> ${esc(durUnit === "perm" ? "Permanent" : ((durNum || "1") + " " + durUnit + (String(durNum || "1") === "1" ? "" : "s")))}</div>`;
+  if (isGearInfo) out += `<div><span style="color:#aaa;">Gear:</span> Yes</div>`;
+  if (hasImmunityInfo) out += `<div><span style="color:#aaa;">Self-Immunity:</span> Yes</div>`;
 
   if (specialType === "sav") {
     out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;">`;
@@ -13336,7 +13347,8 @@ function cmdAttackInfo(msg, args) {
     out += `<div style="color:#666; font-size:11px;">• Recovery roll each between-rounds phase</div>`;
     out += `</div>`;
   } else if (specialType === "snr") {
-    const snrLabel = snareType === "ice" ? "ICE SNARE" : "GRAPNEL SNARE";
+    const snTypeLower = String(snareType || "Snare").toLowerCase();
+    const snrLabel = (snTypeLower === "ice" ? "ICE" : (snTypeLower === "grapnel" ? "GRAPNEL" : String(snareType || "SNARE").toUpperCase())) + " SNARE";
     out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;">`;
     out += `<div style="color:#f4d03f; font-weight:bold;">🔗 ${snrLabel}</div>`;
     out += `<div><span style="color:#aaa;">Break Point:</span> <span style="color:#e94560; font-weight:bold;">${bp}</span></div>`;
@@ -13346,7 +13358,7 @@ function cmdAttackInfo(msg, args) {
     out += `<div style="color:#666; font-size:11px;">• Push escape: +2 to HTH</div>`;
     out += `<div style="color:#666; font-size:11px;">• Next hit: +2 BP (max ${maxBP})</div>`;
 
-    if (snareType === "ice") {
+    if (snTypeLower === "ice") {
       out += `<div style="border-top:1px solid #444; margin-top:4px; padding-top:4px; color:#8be9fd;">`;
       out += `<div style="font-size:11px;">• 3 Entropy dmg/round while snared</div>`;
       out += `<div style="font-size:11px;">• BP melts -1/round (1 PR to hold)</div>`;
@@ -13373,6 +13385,20 @@ function cmdAttackInfo(msg, args) {
       out += `<div style="color:#666; font-size:11px;">• KB collisions deal damage normally (4.8.5.4)</div>`;
       out += `<div style="color:#666; font-size:11px;">• May Counterblast physical projectiles (GM adjudicated)</div>`;
       out += `</div>`;
+    }
+    if (isGrappleInfo) {
+      const gripType = getAtk("attack_grip_type") || "hth";
+      const gripDice = getAtk("attack_grip_dice") || "";
+      const gripText = (gripType === "power" && gripDice) ? gripDice : (getAttr(charId, "hth_damage") || "HTH");
+      out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;"><b>GRAPPLE ATTACK</b> · ${getAtk("attack_grapple_remote") === "1" ? "Remote · " : ""}Grip ${esc(gripText)}</div>`;
+    }
+    if (isSiphonInfo) {
+      const siphonDrainInfo = getAtk("attack_siphon_drain") || "hits";
+      const siphonModeInfo = getAtk("attack_siphon_mode") || "normal";
+      out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;"><b>SIPHON ATTACK</b> · Drains ${esc(siphonDrainInfo)} · ${esc(siphonModeInfo)}</div>`;
+    }
+    if (isDeathTouchInfo) {
+      out += `<div style="border-top:1px solid #444; margin-top:6px; padding-top:6px;"><b>DEATH TOUCH</b></div>`;
     }
     out += `</div>`;
   }

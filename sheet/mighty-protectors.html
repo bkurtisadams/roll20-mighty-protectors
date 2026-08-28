@@ -1,4 +1,13 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.86 - Super Speed initiative controls
+<!-- Mighty Protectors Roll20 Character Sheet v44.87 - Attack Notes configuration codes
+        v44.87: Expand Attack Notes shorthand into an alternate advanced-attack editor
+          without changing Compact mode. A single parseAttackNotes() worker now handles
+          both live note edits and sheet-open initialization, preserving existing sav:/snr:/
+          ap/flash/dazzle/repulsion behavior while adding readable aliases and tags for
+          Grapple/remote grip, Autofire, Area, Duration, Gear, Immunity, Death Touch,
+          Siphon, and no-damage attacks. Tags populate the same repeating attack fields
+          used by the cog panel; the normal !mp atk row resolver remains authoritative.
+          AP matching is word-bounded so the new word "grapple" cannot accidentally
+          be interpreted as bare "ap".
         v44.86: Keep the Super Speed checkbox persistent, move the Super Speed
           controls after the initiative value/reset controls, and suppress spinner
           arrows on the extra-turns field. MP Engine v2.152.0 no longer clears the
@@ -1028,7 +1037,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </td>
           <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
-               <input type="text" name="attr_attack_notes" title="Notes and modifier codes" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" />
+               <input type="text" name="attr_attack_notes" title="Notes / attack tags: save:BC:mod:rec; snare:type:bp/max; grapple[:remote] + grip:dice; af:N; area:N; dur:N:unit; gear; immune; deathtouch; siphon:type; ap[:N]" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" />
               
               <span class="sheet-cog-icon" title="Settings">y</span>
             </div>
@@ -1349,7 +1358,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Help text with Info button -->
         <div class="sheet-panel-help" style="display:flex; align-items:center; gap:8px;">
           <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{title=Attack #@{attack_num}: @{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit_num}}} {{damage=@{attack_damage}}} {{dtype=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{cost=@{attack_cost}}} {{charges=@{attack_charges}}} {{area=@{attack_area}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_save_rec}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{snaretype=@{attack_snare_type}}} {{duration=@{attack_duration_num} @{attack_duration_unit}}} {{notes=@{attack_notes}}}" title="Show attack details" style="flex-shrink:0;">Info</button>
-          <span>Notes shorthand: <code>sav:BC:mod:rec</code> | <code>snr:type:bp/max</code> | <code>dtype:none</code></span>
+          <span>Notes tags: <code>save:BC:mod:rec</code> | <code>snare:type:bp/max</code> | <code>grapple[:remote] grip:dice</code> | <code>af:N</code> | <code>area:N</code> | <code>dur:N:unit</code> | <code>gear</code> | <code>immune</code> | <code>deathtouch</code> | <code>siphon:type</code> | <code>ap[:N]</code></span>
         </div>
       </div>
 
@@ -4967,68 +4976,175 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     });
   }
 
+  // Attack Notes are an alternate editor for advanced attack metadata. Tags are
+  // match-only: recognized tags populate the same repeating attributes as the cog
+  // panel, while ordinary prose and manually configured fields are left alone.
+  // Removing a tag does not erase a field that was already configured.
+  function parseAttackNotes(notes, rowPrefix, updates) {
+    notes = String(notes || "").toLowerCase();
+    updates = updates || {};
+
+    function put(suffix, value) {
+      updates[rowPrefix + "_" + suffix] = String(value);
+    }
+
+    // Save attacks. Legacy sav: remains valid; save: is the readable alias.
+    // Populate both the visible recovery field and the legacy hidden fallback.
+    var savMatch = notes.match(/\b(?:sav|save):([a-z]+):([+-]?\d+)(?::([+-]?\d+))?/i);
+    if (savMatch) {
+      put("attack_type", "sav");
+      put("attack_is_save", "1");
+      put("attack_save_bc", savMatch[1].toUpperCase());
+      put("attack_save_mod", savMatch[2]);
+      if (savMatch[3]) {
+        put("attack_save_rec", savMatch[3]);
+        put("attack_recovery", savMatch[3]);
+      }
+    }
+
+    // Snare attacks. grp is retained as the old Grapnel abbreviation; it never
+    // means Grapple. snare: is an alias for the original snr: form.
+    var snrMatch = notes.match(/\b(?:snr|snare):(grp|grapnel|ice|web|energy|other):([^\/\s,;]+)(?:\/(\d+))?/i);
+    if (snrMatch) {
+      put("attack_type", "snr");
+      put("attack_is_snare", "1");
+      var snType = snrMatch[1].toLowerCase();
+      if (snType === "grp") snType = "Grapnel";
+      else snType = snType.charAt(0).toUpperCase() + snType.slice(1);
+      put("attack_snare_type", snType);
+      put("attack_bp", snrMatch[2]);
+      put("attack_max_bp", snrMatch[3] || "");
+    }
+
+    // Armor Piercing. Word boundaries matter: "grapple" contains the letters
+    // "ap", and the old unbounded regexp would have interpreted that as AP ALL.
+    var apMatch = notes.match(/\bap(?::(\d+|all))?\b/i);
+    if (apMatch) {
+      put("attack_ap", apMatch[1] ? (apMatch[1].toLowerCase() === "all" ? "ALL" : apMatch[1]) : "ALL");
+    }
+
+    // Flash / Dazzle compatibility tags.
+    var flashMatch = notes.match(/\bflash:([1-3])(?::([+-]?\d+))?/i);
+    if (flashMatch) {
+      put("attack_is_save", "1");
+      put("attack_type", "sav");
+      put("attack_no_damage", "1");
+      put("attack_save_bc", "EN");
+      put("attack_sense_loss", flashMatch[1]);
+      if (flashMatch[2]) put("attack_save_mod", flashMatch[2]);
+    }
+
+    var dazzleMatch = notes.match(/\bdazzle:([+-]?\d+)/i);
+    if (dazzleMatch) {
+      put("attack_save_bc", "EN");
+      put("attack_save_mod", dazzleMatch[1]);
+    }
+
+    // Explicit no-damage effect. dtype:none remains engine-readable and is not
+    // rewritten because it means "no protection type", which is a separate rule.
+    if (/\b(?:no-damage|nodmg)\b/i.test(notes)) {
+      put("attack_no_damage", "1");
+    }
+
+    // Grapple metadata. The attack still travels through the ordinary !mp atk row
+    // command; these tags only configure the existing grapple fields.
+    if (/\bgrapple\b/i.test(notes)) {
+      put("attack_is_grapple", "1");
+    }
+    if (/\bgrapple:remote\b/i.test(notes) || /\bremote-grapple\b/i.test(notes)) {
+      put("attack_is_grapple", "1");
+      put("attack_grapple_remote", "1");
+    }
+    var gripMatch = notes.match(/\bgrip:([^\s,;]+)/i);
+    if (gripMatch) {
+      if (gripMatch[1].toLowerCase() === "hth") {
+        put("attack_grip_type", "hth");
+      } else {
+        put("attack_grip_type", "power");
+        put("attack_grip_dice", gripMatch[1]);
+      }
+    }
+
+    // Common advanced-row options.
+    var afMatch = notes.match(/\b(?:af|autofire):([2-7])\b/i);
+    if (afMatch) put("attack_autofire", afMatch[1]);
+
+    var areaMatch = notes.match(/\barea:(\d+(?:\.\d+)?)\b/i);
+    if (areaMatch) put("attack_area", areaMatch[1]);
+
+    if (/\bgear\b/i.test(notes)) put("attack_gear", "1");
+    if (/\b(?:immune|immunity)\b/i.test(notes)) put("attack_immunity", "1");
+
+    var durPerm = notes.match(/\b(?:dur|duration):(?:perm|permanent)\b/i);
+    var durMatch = notes.match(/\b(?:dur|duration):(\d+(?:\.\d+)?):(rounds?|minutes?|hours?|days?|weeks?|months?|years?|perm|permanent)\b/i);
+    if (durPerm) {
+      put("attack_duration_num", "1");
+      put("attack_duration_unit", "perm");
+    } else if (durMatch) {
+      var durUnit = durMatch[2].toLowerCase();
+      if (durUnit === "permanent") durUnit = "perm";
+      else if (durUnit.charAt(durUnit.length - 1) === "s") durUnit = durUnit.slice(0, -1);
+      put("attack_duration_num", durMatch[1]);
+      put("attack_duration_unit", durUnit);
+    }
+
+    if (/\b(?:death-touch|deathtouch|death:touch)\b/i.test(notes)) {
+      put("attack_is_deathtouch", "1");
+    }
+
+    // Siphon may be as simple as "siphon:hits". Optional component tags expose
+    // the remaining cog-panel settings without inventing a second resolver.
+    if (/\bsiphon\b/i.test(notes)) put("attack_is_siphon", "1");
+
+    var siphonDrain = notes.match(/\bsiphon:(hits|power)\b/i);
+    if (siphonDrain) put("attack_siphon_drain", siphonDrain[1].toLowerCase());
+
+    var siphonAbility = notes.match(/\bsiphon:(?:ability|abilities)(?::(super|tech|mystical|info))?\b/i);
+    if (siphonAbility) {
+      put("attack_siphon_drain", "ability");
+      if (siphonAbility[1]) {
+        var siphonCat = siphonAbility[1].toLowerCase();
+        siphonCat = siphonCat === "super" ? "Super" :
+          (siphonCat === "tech" ? "Tech" :
+          (siphonCat === "mystical" ? "Mystical" : "Info"));
+        put("attack_siphon_cat", siphonCat);
+      }
+    }
+
+    var siphonBC = notes.match(/\bsiphon:(?:bc|attribute):(st|en|ag|in|cl)\b/i);
+    if (siphonBC) {
+      put("attack_siphon_drain", "bc");
+      put("attack_siphon_bc", siphonBC[1].toUpperCase());
+    }
+
+    var siphonMode = notes.match(/\b(?:siphon-mode|siphon:mode):(normal|suppress|mimicry)\b/i);
+    if (siphonMode) put("attack_siphon_mode", siphonMode[1].toLowerCase());
+
+    if (/\b(?:siphon:replenish|siphon-replenish)\b/i.test(notes)) {
+      put("attack_siphon_replenish", "1");
+    }
+
+    var siphonCap = notes.match(/\b(?:siphon-cap|siphon:cap):(\d+(?:\.\d+)?)\b/i);
+    if (siphonCap) put("attack_siphon_cap", siphonCap[1]);
+
+    var siphonOverload = notes.match(/\b(?:siphon-overload|siphon:overload):(lose|damage|explode)\b/i);
+    if (siphonOverload) put("attack_siphon_overload", siphonOverload[1].toLowerCase());
+
+    // Repulsion Blast (p.71): damage causes KB only.
+    if (/\brepulsion\b/i.test(notes) || /\bkb:only\b/i.test(notes)) {
+      put("attack_is_repulsion", "1");
+      put("attack_kb", "1");
+      put("attack_kb_display", "Yes");
+    }
+
+    return updates;
+  }
+
   on("change:repeating_attacks:attack_notes", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_notes", "");
-    
     getAttrs([eventInfo.sourceAttribute], function(v) {
-      var notes = (v[eventInfo.sourceAttribute] || "").toLowerCase();
-      var updates = {};
-      
-      // Only update fields when we find matching patterns in notes
-      // This preserves manual UI entries when notes don't contain parseable patterns
-      
-      var savMatch = notes.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
-      if (savMatch) {
-        updates[rowPrefix + "_attack_type"] = "sav";
-        updates[rowPrefix + "_attack_save_bc"] = savMatch[1].toUpperCase();
-        updates[rowPrefix + "_attack_save_mod"] = savMatch[2];
-        if (savMatch[3]) {
-          updates[rowPrefix + "_attack_recovery"] = savMatch[3];
-        }
-      }
-      
-      var snrMatch = notes.match(/snr:(grp|grapnel|ice|web|energy|other):([^\/\s,]+)\/?(\d+)?/i);
-      if (snrMatch) {
-        updates[rowPrefix + "_attack_is_snare"] = "1";
-        var snType = snrMatch[1].toLowerCase();
-        if (snType === "grp") snType = "Grapnel";
-        else snType = snType.charAt(0).toUpperCase() + snType.slice(1);
-        updates[rowPrefix + "_attack_snare_type"] = snType;
-        updates[rowPrefix + "_attack_bp"] = snrMatch[2];
-        updates[rowPrefix + "_attack_max_bp"] = snrMatch[3] || "";
-      }
-      
-      var apMatch = notes.match(/ap:?(\d+)?/);
-      if (apMatch) {
-        updates[rowPrefix + "_attack_ap"] = apMatch[1] || "ALL";
-      }
-      
-      // flash:LEVELS[:SAVEMOD] - Flash save attack (Light Control B), v44.59
-      var flashMatch = notes.match(/flash:([1-3])(?::([+-]?\d+))?/);
-      if (flashMatch) {
-        updates[rowPrefix + "_attack_is_save"] = "1";
-        updates[rowPrefix + "_attack_no_damage"] = "1";
-        updates[rowPrefix + "_attack_save_bc"] = "EN";
-        updates[rowPrefix + "_attack_sense_loss"] = flashMatch[1];
-        if (flashMatch[2]) updates[rowPrefix + "_attack_save_mod"] = flashMatch[2];
-      }
-      
-      // dazzle:SAVEMOD - Laser dazzle called-shot save (Light Control A), v44.59
-      var dazzleMatch = notes.match(/dazzle:([+-]?\d+)/);
-      if (dazzleMatch) {
-        updates[rowPrefix + "_attack_save_bc"] = "EN";
-        updates[rowPrefix + "_attack_save_mod"] = dazzleMatch[1];
-      }
-      
-      // repulsion / kb:only - Repulsion Blast (p.71): damage causes KB only, v2.104.0
-      if (/\brepulsion\b/.test(notes) || /\bkb:only\b/.test(notes)) {
-        updates[rowPrefix + "_attack_is_repulsion"] = "1";
-        updates[rowPrefix + "_attack_kb"] = "1";
-      }
-      
-      if (Object.keys(updates).length > 0) {
-        setAttrs(updates);
-      }
+      var updates = parseAttackNotes(v[eventInfo.sourceAttribute] || "", rowPrefix, {});
+      if (Object.keys(updates).length > 0) setAttrs(updates);
     });
   });
 
@@ -5043,61 +5159,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         var updates = {};
         ids.forEach(function(id) {
           var prefix = "repeating_attacks_" + id;
-          var notes = (values[prefix + "_attack_notes"] || "").toLowerCase();
-          
-          // Only update fields when we find matching patterns in notes
-          // This preserves manual UI entries when notes don't contain parseable patterns
-          
-          var savMatch = notes.match(/sav:(\w+):([+-]?\d+):?([+-]?\d+)?/);
-          if (savMatch) {
-            updates[prefix + "_attack_type"] = "sav";
-            updates[prefix + "_attack_save_bc"] = savMatch[1].toUpperCase();
-            updates[prefix + "_attack_save_mod"] = savMatch[2];
-            if (savMatch[3]) {
-              updates[prefix + "_attack_recovery"] = savMatch[3];
-            }
-          }
-          
-          var snrMatch = notes.match(/snr:(grp|grapnel|ice|web|energy|other):([^\/\s,]+)\/?(\d+)?/i);
-          if (snrMatch) {
-            updates[prefix + "_attack_is_snare"] = "1";
-            var snType = snrMatch[1].toLowerCase();
-            if (snType === "grp") snType = "Grapnel";
-            else snType = snType.charAt(0).toUpperCase() + snType.slice(1);
-            updates[prefix + "_attack_snare_type"] = snType;
-            updates[prefix + "_attack_bp"] = snrMatch[2];
-            updates[prefix + "_attack_max_bp"] = snrMatch[3] || "";
-          }
-          
-          var apMatch = notes.match(/ap:?(\d+)?/);
-          if (apMatch) {
-            updates[prefix + "_attack_ap"] = apMatch[1] || "ALL";
-          }
-          
-          var flashMatch = notes.match(/flash:([1-3])(?::([+-]?\d+))?/);
-          if (flashMatch) {
-            updates[prefix + "_attack_is_save"] = "1";
-            updates[prefix + "_attack_no_damage"] = "1";
-            updates[prefix + "_attack_save_bc"] = "EN";
-            updates[prefix + "_attack_sense_loss"] = flashMatch[1];
-            if (flashMatch[2]) updates[prefix + "_attack_save_mod"] = flashMatch[2];
-          }
-          
-          var dazzleMatch = notes.match(/dazzle:([+-]?\d+)/);
-          if (dazzleMatch) {
-            updates[prefix + "_attack_save_bc"] = "EN";
-            updates[prefix + "_attack_save_mod"] = dazzleMatch[1];
-          }
-          
-          // repulsion / kb:only - Repulsion Blast (p.71), v2.104.0
-          if (/\brepulsion\b/.test(notes) || /\bkb:only\b/.test(notes)) {
-            updates[prefix + "_attack_is_repulsion"] = "1";
-            updates[prefix + "_attack_kb"] = "1";
-          }
+          parseAttackNotes(values[prefix + "_attack_notes"] || "", prefix, updates);
         });
-        if (Object.keys(updates).length > 0) {
-          setAttrs(updates);
-        }
+        if (Object.keys(updates).length > 0) setAttrs(updates);
       });
     });
   }
