@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.156.0 - 2026-08-27
+/* Mighty Protectors Roll20 API Engine v2.156.1 - 2026-08-27
+ * v2.156.1: ATTACK NOTES HELP CARD READABILITY. Replace Roll20-styled <code>
+ *   elements with explicit dark high-contrast span chips so Notes codes and aliases
+ *   remain legible in chat. No attack parsing or resolution behavior changes.
  * v2.156.0: ATTACK NOTES HELP CARD. New player-accessible !mp attackcodes command
  *   prints a private chat reference for every supported Attack Notes tag and alias.
  *   Sheet v44.89 adds a ? button beside the Notes header that calls this command.
@@ -1581,7 +1584,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.156.0";
+var MP_VERSION = "2.156.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -13413,44 +13416,47 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   }
 
 function cmdAttackCodes(msg) {
-  const code = (s) => `<code style="color:#8be9fd;">${esc(s)}</code>`;
+  // Avoid HTML <code> here: Roll20 applies its own pale background to <code>,
+  // which can override the card palette and make syntax text hard to read.
+  const code = (value) => `<span style="display:inline-block; background:#141421; color:#f7f7fb; border:1px solid #6d6d82; border-radius:3px; padding:1px 4px; font-family:monospace; font-size:11px; font-weight:bold; white-space:nowrap;">${esc(value)}</span>`;
   const row = (syntax, meaning) =>
-    `<div style="margin:3px 0; line-height:1.25;">${code(syntax)} <span style="color:#aaa;">-</span> ${meaning}</div>`;
+    `<div style="margin:4px 0; line-height:1.35; color:#f0f0f4;">${code(syntax)} <span style="color:#c8c8d0;">-</span> ${meaning}</div>`;
+  const alias = (value) => code(value);
 
-  let out = `<div style="background:#2b2b3d; border:2px solid #8be9fd; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#eaeaea;">`;
+  let out = `<div style="background:#2b2b3d; border:2px solid #8be9fd; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#f0f0f4;">`;
   out += `<div style="background:#8be9fd; color:#000; font-weight:bold; padding:6px 9px;">Attack Notes Codes</div>`;
   out += `<div style="padding:7px 9px;">`;
-  out += `<div style="color:#aaa; margin-bottom:6px;">Type these in an attack row's <b>Notes</b> field. Codes configure the same attack settings used by the panel; ordinary Notes text may remain alongside them.</div>`;
+  out += `<div style="color:#d8d8df; margin-bottom:6px;">Type these in an attack row's <b>Notes</b> field. Codes configure the same attack settings used by the panel; ordinary Notes text may remain alongside them.</div>`;
 
   out += `<div style="color:#f4d03f; font-weight:bold; margin-top:5px;">Grapple</div>`;
   out += row('grapple', 'Standard grapple attack.');
-  out += row('grapple:remote', 'Grapple at the attack\'s range. Alias: <code>remote-grapple</code>.');
+  out += row('grapple:remote', 'Grapple at the attack\'s range. Alias: ' + alias('remote-grapple') + '.');
   out += row('grip:hth', 'Use normal HTH for Grip.');
   out += row('grip:2d8', 'Use the listed dice/formula for Grip.');
 
   out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Save & Snare</div>`;
-  out += row('save:EN:-8:-12', 'Save attack: BC, save modifier, optional recovery modifier. Alias: <code>sav:</code>.');
-  out += row('nodmg', 'Attack/effect causes no direct damage. Alias: <code>no-damage</code>.');
-  out += row('snare:grapnel:2d8/18', 'Snare type, Break Point, and optional maximum BP. Alias: <code>snr:</code>.');
+  out += row('save:EN:-8:-12', 'Save attack: BC, save modifier, optional recovery modifier. Alias: ' + alias('sav:') + '.');
+  out += row('nodmg', 'Attack/effect causes no direct damage. Alias: ' + alias('no-damage') + '.');
+  out += row('snare:grapnel:2d8/18', 'Snare type, Break Point, and optional maximum BP. Alias: ' + alias('snr:') + '.');
   out += row('snare:ice:2d8/18', 'Ice Snare using the same BP/max format.');
-  out += `<div style="margin:2px 0 4px; color:#888; font-size:11px;">Snare types: grapnel (legacy <code>grp</code>), ice, web, energy, other.</div>`;
+  out += `<div style="margin:2px 0 4px; color:#c8c8d0; font-size:11px;">Snare types: grapnel (legacy ${code('grp')}), ice, web, energy, other.</div>`;
 
   out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Attack Options</div>`;
-  out += row('af:4', 'Autofire rate 4. Alias: <code>autofire:4</code>; valid rates 2-7.');
+  out += row('af:4', 'Autofire rate 4. Alias: ' + alias('autofire:4') + '; valid rates 2-7.');
   out += row('area:2.5', 'Area diameter in inches.');
   out += row('ap:4', 'Ignore 4 points of protection.');
-  out += row('ap', 'Ignore all protection. Alias: <code>ap:ALL</code>.');
+  out += row('ap', 'Ignore all protection. Alias: ' + alias('ap:ALL') + '.');
   out += row('gear', 'Mark the attack as Gear.');
-  out += row('immune', 'Character ignores their own Ability; excluded from their own Area Effect and counters Reflection. Alias: <code>immunity</code>.');
-  out += row('dur:3:round', 'Duration: number and unit. Alias: <code>duration:</code>.');
-  out += row('duration:perm', 'Permanent duration. Alias: <code>dur:perm</code>.');
-  out += `<div style="margin:2px 0 4px; color:#888; font-size:11px;">Duration units: round, minute, hour, day, week, month, year.</div>`;
+  out += row('immune', 'Character ignores their own Ability; excluded from their own Area Effect and counters Reflection. Alias: ' + alias('immunity') + '.');
+  out += row('dur:3:round', 'Duration: number and unit. Alias: ' + alias('duration:') + '.');
+  out += row('duration:perm', 'Permanent duration. Alias: ' + alias('dur:perm') + '.');
+  out += `<div style="margin:2px 0 4px; color:#c8c8d0; font-size:11px;">Duration units: round, minute, hour, day, week, month, year.</div>`;
 
   out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Special Effects</div>`;
   out += row('flash:2:-8', 'Flash: lose 2 sense levels; EN save at -8.');
   out += row('dazzle:-6', 'Dazzle EN save modifier -6.');
-  out += row('repulsion', 'Repulsion Blast: damage produces Knockback only. Alias: <code>kb:only</code>.');
-  out += row('death-touch', 'Mark as Death Touch. Aliases: <code>deathtouch</code>, <code>death:touch</code>.');
+  out += row('repulsion', 'Repulsion Blast: damage produces Knockback only. Alias: ' + alias('kb:only') + '.');
+  out += row('death-touch', 'Mark as Death Touch. Aliases: ' + alias('deathtouch') + ', ' + alias('death:touch') + '.');
 
   out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Siphon</div>`;
   out += row('siphon', "Mark the attack as Siphon using the row's existing/default Siphon settings.");
@@ -13463,7 +13469,7 @@ function cmdAttackCodes(msg) {
   out += row('siphon:cap:12', 'Set the Siphon cap.');
   out += row('siphon:overload:damage', 'Overload result: lose, damage, or explode.');
 
-  out += `<div style="border-top:1px solid #555; margin-top:7px; padding-top:5px; color:#aaa; font-size:11px;">Examples may be combined: ${code('grapple:remote grip:2d8')} or ${code('save:EN:-8:-12 nodmg dur:3:round')}.</div>`;
+  out += `<div style="border-top:1px solid #666; margin-top:7px; padding-top:5px; color:#d8d8df; font-size:11px;">Examples may be combined: ${code('grapple:remote grip:2d8')} or ${code('save:EN:-8:-12 nodmg dur:3:round')}.</div>`;
   out += `</div></div>`;
   return ch("MP", wt(msg) + out);
 }
