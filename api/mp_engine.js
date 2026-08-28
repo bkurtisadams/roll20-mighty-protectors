@@ -1,4 +1,21 @@
-/* Mighty Protectors Roll20 API Engine v2.157.0 - 2026-08-27
+/* Mighty Protectors Roll20 API Engine v2.159.1 - 2026-08-28
+ * v2.159.1: SUPER SPEED CHECKBOX FIDELITY. Initiative automation now treats only
+ *   the sheet checkbox value "1" as enabled. Legacy values such as on/true/yes
+ *   can display unchecked in Roll20 when the checkbox value is 1, so accepting
+ *   them caused unwanted Super Speed rolls from an apparently unchecked sheet.
+ *   Both !mp initselected and the normal Initiative watcher share the same strict
+ *   checkbox helper.
+ * v2.159.0: BULK INITIATIVE SORTING. !mp initselected now sorts the completed
+ *   Turn Tracker descending by default, matching the normal highest-first MP
+ *   initiative workflow. Optional --sort asc, --sort desc, and --sort none
+ *   select ascending, descending, or unsorted behavior. Super Speed custom turns
+ *   are re-sorted into the same order after their asynchronous extra rolls finish.
+ * v2.158.0: INITIATIVE CHAT + TURN ORDER CLEAR. !mp initselected now posts a
+ *   visible normal Initiative chat card for every successfully rolled selected
+ *   token after the callback-only inline roll is resolved. New GM-only
+ *   !mp clearturnorder empties the entire Roll20 Turn Tracker, clears recorded
+ *   Super Speed custom-turn state, and resets the round-wrap anchor without
+ *   changing the current MP round or closing the tracker.
  * v2.157.0: SELECTED-TOKEN INITIATIVE. New player-accessible !mp initselected
  *   command rolls initiative publicly for every selected represented token,
  *   replaces those selected tokens' existing real Turn Tracker entries while
@@ -1592,7 +1609,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.157.0";
+var MP_VERSION = "2.159.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -15748,6 +15765,9 @@ function cmdStance(msg, args) {
       case "info": return cmdInfo(msg, args);
       case "attackcodes": return cmdAttackCodes(msg);
       case "initselected": return cmdInitSelected(msg);
+      case "clearturnorder":
+        if (gmOnly(msg)) return;
+        return cmdClearTurnOrder(msg);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "hthmass":
       case "might": return cmdHTHMass(msg, args);
@@ -15881,7 +15901,8 @@ function cmdStance(msg, args) {
           <code>!mp hthmass [--push 1]</code> - Combined HTH + Mass roll for every selected token; push costs 2 PR for +2<br/>
           <code>!mp atkinfo --row ROWID</code> - Show a selected character's attack-row details<br/>
           <code>!mp attackcodes</code> - Show the Attack Notes code reference<br/>
-          <code>!mp initselected</code> - Roll initiative for all selected represented tokens and update their Turn Tracker entries<br/>
+          <code>!mp initselected [--sort desc|asc|none]</code> - Roll initiative for all selected represented tokens; descending is the default<br/>
+          <code>!mp clearturnorder</code> - Clear the entire Roll20 Turn Tracker (<b>GM</b>)<br/>
           <b>Powers and Senses:</b><br/>
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>)<br/>
           <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Darkness (<b>GM</b>)<br/>
@@ -17835,7 +17856,67 @@ function cmdStance(msg, args) {
     return out;
   }
 
+  // Parse the optional bulk-initiative sort mode. Descending is the default
+  // because MP resolves the highest initiative first. "none" preserves the
+  // existing tracker order for users who want to sort manually or retain a
+  // custom arrangement.
+  function initSelectedSortMode(msg) {
+    const content = String((msg && msg.content) || "");
+    const m = /(?:^|\s)--sort(?:\s+|=)([^\s]+)/i.exec(content);
+    if (!m) return "desc";
+    const raw = String(m[1] || "").toLowerCase();
+    if (raw === "desc" || raw === "descending") return "desc";
+    if (raw === "asc" || raw === "ascending") return "asc";
+    if (raw === "none" || raw === "off" || raw === "manual") return "none";
+    return "invalid";
+  }
+
+  // Match Roll20's numeric Turn Order sort closely while remaining stable for
+  // equal initiatives. Non-numeric PR values are left after numeric entries in
+  // their prior relative order. This sorts every visible tracker row, including
+  // custom Super Speed turns, just as using Roll20's Sort Options does.
+  function sortTurnorderEntries(turnorder, direction) {
+    if (direction !== "asc" && direction !== "desc") return (turnorder || []).slice();
+    return (turnorder || []).map((entry, index) => ({ entry, index })).sort((a, b) => {
+      const av = parseFloat(a.entry && a.entry.pr);
+      const bv = parseFloat(b.entry && b.entry.pr);
+      const aNum = isFinite(av), bNum = isFinite(bv);
+      if (aNum && bNum) {
+        if (av !== bv) return direction === "asc" ? av - bv : bv - av;
+        return a.index - b.index;
+      }
+      if (aNum !== bNum) return aNum ? -1 : 1;
+      return a.index - b.index;
+    }).map(x => x.entry);
+  }
+
+  // Clear the visible Turn Tracker exactly as a full-list clear should, while
+  // also discarding engine bookkeeping for Super Speed custom entries. The MP
+  // round itself is deliberately left alone: clearing turns is not the same as
+  // ending combat or advancing a round. Resetting the wrap anchor is necessary
+  // so the first combatant in the next populated list becomes the new anchor.
+  function cmdClearTurnOrder(msg) {
+    const prior = readTurnorder();
+    const count = prior.length;
+
+    state.MP_Engine.superSpeedTracker = {};
+    const gc = state.MP_Engine.gameClock;
+    if (gc) {
+      gc.roundAnchor = null;
+      gc.topId = null;
+      gc.leftAnchor = false;
+    }
+
+    Campaign().set("turnorder", "");
+    return ch("MP", `/w gm <b>MP Turn Order:</b> Cleared ${count} turn${count === 1 ? "" : "s"}.`);
+  }
+
   function cmdInitSelected(msg) {
+    const sortMode = initSelectedSortMode(msg);
+    if (sortMode === "invalid") {
+      return ch("MP", wt(msg) + `<b>MP Initiative:</b> Unknown sort mode. Use <code>--sort desc</code>, <code>--sort asc</code>, or <code>--sort none</code>.`);
+    }
+
     const rawSelected = (msg.selected || []).filter(s => s && s._type === "graphic");
     if (!rawSelected.length) {
       return ch("MP", wt(msg) + `<b>MP Initiative:</b> Select one or more represented tokens first.`);
@@ -17889,6 +17970,16 @@ function cmdStance(msg, args) {
 
       results.sort((a, b) => a.index - b.index);
 
+      // sendChat calls that use a callback are evaluator calls: Roll20 returns
+      // the inline-roll result to the API instead of displaying that message.
+      // Re-emit each resolved normal initiative as a public card, in selection
+      // order, so bulk initiative has the same visible feedback as the sheet roll.
+      results.forEach(r => {
+        const shown = formatTrackerPr(r.total);
+        sendChat("character|" + r.charId,
+          `&{template:default} {{name=${r.charName} rolls Initiative}} {{Roll=[[${shown}]]}}`);
+      });
+
       // Work against the freshest tracker in case another combatant was edited
       // while Roll20 was resolving the inline rolls. Remove only this engine's
       // recorded Super Speed custom turns for the affected characters first.
@@ -17900,6 +17991,7 @@ function cmdStance(msg, args) {
         cleanedCharIds[r.charId] = true;
       });
       to = mergeSelectedInitiativeEntries(to, results);
+      to = sortTurnorderEntries(to, sortMode);
       Campaign().set("turnorder", JSON.stringify(to));
 
       // Reuse the existing Super Speed implementation. If multiple selected tokens
@@ -17909,18 +18001,17 @@ function cmdStance(msg, args) {
       results.forEach(r => {
         if (superSpeedDone[r.charId]) return;
         superSpeedDone[r.charId] = true;
-        const armedRaw = String(getAttr(r.charId, "super_speed_initiative") || "").toLowerCase();
-        const armed = armedRaw === "1" || armedRaw === "on" || armedRaw === "true" || armedRaw === "yes";
-        if (!armed) return;
+        if (!isSuperSpeedInitiativeChecked(r.charId)) return;
         const extraTurns = Math.max(0, Math.min(20, Math.floor(getAttrNum(r.charId, "super_speed_turns", 0))));
         if (extraTurns < 1) {
           ch("MP", `/w gm <b>MP Super Speed:</b> ${esc(r.charName)} checked Super Speed but has no extra turns entered.`);
           return;
         }
-        rollSuperSpeedExtras(r.charObj, r.tok, { pr: r.total }, extraTurns);
+        rollSuperSpeedExtras(r.charObj, r.tok, { pr: r.total }, extraTurns, sortMode);
       });
 
-      let summary = `<b>MP Initiative:</b> ${results.length} selected token${results.length === 1 ? "" : "s"} added/updated in the Turn Tracker.`;
+      const sortLabel = sortMode === "desc" ? " Sorted descending." : sortMode === "asc" ? " Sorted ascending." : "";
+      let summary = `<b>MP Initiative:</b> ${results.length} selected token${results.length === 1 ? "" : "s"} added/updated in the Turn Tracker.${sortLabel}`;
       if (skipped.length) summary += `<br/><span style="color:#c8c8d0;">Skipped: ${skipped.join("; ")}</span>`;
       return ch("MP", wt(msg) + summary);
     };
@@ -17954,7 +18045,15 @@ function cmdStance(msg, args) {
     });
   }
 
-  function rollSuperSpeedExtras(charObj, tok, baseEntry, extraTurns) {
+  // Roll20 renders this checkbox as checked only when its current value matches
+  // value="1". Keep API behavior identical to that visible state. In particular,
+  // do not accept legacy truthy strings such as "on", "true", or "yes": those can
+  // appear unchecked in the current sheet while remaining stored on old characters.
+  function isSuperSpeedInitiativeChecked(charId) {
+    return String(getAttr(charId, "super_speed_initiative") || "").trim() === "1";
+  }
+
+  function rollSuperSpeedExtras(charObj, tok, baseEntry, extraTurns, sortMode) {
     const charId = charObj.id;
     const charName = charObj.get("name") || "Character";
     const initExpr = String(getAttr(charId, "initiative_score") || "").trim();
@@ -18017,6 +18116,7 @@ function cmdStance(msg, args) {
           tokenId: tok.id,
           prs: customPrs.slice()
         };
+        to = sortTurnorderEntries(to, sortMode);
         Campaign().set("turnorder", JSON.stringify(to));
 
         const rollText = rawRolls.map(formatTrackerPr).join(" + ");
@@ -18077,9 +18177,7 @@ function cmdStance(msg, args) {
       Campaign().set("turnorder", JSON.stringify(fresh));
     }
 
-    const armedRaw = String(getAttr(charId, "super_speed_initiative") || "").toLowerCase();
-    const armed = armedRaw === "1" || armedRaw === "on" || armedRaw === "true" || armedRaw === "yes";
-    if (!armed) return;
+    if (!isSuperSpeedInitiativeChecked(charId)) return;
 
     // The checkbox is a persistent character preference. Players can leave it on
     // for characters who normally use Super Speed and uncheck it when they choose
