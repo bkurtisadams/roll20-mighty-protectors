@@ -1,4 +1,9 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.87 - Attack Notes configuration codes
+<!-- Mighty Protectors Roll20 Character Sheet v44.88 - Attack Notes runtime sync hardening
+        v44.88: Keep Compact mode unchanged. Attack Notes remain the alternate editor,
+          but MP Engine v2.155.0 now also interprets the same tags at attack-resolution
+          time so a newly typed code does not depend on a sheet-worker update finishing
+          first. The Notes change worker also clears the specific legacy false AP ALL
+          residue when a Grapple tag has no explicit ap/ap:N tag.
         v44.87: Expand Attack Notes shorthand into an alternate advanced-attack editor
           without changing Compact mode. A single parseAttackNotes() worker now handles
           both live note edits and sheet-open initialization, preserving existing sav:/snr:/
@@ -5142,8 +5147,17 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
 
   on("change:repeating_attacks:attack_notes", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_notes", "");
-    getAttrs([eventInfo.sourceAttribute], function(v) {
-      var updates = parseAttackNotes(v[eventInfo.sourceAttribute] || "", rowPrefix, {});
+    var apAttr = rowPrefix + "_attack_ap";
+    getAttrs([eventInfo.sourceAttribute, apAttr], function(v) {
+      var notes = v[eventInfo.sourceAttribute] || "";
+      var updates = parseAttackNotes(notes, rowPrefix, {});
+      // v44.87 compatibility: an older unbounded AP matcher could turn the word
+      // "grapple" into AP ALL. Clean only that signature when Notes itself does
+      // not explicitly request AP. Numeric/manual AP values are left untouched.
+      if (/\bgrapple\b/i.test(notes) && !/\bap(?::(\d+|all))?\b/i.test(notes) &&
+          String(v[apAttr] || "").toUpperCase() === "ALL") {
+        updates[apAttr] = "";
+      }
       if (Object.keys(updates).length > 0) setAttrs(updates);
     });
   });

@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.154.0 - 2026-08-27
+/* Mighty Protectors Roll20 API Engine v2.155.0 - 2026-08-27
+ * v2.155.0: ATTACK NOTES RUNTIME RESOLUTION. !mp atk and !mp atkinfo now parse
+ *   the supported Attack Notes tags at resolution time and overlay them on the same
+ *   repeating attack fields used by the cog panel. This removes the dependency on a
+ *   sheet-worker sync firing before an attack is rolled. A bare grapple tag therefore
+ *   resolves as a real Grapple even if attack_is_grapple was not yet populated. The
+ *   resolver also masks the legacy v44.87-era false AP ALL residue caused when the
+ *   letters "ap" inside "grapple" were previously misread as a bare AP tag; an
+ *   explicitly written ap/ap:ALL tag still wins.
  * v2.154.0: ATTACK NOTES CONFIGURATION FOLLOW-UP. The attack resolver remains
  *   attribute-driven: sheet v44.87 Notes tags populate the same repeating attack
  *   fields as the cog panel, so !mp atk needs no parallel Notes-only rules path.
@@ -6404,6 +6412,151 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return found ? found.get("current") : "";
   }
 
+  // Runtime counterpart to sheet v44.88 parseAttackNotes(). Roll20 sheet workers
+  // are asynchronous and may not have copied a freshly typed Notes code into its
+  // hidden/cog-panel attributes before !mp atk fires. The API therefore overlays
+  // recognized Notes tags on the same attack_* values at resolution time. This is
+  // configuration parsing only; all actual rules still run through handleMpAttack.
+  function parseAttackNoteOverrides(notes) {
+    const text = String(notes || "").toLowerCase();
+    const out = {};
+    const put = (name, value) => { out[name] = String(value); };
+
+    let m = text.match(/\b(?:sav|save):([a-z]+):([+-]?\d+)(?::([+-]?\d+))?/i);
+    if (m) {
+      put("attack_type", "sav");
+      put("attack_is_save", "1");
+      put("attack_save_bc", m[1].toUpperCase());
+      put("attack_save_mod", m[2]);
+      if (m[3]) {
+        put("attack_save_rec", m[3]);
+        put("attack_recovery", m[3]);
+      }
+    }
+
+    m = text.match(/\b(?:snr|snare):(grp|grapnel|ice|web|energy|other):([^\/\s,;]+)(?:\/(\d+))?/i);
+    if (m) {
+      put("attack_type", "snr");
+      put("attack_is_snare", "1");
+      let snType = m[1].toLowerCase();
+      if (snType === "grp") snType = "Grapnel";
+      else snType = snType.charAt(0).toUpperCase() + snType.slice(1);
+      put("attack_snare_type", snType);
+      put("attack_bp", m[2]);
+      put("attack_max_bp", m[3] || "");
+    }
+
+    const apMatch = text.match(/\bap(?::(\d+|all))?\b/i);
+    if (apMatch) {
+      put("attack_ap", apMatch[1] ? (apMatch[1].toLowerCase() === "all" ? "ALL" : apMatch[1]) : "ALL");
+      out._explicitAp = true;
+    }
+
+    m = text.match(/\bflash:([1-3])(?::([+-]?\d+))?/i);
+    if (m) {
+      put("attack_is_save", "1");
+      put("attack_type", "sav");
+      put("attack_no_damage", "1");
+      put("attack_save_bc", "EN");
+      put("attack_sense_loss", m[1]);
+      if (m[2]) put("attack_save_mod", m[2]);
+    }
+
+    m = text.match(/\bdazzle:([+-]?\d+)/i);
+    if (m) {
+      put("attack_save_bc", "EN");
+      put("attack_save_mod", m[1]);
+    }
+
+    if (/\b(?:no-damage|nodmg)\b/i.test(text)) put("attack_no_damage", "1");
+
+    if (/\bgrapple\b/i.test(text)) {
+      put("attack_is_grapple", "1");
+      if (!apMatch) out._grappleWithoutExplicitAp = true;
+    }
+    if (/\bgrapple:remote\b/i.test(text) || /\bremote-grapple\b/i.test(text)) {
+      put("attack_is_grapple", "1");
+      put("attack_grapple_remote", "1");
+    }
+    m = text.match(/\bgrip:([^\s,;]+)/i);
+    if (m) {
+      if (m[1].toLowerCase() === "hth") put("attack_grip_type", "hth");
+      else {
+        put("attack_grip_type", "power");
+        put("attack_grip_dice", m[1]);
+      }
+    }
+
+    m = text.match(/\b(?:af|autofire):([2-7])\b/i);
+    if (m) put("attack_autofire", m[1]);
+    m = text.match(/\barea:(\d+(?:\.\d+)?)\b/i);
+    if (m) put("attack_area", m[1]);
+    if (/\bgear\b/i.test(text)) put("attack_gear", "1");
+    if (/\b(?:immune|immunity)\b/i.test(text)) put("attack_immunity", "1");
+
+    const durPerm = text.match(/\b(?:dur|duration):(?:perm|permanent)\b/i);
+    const durMatch = text.match(/\b(?:dur|duration):(\d+(?:\.\d+)?):(rounds?|minutes?|hours?|days?|weeks?|months?|years?|perm|permanent)\b/i);
+    if (durPerm) {
+      put("attack_duration_num", "1");
+      put("attack_duration_unit", "perm");
+    } else if (durMatch) {
+      let durUnit = durMatch[2].toLowerCase();
+      if (durUnit === "permanent") durUnit = "perm";
+      else if (durUnit.charAt(durUnit.length - 1) === "s") durUnit = durUnit.slice(0, -1);
+      put("attack_duration_num", durMatch[1]);
+      put("attack_duration_unit", durUnit);
+    }
+
+    if (/\b(?:death-touch|deathtouch|death:touch)\b/i.test(text)) put("attack_is_deathtouch", "1");
+
+    if (/\bsiphon\b/i.test(text)) put("attack_is_siphon", "1");
+    m = text.match(/\bsiphon:(hits|power)\b/i);
+    if (m) put("attack_siphon_drain", m[1].toLowerCase());
+    m = text.match(/\bsiphon:(?:ability|abilities)(?::(super|tech|mystical|info))?\b/i);
+    if (m) {
+      put("attack_siphon_drain", "ability");
+      if (m[1]) {
+        const cat = m[1].toLowerCase();
+        put("attack_siphon_cat", cat === "super" ? "Super" : (cat === "tech" ? "Tech" : (cat === "mystical" ? "Mystical" : "Info")));
+      }
+    }
+    m = text.match(/\bsiphon:(?:bc|attribute):(st|en|ag|in|cl)\b/i);
+    if (m) {
+      put("attack_siphon_drain", "bc");
+      put("attack_siphon_bc", m[1].toUpperCase());
+    }
+    m = text.match(/\b(?:siphon-mode|siphon:mode):(normal|suppress|mimicry)\b/i);
+    if (m) put("attack_siphon_mode", m[1].toLowerCase());
+    if (/\b(?:siphon:replenish|siphon-replenish)\b/i.test(text)) put("attack_siphon_replenish", "1");
+    m = text.match(/\b(?:siphon-cap|siphon:cap):(\d+(?:\.\d+)?)\b/i);
+    if (m) put("attack_siphon_cap", m[1]);
+    m = text.match(/\b(?:siphon-overload|siphon:overload):(lose|damage|explode)\b/i);
+    if (m) put("attack_siphon_overload", m[1].toLowerCase());
+
+    if (/\brepulsion\b/i.test(text) || /\bkb:only\b/i.test(text)) {
+      put("attack_is_repulsion", "1");
+      put("attack_kb", "1");
+      put("attack_kb_display", "Yes");
+    }
+
+    return out;
+  }
+
+  function makeNoteAwareAttackGetter(baseGet) {
+    const notes = baseGet("attack_notes") || "";
+    const overrides = parseAttackNoteOverrides(notes);
+    return function(name) {
+      if (Object.prototype.hasOwnProperty.call(overrides, name)) return overrides[name];
+      const raw = baseGet(name);
+      // v44.87 briefly allowed an unbounded /ap/ match, so entering "grapple"
+      // could leave attack_ap=ALL behind. If Notes says Grapple but contains no
+      // explicit AP code, mask that specific legacy residue at runtime. A real
+      // AP grapple remains available by writing "grapple ap" or "grapple ap:ALL".
+      if (name === "attack_ap" && overrides._grappleWithoutExplicitAp && /^all$/i.test(String(raw || ""))) return "";
+      return raw;
+    };
+  }
+
   function setRepeatingAttackAttr(charId, rowId, shortName, value) {
     const searchName = `repeating_attacks_${rowId}_${shortName}`.toLowerCase();
     const attrs = findObjs({ _type: "attribute", _characterid: charId });
@@ -6928,7 +7081,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (atkChar && defTok && !defChar) {
       const rowAreaPeek = isVehicleMode(atkCharId)
         ? num(fields.area, 0)
-        : num(getRepeatingAttackAttr(atkCharId, rowId, "attack_area"), num(fields.area, 0));
+        : num(makeNoteAwareAttackGetter((name) => getRepeatingAttackAttr(atkCharId, rowId, name))("attack_area"), num(fields.area, 0));
       if (rowAreaPeek > 0) {
         defIsPointTarget = true;
         defChar = {
@@ -7062,9 +7215,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       attack_no_damage: fields.no_damage || "",
       attack_autofire: fields.autofire || ""
     };
-    const getAtk = atkIsVehicle
+    const baseGetAtk = atkIsVehicle
       ? (name) => (vehAtkMap[name] !== undefined ? String(vehAtkMap[name]) : "")
       : (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+    const getAtk = atkIsVehicle ? baseGetAtk : makeNoteAwareAttackGetter(baseGetAtk);
 
     const rawAtkType = getAtk("attack_atk");
     const weaponName = getAtk("attack_name") || fields.name || "Attack";
@@ -7146,7 +7300,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       recTime = `${durNum} ${durUnit || "round"}${durNum === 1 ? "" : "s"}`;
     }
 
-    const atkAPRaw = getAtk("attack_ap") || fields.ap || "";
+    // Repeating attacks are authoritative through the note-aware getter. Do not
+    // fall back to the roll-template AP field here, because that field may contain
+    // the stale v44.87 false AP ALL value that a Grapple Notes tag is masking.
+    const atkAPRaw = getAtk("attack_ap") || (atkIsVehicle ? (fields.ap || "") : "");
     const atkAP = (atkAPRaw === "ALL" || atkAPRaw === "all") ? Infinity : num(atkAPRaw, 0);
     
     const snBP = String(getAtk("attack_bp") || "").trim();
@@ -13272,7 +13429,8 @@ function cmdAttackInfo(msg, args) {
     return ch("MP", `/w gm <b>Debug:</b> No rowId received. Button may not be passing @{attack_rowid}`);
   }
 
-  const getAtk = (name) => getRepeatingAttackAttr(charId, rowId, name);
+  const baseGetAtk = (name) => getRepeatingAttackAttr(charId, rowId, name);
+  const getAtk = makeNoteAwareAttackGetter(baseGetAtk);
   
   const attackName = getAtk("attack_name") || "";
   const notes = getAtk("attack_notes") || "";
@@ -13294,9 +13452,8 @@ function cmdAttackInfo(msg, args) {
     return ch("MP", `/w gm <b>Debug:</b> rowId="${esc(rowId)}" but attack_name is empty. Check that attack_rowid is being set by sheet worker.`);
   }
 
-  // Special attack metadata comes from the same repeating fields used by !mp atk.
-  // Sheet v44.87 Notes tags are simply an alternate editor for these attributes;
-  // atkinfo deliberately does not maintain a second Notes parser.
+  // Special attack metadata uses the same note-aware getter as !mp atk, so atkinfo
+  // reports what the resolver will actually do even before sheet-worker sync.
   const rowSpecialType = (getAtk("attack_type") || "std").toLowerCase();
   const isSaveInfo = getAtk("attack_is_save") === "1" || rowSpecialType === "sav";
   const isSnareInfo = getAtk("attack_is_snare") === "1" || rowSpecialType === "snr";
@@ -14952,14 +15109,16 @@ function cmdStance(msg, args) {
 
     const defChar = getCharFromToken(defTok);
     if (!defChar) {
-      const rowArea = num(getRepeatingAttackAttr(atkCharId, rowId, "attack_area"), 0);
+      const rowAreaGetter = makeNoteAwareAttackGetter((name) => getRepeatingAttackAttr(atkCharId, rowId, name));
+      const rowArea = num(rowAreaGetter("attack_area"), 0);
       if (rowArea <= 0) {
         return ch("MP", `${wt(msg)}Target token not linked to character. Only AREA attacks can target a generic point token.`);
       }
       // else: fall through - handleMpAttack substitutes a point-target stub
     }
 
-    const getAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+    const baseGetAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+    const getAtk = makeNoteAwareAttackGetter(baseGetAtk);
 
     // Get attack attributes
     const attackName = getAtk("attack_name") || `Attack ${atkIndex}`;
@@ -15150,7 +15309,8 @@ function cmdStance(msg, args) {
     const rowId = findAttackRowByIndex(atkCharId, atkIndexOrRate);
     if (!rowId) return ch("MP", `${wt(msg)}Attack #${atkIndexOrRate} not found for ${esc(atkName)}.`);
 
-    const getAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+    const baseGetAtk = (name) => getRepeatingAttackAttr(atkCharId, rowId, name);
+    const getAtk = makeNoteAwareAttackGetter(baseGetAtk);
 
     // Get autofire rate from attack row
     const autofireRate = num(getAtk("attack_autofire"), 0);
