@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.155.0 - 2026-08-27
+/* Mighty Protectors Roll20 API Engine v2.156.0 - 2026-08-27
+ * v2.156.0: ATTACK NOTES HELP CARD. New player-accessible !mp attackcodes command
+ *   prints a private chat reference for every supported Attack Notes tag and alias.
+ *   Sheet v44.89 adds a ? button beside the Notes header that calls this command.
+ *   Also corrects MP_VERSION, which was accidentally left at 2.153.0 in v2.155.0.
  * v2.155.0: ATTACK NOTES RUNTIME RESOLUTION. !mp atk and !mp atkinfo now parse
  *   the supported Attack Notes tags at resolution time and overlay them on the same
  *   repeating attack fields used by the cog panel. This removes the dependency on a
@@ -1577,7 +1581,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.153.0";
+var MP_VERSION = "2.156.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -13408,6 +13412,62 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return sendChat("MP", who + html);
   }
 
+function cmdAttackCodes(msg) {
+  const code = (s) => `<code style="color:#8be9fd;">${esc(s)}</code>`;
+  const row = (syntax, meaning) =>
+    `<div style="margin:3px 0; line-height:1.25;">${code(syntax)} <span style="color:#aaa;">-</span> ${meaning}</div>`;
+
+  let out = `<div style="background:#2b2b3d; border:2px solid #8be9fd; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#eaeaea;">`;
+  out += `<div style="background:#8be9fd; color:#000; font-weight:bold; padding:6px 9px;">Attack Notes Codes</div>`;
+  out += `<div style="padding:7px 9px;">`;
+  out += `<div style="color:#aaa; margin-bottom:6px;">Type these in an attack row's <b>Notes</b> field. Codes configure the same attack settings used by the panel; ordinary Notes text may remain alongside them.</div>`;
+
+  out += `<div style="color:#f4d03f; font-weight:bold; margin-top:5px;">Grapple</div>`;
+  out += row('grapple', 'Standard grapple attack.');
+  out += row('grapple:remote', 'Grapple at the attack\'s range. Alias: <code>remote-grapple</code>.');
+  out += row('grip:hth', 'Use normal HTH for Grip.');
+  out += row('grip:2d8', 'Use the listed dice/formula for Grip.');
+
+  out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Save & Snare</div>`;
+  out += row('save:EN:-8:-12', 'Save attack: BC, save modifier, optional recovery modifier. Alias: <code>sav:</code>.');
+  out += row('nodmg', 'Attack/effect causes no direct damage. Alias: <code>no-damage</code>.');
+  out += row('snare:grapnel:2d8/18', 'Snare type, Break Point, and optional maximum BP. Alias: <code>snr:</code>.');
+  out += row('snare:ice:2d8/18', 'Ice Snare using the same BP/max format.');
+  out += `<div style="margin:2px 0 4px; color:#888; font-size:11px;">Snare types: grapnel (legacy <code>grp</code>), ice, web, energy, other.</div>`;
+
+  out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Attack Options</div>`;
+  out += row('af:4', 'Autofire rate 4. Alias: <code>autofire:4</code>; valid rates 2-7.');
+  out += row('area:2.5', 'Area diameter in inches.');
+  out += row('ap:4', 'Ignore 4 points of protection.');
+  out += row('ap', 'Ignore all protection. Alias: <code>ap:ALL</code>.');
+  out += row('gear', 'Mark the attack as Gear.');
+  out += row('immune', 'Character ignores their own Ability; excluded from their own Area Effect and counters Reflection. Alias: <code>immunity</code>.');
+  out += row('dur:3:round', 'Duration: number and unit. Alias: <code>duration:</code>.');
+  out += row('duration:perm', 'Permanent duration. Alias: <code>dur:perm</code>.');
+  out += `<div style="margin:2px 0 4px; color:#888; font-size:11px;">Duration units: round, minute, hour, day, week, month, year.</div>`;
+
+  out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Special Effects</div>`;
+  out += row('flash:2:-8', 'Flash: lose 2 sense levels; EN save at -8.');
+  out += row('dazzle:-6', 'Dazzle EN save modifier -6.');
+  out += row('repulsion', 'Repulsion Blast: damage produces Knockback only. Alias: <code>kb:only</code>.');
+  out += row('death-touch', 'Mark as Death Touch. Aliases: <code>deathtouch</code>, <code>death:touch</code>.');
+
+  out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Siphon</div>`;
+  out += row('siphon', "Mark the attack as Siphon using the row's existing/default Siphon settings.");
+  out += row('siphon:hits', 'Drain Hits.');
+  out += row('siphon:power', 'Drain Power.');
+  out += row('siphon:ability:super', 'Drain an ability category: super, tech, mystical, or info.');
+  out += row('siphon:bc:ST', 'Drain a Basic Characteristic: ST, EN, AG, IN, or CL.');
+  out += row('siphon:mode:suppress', 'Siphon mode: normal, suppress, or mimicry.');
+  out += row('siphon:replenish', 'Enable replenishment.');
+  out += row('siphon:cap:12', 'Set the Siphon cap.');
+  out += row('siphon:overload:damage', 'Overload result: lose, damage, or explode.');
+
+  out += `<div style="border-top:1px solid #555; margin-top:7px; padding-top:5px; color:#aaa; font-size:11px;">Examples may be combined: ${code('grapple:remote grip:2d8')} or ${code('save:EN:-8:-12 nodmg dur:3:round')}.</div>`;
+  out += `</div></div>`;
+  return ch("MP", wt(msg) + out);
+}
+
 function cmdAttackInfo(msg, args) {
   // The row argument may have template junk appended - extract just the rowid
   const rowId = (args.row || "").split(/\s+/)[0].trim();
@@ -15672,6 +15732,7 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdShowBars(msg, args);
       case "info": return cmdInfo(msg, args);
+      case "attackcodes": return cmdAttackCodes(msg);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "hthmass":
       case "might": return cmdHTHMass(msg, args);
@@ -15804,6 +15865,7 @@ function cmdStance(msg, args) {
           <code>!mp sv BC [mod]</code> - Save using EN, AG, IN, or CL<br/>
           <code>!mp hthmass [--push 1]</code> - Combined HTH + Mass roll for every selected token; push costs 2 PR for +2<br/>
           <code>!mp atkinfo --row ROWID</code> - Show a selected character's attack-row details<br/>
+          <code>!mp attackcodes</code> - Show the Attack Notes code reference<br/>
           <b>Powers and Senses:</b><br/>
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>)<br/>
           <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Darkness (<b>GM</b>)<br/>

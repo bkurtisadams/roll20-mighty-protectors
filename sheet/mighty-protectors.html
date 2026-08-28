@@ -1,4 +1,8 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.88 - Attack Notes runtime sync hardening
+<!-- Mighty Protectors Roll20 Character Sheet v44.89 - Attack Notes code reference
+        v44.89: Add a small ? button beside the Attacks Notes header. It calls the
+          API-owned !mp attackcodes reference card so players can see supported Notes
+          tags and meanings without opening the attack settings panel. Compact mode
+          and attack resolution are unchanged.
         v44.88: Keep Compact mode unchanged. Attack Notes remain the alternate editor,
           but MP Engine v2.155.0 now also interprets the same tags at attack-resolution
           time so a newly typed code does not depend on a sheet-worker update finishing
@@ -949,7 +953,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <th style="text-align:center; padding:2px;" title="Causes Knockback">KB</th>
           <th style="text-align:center; padding:2px;" title="Power Requirement per use">PR</th>
           <th style="text-align:center; padding:2px;" title="Charges remaining (-1 = unlimited)">Ch</th>
-          <th style="text-align:left; padding:2px;" title="Notes and modifier codes">Notes</th>
+          <th style="text-align:left; padding:2px;" title="Attack codes supported. Click ? for reference.">Notes <button type="roll" name="roll_attack_codes" value="!mp attackcodes" title="Show Attack Notes code reference in chat" style="display:inline-block; width:14px; height:14px; line-height:12px; padding:0; margin:0 0 0 2px; vertical-align:middle; background:#444; color:#8be9fd; border:1px solid #555; border-radius:50%; cursor:pointer; font-size:9px; font-weight:bold;">?</button></th>
         </tr>
       </thead>
     </table>
@@ -1042,7 +1046,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </td>
           <td style="padding:1px; padding-right:50px;">
             <div style="display:flex; align-items:center; gap:2px;">
-               <input type="text" name="attr_attack_notes" title="Notes / attack tags: save:BC:mod:rec; snare:type:bp/max; grapple[:remote] + grip:dice; af:N; area:N; dur:N:unit; gear; immune; deathtouch; siphon:type; ap[:N]" style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" />
+               <input type="text" name="attr_attack_notes" title="Attack codes supported. Click ? in the Notes header for the reference." style="flex:1; min-width:0; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:2px; box-sizing:border-box; font-size:9px;" />
               
               <span class="sheet-cog-icon" title="Settings">y</span>
             </div>
