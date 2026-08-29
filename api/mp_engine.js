@@ -8701,7 +8701,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const tn = baseSave + num(areaRec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod + discomfort;
     const d20 = (forcedRoll !== undefined) ? forcedRoll : randomInteger(20);
     const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
-    const pass = !isFumble && (d20 <= tn);
+    // 3.0.1: a saving roll of 1 always succeeds, a roll of 20 always fails.
+    const pass = (d20 === CFG.CRIT_SUCCESS_NAT) || (!isFumble && (d20 <= tn));
 
     if (pass) {
       return `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> saves (${tn}-, rolled ${d20})${isSenseLoss ? " \u2014 vision unaffected" : " \u2014 no effect"}</span>`;
@@ -11517,7 +11518,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const d20 = randomInteger(20);
     const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
-    const pass = !isFumble && (d20 <= tn);
+    // 3.0.1: a saving roll of 1 always succeeds, a roll of 20 always fails.
+    // Without this, save modifiers can drive the TN to 0 or below and the
+    // defender cannot succeed at all.
+    const pass = (d20 === CFG.CRIT_SUCCESS_NAT) || (!isFumble && (d20 <= tn));
 
     // Recovery TN per 4.9: "vs. the same target number as their initial save but
     // with an additional difficulty modifier". Derive it from the initial TN rather
@@ -11740,8 +11744,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     const d20 = randomInteger(20);
-    const isFumble = (d20 === 20);
-    const pass = !isFumble && (d20 <= tn);
+    const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
+    // 3.0.1: a saving roll of 1 always succeeds, a roll of 20 always fails.
+    // Recovery TNs carry the attack's difficulty modifier and can easily be
+    // 0 or below, which would otherwise make recovery impossible.
+    const pass = (d20 === CFG.CRIT_SUCCESS_NAT) || (!isFumble && (d20 <= tn));
 
     let msg_out = `<b>Recovery Roll</b> (${esc(char.get("name"))})`;
     if (cond) {
