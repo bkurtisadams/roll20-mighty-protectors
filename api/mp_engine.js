@@ -1920,7 +1920,7 @@ MP.Engine = (function () {
 
   // Status markers for save attack conditions
   const CONDITION_MARKERS = {
-    paralyzed: "skull",
+    paralyzed: "frozen-orb",
     mind_control: "chained-heart",
     emotion_control: "broken-heart",
     dazzled: "bleeding-eye",
@@ -11519,9 +11519,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
     const pass = !isFumble && (d20 <= tn);
 
-    // Recovery TN per 4.9: "same target number as their initial save but with an additional difficulty modifier"
-    // Base + saveMod + recMod + protection + invuln + adapt + vulnerability (no roll-with/crit/push - those were for initial only)
-    const recTN = baseSave + num(rec.saveMod, 0) + num(rec.recMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod + saveDiscomfort;
+    // Recovery TN per 4.9: "vs. the same target number as their initial save but
+    // with an additional difficulty modifier". Derive it from the initial TN rather
+    // than rebuilding it, so every component of that TN carries over. 4.9's worked
+    // example is explicit: Tigress' initial save is 11+5+2(roll-with)=18-, and her
+    // recovery is "the same target number as her original save (18 or less) but with
+    // a further penalty of -14", i.e. 4-. Rebuilding the TN dropped the roll-with
+    // bonus she paid Power for, making recovery harder than RAW allows.
+    const recTN = tn + num(rec.recMod, 0);
     const recTime = rec.recTime || "1 round";
 
     let statusLine = "";
