@@ -4799,6 +4799,13 @@ MP.Engine = (function () {
     "broken-leg", "broken-shield", "back-pain", "purple", "blue", "white-tower"
   ];
 
+  // Conditions that prevent the affected character from attacking at all.
+  // Paralysis Ray leaves the victim conscious and aware but "completely
+  // immobile", so no attack is possible until they recover. Conditions that
+  // only redirect or impair action (mind_control, emotion_control, dazzled)
+  // are deliberately NOT listed - those stay GM-adjudicated.
+  const ATTACK_BLOCKING_CONDITIONS = ["paralyzed"];
+
   function clearEngineMarkers(tok) {
     if (!tok) return;
     const seen = {};
@@ -7398,6 +7405,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       atkTok = atkTokCandidates[0];
     }
     const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
+
+    // Paralysis Ray: the victim is "completely immobile ... their muscles won't
+    // respond and they can't speak", so a paralyzed attacker cannot attack.
+    // Checked here because both the !mp atk macro and the sheet's own Roll
+    // button funnel through this handler. The GM can allow an attack anyway
+    // (a purely mental Ability needing no movement or speech is a GM call) by
+    // clearing the condition or using !mp restore.
+    if (atkTok) {
+      const atkBlocked = ((state.MP_Engine.conditions && state.MP_Engine.conditions[atkTok.id]) || [])
+        .find(c => ATTACK_BLOCKING_CONDITIONS.indexOf(c.type) >= 0);
+      if (atkBlocked) {
+        ch("MP", `${wt(msg)}<div style="background:#3a1a1a; border:1px solid #8b3a3a; padding:3px 8px; font-size:11px; color:#eee;">⛔ <b>${esc(atkChar.get("name"))}</b> is <b>${esc(getConditionDesc(atkBlocked.type, atkBlocked.sourceAtk, atkBlocked.senseLevels))}</b> and cannot attack. Recover first, or the GM can clear it with <code>!mp restore --target ${atkTok.id}</code>.</div>`);
+        return;
+      }
+    }
     
     if (atkDefMod === 6) {
       ch("MP", `${wt(msg)}<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;"><b>${esc(atkChar.get("name"))}</b> is in <b>Full Defense</b> and cannot attack!</div>`);
