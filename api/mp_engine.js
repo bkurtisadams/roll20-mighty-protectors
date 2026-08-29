@@ -2206,6 +2206,14 @@ MP.Engine = (function () {
     }
   }
 
+  // A tier that represents an actual acquisition, and so may be held in the
+  // acquire-once cache. "-" (blocked), "?" (unlocated) and "-3" (crude) are
+  // perception failures: they are re-rolled on the next attempt rather than
+  // frozen in place.
+  function acqIsAcquired(tier) {
+    return tier === "ID" || tier === "+" || tier === "++";
+  }
+
   function acqDefensePenalty(tier) {
     if (tier === "-") return num(state.MP_Engine.blindPenalty, -6);
     if (tier === "?" || tier === "-3") return -3;
@@ -7645,7 +7653,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
             defAcqMod,
             defObservation.sneakGate
           );
-          if (!defAcq.blocked) {
+          // Only a genuine acquisition is held. The adverse tiers ("?" and
+          // "-3") are perception FAILURES, not acquisitions, and caching them
+          // froze a single bad roll into a standing defense penalty: a
+          // Full-vision defender in daylight who critically fumbled once kept
+          // "-3 crude (cached)" for as long as neither token moved. They now
+          // re-roll on the next attack. "-" (blocked) is still never cached,
+          // and tiers deliberately seeded by !mp scan are still honored.
+          if (acqIsAcquired(defAcq.tier)) {
             state.MP_Engine.acquired[defAcqKey] = {
               sig: defAcqSig,
               tier: defAcq.tier,
