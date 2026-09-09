@@ -1,4 +1,19 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.89 - Attack Notes code reference
+<!-- Mighty Protectors Roll20 Character Sheet v44.92 - Career button: label order fix
+        v44.92: Difficulty/Culture dropdown labels reordered to text-then-number
+          ("Routine (+2)", "Fantasy vs Mystical (+6)") to match Background's existing
+          convention exactly - v44.91 had it number-first ("+2 (Routine)"). Also dropped
+          the redundant "/N/A" from Average, now just "Average (+0)".
+        v44.91: Difficulty and Culture dropdown options (added in v44.90) now show their
+          signed modifier number in the label - "+2 (Routine)", "-6 (Very Difficult)",
+          etc. - matching the convention Background's own options already used, instead
+          of requiring the player to remember which label maps to which number.
+        v44.90: Extended the Career task-check button (roll_career_task) with two more
+          query dropdowns beyond Background: Difficulty (3.0.2.2, Automatic +10 through
+          Impossible -10) and Culture vs Device Type (3.1.2, for identification checks -
+          Fantasy/Primitive/Mixed/Modern/High Tech vs Mystical/Technological). Both
+          default to N/A (0), so existing uses of the button are unaffected unless a
+          player actively picks a non-default option. No new button, no new sheet
+          section - same click, three prompts instead of one.
         v44.89: Add a small ? button beside the Attacks Notes header. It calls the
           API-owned !mp attackcodes reference card so players can see supported Notes
           tags and meanings without opening the attack settings panel. Compact mode
@@ -532,9 +547,9 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
     <div class="career-scroll" style="background:#1e1e38; padding:4px; border-radius:4px; flex:1; display:flex; flex-direction:column; justify-content:flex-start; max-height: 80px; overflow-y: auto;">
       <fieldset class="repeating_careers" style="border:none; padding:0; margin:0; width:100%;">
         <div style="display:flex; align-items:center; gap:4px; margin-bottom: 2px;">
-          <button type="roll" name="roll_career_task" title="Roll Task Check (3.0.2.1 Background)" 
+          <button type="roll" name="roll_career_task" title="Roll Task Check (3.0.2.1 Background, 3.0.2.2 Difficulty, 3.1.2 Culture vs. device type for identification checks)" 
             style="font-size:10px; font-weight:bold; height:18px; line-height:16px; padding:0 4px; margin:0; background:#e63946; color:#fff; border:1px solid #2a2040; cursor:pointer; white-space:nowrap;" 
-            value="&{template:default} {{name=@{character_name} rolls @{career_name} Task}} {{Needs=[[?{Which Save?|IN,@{intelligence_save}|AG,@{agility_save}|CL,@{cool_save}} + ?{Background|Common Knowledge/Has Bkgd (+3),3|Common Knowledge/Lacks Bkgd (+0),0|Training Required/Has Bkgd (+0),0|Training Required/Lacks Bkgd (-3),-3|Specialized Training/Has Bkgd (+0),0|Specialized Training/Lacks Bkgd w/ Instr (-3),-3|Specialized Training / *NO Instr (d20 must = 1),0} + @{career_bonus}]]-}} {{Rolls=[[1d20cs<[[?{Which Save?} + ?{Background} + @{career_bonus}]]cf>[[?{Which Save?} + ?{Background} + @{career_bonus}]]]]}}">Career</button>
+            value="&{template:default} {{name=@{character_name} rolls @{career_name} Task}} {{Needs=[[?{Which Save?|IN,@{intelligence_save}|AG,@{agility_save}|CL,@{cool_save}} + ?{Difficulty|Average (+0),0|Automatic (+10),10|Simple (+8),8|Very Easy (+6),6|Easy (+4),4|Routine (+2),2|Challenging (-2),-2|Difficult (-4),-4|Very Difficult (-6),-6|Extremely Difficult (-8),-8|Impossible (-10),-10} + ?{Culture vs Device|N/A (+0),0|Fantasy vs Mystical (+6),6|Fantasy vs Technological (-6),-6|Primitive vs Mystical (+3),3|Primitive vs Technological (-3),-3|Mixed (+0),0|Modern vs Mystical (-3),-3|Modern vs Technological (+3),3|High Tech vs Mystical (-6),-6|High Tech vs Technological (+6),6} + ?{Background|Common Knowledge/Has Bkgd (+3),3|Common Knowledge/Lacks Bkgd (+0),0|Training Required/Has Bkgd (+0),0|Training Required/Lacks Bkgd (-3),-3|Specialized Training/Has Bkgd (+0),0|Specialized Training/Lacks Bkgd w/ Instr (-3),-3|Specialized Training / *NO Instr (d20 must = 1),0} + @{career_bonus}]]-}} {{Rolls=[[1d20cs<[[?{Which Save?} + ?{Difficulty} + ?{Culture vs Device} + ?{Background} + @{career_bonus}]]cf>[[?{Which Save?} + ?{Difficulty} + ?{Culture vs Device} + ?{Background} + @{career_bonus}]]]]}}">Career</button>
           <input type="text" name="attr_career_name" placeholder="Career" title="Background areas: Medicine, Law, Engineering, Security, Art, Social Work, Media, Sports, Education, Crime, Military, Government, Agriculture, Science, Religion, Psychology, Labor, Business, Finance, Travel, Hunting" style="flex:1; min-width:60px; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:3px; border-radius:0; box-sizing:border-box;" />
           <input type="text" name="attr_career_bonus" value="0" title="Add +3 for specialized career and +1 per Experience Level" style="width:20px; background:#0d0d1a; color:#8be9fd; border:1px solid #2a2040; padding:3px; text-align:center; box-sizing:border-box;" />
         </div>
