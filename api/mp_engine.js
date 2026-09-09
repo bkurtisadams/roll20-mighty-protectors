@@ -1,4 +1,15 @@
-/* Mighty Protectors Roll20 API Engine v2.164.0 - 2026-09-08
+/* Mighty Protectors Roll20 API Engine v2.165.0 - 2026-09-09
+ * v2.165.0: GROUND POINT TARGET. A character named "Ground" (or with attribute
+ *   point_target = 1) is a movement space: area attacks aimed at its token use
+ *   the existing point-target path (no defenses, +6 immobile, scatter), it is
+ *   never swept by an area, and single-target attacks against it are refused.
+ *   Because it is a real character, the sheet Roll button's @{target|...}
+ *   lookups resolve, so both the sheet and !mp atk can aim at the ground. New
+ *   player command !mp ground places the page's Ground token beside the
+ *   selected token (spawning it from Ground's default token if absent, with
+ *   Bar 3 = 0); !mp ground --off removes it.
+ * v2.164.1: FIX areaOffset read isAreaAttack before its declaration (TDZ
+ *   error on every attack). Flag now computed after the area fields.
  * v2.164.0: AREA EFFECT OFFSET. Attack Notes code "offset" marks an Area
  *   Effect with the Offset Modifier (+2.5): after the hit/scatter point is
  *   fixed, the area's center moves one radius directly away from the attacker
@@ -1666,7 +1677,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.164.0";
+var MP_VERSION = "2.165.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1750,6 +1761,60 @@ MP.Engine = (function () {
   };
 
   // Vehicle mode detection
+  // Point-target character: a character named "Ground" (or with attribute
+  // point_target = 1) is a movement space, not a combatant. Area attacks can
+  // be aimed at its token so the sheet Roll button's @{target|...} lookups
+  // resolve; it has no defenses, is +6 immobile, takes nothing and is never
+  // swept by an area.
+  function isPointTargetChar(charId) {
+    if (!charId) return false;
+    const c = getObj("character", charId);
+    if (!c) return false;
+    if (/^ground$/i.test(String(c.get("name") || "").trim())) return true;
+    return num(getAttr(charId, "point_target"), 0) === 1;
+  }
+  function findGroundChar() {
+    return findObjs({ _type: "character" }).find(c => /^ground$/i.test(String(c.get("name") || "").trim())) || null;
+  }
+
+  // !mp ground [--off]: summon the Ground token next to the selected token
+  // (reusing the page's existing one), or remove it.
+  function cmdGround(msg, args) {
+    const gc = findGroundChar();
+    if (!gc) return ch("MP", `${wt(msg)}<b>MP:</b> No character named <b>Ground</b>. Create one (blank sheet), give it a crosshair default token with Bar 3 = 0, and try again.`);
+    const sel = (msg.selected || []).map(x => x._type === "graphic" ? getObj("graphic", x._id) : null).filter(Boolean);
+    let pageId = sel.length ? sel[0].get("_pageid") : Campaign().get("playerpageid");
+    const existing = findObjs({ _type: "graphic", _subtype: "token", represents: gc.id, _pageid: pageId });
+    if ("off" in args) {
+      existing.forEach(t => t.remove());
+      return ch("MP", `${wt(msg)}<b>MP:</b> Removed ${existing.length} Ground token(s).`);
+    }
+    const anchor = sel.find(t => t.get("represents") !== gc.id) || null;
+    const page = getObj("page", pageId);
+    const step = 70 * ((page && page.get("snapping_increment")) || 1);
+    const left = anchor ? num(anchor.get("left"), 0) + num(anchor.get("width"), step) / 2 + step / 2 : step * 3;
+    const top = anchor ? num(anchor.get("top"), 0) : step * 3;
+    if (existing.length) {
+      existing[0].set({ left, top, layer: "objects", bar3_value: 0 });
+      existing.slice(1).forEach(t => t.remove());
+      return ch("MP", `${wt(msg)}<b>MP:</b> Ground token moved${anchor ? ` beside ${esc(anchor.get("name") || "your token")}` : ""}. Drag it to the target space, then target it with an area attack.`);
+    }
+    gc.get("_defaulttoken", function(dt) {
+      let base = {};
+      try { base = JSON.parse(dt || "{}") || {}; } catch (e) { base = {}; }
+      if (!base.imgsrc) return ch("MP", `${wt(msg)}<b>MP:</b> The Ground character has no default token. Place a crosshair token, set its Bar 3 to 0, and save it as Ground's default token.`);
+      const img = String(base.imgsrc).replace(/\/(max|med|original)\./, "/thumb.");
+      const props = {
+        _pageid: pageId, layer: "objects", represents: gc.id, imgsrc: img,
+        name: base.name || "Ground", showname: true, left, top,
+        width: base.width || step, height: base.height || step,
+        bar3_value: 0, controlledby: "all"
+      };
+      createObj("graphic", props);
+      ch("MP", `${wt(msg)}<b>MP:</b> Ground token placed${anchor ? ` beside ${esc(anchor.get("name") || "your token")}` : ""}. Drag it to the target space, then target it with an area attack.`);
+    });
+  }
+
   function isVehicleMode(charId) {
     const v = getAttr(charId, "vehicle_mode");
     return v === "on" || v === "1" || v === 1;
@@ -5952,6 +6017,7 @@ function generateRowID() {
       
       const char = getObj("character", charId);
       if (!char) return;
+      if (isPointTargetChar(charId)) return;
       
       const tx = tok.get("left");
       const ty = tok.get("top");
@@ -7476,7 +7542,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Substitute a stub character so downstream attr lookups fall through to
     // defaults (getAttr/chToChars/getTokensInRadius all skip null charIds).
     let defIsPointTarget = false;
-    if (atkChar && defTok && !defChar) {
+    const defIsGroundChar = !!(defChar && defChar.id && isPointTargetChar(defChar.id));
+    if (atkChar && defTok && (!defChar || defIsGroundChar)) {
       const rowAreaPeek = isVehicleMode(atkCharId)
         ? num(fields.area, 0)
         : num(makeNoteAwareAttackGetter((name) => getRepeatingAttackAttr(atkCharId, rowId, name))("attack_area"), num(fields.area, 0));
@@ -7486,6 +7553,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           id: null,
           get: (k) => (k === "name" ? (defTok.get("name") || "Target Point") : "")
         };
+      } else if (defIsGroundChar) {
+        ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(defTok.get("name") || "Ground")}</b> is a point target - only AREA attacks can be aimed at the ground.`);
+        return;
       }
     }
 
@@ -7672,7 +7742,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const atkNotes = getAtk("attack_notes") || "";
     const noDamageType = isSaveAttack && notesIndicateNoDamageType(atkNotes, atkName);
-    const areaOffset = isAreaAttack && /(^|[\s,;\[])offset(?=$|[\s,;\]])/i.test(atkNotes);
     const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
     const range = getAtk("attack_range") || fields.range || "-";
     const kbChecked = getAtk("attack_kb");
@@ -7720,6 +7789,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const areaRaw = getAtk("attack_area") || fields.area || "";
     const areaDiameter = num(areaRaw, 0);
     const isAreaAttack = areaDiameter > 0;
+    const areaOffset = isAreaAttack && /(^|[\s,;\[])offset(?=$|[\s,;\]])/i.test(atkNotes);
     const areaRadius = areaDiameter / 2;
     const hasImmunity = (getAtk("attack_immunity") === "1");
     
@@ -16126,6 +16196,7 @@ function cmdStance(msg, args) {
       case "mookcheck":
         if (gmOnly(msg)) return;
         return cmdMookCheck(msg, args);
+      case "ground": return cmdGround(msg, args);
       case "sensepanel":
         if (gmOnly(msg)) return;
         return cmdSensePanel(msg, args);
@@ -16391,6 +16462,7 @@ function cmdStance(msg, args) {
           <code>!mp charges</code> - Ammo readout for selected tokens (mook tokens track charges per token)<br/>
           <code>!mp reload | --all</code> - Reset selected mook tokens' charges to the sheet value (<b>GM</b>)<br/>
           <code>!mp mookcheck [--fix] [--all]</code> - Audit bar links on multi-token characters on this page; --fix unlinks Power/Hits bars (<b>GM</b>)<br/>
+          <code>!mp ground | --off</code> - Summon the Ground point-target token beside your selected token (needs a character named Ground with a default token); drag it, then aim an area attack at it<br/>
           <code>!mp sensepanel</code> - Senses control panel (<b>GM</b>)<br/>
           <code>!mp perceive [--sense KEY] [--mod N]</code> - Perception check; second selected token is the subject<br/>
           <code>!mp scan [--mod N]</code> - 3.1.5 passive sweep of the page (best sense per target); closed doors/walls hide contacts unless a sense is Penetrating. Located contacts get player-only Locate and Attack buttons. First scan/round is the free check. GM tip: add a token action macro named Scan with body <code>!mp scan</code> (visible whenever a token is selected)<br/>
