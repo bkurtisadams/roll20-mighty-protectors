@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.86 - Super Speed input spinner cleanup */
+/* Mighty Protectors Character Sheet CSS v44.90 - Compact attack/protection grid fits the sheet width */
 
 /* Super Speed extra-turn count: compact field without browser spinner arrows. */
 input[name="attr_super_speed_turns"] {
@@ -831,10 +831,22 @@ input[name="attr_super_speed_turns"]::-webkit-inner-spin-button {
 .charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table tr {
   display: grid !important;
   width: 100% !important;
-  grid-template-columns: minmax(118px, 1fr) 42px 46px 48px 82px 34px 50px 24px 30px 34px minmax(64px, 0.8fr) !important;
+  grid-template-columns: minmax(80px, 1fr) 42px 46px 44px 72px 34px 46px 24px 30px 34px minmax(0, 0.8fr) !important;
   column-gap: 2px !important;
   align-items: center !important;
   box-sizing: border-box !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table td:last-child,
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table th:last-child {
+  overflow: hidden !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-attack-table td:last-child > div {
+  min-width: 0 !important;
+  width: 100% !important;
 }
 
 /* Hide activation badge and modifier. Notes stays visible as the flexible
@@ -951,10 +963,17 @@ input[name="attr_super_speed_turns"]::-webkit-inner-spin-button {
 .charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table tr {
   display: grid !important;
   width: 100% !important;
-  grid-template-columns: minmax(118px, 1fr) 42px 46px 56px repeat(6, 34px) 30px minmax(64px, 0.8fr) !important;
+  grid-template-columns: minmax(80px, 1fr) 42px 46px 56px repeat(6, 34px) 30px minmax(0, 0.8fr) !important;
   column-gap: 2px !important;
   align-items: center !important;
   box-sizing: border-box !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table td:last-child,
+.charsheet .sheet-compact-toggle:checked ~ .sheet-character-content .sheet-compact-protection-table th:last-child {
+  overflow: hidden !important;
 }
 
 /* Hide activation badge in compact; the Notes cell stays but swaps the

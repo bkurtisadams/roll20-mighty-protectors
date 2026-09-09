@@ -1,4 +1,47 @@
-/* Mighty Protectors Roll20 API Engine v2.159.1 - 2026-08-28
+/* Mighty Protectors Roll20 API Engine v2.162.1 - 2026-09-08
+ * v2.162.1: MOOK TOKEN NAMES ON CARDS. Attack, apply, knockback and limb-save
+ *   cards label a mook token (unlinked, represents the character) by its token
+ *   name ("Mutant #1") instead of the shared character name ("Pinky"), for both
+ *   attacker and defender. Linked tokens still show the character name. The
+ *   autofire announce line does the same.
+ * v2.162.0: PER-TOKEN CHARGES FOR MOOKS. A token that represents a character
+ *   but has no bar1 link (the same signal getResource uses for Hits/Power) now
+ *   carries its own charge magazine in state.MP_Engine.tokenCharges, seeded
+ *   from the sheet row's attack_charges the first time that token fires.
+ *   Linked (PC) tokens keep using the sheet row. Attack, autofire, the
+ *   no-charges gate, the last-charge whisper (now names the token), the card
+ *   readout ("(N tok)") and undo refunds all route through getCharges /
+ *   setCharges. Magazines are pruned on token destroy. New !mp charges (ammo
+ *   readout for selected tokens) and GM !mp reload [--all] (reset to sheet).
+ *   Vehicle systems unchanged. On a mook sheet the Ch field now means
+ *   magazine size rather than current count.
+ * v2.161.1: MOOK ATTACKER FALLBACK + DIAGNOSTIC. When a character has 2+
+ *   tokens and no attacker token was identified, the candidate whose turn is
+ *   at the top of the Turn Tracker is used. The duplicate-token refusal now
+ *   reports what arrived in {{atktok=...}} so a sheet that is not passing the
+ *   selected token id can be told apart from a token on the wrong page.
+ * v2.161.0: HEAD AVOID HELMET BYPASSES HELMETS ONLY. Head Avoid Helmet (-9,
+ *   4.14.2.1) previously used the "partial" tier and stripped every Light or
+ *   Heavy partial-coverage row, body armor included. New "helmet" tier skips
+ *   only partial-coverage rows (armor or force field) whose prot_name reads as
+ *   head gear (helm, mask, hood, visor, cowl, headgear, face plate, head).
+ *   Full-coverage rows and unnamed partial body armor keep protecting. With no
+ *   matching row the apply card shows [no helmet to avoid] and the attack
+ *   resolves as a plain head shot with the -9 already paid. Sheet: new
+ *   "Multi-token" checkbox makes the Roll buttons pass {{atktok=@{selected|token_id}}}
+ *   so mook (unlinked multi-token) characters can attack from the sheet.
+ * v2.160.0: DAMAGING RADIATION / ENVIRONMENT SAVE CONDITIONS. Save attacks that
+ *   deal recurring non-poison damage (Change Environment: Damaging with the Hard
+ *   Radiation modifier, or any attack with damage subtype "radiation") no longer
+ *   fall through inferConditionType's EN+Entropy heuristic and land as PARALYZED
+ *   with no damage. New condition types damaging_radiation and
+ *   damaging_environment are recognized before that heuristic, join
+ *   damaging_poison in conditionDealsDamage, and follow the Damaging Poison rule
+ *   that protection applies to the damage rather than the save TN. Condition
+ *   records now carry dmgSubtype so recovery-tick protection honors subtype-
+ *   specific rows (e.g. Adaptation: Energy radiation). Recurring-damage labels
+ *   say "(Poison)" only for actual poison conditions. Single-target and area
+ *   save paths both updated. inferConditionType gains an optional dmgSubtype arg.
  * v2.159.1: SUPER SPEED CHECKBOX FIDELITY. Initiative automation now treats only
  *   the sheet checkbox value "1" as enabled. Legacy values such as on/true/yes
  *   can display unchecked in Roll20 when the checkbox value is 1, so accepting
@@ -1609,7 +1652,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.159.1";
+var MP_VERSION = "2.162.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1917,6 +1960,8 @@ MP.Engine = (function () {
   if (!state.MP_Engine.currentRound) state.MP_Engine.currentRound = 1;
   // Ensure undo store exists for existing state
   if (!state.MP_Engine.undo) state.MP_Engine.undo = {};
+  // Per-token charge magazines for mook tokens: tokenCharges[tokenId][rowId]
+  if (!state.MP_Engine.tokenCharges) state.MP_Engine.tokenCharges = {};
 
   // Status markers for save attack conditions
   const CONDITION_MARKERS = {
@@ -1928,6 +1973,8 @@ MP.Engine = (function () {
     transmuted: "chemical-bolt",
     poisoned: "skull",
     damaging_poison: "three-leaves",
+    damaging_radiation: "radioactive",
+    damaging_environment: "overdrive",
     duration: "stopwatch",
     darkness: "ninja-mask",
     glare: "aura",
@@ -1940,7 +1987,22 @@ MP.Engine = (function () {
 
   // Map attack names/types to condition types
   // For damaging poison, also pass the damage amount to distinguish from paralytic
-  function inferConditionType(atkName, saveBC, dmgType, damageAmount) {
+  // v2.160.0: a save attack that deals recurring damage but is NOT poison
+  // (Change Environment: Damaging w/ Hard Radiation, any "radiation" subtype).
+  // Returns "damaging_radiation", "damaging_environment", or "" when neither.
+  // Must run before the EN+Entropy => paralyzed heuristic, which otherwise
+  // captures every Entropy Devitalization EN save as a paralysis effect.
+  function damagingEnvironmentType(atkNameLower, dmgSubtype, damageAmount) {
+    if ((damageAmount || 0) <= 0) return "";
+    const name = String(atkNameLower || "").toLowerCase();
+    const sub = String(dmgSubtype || "").trim().toLowerCase();
+    if (name.includes("paralytic") || name.includes("poison") || name.includes("venom")) return "";
+    if (sub === "radiation" || sub === "hard radiation" || /radiat|radioact/.test(name)) return "damaging_radiation";
+    if (name.includes("change environment") || name.includes("damaging environment")) return "damaging_environment";
+    return "";
+  }
+
+  function inferConditionType(atkName, saveBC, dmgType, damageAmount, dmgSubtype) {
     const name = String(atkName || "").toLowerCase();
     const bc = String(saveBC || "").toUpperCase();
     const dtype = String(dmgType || "").toLowerCase();
@@ -1952,6 +2014,10 @@ MP.Engine = (function () {
     if (name.includes("emotion") || name.includes("fear")) return "emotion_control";
     if (name.includes("dazzle") || name.includes("flash") || name.includes("blind")) return "dazzled";
     if (name.includes("transmut")) return "transmuted";
+
+    // v2.160.0: recurring non-poison damage (radiation / Change Environment).
+    const envType = damagingEnvironmentType(name, dmgSubtype, damageAmount);
+    if (envType) return envType;
     
     // Damaging Poison/Venom:
     // 1. Explicitly named "damaging poison/venom", OR
@@ -1971,7 +2037,16 @@ MP.Engine = (function () {
   
   // Check if condition deals damage on failed recovery
   function conditionDealsDamage(condType) {
-    return condType === "damaging_poison";
+    return condType === "damaging_poison"
+      || condType === "damaging_radiation"
+      || condType === "damaging_environment";
+  }
+
+  // Chat label suffix for the recurring-damage pending record of a condition.
+  function condDamageLabel(condType) {
+    if (condType === "damaging_radiation") return " (Radiation)";
+    if (condType === "damaging_environment") return " (Environment)";
+    return " (Poison)";
   }
 
   // Stable per-condition handle. Array indices shift on splice, so chat buttons
@@ -4478,6 +4553,106 @@ MP.Engine = (function () {
     ch("MP", `/w gm <b style="color:#c88fff;">TEST AREA POISON</b> (${dmg} dmg) \u2014 ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
   }
 
+  // Self-test: !mp test arearadiation [DMG] (GM, 1 selected token). v2.160.0.
+  // Exercises resolveAreaSave for a Change Environment: Damaging (Hard
+  // Radiation) field delivered as an Area Effect — EN save, Entropy damage,
+  // subtype "radiation". Verifies the attack is NOT captured by the EN+Entropy
+  // => paralyzed heuristic, lands as damaging_radiation, carries recurring
+  // damage, stores the subtype, and keeps protection off the save TN.
+  // Non-destructive (snapshot/restore).
+  function testAreaRadiation(msg, args) {
+    const sel = (msg.selected || []).filter(s => s._type === "graphic");
+    if (!sel.length) return ch("MP", `/w gm <b>MP:</b> Select 1 token, then run <code>!mp test arearadiation [DMG]</code>.`);
+    const tokId = sel[0]._id;
+    const tok = getObj("graphic", tokId);
+    const char = getCharFromToken(tok);
+    if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Token missing or unlinked.`);
+
+    const parts = msg.content.split(/\s+/);
+    const dmg = Math.max(1, num(parts[3], 5));
+
+    const marker = CONDITION_MARKERS.damaging_radiation;
+    const snapshot = JSON.parse(JSON.stringify(state.MP_Engine.conditions[tokId] || []));
+    const markerBefore = tok.get("status_" + marker);
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "\u2705" : "\u274c"} ${name}`);
+
+    // Mirrors Barl Nep's ability as it would be entered on a sheet.
+    const fakeArea = {
+      atkName: "Change Environment: Hard Radiation",
+      atkCharIdForCond: char.id,
+      saveBC: "EN",
+      saveMod: -8,
+      recMod: 0,
+      recTime: "1 round",
+      senseLoss: 0,
+      isSaveAttack: true,
+      saveDamage: dmg,
+      damage: dmg,
+      damageType: "Entropy",
+      dmgSubtype: "radiation",
+      protKey: "entropy",
+      noDamage: false,
+      tokens: {}
+    };
+    fakeArea.tokens[tokId] = { charId: char.id, name: char.get("name"), escaped: false };
+
+    const baseSave = getAttrNum(char.id, "endurance_save", 10);
+
+    // 0. Classifier: subtype alone, and name alone, both resolve to radiation;
+    //    the EN+Entropy heuristic must not win.
+    check(`inferConditionType(subtype radiation) => damaging_radiation`,
+      inferConditionType("Some Field", "EN", "Entropy", dmg, "radiation") === "damaging_radiation");
+    check(`inferConditionType(name only) => damaging_radiation`,
+      inferConditionType("Radioactive Oil Slick", "EN", "Entropy", dmg, "") === "damaging_radiation");
+    check(`inferConditionType(Change Environment, no subtype) => damaging_environment`,
+      inferConditionType("Change Environment (Damaging)", "EN", "Energy", dmg, "") === "damaging_environment");
+    check(`plain EN+Entropy save (no damage) still => paralyzed`,
+      inferConditionType("Paralysis Ray", "EN", "Entropy", 0, "") === "paralyzed");
+    check(`conditionDealsDamage(damaging_radiation)`, conditionDealsDamage("damaging_radiation") === true);
+
+    // 1. Forced pass: no condition, no badge
+    state.MP_Engine.conditions[tokId] = [];
+    setMarker(tok, marker, false);
+    resolveAreaSave(fakeArea, tokId, 1);
+    check(`forced pass => no condition`, (state.MP_Engine.conditions[tokId] || []).length === 0);
+    check(`forced pass => no badge`, parseMarkers(tok.get("statusmarkers")).indexOf(marker) < 0);
+
+    // 2. Forced fail: damaging_radiation condition, badge on, damage + subtype carried
+    state.MP_Engine.conditions[tokId] = [];
+    fakeArea.saveMod = -30;
+    resolveAreaSave(fakeArea, tokId, 19);
+    let conds = state.MP_Engine.conditions[tokId] || [];
+    let c0 = conds.find(c => c.type === "damaging_radiation");
+    check(`forced fail => damaging_radiation condition (not paralyzed)`, !!c0 && !conds.some(c => c.type === "paralyzed"));
+    check(`badge "${marker}" stored in statusmarkers`, parseMarkers(tok.get("statusmarkers")).indexOf(marker) >= 0);
+    check(`condition carries ${dmg} recurring damage`, !!c0 && c0.damage === dmg);
+    check(`condition stores dmgSubtype "radiation"`, !!c0 && c0.dmgSubtype === "radiation");
+    check(`condition dmgType is Entropy`, !!c0 && c0.dmgType === "Entropy");
+    check(`prot excluded from save TN (recTN = ${baseSave - 30})`, !!c0 && c0.recTN === baseSave - 30);
+
+    // 3. Refresh in place: second fail doesn't stack a duplicate
+    resolveAreaSave(fakeArea, tokId, 19);
+    conds = state.MP_Engine.conditions[tokId] || [];
+    check(`re-apply refreshes, no duplicate (count=${conds.filter(c => c.type === "damaging_radiation").length})`,
+      conds.filter(c => c.type === "damaging_radiation").length === 1);
+
+    // 4. Clear by id removes condition and badge
+    c0 = conds.find(c => c.type === "damaging_radiation");
+    const radId = c0 ? c0.id : "";
+    cmdClearCondition({ playerid: msg.playerid, selected: [] }, { target: tokId, cid: radId });
+    const after = state.MP_Engine.conditions[tokId] || [];
+    check(`clear by cid removed condition (count=${after.length})`, !after.some(c => c.id === radId));
+    check(`badge "${marker}" removed from statusmarkers`, parseMarkers(tok.get("statusmarkers")).indexOf(marker) < 0);
+
+    // Restore
+    state.MP_Engine.conditions[tokId] = snapshot;
+    setMarker(tok, marker, markerBefore === true);
+
+    const passCount = results.filter(r => r.startsWith("\u2705")).length;
+    ch("MP", `/w gm <b style="color:#c88fff;">TEST AREA RADIATION</b> (${dmg} dmg) \u2014 ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
+  }
+
   // Self-test: !mp test flash [LEVELS] (GM, 1 selected token). Exercises
   // resolveAreaSave with forced rolls: guaranteed pass, guaranteed
   // fail, and fumble (permanent). Non-destructive (snapshot/restore).
@@ -4913,7 +5088,9 @@ MP.Engine = (function () {
       }
       // Refund a spent charge (repeating attack attr)
       if (ex.chgCharId && ex.chgRowId && ex.chgBefore !== undefined && ex.chgBefore !== "") {
-        setRepeatingAttackAttr(ex.chgCharId, ex.chgRowId, "attack_charges", ex.chgBefore);
+        const ctok = ex.chgTokId ? getObj("graphic", ex.chgTokId) : null;
+        if (ctok) setCharges(ctok, ex.chgCharId, ex.chgRowId, ex.chgBefore);
+        else setRepeatingAttackAttr(ex.chgCharId, ex.chgRowId, "attack_charges", ex.chgBefore);
       }
       // Void the pending attack so its damage buttons can't be applied after undo
       if (ex.voidPending && state.MP_Engine.pending[ex.voidPending]) {
@@ -5146,27 +5323,29 @@ function generateRowID() {
   //   "none"    nothing avoided
   //   "light"   light partial coverage only
   //   "partial" light or heavy partial coverage
+  //   "helmet"  partial coverage rows whose name reads as head gear
   //   "all"     every row - legacy cards and the --noprot test flag, which
   //             predate the coverage model and mean a flat bypass
+  const HELMET_NAME_RE = /helm|mask|hood|visor|cowl|headgear|face ?plate|head/i;
   function avoidCoverageTier(rec, critType) {
     if (critType === CRIT_TYPES.AVOID_LIGHT_ARMOR) return "light";
     if (critType === CRIT_TYPES.AVOID_HEAVY_ARMOR) return "partial";
     const called = rec && rec.calledShotType;
     if (called === "Avoid Light Armor") return "light";
     if (called === "Avoid Heavy Armor") return "partial";
-    // 4.14.2.1 avoids the HELMET, not the body armor. With no per-piece model
-    // this is the closest honest approximation: a helmet is partial coverage by
-    // definition, and full-coverage armor is left standing.
-    if (called === "Head Avoid Helmet") return "partial";
+    // 4.14.2.1 avoids the HELMET, not the body armor: only partial-coverage
+    // rows named as head gear are skipped. Body armor is left standing.
+    if (called === "Head Avoid Helmet") return "helmet";
     return "all";
   }
 
-  function coverageAvoided(cov, tier) {
+  function coverageAvoided(cov, tier, name) {
     if (!tier || tier === "none") return false;
     if (tier === "all") return true;
     const c = String(cov || "full").toLowerCase();
     if (tier === "light") return c === "light";
     if (tier === "partial") return c === "light" || c === "heavy";
+    if (tier === "helmet") return (c === "light" || c === "heavy") && HELMET_NAME_RE.test(String(name || ""));
     return false;
   }
 
@@ -5634,7 +5813,8 @@ function generateRowID() {
       if (avoidTier && avoidTier !== "none") {
         const covAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_coverage`);
         const cov = covAttr ? covAttr.get("current") : "full";
-        if (coverageAvoided(cov, avoidTier)) {
+        const covNameAttr = attrs.find(a => a.get("name") === `repeating_protection_${rowId}_prot_name`);
+        if (coverageAvoided(cov, avoidTier, covNameAttr ? covNameAttr.get("current") : "")) {
           avoidedProt += parsed.prot;
           avoidedRows += 1;
           return;
@@ -6623,6 +6803,109 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return false;
   }
 
+  // Mook charges. A token that represents the character but has no bar1 link
+  // (same signal getResource uses for Hits/Power) carries its own magazine in
+  // state, seeded from the sheet row the first time it fires. Linked tokens
+  // keep using the sheet row.
+  function isMookToken(tok, charId) {
+    return !!(tok && charId && !tok.get("bar1_link") && tok.get("represents") === charId);
+  }
+  // Card label: a mook token's own name, otherwise the character name.
+  function displayName(tok, char) {
+    if (!char) return tok ? (tok.get("name") || "Token") : "Unknown";
+    if (isMookToken(tok, char.id) && tok.get("name")) return tok.get("name");
+    return char.get("name");
+  }
+  function tokenMagazine(tokId, create) {
+    const store = state.MP_Engine.tokenCharges;
+    if (!store[tokId] && create) store[tokId] = {};
+    return store[tokId] || null;
+  }
+  function getCharges(tok, charId, rowId, sheetVal) {
+    if (!isMookToken(tok, charId) || !rowId) return sheetVal;
+    const key = String(rowId).toLowerCase();
+    const mag = tokenMagazine(tok.id, true);
+    if (mag[key] === undefined) mag[key] = num(sheetVal, 0);
+    return mag[key];
+  }
+  function setCharges(tok, charId, rowId, value) {
+    if (isMookToken(tok, charId) && rowId) {
+      tokenMagazine(tok.id, true)[String(rowId).toLowerCase()] = num(value, 0);
+      return true;
+    }
+    return setRepeatingAttackAttr(charId, rowId, "attack_charges", value);
+  }
+  function chargedAttackRows(charId) {
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    const rows = [];
+    attrs.forEach(a => {
+      const m = a.get("name").match(/^repeating_attacks_([^_]+)_attack_charges$/i);
+      if (!m) return;
+      const raw = String(a.get("current") || "").trim();
+      if (raw === "" || raw === "-1") return;
+      const nameAttr = attrs.find(x => x.get("name").toLowerCase() === `repeating_attacks_${m[1]}_attack_name`.toLowerCase());
+      rows.push({ rowId: m[1], name: nameAttr ? nameAttr.get("current") : "Attack", sheet: num(raw, 0) });
+    });
+    return rows;
+  }
+
+  function cmdTokenIds(msg, args) {
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else if (msg.selected && msg.selected.length) {
+      msg.selected.forEach(sel => { if (sel._type === "graphic") ids.push(sel._id); });
+    }
+    return ids;
+  }
+
+  // !mp charges (selected tokens or --target): per-token ammo readout.
+  function cmdCharges(msg, args) {
+    const ids = cmdTokenIds(msg, args);
+    if (!ids.length) return ch("MP", `${wt(msg)}<b>MP:</b> Select token(s) or use --target. Usage: <code>!mp charges</code>`);
+    let out = `<div style="background:#1a1a2e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:300px;"><b style="color:#f4d03f;">Charges</b>`;
+    ids.forEach(id => {
+      const tok = getObj("graphic", id);
+      if (!tok) return;
+      const charId = tok.get("represents");
+      if (!charId) { out += `<br/><b>${esc(tok.get("name") || "Token")}</b>: no character`; return; }
+      const rows = chargedAttackRows(charId);
+      const mook = isMookToken(tok, charId);
+      out += `<br/><b>${esc(tok.get("name") || "Token")}</b>${mook ? ` <span style="color:#8a84a8;">(per-token)</span>` : ` <span style="color:#8a84a8;">(sheet)</span>`}`;
+      if (!rows.length) { out += ` — no charged attacks`; return; }
+      rows.forEach(r => {
+        const cur = mook ? getCharges(tok, charId, r.rowId, r.sheet) : r.sheet;
+        const low = cur <= 1 ? ` style="color:#ff6b6b; font-weight:bold;"` : "";
+        out += `<br/>&nbsp;&nbsp;${esc(r.name)}: <span${low}>${cur}</span>${mook ? ` / ${r.sheet}` : ""}`;
+      });
+    });
+    out += `</div>`;
+    ch("MP", `${wt(msg)}` + out);
+  }
+
+  // !mp reload [--all] (GM; selected tokens or --target): reset mook magazines
+  // to the sheet row value. --all clears every stored magazine in the game.
+  function cmdReload(msg, args) {
+    if ("all" in args) {
+      const n = Object.keys(state.MP_Engine.tokenCharges).length;
+      state.MP_Engine.tokenCharges = {};
+      return ch("MP", `/w gm <b>MP:</b> Cleared ${n} token magazine(s); every mook reloads from its sheet on its next shot.`);
+    }
+    const ids = cmdTokenIds(msg, args);
+    if (!ids.length) return ch("MP", `/w gm <b>MP:</b> Select token(s) or use --target. Usage: <code>!mp reload | --all</code>`);
+    const lines = [];
+    ids.forEach(id => {
+      const tok = getObj("graphic", id);
+      if (!tok) return;
+      const charId = tok.get("represents");
+      if (!isMookToken(tok, charId)) { lines.push(`${esc(tok.get("name") || "Token")}: linked token, charges live on the sheet`); return; }
+      delete state.MP_Engine.tokenCharges[tok.id];
+      const rows = chargedAttackRows(charId);
+      rows.forEach(r => getCharges(tok, charId, r.rowId, r.sheet));
+      lines.push(`${esc(tok.get("name") || "Token")}: reloaded ${rows.map(r => `${esc(r.name)} ${r.sheet}`).join(", ") || "(no charged attacks)"}`);
+    });
+    ch("MP", `/w gm <b>MP: Reload</b><br/>` + lines.join("<br/>"));
+  }
+
   function rollExpr(s) {
     let str = String(s || "").replace(/\s+/g, "");
     if (!str) return 0;
@@ -6885,7 +7168,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const p = sumProtectionWithHardened(charId, protKey, atkSubtype, false, tier);
     if (num(p.avoidedRows, 0) > 0) return true;
     const ff = getForceFieldData(charId, tokenId);
-    if (ff && coverageAvoided(ff.coverage, tier) &&
+    if (ff && coverageAvoided(ff.coverage, tier, ff.name) &&
         num(ff.protValues ? ff.protValues[protKey] : 0, 0) > 0) return true;
     return false;
   }
@@ -7269,11 +7552,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const rawAtkType = getAtk("attack_atk");
     const weaponName = getAtk("attack_name") || fields.name || "Attack";
-    const atkName = atkChar.get("name") + " - " + weaponName;
+    let atkName = atkChar.get("name") + " - " + weaponName;
     const defIsVehName = isVehicleMode(defChar.id);
     const defName = defIsVehName
       ? ("Vehicle: " + (getAttr(defChar.id, "vehicle_name") || defChar.get("name")))
-      : defChar.get("name");
+      : displayName(defTok, defChar);
 
     const atkTypeCode = rawAtkType || "P";
     
@@ -7373,7 +7656,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const skipCosts = (fields.nopr === "1");
     const atkPR = skipCosts ? 0 : num(getAtk("attack_cost") || fields.cost || "", 0);
-    const atkChgRaw = getAtk("attack_charges");
+    let atkChgRaw = getAtk("attack_charges");
     const hasCharges = !skipCosts && (atkChgRaw !== undefined && atkChgRaw !== null && String(atkChgRaw).trim() !== "");
     const atkChgNum = hasCharges ? num(atkChgRaw, 0) : 0;
     const isUnlimitedCharges = (atkChgNum === -1);
@@ -7405,13 +7688,31 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         .find(t => t && t.get("represents") === atkCharId && t.get("_pageid") === defPageId);
       if (selMatch) atkTok = selMatch;
     }
+    if (!atkTok && atkTokCandidates.length > 1) {
+      // Mook fallback: the candidate whose turn it is on the Turn Tracker.
+      let to = [];
+      try { to = JSON.parse(Campaign().get("turnorder") || "[]"); } catch (e) { to = []; }
+      const curId = to.length ? String(to[0].id || "") : "";
+      const curMatch = curId ? atkTokCandidates.find(t => t.id === curId) : null;
+      if (curMatch) atkTok = curMatch;
+    }
     if (!atkTok) {
       if (atkTokCandidates.length > 1) {
-        ch("MP", `${wt(msg)}<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkChar.get("name"))}</b> has ${atkTokCandidates.length} tokens on this map. Select the attacking token before rolling, or use the <code>!mp atk</code> token action (which passes the token id).</div>`);
+        const rawTok = String(fields.atktok || "");
+        const diag = rawTok
+          ? (explicitAtkTok
+              ? `atktok=${esc(rawTok)} found, represents=${esc(String(explicitAtkTok.get("represents")))} page=${esc(String(explicitAtkTok.get("_pageid")))} (need ${esc(atkCharId)} / ${esc(defPageId)})`
+              : `atktok=${esc(rawTok)} is not a token id on this map`)
+          : "no atktok field received";
+        ch("MP", `${wt(msg)}<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkChar.get("name"))}</b> has ${atkTokCandidates.length} tokens on this map. Select the attacking token before rolling, put its turn at the top of the Turn Tracker, or use the <code>!mp atk</code> token action (which passes the token id).<br/><span style="font-size:10px; color:#400;">${diag}</span></div>`);
         return;
       }
       atkTok = atkTokCandidates[0];
     }
+    const chgIsToken = atkChgCost > 0 && !atkIsVehicle && isMookToken(atkTok, atkCharId);
+    if (chgIsToken) atkChgRaw = String(getCharges(atkTok, atkCharId, rowId, atkChgRaw));
+    const atkLabel = displayName(atkTok, atkChar);
+    atkName = atkLabel + " - " + weaponName;
     const atkDefMod = atkTok ? num(atkTok.get(CFG.DEF_MOD_BAR), 0) : 0;
 
     // Paralysis Ray: the victim is "completely immobile ... their muscles won't
@@ -7737,7 +8038,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     if (atkChgCost > 0 && num(atkChgRaw, 0) <= 0) {
-      ch("MP", `<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkName)}</b>: No charges remaining!</div>`);
+      ch("MP", `<div style="background:#ff6b6b; border:3px solid #000; padding:4px 8px;">⚠️ <b>${esc(atkName)}</b>: No charges remaining!${chgIsToken ? ` <span style="font-size:10px;">(${esc(atkTok.get("name") || "token")} — <code>!mp reload</code>)</span>` : ""}</div>`);
       return;
     }
 
@@ -7772,9 +8073,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const chg1 = chg0 - 1;
       chgRemaining = chg1;
       if (atkIsVehicle) setVehSystemAttr(atkCharId, rowId, "vsys_charges", chg1);
-      else setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", chg1);
+      else setCharges(atkTok, atkCharId, rowId, chg1);
       if (chg1 === 0) {
-        sendChat("MP", `/w gm ⚠️ ${esc(atkName)}: Last charge used!`);
+        sendChat("MP", `/w gm ⚠️ ${esc(atkName)}${chgIsToken ? ` (${esc(atkTok.get("name") || "token")})` : ""}: Last charge used!`);
       }
     }
 
@@ -7990,7 +8291,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // --- Header: "Attacker attacks Target with Weapon" ---
     html += `<div style="background:#c0392b; padding:7px 10px; font-size:14px; color:#fdd;">`;
-    html += `<b style="color:#fff;">${esc(atkChar.get("name"))}</b> attacks <b style="color:#fff;">${esc(defName)}</b> with <b style="color:#fff;">${esc(weaponName)}</b>`;
+    html += `<b style="color:#fff;">${esc(atkLabel)}</b> attacks <b style="color:#fff;">${esc(defName)}</b> with <b style="color:#fff;">${esc(weaponName)}</b>`;
     html += `</div>`;
 
     // --- Outcome Banner ---
@@ -8101,8 +8402,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       let costParts = [];
       if (prDeducted > 0) costParts.push(`PR:-${prDeducted}`);
       if (chgDeducted > 0) {
-        const chgHover = chgRemaining >= 0 ? ` title="${chgRemaining} charges remaining"` : "";
-        const chgLeft = chgRemaining >= 0 ? ` (${chgRemaining})` : "";
+        const chgHover = chgRemaining >= 0 ? ` title="${chgRemaining} charges remaining${chgIsToken ? " on this token" : ""}"` : "";
+        const chgLeft = chgRemaining >= 0 ? ` (${chgRemaining}${chgIsToken ? " tok" : ""})` : "";
         const chgLow = (chgRemaining >= 0 && chgRemaining <= 1) ? ` style="color:#ff6b6b; font-weight:bold;"` : "";
         costParts.push(`<span${chgHover}${chgLow}>Chg:-${chgDeducted}c${chgLeft}</span>`);
       }
@@ -8280,6 +8581,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       powerBefore: undoAtkPowerBefore,
       chgCharId: chgDeducted ? atkCharId : null,
       chgRowId: chgDeducted ? rowId : null,
+      chgTokId: (chgDeducted && chgIsToken) ? atkTok.id : null,
       chgBefore: chgDeducted ? atkChgRaw : undefined,
       voidPending: uniqueRollId
     });
@@ -8712,6 +9014,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const hasPoisonInName = atkNameLower.includes("poison") || atkNameLower.includes("venom");
     const rawCondDamage = num(areaRec.saveDamage, 0) || (areaRec.noDamage ? 0 : num(areaRec.damage, 0));
     const isDamagingPoison = hasPoisonInName && rawCondDamage > 0 && !atkNameLower.includes("paralytic");
+    // v2.160.0: radiation / Change Environment recurring damage — same
+    // protection-applies-to-damage rule as Damaging Poison.
+    const isDamagingEnv = !isDamagingPoison && !!damagingEnvironmentType(atkNameLower, areaRec.dmgSubtype, rawCondDamage);
+    const isDamagingSave = isDamagingPoison || isDamagingEnv;
     const isTransmutation = String(areaRec.dmgSubtype || "").trim().toLowerCase() === "transmutation";
 
     const tokIsVeh = isVehicleMode(tokData.charId);
@@ -8721,9 +9027,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const prot = isTransmutation ? 0 : protData.prot;
     const invulnBonus = protData.invuln ? 8 : 0;
     const adaptBonus = (!isTransmutation && protData.adapt) ? 5 : 0;
-    const protForSave = (isDamagingPoison || isSenseLoss || isTransmutation) ? 0 : Math.floor(prot);
-    const invulnForSave = (isDamagingPoison || isSenseLoss) ? 0 : invulnBonus;
-    const adaptForSave = (isDamagingPoison || isSenseLoss || isTransmutation) ? 0 : adaptBonus;
+    const protForSave = (isDamagingSave || isSenseLoss || isTransmutation) ? 0 : Math.floor(prot);
+    const invulnForSave = (isDamagingSave || isSenseLoss) ? 0 : invulnBonus;
+    const adaptForSave = (isDamagingSave || isSenseLoss || isTransmutation) ? 0 : adaptBonus;
 
     const saveAttr = bcToSaveAttr(areaRec.saveBC || "EN") || "endurance_save";
     const baseSave = tokIsVeh
@@ -8750,7 +9056,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const condType = isPermanent ? "blinded"
       : (isSenseLoss ? "dazzled"
         : (isDamagingPoison ? "damaging_poison"
-          : inferConditionType(areaRec.atkName, areaRec.saveBC, areaRec.damageType, rawCondDamage)));
+          : inferConditionType(areaRec.atkName, areaRec.saveBC, areaRec.damageType, rawCondDamage, areaRec.dmgSubtype)));
     const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
     const hasDamage = conditionDealsDamage(condType);
     const condDamage = hasDamage ? rawCondDamage : 0;
@@ -8776,7 +9082,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       effectDesc: getConditionDesc(condType, areaRec.atkName, levels),
       damage: condDamage,
       dmgType: hasDamage ? (areaRec.damageType || "Biochemical") : null,
-      protKey: hasDamage ? areaRec.protKey : null
+      protKey: hasDamage ? areaRec.protKey : null,
+      dmgSubtype: hasDamage ? (areaRec.dmgSubtype || "") : ""
     };
     let condIdx = condList.findIndex(c => c.type === condType);
     if (condIdx >= 0) condList[condIdx] = condition; // refresh in place
@@ -8807,7 +9114,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           damageTotal: penetrating,
           dmgTypeStr: areaRec.damageType || "Biochemical",
           protKey: null,  // Protection already applied
-          atkName: areaRec.atkName + " (Poison)",
+          atkName: areaRec.atkName + condDamageLabel(condType),
           condIdx: condIdx,
           condId: condition.id,
           created: Date.now()
@@ -8817,7 +9124,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         out += `${btn(`Roll-With Max`, `!mp apply --id ${poisonRollId} --mode rollwithmax`)} `;
         out += `${btn(`Roll-With Custom`, `!mp apply --id ${poisonRollId} --mode rollwithcustom --amt ?{Power to divert|0}`)}`;
       } else {
-        out += `<br/><span style="font-size:11px;">Poison damage blocked by ${dmgProt} ${esc(areaRec.damageType || "Biochemical")} protection</span>`;
+        out += `<br/><span style="font-size:11px;">Damage blocked by ${dmgProt} ${esc(areaRec.damageType || "Biochemical")} protection</span>`;
       }
       out += `<br/><span style="font-size:11px;">Takes <b>${condDamage}</b> ${esc(areaRec.damageType || "Biochemical")} dmg each failed recovery</span>`;
     }
@@ -10495,7 +10802,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Claim the damage phase immediately before the first possible mutation.
     markResolution(rec, "damage", msg);
 
-    if (ffData && !(bypassProt || coverageAvoided(ffData.coverage, avoidTier))) {
+    if (ffData && !(bypassProt || coverageAvoided(ffData.coverage, avoidTier, ffData.name))) {
       const atkSub = (rec.dmgSubtype || "").trim().toLowerCase();
       
       // Disintegration can only be blocked by dedicated Invulnerability.
@@ -10871,11 +11178,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Partial coverage indicator (4.14.2.4)
     let coverIndicator = "";
     if (avoidsProt && !bypassProt) {
-      const tierLabel = avoidTier === "light" ? "Light partial coverage" : "partial coverage";
+      const tierLabel = avoidTier === "light" ? "Light partial coverage" : avoidTier === "helmet" ? "helmet" : "partial coverage";
       if (avoidedRows > 0) {
         coverIndicator = ` <span style="color:#e67e22;" title="Avoided ${Math.floor(avoidedProt)} protection across ${avoidedRows} row(s) with ${tierLabel}">[avoided ${Math.floor(avoidedProt)}]</span>`;
-      } else if (armorProt > 0 || (ffData && !coverageAvoided(ffData.coverage, avoidTier))) {
-        coverIndicator = ` <span style="color:#889;" title="4.14.2.4: armor without the Partial Coverage Modifier cannot be avoided">[no ${tierLabel} to avoid]</span>`;
+      } else if (armorProt > 0 || (ffData && !coverageAvoided(ffData.coverage, avoidTier, ffData.name))) {
+        const noAvoidTitle = avoidTier === "helmet"
+          ? "4.14.2.1: no partial-coverage protection row named as head gear (helm/mask/hood/visor/cowl) - resolved as a plain head shot"
+          : "4.14.2.4: armor without the Partial Coverage Modifier cannot be avoided";
+        coverIndicator = ` <span style="color:#889;" title="${noAvoidTitle}">[no ${tierLabel} to avoid]</span>`;
       }
     }
 
@@ -11395,10 +11705,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const hasPoisonInName = atkNameLower.includes("poison") || atkNameLower.includes("venom");
     const rawCondDamage = rec.saveDamage || rec.damageTotal || 0;
     const isDamagingPoison = hasPoisonInName && rawCondDamage > 0 && !atkNameLower.includes("paralytic");
+    const isDamagingEnv = !isDamagingPoison && !!damagingEnvironmentType(atkNameLower, rec.dmgSubtype, rawCondDamage);
+    const isDamagingSave = isDamagingPoison || isDamagingEnv;
     const isSenseLossAttack = num(rec.senseLoss, 0) > 0;
-    const protForSave = (isDamagingPoison || isSenseLossAttack || isTransmutation) ? 0 : Math.floor(prot);
-    const invulnForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : invulnBonus;
-    const adaptForSave = (isDamagingPoison || isSenseLossAttack || isTransmutation) ? 0 : adaptBonus;
+    const protForSave = (isDamagingSave || isSenseLossAttack || isTransmutation) ? 0 : Math.floor(prot);
+    const invulnForSave = (isDamagingSave || isSenseLossAttack) ? 0 : invulnBonus;
+    const adaptForSave = (isDamagingSave || isSenseLossAttack || isTransmutation) ? 0 : adaptBonus;
     const critMod = (rec.critResult && rec.critResult.type === CRIT_TYPES.SOLID_HIT) ? -3 : 0;
     const pushMod = num(rec.pushAmount, 0) > 0 ? -num(rec.pushAmount, 0) : 0;
     const vulnData = (!rec.noDamageType && rec.dmgTypeStr) ? getVulnerabilityMods(defChar.id, rec.dmgTypeStr, rec.dmgSubtype) : { dmgMod: 0 };
@@ -11512,15 +11824,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const hasPoisonInName = atkNameLower.includes("poison") || atkNameLower.includes("venom");
     const rawCondDamage = rec.saveDamage || rec.damageTotal || 0;
     const isDamagingPoison = hasPoisonInName && rawCondDamage > 0 && !atkNameLower.includes("paralytic");
+    // v2.160.0: radiation / Change Environment recurring damage follows the
+    // same protection-applies-to-damage rule as Damaging Poison.
+    const isDamagingEnv = !isDamagingPoison && !!damagingEnvironmentType(atkNameLower, rec.dmgSubtype, rawCondDamage);
+    const isDamagingSave = isDamagingPoison || isDamagingEnv;
     
     // For Damaging Poison: protection does NOT apply to save TN
     // For Paralytic Poison/other saves: protection DOES apply to save TN
     // v2.89.1: Sense-loss (Flash) attacks have no Damage Type and "can only
     // be mitigated by the Protected Sense Modifier" — no protection to save.
     const isSenseLossAttack = num(rec.senseLoss, 0) > 0;
-    const protForSave = (isDamagingPoison || isSenseLossAttack || isTransmutation) ? 0 : Math.floor(prot);
-    const invulnForSave = (isDamagingPoison || isSenseLossAttack) ? 0 : invulnBonus;
-    const adaptForSave = (isDamagingPoison || isSenseLossAttack || isTransmutation) ? 0 : adaptBonus;
+    const protForSave = (isDamagingSave || isSenseLossAttack || isTransmutation) ? 0 : Math.floor(prot);
+    const invulnForSave = (isDamagingSave || isSenseLossAttack) ? 0 : invulnBonus;
+    const adaptForSave = (isDamagingSave || isSenseLossAttack || isTransmutation) ? 0 : adaptBonus;
 
     // Roll-with for saves: spend Power to add to save TN (4.8.3.1)
     // Cost is 1 Power per +1 bonus to save TN
@@ -11582,7 +11898,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Ordinary sense loss is Dazzled; a permanent Flash fumble is Blinded.
       const condType = isPermanent ? "blinded"
         : (isSenseLossAttack ? "dazzled"
-          : (isDamagingPoison ? "damaging_poison" : inferConditionType(rec.atkName, rec.saveBC, rec.dmgTypeStr, rawCondDamage)));
+          : (isDamagingPoison ? "damaging_poison" : inferConditionType(rec.atkName, rec.saveBC, rec.dmgTypeStr, rawCondDamage, rec.dmgSubtype)));
       const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
       
       // For Damaging Poison, use the damage value
@@ -11609,10 +11925,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           ? Math.max(1, Math.min(3, num(rec.senseLoss, 2)))
           : ((condType === "dazzled") ? 2 : 0),
         effectDesc: getConditionDesc(condType, rec.atkName, num(rec.senseLoss, 2)),
-        // For damaging conditions (Damaging Poison)
+        // For damaging conditions (Damaging Poison / Radiation / Environment)
         damage: condDamage,
         dmgType: hasDamage ? rec.dmgTypeStr : null,
-        protKey: hasDamage ? rec.protKey : null
+        protKey: hasDamage ? rec.protKey : null,
+        dmgSubtype: hasDamage ? (rec.dmgSubtype || "") : ""
       };
       
       // Add to conditions tracking. Refresh a same-type condition in place instead of
@@ -11664,7 +11981,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
             damageTotal: penetrating,
             dmgTypeStr: rec.dmgTypeStr || "Biochemical",
             protKey: null,  // Protection already applied
-            atkName: rec.atkName + " (Poison)",
+            atkName: rec.atkName + condDamageLabel(condType),
             condIdx: condIdx,  // Legacy fallback for retry button
             condId: condition.id,
             created: Date.now()
@@ -11676,7 +11993,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
           damageButtons += `${btn(`Roll-With Max`, `!mp apply --id ${poisonRollId} --mode rollwithmax`)} `;
           damageButtons += `${btn(`Roll-With Custom`, `!mp apply --id ${poisonRollId} --mode rollwithcustom --amt ?{Power to divert|0}`)}`;
         } else {
-          statusLine += `<br/><span style="font-size:11px;">Poison damage blocked by ${dmgProt} ${rec.dmgTypeStr || "Biochemical"} protection</span>`;
+          statusLine += `<br/><span style="font-size:11px;">Damage blocked by ${dmgProt} ${rec.dmgTypeStr || "Biochemical"} protection</span>`;
         }
         statusLine += `<br/><span style="font-size:11px;">Takes <b>${condDamage}</b> ${rec.dmgTypeStr} dmg each failed recovery</span>`;
       }
@@ -11695,8 +12012,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       `<b>Save Attack</b> (${esc(rec.saveBC)}) vs <b>${esc(rec.defName)}</b><br/>` +
       `Base: <b>${baseSave}</b> | Init: <b>${rec.saveMod}</b>` +
       // Show protection: for damaging poison it doesn't apply to save, for others it does
-      (isDamagingPoison 
-        ? (prot > 0 ? ` | <span style="color:#888;" title="Damaging Poison: prot applies to damage, not save">Prot: n/a</span>` : "")
+      (isDamagingSave 
+        ? (prot > 0 ? ` | <span style="color:#888;" title="Damaging save attack: prot applies to damage, not save">Prot: n/a</span>` : "")
         : (rec.protKey ? ` | Prot: <b>+${protForSave}</b>` : "")) +
       (invulnForSave > 0 ? ` | <span style="color:#d35400;">Invuln: <b>+${invulnForSave}</b></span>` : "") +
       (adaptForSave > 0 ? ` | <span style="color:#1abc9c;">Adapt: <b>+${adaptForSave}</b></span>` : "") +
@@ -11731,6 +12048,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       case "transmuted": return "Transmuted - form altered";
       case "poisoned": return "Poisoned - paralytic effect";
       case "damaging_poison": return "Damaging Poison/Venom - takes damage each failed save";
+      case "damaging_radiation": return "Irradiated - takes radiation damage each failed save";
+      case "damaging_environment": return "Damaging Environment - takes damage each failed save while in the field";
       case "darkness": return "In Darkness field - vision dampened";
       case "glare": return "In Glare field - vision overloaded";
       case "invisible": return "Invisible - undetectable by sight (PR 1/round)";
@@ -11805,10 +12124,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       msg_out += `<br/><span style="color:#27ae60;">Condition cleared!</span>`;
     } else if (!pass) {
-      // Handle damaging conditions (Damaging Poison)
+      // Handle damaging conditions (Damaging Poison / Radiation / Environment)
       if (cond && cond.damage > 0) {
-        // Get protection against damage type
-        const prot = cond.protKey ? sumProtection(char.id, cond.protKey) : 0;
+        // Get protection against damage type. v2.160.0: pass the stored
+        // subtype so Adaptation/protection rows keyed to e.g. "radiation" apply.
+        const prot = cond.protKey ? sumProtection(char.id, cond.protKey, cond.dmgSubtype || "") : 0;
         const penetrating = Math.max(0, cond.damage - prot);
         
         if (penetrating > 0) {
@@ -11823,7 +12143,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
             damageTotal: penetrating,
             dmgTypeStr: cond.dmgType || "Biochemical",
             protKey: null,  // Protection already applied
-            atkName: cond.sourceAtk + " (Poison)",
+            atkName: cond.sourceAtk + condDamageLabel(cond.type),
             condIdx: condIdx,  // Legacy fallback for retry button
             condId: cond.id,
             created: Date.now()
@@ -13910,6 +14230,8 @@ function cmdStance(msg, args) {
         return testFlash(msg, args);
       case "areapoison":
         return testAreaPoison(msg, args);
+      case "arearadiation":
+        return testAreaRadiation(msg, args);
       case "acquire":
         return testAcquire(msg, args);
       case "invis":
@@ -13934,6 +14256,8 @@ function cmdStance(msg, args) {
           <code>!mp test senseloss</code> - Vision-loss model self-test (select 1 token; non-destructive)<br/>
           <code>!mp test vision</code> - Full acquisition/vision pipeline self-test (select observer then target; non-destructive)<br/>
           <code>!mp test flash [LEVELS]</code> - Flash save/condition self-test (select 1 token; non-destructive)<br/>
+          <code>!mp test areapoison [DMG]</code> - Damaging Poison area-save self-test (select 1 token; non-destructive)<br/>
+          <code>!mp test arearadiation [DMG]</code> - Change Environment / Hard Radiation area-save self-test (select 1 token; non-destructive)<br/>
           <code>!mp test acquire</code> - 4.6 target-acquisition table self-test (select 1 token)<br/>
           <code>!mp test invis</code> - Invisibility/observation self-test (select 2 tokens: observer, target)<br/>
           <code>!mp test senses</code> - Report the selected token's resolved sense map + acquisition fallback<br/>
@@ -15481,7 +15805,8 @@ function cmdStance(msg, args) {
     // Check charges - multiply by autofire rate (-1 = unlimited)
     const chargesRaw = getAtk("attack_charges");
     const hasCharges = (chargesRaw !== undefined && chargesRaw !== null && String(chargesRaw).trim() !== "");
-    const currentCharges = hasCharges ? num(chargesRaw, 0) : Infinity;
+    const afChgIsToken = hasCharges && isMookToken(atkTok, atkCharId);
+    const currentCharges = hasCharges ? num(afChgIsToken ? getCharges(atkTok, atkCharId, rowId, chargesRaw) : chargesRaw, 0) : Infinity;
     const isUnlimitedCharges = (currentCharges === -1);
     
     if (hasCharges && !isUnlimitedCharges && currentCharges < autofireRate) {
@@ -15501,16 +15826,16 @@ function cmdStance(msg, args) {
 
     // Deduct charges upfront (skip if unlimited)
     if (hasCharges && !isUnlimitedCharges) {
-      setRepeatingAttackAttr(atkCharId, rowId, "attack_charges", currentCharges - autofireRate);
+      setCharges(atkTok, atkCharId, rowId, currentCharges - autofireRate);
       if (currentCharges - autofireRate <= 0) {
-        ch("MP", `/w gm ⚠️ ${esc(attackName)}: Last charges used!`);
+        ch("MP", `/w gm ⚠️ ${esc(attackName)}${afChgIsToken ? ` (${esc(atkTok.get("name") || "token")})` : ""}: Last charges used!`);
       }
     }
 
     // Announce autofire burst
     let announceHtml = `<div style="background:#2b2b3d; border:2px solid #f4d03f; border-radius:6px; padding:6px; font-family:Arial,sans-serif; font-size:12px; color:#eaeaea;">`;
     announceHtml += `<div style="font-weight:bold; font-size:14px; color:#f4d03f; margin-bottom:4px;">🔥 AUTOFIRE ×${autofireRate}</div>`;
-    announceHtml += `<div><b>${esc(atkName)}</b> fires <b>${esc(attackName)}</b> at <b>${esc(defChar.get("name"))}</b></div>`;
+    announceHtml += `<div><b>${esc(displayName(atkTok, atkChar))}</b> fires <b>${esc(attackName)}</b> at <b>${esc(displayName(defTok, defChar))}</b></div>`;
     if (totalPR > 0) announceHtml += `<div style="color:#8be9fd; font-size:11px;">PR: -${totalPR} (${basePR}×${autofireRate})</div>`;
     if (hasCharges) announceHtml += `<div style="color:#8be9fd; font-size:11px;">Charges: ${isUnlimitedCharges ? "∞" : `-${autofireRate} (${currentCharges - autofireRate} remaining)`}</div>`;
     announceHtml += `<div style="color:#aaa; font-size:10px; margin-top:4px;">Note: Targets must be adjacent. Rolling ${autofireRate} separate attacks...</div>`;
@@ -15699,6 +16024,11 @@ function cmdStance(msg, args) {
       case "invisible": return cmdInvis(msg, args);
       case "sneak":
       case "sneaking": return cmdSneak(msg, args);
+      case "charges":
+      case "ammo": return cmdCharges(msg, args);
+      case "reload":
+        if (gmOnly(msg)) return;
+        return cmdReload(msg, args);
       case "sensepanel":
         if (gmOnly(msg)) return;
         return cmdSensePanel(msg, args);
@@ -15961,6 +16291,8 @@ function cmdStance(msg, args) {
           <code>!mp fieldcard --kind darkness|glare|glow ...</code> - Build the sheet's field control card<br/>
           <code>!mp invis [--blur] [--sneaking] | --off</code> - Invisibility on selected tokens<br/>
           <code>!mp sneak | --off</code> - Sneaking on selected tokens<br/>
+          <code>!mp charges</code> - Ammo readout for selected tokens (mook tokens track charges per token)<br/>
+          <code>!mp reload | --all</code> - Reset selected mook tokens' charges to the sheet value (<b>GM</b>)<br/>
           <code>!mp sensepanel</code> - Senses control panel (<b>GM</b>)<br/>
           <code>!mp perceive [--sense KEY] [--mod N]</code> - Perception check; second selected token is the subject<br/>
           <code>!mp scan [--mod N]</code> - 3.1.5 passive sweep of the page (best sense per target); closed doors/walls hide contacts unless a sense is Penetrating. Located contacts get player-only Locate and Attack buttons. First scan/round is the free check. GM tip: add a token action macro named Scan with body <code>!mp scan</code> (visible whenever a token is selected)<br/>
@@ -18348,6 +18680,9 @@ function cmdStance(msg, args) {
   on("change:campaign:turnorder", onTurnorderChange);
   on("change:attribute", onAbilityAttributeChange);
   on("destroy:attribute", onAbilityAttributeDestroy);
+  on("destroy:graphic", function(t) {
+    if (state.MP_Engine && state.MP_Engine.tokenCharges && state.MP_Engine.tokenCharges[t.id]) delete state.MP_Engine.tokenCharges[t.id];
+  });
 
   // On ready: migrate any wall-clock siphon expiries (pre-v2.84.0) to game
   // time, run one game-time sweep, and resync the tracker Round entry.
