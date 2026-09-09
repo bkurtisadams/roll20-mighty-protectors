@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.165.2 - 2026-09-09
+/* Mighty Protectors Roll20 API Engine v2.166.0 - 2026-09-09
+ * v2.166.0: SIPHON ABILITY CAP FROM CPs. When the siphon row's Cap field is
+ *   blank, the ceiling is derived per 2.1.16.5 as floor(total CPs / 5), with
+ *   total CPs = starting_eps + ep_earned (spent total_eps as fallback). An
+ *   explicit Cap still overrides. The over-cap note names the derivation.
  * v2.165.2: FIX GHOST ATTACK ROWS. setAttr/getAttr looked up repeating
  *   attributes case-sensitively; the sheet Roll button passes a lowercased
  *   attack_rowid, so the first siphon-pool write missed the real row and
@@ -1687,7 +1691,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.165.2";
+var MP_VERSION = "2.166.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -9654,7 +9658,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (gain <= 0) return "";
     const pfx = `repeating_attacks_${rowId}_`;
     const pool0 = getAttrNum(atkCharId, pfx + "attack_siphon_pool", 0);
-    const cap = getAttrNum(atkCharId, pfx + "attack_siphon_cap", 0);
+    // 2.1.16.5: Ability Cap = floor(total CPs / 5). Row Cap field overrides;
+    // blank derives from starting + earned EPs (spent total as fallback).
+    let cap = getAttrNum(atkCharId, pfx + "attack_siphon_cap", 0);
+    let capSrc = "";
+    if (cap <= 0) {
+      const totalCP = getAttrNum(atkCharId, "starting_eps", 0) + getAttrNum(atkCharId, "ep_earned", 0) || getAttrNum(atkCharId, "total_eps", 0);
+      if (totalCP > 0) { cap = Math.floor(totalCP / 5); capSrc = ` <span style="font-size:10px; color:#8a84a8;">(Ability Cap: ${totalCP} CP / 5)</span>`; }
+    }
     const replenish = (getAttr(atkCharId, pfx + "attack_siphon_replenish") === "1");
     const overload = getAttr(atkCharId, pfx + "attack_siphon_overload") || "";
     const unitLabel = siphonDrain === "power" ? "Power" : (siphonDrain === "hits" ? "Hits" : (siphonDrain === "bc" ? `${siphonBC || "BC"} pts` : `${siphonCat || "Ability"} CPs`));
@@ -9695,7 +9706,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (excess > 0) {
       if (!overload) {
-        html += `<br/><span style="color:#e67e22;">+${excess} over cap — lost.</span>`;
+        html += `<br/><span style="color:#e67e22;">+${excess} over cap — lost.</span>${capSrc}`;
       } else {
         const wiped = wipeSiphonPool(atkCharId, rowId, siphonDrain);
         if (overload === "lose") {
