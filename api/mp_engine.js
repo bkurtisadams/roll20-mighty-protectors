@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.162.1 - 2026-09-08
+/* Mighty Protectors Roll20 API Engine v2.163.0 - 2026-09-08
+ * v2.163.0: !mp mookcheck [--fix] [--all]. GM audit of the current page (or the
+ *   selected token's page): every character with 2+ tokens is listed with each
+ *   token's bar1/bar2 link state, and linked bars on a multi-token character
+ *   are flagged as sharing the sheet's Hits/Power pool. --fix unlinks bar1/bar2
+ *   on flagged tokens and copies the sheet current/max into the token bars.
+ *   --all lists single-token characters too.
  * v2.162.1: MOOK TOKEN NAMES ON CARDS. Attack, apply, knockback and limb-save
  *   cards label a mook token (unlinked, represents the character) by its token
  *   name ("Mutant #1") instead of the shared character name ("Pinky"), for both
@@ -1652,7 +1658,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.162.1";
+var MP_VERSION = "2.163.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -6880,6 +6886,60 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     });
     out += `</div>`;
     ch("MP", `${wt(msg)}` + out);
+  }
+
+  // !mp mookcheck [--fix] [--all] (GM): audit tokens on the page. Characters
+  // with 2+ tokens (or every represented token with --all) are listed with
+  // their bar1/bar2 link state; a linked bar on a multi-token character means
+  // the bodies share one Hits/Power pool. --fix unlinks bar1/bar2 on flagged
+  // tokens, copying the sheet current/max into the token bars.
+  function cmdMookCheck(msg, args) {
+    const fix = ("fix" in args);
+    const everyone = ("all" in args);
+    let pageId = Campaign().get("playerpageid");
+    if (msg.selected && msg.selected.length) {
+      const st = getObj("graphic", msg.selected[0]._id);
+      if (st) pageId = st.get("_pageid");
+    }
+    const toks = findObjs({ _type: "graphic", _subtype: "token", _pageid: pageId }).filter(t => t.get("represents"));
+    const byChar = {};
+    toks.forEach(t => { (byChar[t.get("represents")] = byChar[t.get("represents")] || []).push(t); });
+    const bars = [["bar1", CFG.POWER_ATTR], ["bar2", CFG.HITS_ATTR]];
+    let out = `<div style="background:#1a1a2e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:320px;"><b style="color:#f4d03f;">Mook Check</b>${fix ? " (fixing)" : ""}`;
+    let flagged = 0, fixed = 0, shown = 0;
+    Object.keys(byChar).forEach(charId => {
+      const list = byChar[charId];
+      if (list.length < 2 && !everyone) return;
+      const c = getObj("character", charId);
+      if (!c) return;
+      shown++;
+      out += `<br/><b>${esc(c.get("name"))}</b> — ${list.length} token${list.length === 1 ? "" : "s"}`;
+      list.forEach(t => {
+        const linked = bars.filter(b => t.get(b[0] + "_link")).map(b => b[0]);
+        const multi = list.length >= 2;
+        if (linked.length && multi) flagged++;
+        let status;
+        if (!linked.length) status = `<span style="color:#7bd88f;">unlinked</span>`;
+        else if (multi && fix) {
+          linked.forEach(bn => {
+            const attrName = bars.find(b => b[0] === bn)[1];
+            const a = findObjs({ _type: "attribute", _characterid: charId, name: attrName })[0];
+            const cur = a ? a.get("current") : t.get(bn + "_value");
+            const mx = a ? (a.get("max") || cur) : (t.get(bn + "_max") || cur);
+            const upd = {}; upd[bn + "_link"] = ""; upd[bn + "_value"] = cur; upd[bn + "_max"] = mx;
+            t.set(upd);
+          });
+          fixed++;
+          status = `<span style="color:#f4d03f;">unlinked ${linked.join("+")} (was linked)</span>`;
+        } else status = `<span style="color:${multi ? "#ff6b6b" : "#8a84a8"}; font-weight:${multi ? "bold" : "normal"};">${linked.join("+")} linked${multi ? " — shares sheet pool" : ""}</span>`;
+        out += `<br/>&nbsp;&nbsp;${esc(t.get("name") || "(unnamed)")}: ${status}`;
+      });
+    });
+    if (!shown) out += `<br/><span style="color:#8a84a8;">No ${everyone ? "represented" : "multi-token"} characters on this page.</span>`;
+    else if (fix) out += `<br/><span style="color:#8a84a8;">${fixed} token(s) unlinked. Save one as the character's default token so new drag-outs stay unlinked.</span>`;
+    else if (flagged) out += `<br/><span style="color:#8a84a8;">${flagged} flagged. <code>!mp mookcheck --fix</code> unlinks them and copies the sheet values into the bars.</span>`;
+    out += `</div>`;
+    ch("MP", `/w gm ` + out);
   }
 
   // !mp reload [--all] (GM; selected tokens or --target): reset mook magazines
@@ -16029,6 +16089,9 @@ function cmdStance(msg, args) {
       case "reload":
         if (gmOnly(msg)) return;
         return cmdReload(msg, args);
+      case "mookcheck":
+        if (gmOnly(msg)) return;
+        return cmdMookCheck(msg, args);
       case "sensepanel":
         if (gmOnly(msg)) return;
         return cmdSensePanel(msg, args);
@@ -16293,6 +16356,7 @@ function cmdStance(msg, args) {
           <code>!mp sneak | --off</code> - Sneaking on selected tokens<br/>
           <code>!mp charges</code> - Ammo readout for selected tokens (mook tokens track charges per token)<br/>
           <code>!mp reload | --all</code> - Reset selected mook tokens' charges to the sheet value (<b>GM</b>)<br/>
+          <code>!mp mookcheck [--fix] [--all]</code> - Audit bar links on multi-token characters on this page; --fix unlinks Power/Hits bars (<b>GM</b>)<br/>
           <code>!mp sensepanel</code> - Senses control panel (<b>GM</b>)<br/>
           <code>!mp perceive [--sense KEY] [--mod N]</code> - Perception check; second selected token is the subject<br/>
           <code>!mp scan [--mod N]</code> - 3.1.5 passive sweep of the page (best sense per target); closed doors/walls hide contacts unless a sense is Penetrating. Located contacts get player-only Locate and Attack buttons. First scan/round is the free check. GM tip: add a token action macro named Scan with body <code>!mp scan</code> (visible whenever a token is selected)<br/>
