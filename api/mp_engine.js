@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.163.0 - 2026-09-08
+/* Mighty Protectors Roll20 API Engine v2.164.0 - 2026-09-08
+ * v2.164.0: AREA EFFECT OFFSET. Attack Notes code "offset" marks an Area
+ *   Effect with the Offset Modifier (+2.5): after the hit/scatter point is
+ *   fixed, the area's center moves one radius directly away from the attacker
+ *   so its edge sits on the point of creation. A self-centered origin (touch
+ *   on the attacker's own space) uses the attacker token's rotation as the
+ *   direction. The area card states the shift; the marker and token sweep use
+ *   the shifted center. Pending records now carry atkTokenId. Listed in
+ *   !mp attackcodes. Engine-only: no sheet field.
  * v2.163.0: !mp mookcheck [--fix] [--all]. GM audit of the current page (or the
  *   selected token's page): every character with 2+ tokens is listed with each
  *   token's bar1/bar2 link state, and linked bars on a multi-token character
@@ -1658,7 +1666,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.163.0";
+var MP_VERSION = "2.164.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7664,6 +7672,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const atkNotes = getAtk("attack_notes") || "";
     const noDamageType = isSaveAttack && notesIndicateNoDamageType(atkNotes, atkName);
+    const areaOffset = isAreaAttack && /(^|[\s,;\[])offset(?=$|[\s,;\]])/i.test(atkNotes);
     const protKey = noDamageType ? null : typeToProtKey(dmgTypeStr);
     const range = getAtk("attack_range") || fields.range || "-";
     const kbChecked = getAtk("attack_kb");
@@ -8223,7 +8232,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       isRepulsion: isRepulsionAttack,
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType,
-      isAreaAttack, areaRadius, areaDiameter, hasImmunity,
+      isAreaAttack, areaRadius, areaDiameter, hasImmunity, areaOffset,
+      atkTokenId: atkTok ? atkTok.id : null,
       calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot,
       hasDuration, durNum, durUnit, durRounds, durEscape, durDamageExpr: atkDamageExpr
     };
@@ -8706,6 +8716,28 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       scatterNote = ` Scatter: ${scatterDist}" ${direction}`;
     }
     
+    // Area Effect: Offset (+2.5) - the edge sits on the point of creation, so
+    // the center moves one radius directly away from the attacker. A
+    // self-centered origin (touch on own space) uses the token's rotation.
+    let offsetNote = "";
+    if (rec.areaOffset && rec.areaRadius > 0) {
+      const oTok = rec.atkTokenId ? getObj("graphic", rec.atkTokenId) : null;
+      let ux = 0, uy = 0, how = "";
+      if (oTok) {
+        const dx = centerX - oTok.get("left"), dy = centerY - oTok.get("top");
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d >= 1) { ux = dx / d; uy = dy / d; how = "away from attacker"; }
+        else {
+          const a = ((num(oTok.get("rotation"), 0) - 90) * Math.PI) / 180;
+          ux = Math.cos(a); uy = Math.sin(a); how = "along attacker facing (self-centered origin)";
+        }
+      } else { uy = -1; how = "north (attacker token not found)"; }
+      const shift = rec.areaRadius * pixelsPerInch;
+      centerX += ux * shift;
+      centerY += uy * shift;
+      offsetNote = `Offset: edge on target point, center ${rec.areaRadius}" ${how}`;
+    }
+
     // Find all tokens in the area; Immunity (+2.5) excludes the attacker
     // from their own Area Effect (RAW: ignore negative effects of own Ability)
     let tokensInArea = getTokensInRadius(pageId, centerX, centerY, rec.areaRadius);
@@ -8792,6 +8824,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     html += `<br/>To-Hit: <b style="color:#fff;">${rec.targetTotal}-</b> <span style="color:#aab; font-size:11px;">(+6 immobile, no def)</span> &middot; Roll: <b style="color:#fff;">${rec.roll}</b>`;
     if (scatterNote) html += `<br/><span style="color:#f1c40f; font-weight:bold;">${scatterNote.trim()}</span>`;
+    if (offsetNote) html += `<br/><span style="color:#9ecbff; font-size:11px;">${esc(offsetNote)}</span>`;
     html += `</div>`;
     
     if (tokensInArea.length === 0) {
@@ -13898,6 +13931,7 @@ function cmdAttackCodes(msg) {
   out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Attack Options</div>`;
   out += row('af:4', 'Autofire rate 4. Alias: ' + alias('autofire:4') + '; valid rates 2-7.');
   out += row('area:2.5', 'Area diameter in inches.');
+  out += row('offset', 'Area Effect: Offset - edge on the target point, center one radius away from the attacker.');
   out += row('ap:4', 'Ignore 4 points of protection.');
   out += row('ap', 'Ignore all protection. Alias: ' + alias('ap:ALL') + '.');
   out += row('gear', 'Mark the attack as Gear.');
