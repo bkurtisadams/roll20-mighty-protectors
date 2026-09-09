@@ -1,4 +1,7 @@
-/* Mighty Protectors Roll20 API Engine v2.165.0 - 2026-09-09
+/* Mighty Protectors Roll20 API Engine v2.165.1 - 2026-09-09
+ * v2.165.1: Area sweep labels mook tokens by token name (getTokensInRadius
+ *   now uses displayName), so area, escape and apply-all cards match the
+ *   single-target cards.
  * v2.165.0: GROUND POINT TARGET. A character named "Ground" (or with attribute
  *   point_target = 1) is a movement space: area attacks aimed at its token use
  *   the existing point-target path (no defenses, +6 immobile, scatter), it is
@@ -1677,7 +1680,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.165.0";
+var MP_VERSION = "2.165.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -6035,7 +6038,7 @@ function generateRowID() {
           token: tok,
           tokenId: tok.id,
           charId: charId,
-          name: char.get("name"),
+          name: displayName(tok, char),
           distance: distInches,
           controller: controller
         });
