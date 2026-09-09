@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.165.1 - 2026-09-09
+/* Mighty Protectors Roll20 API Engine v2.165.2 - 2026-09-09
+ * v2.165.2: FIX GHOST ATTACK ROWS. setAttr/getAttr looked up repeating
+ *   attributes case-sensitively; the sheet Roll button passes a lowercased
+ *   attack_rowid, so the first siphon-pool write missed the real row and
+ *   created attributes under the lowercase id, which Roll20 renders as a
+ *   duplicate row. Repeating names now resolve case-insensitively and new
+ *   attributes adopt the row's existing case. New GM !mp fixrows [--all]
+ *   merges existing ghost rows (most-populated spelling wins).
  * v2.165.1: Area sweep labels mook tokens by token name (getTokensInRadius
  *   now uses displayName), so area, escape and apply-all cards match the
  *   single-target cards.
@@ -1680,7 +1687,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.165.1";
+var MP_VERSION = "2.165.2";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -5615,8 +5622,26 @@ function generateRowID() {
     return getObj("character", cid);
   }
 
+  // Repeating-row ids arrive in mixed case (sheet worker / @{attack_rowid} are
+  // lowercased; stored attributes keep the original case). A case-sensitive
+  // miss followed by createObj makes a Roll20 ghost row, so repeating names
+  // resolve case-insensitively and adopt the case the row already uses.
+  function findAttrCI(charId, name) {
+    const exact = findObjs({ _type: "attribute", _characterid: charId, name: name })[0];
+    if (exact || !/^repeating_/i.test(name)) return exact || null;
+    const lc = name.toLowerCase();
+    return findObjs({ _type: "attribute", _characterid: charId }).find(a => a.get("name").toLowerCase() === lc) || null;
+  }
+  function canonicalRepeatingName(charId, name) {
+    const m = /^(repeating_[^_]+_[^_]+_)(.+)$/i.exec(name);
+    if (!m) return name;
+    const pfxLc = m[1].toLowerCase();
+    const sib = findObjs({ _type: "attribute", _characterid: charId }).find(a => a.get("name").toLowerCase().indexOf(pfxLc) === 0);
+    return sib ? sib.get("name").slice(0, m[1].length) + m[2] : name;
+  }
+
   function getAttr(charId, name) {
-    const a = findObjs({ _type: "attribute", _characterid: charId, name: name })[0];
+    const a = findAttrCI(charId, name);
     return a ? a.get("current") : "";
   }
 
@@ -5626,12 +5651,63 @@ function generateRowID() {
 
   function setAttr(charId, name, value) {
     const strVal = String(value);
-    let a = findObjs({ _type: "attribute", _characterid: charId, name: name })[0];
+    let a = findAttrCI(charId, name);
     if (!a) {
-      a = createObj("attribute", { _characterid: charId, name: name, current: strVal });
+      a = createObj("attribute", { _characterid: charId, name: canonicalRepeatingName(charId, name), current: strVal });
     } else {
       a.set("current", strVal);
     }
+  }
+
+  // !mp fixrows [--all] (GM): merge ghost repeating rows whose ids differ only
+  // by case. The spelling with the most attributes wins; the others' values
+  // fill in missing fields and are then deleted. Selected token's character,
+  // or every character with --all.
+  function cmdFixRows(msg, args) {
+    let chars = [];
+    if ("all" in args) chars = findObjs({ _type: "character" });
+    else {
+      (msg.selected || []).forEach(x => {
+        const t = x._type === "graphic" ? getObj("graphic", x._id) : null;
+        const c = t && t.get("represents") ? getObj("character", t.get("represents")) : null;
+        if (c && chars.indexOf(c) < 0) chars.push(c);
+      });
+    }
+    if (!chars.length) return ch("MP", `/w gm <b>MP:</b> Select token(s) or use <code>!mp fixrows --all</code>.`);
+    const lines = [];
+    chars.forEach(c => {
+      const attrs = findObjs({ _type: "attribute", _characterid: c.id });
+      const groups = {};
+      attrs.forEach(a => {
+        const m = /^(repeating_[^_]+)_([^_]+)_(.+)$/.exec(a.get("name"));
+        if (!m) return;
+        const key = (m[1] + "_" + m[2]).toLowerCase();
+        const g = groups[key] = groups[key] || {};
+        const spelling = m[1] + "_" + m[2];
+        (g[spelling] = g[spelling] || []).push({ attr: a, field: m[3] });
+      });
+      let merged = 0;
+      Object.keys(groups).forEach(key => {
+        const spellings = Object.keys(groups[key]);
+        if (spellings.length < 2) return;
+        spellings.sort((x, y) => groups[key][y].length - groups[key][x].length);
+        const keep = spellings[0];
+        const have = {};
+        groups[key][keep].forEach(e => { have[e.field.toLowerCase()] = e.attr; });
+        spellings.slice(1).forEach(sp => {
+          groups[key][sp].forEach(e => {
+            const k = e.field.toLowerCase();
+            if (!have[k]) {
+              createObj("attribute", { _characterid: c.id, name: keep + "_" + e.field, current: e.attr.get("current"), max: e.attr.get("max") });
+            }
+            e.attr.remove();
+          });
+          merged++;
+        });
+      });
+      if (merged) lines.push(`${esc(c.get("name"))}: merged ${merged} ghost row(s)`);
+    });
+    ch("MP", `/w gm <b>MP: Fix Rows</b><br/>` + (lines.length ? lines.join("<br/>") : "No ghost rows found.") + `<br/><span style="font-size:10px; color:#8a84a8;">Close and reopen affected sheets to redraw.</span>`);
   }
 
   function getResource(token, charId, barProp, attrName) {
@@ -16200,6 +16276,9 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdMookCheck(msg, args);
       case "ground": return cmdGround(msg, args);
+      case "fixrows":
+        if (gmOnly(msg)) return;
+        return cmdFixRows(msg, args);
       case "sensepanel":
         if (gmOnly(msg)) return;
         return cmdSensePanel(msg, args);
@@ -16465,6 +16544,7 @@ function cmdStance(msg, args) {
           <code>!mp charges</code> - Ammo readout for selected tokens (mook tokens track charges per token)<br/>
           <code>!mp reload | --all</code> - Reset selected mook tokens' charges to the sheet value (<b>GM</b>)<br/>
           <code>!mp mookcheck [--fix] [--all]</code> - Audit bar links on multi-token characters on this page; --fix unlinks Power/Hits bars (<b>GM</b>)<br/>
+          <code>!mp fixrows [--all]</code> - Merge ghost repeating rows whose ids differ only by case (<b>GM</b>)<br/>
           <code>!mp ground | --off</code> - Summon the Ground point-target token beside your selected token (needs a character named Ground with a default token); drag it, then aim an area attack at it<br/>
           <code>!mp sensepanel</code> - Senses control panel (<b>GM</b>)<br/>
           <code>!mp perceive [--sense KEY] [--mod N]</code> - Perception check; second selected token is the subject<br/>
