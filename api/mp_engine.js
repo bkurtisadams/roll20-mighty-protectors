@@ -1,4 +1,13 @@
-/* Mighty Protectors Roll20 API Engine v2.167.0 - 2026-09-09
+/* Mighty Protectors Roll20 API Engine v2.167.1 - 2026-09-09
+ * v2.167.1: RW MAX ALL FOR NPC AREA DAMAGE. A large-group area hit (a 5"
+ *   grenade blast, say) offered three roll-with buttons per NPC target,
+ *   which doesn't scale. 4.8.3 lets any conscious, aware target roll with a
+ *   hit - PC or NPC alike - so there's no rule distinction here, just a GM
+ *   speed shortcut for the common case: new GM button "RW Max All (NPCs)"
+ *   (shown once 2+ NPC targets are pending) resolves every pending NPC at
+ *   Roll-With Max in one click via new !mp arearwmaxall. Player-controlled
+ *   targets and any NPC already flagged sleepy/dead (no roll-with offered
+ *   at all, per 4.8.3's conscious-and-aware requirement) are unaffected.
  * v2.167.0: CHANGELOG SPLIT OUT. The header changelog had grown to 1,707
  *   lines / ~115KB / 214 entries (12% of the file). All entries moved
  *   verbatim, in original order, to CHANGELOG.md in the repo root; header
@@ -24,7 +33,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.167.0";
+var MP_VERSION = "2.167.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7925,7 +7934,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `</div></div>`;
       areaRec.timestamp = Date.now();
       chCardBody("MP", html, [areaRec.atkCharId]);
-      chToChar("MP", npcBtns + `<br/>${btnDanger(`Apply Rest (No RW)`, `!mp arearwrest --id ${rollId}`)}`,
+      // 4.8.3: any conscious, aware target may roll with a hit - there's no
+      // rule distinguishing NPCs from PCs here, so "RW Max All" is a GM speed
+      // shortcut for the common case (the GM would choose max for a mook
+      // nearly every time), not a different ruling. Only offered when 2+ NPC
+      // targets are actually pending, so a single mook still just gets its
+      // three normal buttons.
+      const npcCount = (npcBtns.match(/<br\/>/g) || []).length;
+      const rwMaxAllBtn = npcCount >= 2 ? `${btnDanger(`RW Max All (NPCs)`, `!mp arearwmaxall --id ${rollId}`)}<br/>` : "";
+      chToChar("MP", rwMaxAllBtn + npcBtns + `<br/>${btnDanger(`Apply Rest (No RW)`, `!mp arearwrest --id ${rollId}`)}`,
         areaRec.atkCharId);
       return;
     }
@@ -7952,6 +7969,34 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const line = resolveAreaTarget(areaRec, tokId, Math.max(0, num(args.amt, 0)));
     const resultHtml = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>AREA DAMAGE</b>${line}</div>`;
     chCombat("MP", resultHtml, tokData.charId);
+    finalizeAreaIfDone(rollId);
+  }
+
+  // GM: resolve all remaining deferred NPC targets at Roll-With Max (4.8.3 -
+  // any conscious, aware target may roll with a hit; this just answers "max"
+  // for every NPC in one click instead of one set of buttons per mook).
+  // Player-controlled targets are left for their own buttons.
+  function cmdAreaRWMaxAll(msg, args) {
+    const rollId = args.id;
+    const areaRec = state.MP_Engine.pendingArea[rollId];
+    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+
+    let html = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>AREA DAMAGE</b> (Roll-With Max, NPCs)`;
+    let any = 0;
+    Object.keys(areaRec.tokens).forEach(tokId => {
+      const tokData = areaRec.tokens[tokId];
+      if (tokData.applied || !tokData.rwPending) return;
+      if (tokData.controller !== "gm" && tokData.controller !== "all") return;  // leave player choices alone
+      const tok = getObj("graphic", tokId);
+      if (!tok) return;
+      const c = computeAreaPen(areaRec, tokData);
+      const maxDivert = Math.min(areaMaxDivert(tokData, tok), c.penetrating);
+      html += resolveAreaTarget(areaRec, tokId, maxDivert);
+      any++;
+    });
+    html += `</div>`;
+    if (!any) return ch("MP", `/w gm <b>MP:</b> No pending NPC targets to roll with.`);
+    chCardBody("MP", html, [areaRec.atkCharId]);
     finalizeAreaIfDone(rollId);
   }
 
@@ -14670,6 +14715,9 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdAreaDamageAll(msg, args);
       case "arearw": return cmdAreaRW(msg, args);
+      case "arearwmaxall":
+        if (gmOnly(msg)) return;
+        return cmdAreaRWMaxAll(msg, args);
       case "arearwrest":
         if (gmOnly(msg)) return;
         return cmdAreaRWRest(msg, args);
@@ -14956,7 +15004,7 @@ function cmdStance(msg, args) {
           <code>!mp buttondemo</code> - Inert button-color samples (<b>GM</b>)<br/>
           <b>Aliases:</b> <code>might</code>=<code>hthmass</code>, <code>invisible</code>=<code>invis</code>, <code>sneaking</code>=<code>sneak</code>, <code>veh</code>=<code>vehicle</code>, <code>clearstance</code>=<code>clearstances</code>, <code>offbalance</code>=<code>offbal</code>.<br/>
           <b>Generated Button Callbacks:</b> These are implemented commands, but normally come from engine-generated chat buttons rather than typed macros:<br/>
-          <code>locate apply limbsave save snare break kb kbsave areaescape areashield arearollnpcs areaforceall areadamageall arearw arearwrest absorb reflect reflecthit afield afresume afcancel afcounter</code` }
+          <code>locate apply limbsave save snare break kb kbsave areaescape areashield arearollnpcs areaforceall areadamageall arearw arearwmaxall arearwrest absorb reflect reflecthit afield afresume afcancel afcounter</code` }
         };
         const sec = String(args.subcmd || (msg.content.split(/\s+/)[2] || "")).toLowerCase();
         if (sec === "all") {
