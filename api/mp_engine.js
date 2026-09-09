@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.166.0 - 2026-09-09
+/* Mighty Protectors Roll20 API Engine v2.166.1 - 2026-09-09
+ * v2.166.1: !mp help SPLIT INTO SECTIONS. The help whisper had grown to ~8.9KB
+ *   of single-message HTML across the night's additions, which some clients
+ *   render as an unreadable wall of text. !mp help now whispers a short list
+ *   of section names; !mp help <section> shows one category; !mp help ALL
+ *   reproduces the old single-message dump for anyone who wants it.
  * v2.166.0: SIPHON ABILITY CAP FROM CPs. When the siphon row's Cap field is
  *   blank, the ceiling is derived per 2.1.16.5 as floor(total CPs / 5), with
  *   total CPs = starting_eps + ep_earned (spent total_eps as fallback). An
@@ -1691,7 +1696,7 @@
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.166.0";
+var MP_VERSION = "2.166.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -16531,10 +16536,9 @@ function cmdStance(msg, args) {
         return cmdGWSpawn(msg, args);
 
       case "help":
-      default:
-        return ch("MP", `/w gm <b>MP Engine v${MP_VERSION}</b> Commands:<br/>
-          <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/>
-          <b>Attacks and Saves:</b><br/>
+      default: {
+        const HELP_SECTIONS = {
+          attacks: { label: "Attacks and Saves", body: `
           <code>!mp atk N --atk TOKID --target TOKID [--mod N] [--push N] [--called TYPE]</code> - Attack row N<br/>
           <code>!mp autofire N --atk TOKID --target TOKID</code> - Autofire attack row N<br/>
           <code>!mp sv BC [mod]</code> - Save using EN, AG, IN, or CL<br/>
@@ -16542,8 +16546,8 @@ function cmdStance(msg, args) {
           <code>!mp atkinfo --row ROWID</code> - Show a selected character's attack-row details<br/>
           <code>!mp attackcodes</code> - Show the Attack Notes code reference<br/>
           <code>!mp initselected [--sort desc|asc|none]</code> - Roll initiative for all selected represented tokens; descending is the default<br/>
-          <code>!mp clearturnorder</code> - Clear the entire Roll20 Turn Tracker (<b>GM</b>)<br/>
-          <b>Powers and Senses:</b><br/>
+          <code>!mp clearturnorder</code> - Clear the entire Roll20 Turn Tracker (<b>GM</b>)` },
+          powers: { label: "Powers and Senses", body: `
           <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>)<br/>
           <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Darkness (<b>GM</b>)<br/>
           <code>!mp glare --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Glare (<b>GM</b>)<br/>
@@ -16563,8 +16567,8 @@ function cmdStance(msg, args) {
           <code>!mp willcheck --mod N [--present] [--phobia] [--stimulus "x"]</code> - Compulsion/Phobia save (<b>GM</b>)<br/>
           <code>!mp discomfort | --off</code> - Special Requirement penalty<br/>
           <code>!mp require --interval 7d --consequence discomfort --name "x" | --met | --off | list</code> - Requirement clock (<b>GM</b>)<br/>
-          <b>Flash:</b> Flash is not a standalone command. Configure the attack row as a save attack with Sense Loss, then use <code>!mp atk</code>. Test it with <code>!mp test flash [LEVELS]</code>.<br/>
-          <b>Conditions, Damage, and Healing:</b><br/>
+          <b>Flash:</b> Flash is not a standalone command. Configure the attack row as a save attack with Sense Loss, then use <code>!mp atk</code>. Test it with <code>!mp test flash [LEVELS]</code>.` },
+          conditions: { label: "Conditions, Damage, and Healing", body: `
           <code>!mp conditions --target TOKID</code> - List active conditions<br/>
           <code>!mp clearcondition --target TOKID --idx N</code> - Clear condition N<br/>
           <code>!mp recover --target TOKID --idx N</code> - Roll recovery for condition N<br/>
@@ -16574,8 +16578,8 @@ function cmdStance(msg, args) {
           <code>!mp dailyheal</code> - Apply daily rest healing to selected token (<b>GM</b>)<br/>
           <code>!mp wakeup [--target TOKID]</code> - Wake-up roll for selected/target token (reads token bar hits)<br/>
           <code>!mp maintenance [--charid ID]</code> - Check a controlled sheet for known obsolete data; cleanup requires confirmation<br/>
-          <code>!mp restore</code> - Restore selected token(s) and clear conditions (<b>GM</b>)<br/>
-          <b>Snare and Grapple:</b><br/>
+          <code>!mp restore</code> - Restore selected token(s) and clear conditions (<b>GM</b>)` },
+          grapple: { label: "Snare and Grapple", body: `
           <code>!mp grapple --atk TOKID --def TOKID</code><br/>
           <code>!mp squeeze --target TOKID</code> - Damage a grappled target<br/>
           <code>!mp grapplelock --target TOKID</code> - Lock the grapple<br/>
@@ -16587,8 +16591,8 @@ function cmdStance(msg, args) {
           <b>Force Fields:</b><br/>
           <code>!mp ff --target TOKID</code> - Toggle Force Field<br/>
           <code>!mp ffreset --target TOKID</code> - Renew Force Field<br/>
-          <code>!mp ffreinforce --id ID</code> - Reinforce a collapsing Force Field<br/>
-          <b>Stances, Range, and Time:</b><br/>
+          <code>!mp ffreinforce --id ID</code> - Reinforce a collapsing Force Field` },
+          time: { label: "Stances, Range, and Time", body: `
           <code>!mp stance normal|def|full|offbal|N</code><br/>
           <code>!mp clearstances</code> - Clear page stances (<b>GM</b>)<br/>
           <code>!mp offbal</code> - Apply Off Balance to selected token (<b>GM</b>)<br/>
@@ -16596,8 +16600,8 @@ function cmdStance(msg, args) {
           <code>!mp round | +N | set N | show</code> - Round controls (<b>GM</b>)<br/>
           <code>!mp time</code> - Game-time control panel; typed advance supports sec|min|hour|day|week|month|year|round, plus date/time set and calendar month aliases (<b>GM</b>)<br/>
           <code>!mp rest N sec|min|hour|day|week</code> - Selected characters rest simultaneously; advances game time once and restores 1 Power/full minute, capped at max (<b>GM</b>)<br/>
-          <code>!mp abilitytime [sync|clear]</code> - Inspect or resync automatic ability charge timers (<b>GM</b>)<br/>
-          <b>Status and Setup:</b><br/>
+          <code>!mp abilitytime [sync|clear]</code> - Inspect or resync automatic ability charge timers (<b>GM</b>)` },
+          setup: { label: "Status and Setup", body: `
           <code>!mp status</code> - Live selected-token control card<br/>
           <code>!mp stat</code> - Detailed selected-token status<br/>
           <code>!mp showbars [--bars 1,2,3] [--off]</code> - Show/hide selected token bars (<b>GM</b>)<br/>
@@ -16608,16 +16612,30 @@ function cmdStance(msg, args) {
           <b>Import, Export, and Gamma World:</b><br/>
           <code>!mp export</code> - Export selected token to handout JSON (<b>GM</b>)<br/>
           <code>!mp import --name HandoutName</code> - Import MP Builder JSON (<b>GM</b>)<br/>
-          <code>!mp gwspawn --name NAME [--form FORM]</code> - Spawn embedded GW bestiary entry (<b>GM</b>)<br/>
-          <b>Tests and Diagnostics:</b><br/>
+          <code>!mp gwspawn --name NAME [--form FORM]</code> - Spawn embedded GW bestiary entry (<b>GM</b>)` },
+          diag: { label: "Tests, Diagnostics, and Aliases", body: `
           <code>!mp test</code> - Show all test commands (<b>GM</b>)<br/>
           <code>!mp debug tokens|deltoken X,Y|absorb</code> - Diagnostics (<b>GM</b>)<br/>
           <code>!mp buttondemo</code> - Inert button-color samples (<b>GM</b>)<br/>
           <b>Aliases:</b> <code>might</code>=<code>hthmass</code>, <code>invisible</code>=<code>invis</code>, <code>sneaking</code>=<code>sneak</code>, <code>veh</code>=<code>vehicle</code>, <code>clearstance</code>=<code>clearstances</code>, <code>offbalance</code>=<code>offbal</code>.<br/>
           <b>Generated Button Callbacks:</b> These are implemented commands, but normally come from engine-generated chat buttons rather than typed macros:<br/>
-          <code>locate apply limbsave save snare break kb kbsave areaescape areashield arearollnpcs areaforceall areadamageall arearw arearwrest absorb reflect reflecthit afield afresume afcancel afcounter</code><br/>
-          <code>!mp help</code> - Show this list.
-   `);
+          <code>locate apply limbsave save snare break kb kbsave areaescape areashield arearollnpcs areaforceall areadamageall arearw arearwrest absorb reflect reflecthit afield afresume afcancel afcounter</code` }
+        };
+        const sec = String(args.subcmd || (msg.content.split(/\s+/)[2] || "")).toLowerCase();
+        if (sec === "all") {
+          const everything = Object.keys(HELP_SECTIONS).map(k => `<b>${esc(HELP_SECTIONS[k].label)}:</b><br/>${HELP_SECTIONS[k].body}`).join("<br/><br/>");
+          return ch("MP", `/w gm <b>MP Engine v${MP_VERSION} - All Commands:</b><br/>${everything}`);
+        }
+        if (sec && HELP_SECTIONS[sec]) {
+          const h = HELP_SECTIONS[sec];
+          return ch("MP", `/w gm <b>MP Engine v${MP_VERSION} - ${esc(h.label)}:</b><br/>${h.body}<br/><br/><code>!mp help</code> - Back to the section list.`);
+        }
+        const list = Object.keys(HELP_SECTIONS).map(k => `<code>!mp help ${k}</code> - ${esc(HELP_SECTIONS[k].label)}`).join("<br/>");
+        return ch("MP", `/w gm <b>MP Engine v${MP_VERSION}</b><br/>
+          <span style="color:#aab;">Commands marked <b>GM</b> are GM-only. Select tokens when the command says to.</span><br/><br/>
+          ${list}<br/><br/>
+          <code>!mp help ALL</code> - Everything at once.`);
+      }
     }
   }
 
