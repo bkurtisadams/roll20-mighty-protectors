@@ -6,6 +6,18 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.167.4: !mp atkrows. Roll20 exposes no UI for repeating-row ids, so
+  !mp atkinfo --row was unusable without a hand-built @{repeating_attacks_$N_
+  attack_rowid} macro, and a blank Save BC on a card could mean three
+  different things: the attribute was never written, it exists but is empty,
+  or the engine is reading a ghost duplicate row. New !mp atkrows lists every
+  attack row on the selected character in sheet display order with its rowid
+  and, for save rows, whether BC/Init/Rec are set, empty, or have no
+  attribute at all - plus a ghost-row warning pointing at !mp fixrows, and a
+  note when a value is coming from an Attack Notes code rather than the
+  dropdown. Row ordering was extracted from findAttackRowByIndex into
+  orderedAttackRowIds so both count rows identically.
+
 v2.167.3: ROLL-WITH ON AREA SAVES. 4.8.3.1 lets a target spend Power to add
   to a save attack's target number, and nothing in 4.8.3.1 or 4.9 exempts
   an attack delivered as an Area Effect - but the area path offered no

@@ -1,4 +1,15 @@
-/* Mighty Protectors Roll20 API Engine v2.167.3 - 2026-09-12
+/* Mighty Protectors Roll20 API Engine v2.167.4 - 2026-09-12
+ * v2.167.4: !mp atkrows. Roll20 exposes no UI for repeating-row ids, so
+ *   !mp atkinfo --row was unusable without a hand-built @{repeating_attacks_$N_
+ *   attack_rowid} macro, and a blank Save BC on a card could mean three
+ *   different things: the attribute was never written, it exists but is empty,
+ *   or the engine is reading a ghost duplicate row. New !mp atkrows lists every
+ *   attack row on the selected character in sheet display order with its rowid
+ *   and, for save rows, whether BC/Init/Rec are set, empty, or have no
+ *   attribute at all - plus a ghost-row warning pointing at !mp fixrows, and a
+ *   note when a value is coming from an Attack Notes code rather than the
+ *   dropdown. Row ordering was extracted from findAttackRowByIndex into
+ *   orderedAttackRowIds so both count rows identically.
  * v2.167.3: ROLL-WITH ON AREA SAVES. 4.8.3.1 lets a target spend Power to add
  *   to a save attack's target number, and nothing in 4.8.3.1 or 4.9 exempts
  *   an attack delivered as an Area Effect - but the area path offered no
@@ -37,18 +48,13 @@
  *   Roll-With Max in one click via new !mp arearwmaxall. Player-controlled
  *   targets and any NPC already flagged sleepy/dead (no roll-with offered
  *   at all, per 4.8.3's conscious-and-aware requirement) are unaffected.
- * v2.167.0: CHANGELOG SPLIT OUT. The header changelog had grown to 1,707
- *   lines / ~115KB / 214 entries (12% of the file). All entries moved
- *   verbatim, in original order, to CHANGELOG.md in the repo root; header
- *   keeps only the current version and the last 3 entries plus a pointer.
- *   No entry text changed or was reordered - this is a pure relocation.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.167.3";
+var MP_VERSION = "2.167.4";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -14204,13 +14210,11 @@ function cmdStance(msg, args) {
   // Macro: !mp atk ?{Attack|1|2|3} --atk @{selected|token_id} --target @{target|token_id} --push ?{Push|0} --mod ?{Modifier|0} --called ?{Called|None|Head|Helmet|Arm|Leg|Light|Heavy|Gear|Snare}
   // Triggers existing mpattack roll template handler
 
-  function findAttackRowByIndex(charId, atkIndex) {
-    // Resolve by DISPLAY position, not the stored attack_num attribute.
-    // attack_num is written by the sheet renumber worker and two API import
-    // paths and goes stale after row deletion/reorder; the number the player
-    // counts on the sheet is visual position (_reporder order, unlisted rows
-    // after in creation order).
-    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+  // Attack row ids in SHEET DISPLAY order: _reporder first (Roll20 stores
+  // those ids lowercased), then any unlisted rows in creation order. Shared by
+  // row-number resolution and !mp atkrows so both count rows the same way.
+  function orderedAttackRowIds(charId, attrsIn) {
+    const attrs = attrsIn || findObjs({ _type: "attribute", _characterid: charId });
     const seen = {};
     const created = [];
     attrs.forEach(a => {
@@ -14220,17 +14224,25 @@ function cmdStance(msg, args) {
         created.push(m[1]);
       }
     });
-    if (!created.length) return null;
-    let ordered = created;
+    if (!created.length) return [];
     const repAttr = attrs.find(a => a.get("name") === "_reporder_repeating_attacks");
-    if (repAttr) {
-      // Roll20 stores _reporder row ids lowercased.
-      const rep = String(repAttr.get("current") || "").split(",")
-        .map(s => s.trim().toLowerCase()).filter(Boolean);
-      const inRep = rep.map(id => seen[id]).filter(Boolean);
-      const rest = created.filter(id => rep.indexOf(id.toLowerCase()) === -1);
-      ordered = inRep.concat(rest);
-    }
+    if (!repAttr) return created;
+    const rep = String(repAttr.get("current") || "").split(",")
+      .map(x => x.trim().toLowerCase()).filter(Boolean);
+    const inRep = rep.map(id => seen[id]).filter(Boolean);
+    const rest = created.filter(id => rep.indexOf(id.toLowerCase()) === -1);
+    return inRep.concat(rest);
+  }
+
+  function findAttackRowByIndex(charId, atkIndex) {
+    // Resolve by DISPLAY position, not the stored attack_num attribute.
+    // attack_num is written by the sheet renumber worker and two API import
+    // paths and goes stale after row deletion/reorder; the number the player
+    // counts on the sheet is visual position (_reporder order, unlisted rows
+    // after in creation order).
+    const attrs = findObjs({ _type: "attribute", _characterid: charId });
+    const ordered = orderedAttackRowIds(charId, attrs);
+    if (!ordered.length) return null;
     const rowId = ordered[atkIndex - 1] || null;
     if (rowId) {
       const numAttr = attrs.find(a =>
@@ -14241,6 +14253,92 @@ function cmdStance(msg, args) {
       }
     }
     return rowId;
+  }
+
+  // !mp atkrows — list every attack row on the selected character with its
+  // rowid and save-field state. Roll20 has no UI for repeating row ids, and a
+  // blank Save BC on a card can mean three different things: the attribute was
+  // never written, it exists but is empty, or the engine is reading a ghost
+  // duplicate row. Those need distinguishing before anyone edits a sheet.
+  function cmdAttackRows(msg, args) {
+    const tok = getSelectedToken(msg);
+    if (!tok) return ch("MP", `${wt(msg)}<b>MP:</b> Select a token first. Usage: <code>!mp atkrows</code>`);
+    const char = getCharFromToken(tok);
+    if (!char) return ch("MP", `${wt(msg)}<b>MP:</b> Token not linked to a character.`);
+    if (!requireControl(msg, char.id, "list this character's attack rows")) return;
+
+    const attrs = findObjs({ _type: "attribute", _characterid: char.id });
+    const ordered = orderedAttackRowIds(char.id, attrs);
+    if (!ordered.length) return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(displayName(tok, char))} has no attack rows.`);
+
+    // Case-variant spellings of one row id are Roll20 ghost rows (see
+    // !mp fixrows): the sheet shows one set of attributes, the engine may read
+    // the other.
+    const spellings = {};
+    attrs.forEach(a => {
+      const m = a.get("name").match(/^repeating_attacks_([^_]+)_/i);
+      if (!m) return;
+      const key = m[1].toLowerCase();
+      (spellings[key] = spellings[key] || {})[m[1]] = true;
+    });
+
+    // Raw attribute lookup that distinguishes "missing" from "empty". The
+    // note-aware getter is reported separately so an override is visible as
+    // an override rather than silently standing in for a sheet value.
+    const rawField = (rowId, field) => {
+      const want = `repeating_attacks_${rowId}_${field}`.toLowerCase();
+      const found = attrs.find(a => a.get("name").toLowerCase() === want);
+      if (!found) return { state: "missing", value: "" };
+      const v = String(found.get("current") || "");
+      return { state: v.trim() === "" ? "empty" : "set", value: v };
+    };
+    const stateLabel = (f) => f.state === "set"
+      ? `<b style="color:#2ecc71;">${esc(f.value)}</b>`
+      : (f.state === "empty"
+        ? `<b style="color:#f4d03f;">(empty)</b>`
+        : `<b style="color:#ff6b6b;">(no attribute)</b>`);
+
+    let out = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:12px; color:#eee; max-width:320px; overflow:hidden;">`;
+    out += `<div style="background:#2c3e50; padding:6px 10px; font-weight:bold; color:#fff;">${esc(displayName(tok, char))} — Attack Rows (${ordered.length})</div>`;
+    out += `<div style="padding:6px 10px;">`;
+
+    ordered.forEach((rowId, i) => {
+      const baseGet = (name) => getRepeatingAttackAttr(char.id, rowId, name);
+      const getAtk = makeNoteAwareAttackGetter(baseGet);
+      const nameF = rawField(rowId, "attack_name");
+      const notes = baseGet("attack_notes") || "";
+      const isSave = (getAtk("attack_is_save") === "1") || String(getAtk("attack_type") || "").toLowerCase() === "sav";
+      if (i > 0) out += `<div style="border-top:1px solid #333; margin:5px 0;"></div>`;
+      out += `<b style="color:#f4d03f;">#${i + 1}</b> ${nameF.state === "set" ? esc(nameF.value) : `<i style="color:#8a84a8;">(unnamed)</i>`}`;
+      out += `<br/><span style="font-size:10px; color:#8a84a8;">rowid: <code>${esc(rowId)}</code></span>`;
+      const variants = Object.keys(spellings[rowId.toLowerCase()] || {});
+      if (variants.length > 1) {
+        out += `<br/><span style="color:#ff6b6b;">\u26a0 ghost row: ${variants.length} spellings of this id \u2014 run <code>!mp fixrows</code></span>`;
+      }
+      if (isSave) {
+        const bc = rawField(rowId, "attack_save_bc");
+        const initF = rawField(rowId, "attack_save_mod");
+        const recF = rawField(rowId, "attack_save_rec");
+        out += `<br/>Save: BC ${stateLabel(bc)} \u00b7 Init ${stateLabel(initF)} \u00b7 Rec ${stateLabel(recF)}`;
+        const bcResolved = getAtk("attack_save_bc") || "";
+        if (bcResolved && bc.state !== "set") {
+          out += `<br/><span style="color:#5dade2;">BC ${esc(bcResolved)} comes from the Notes code, not the dropdown</span>`;
+        } else if (!bcResolved) {
+          out += `<br/><span style="color:#ff6b6b;">\u26a0 save attack with no BC \u2014 single-target saves refuse, area saves default to EN</span>`;
+        }
+      }
+      const areaF = rawField(rowId, "attack_area");
+      const areaResolved = getAtk("attack_area") || "";
+      if (areaF.state === "set" || areaResolved) {
+        out += `<br/>Area: <b>${esc(areaResolved || areaF.value)}"</b>${areaF.state !== "set" ? ` <span style="font-size:10px; color:#5dade2;">(from Notes)</span>` : ""}`;
+      }
+      if (String(notes).trim() !== "") {
+        out += `<br/><span style="font-size:10px; color:#8a84a8;">Notes: ${esc(String(notes).slice(0, 60))}${String(notes).length > 60 ? "\u2026" : ""}</span>`;
+      }
+    });
+
+    out += `</div></div>`;
+    ch("MP", `${wt(msg)}${out}`);
   }
 
   function cmdQuickAttack(msg, args) {
@@ -14865,6 +14963,7 @@ function cmdStance(msg, args) {
         if (gmOnly(msg)) return;
         return cmdClearTurnOrder(msg);
       case "atkinfo": return cmdAttackInfo(msg, args);
+      case "atkrows": return cmdAttackRows(msg, args);
       case "hthmass":
       case "might": return cmdHTHMass(msg, args);
       case "atk": return cmdQuickAttack(msg, args);
@@ -14995,6 +15094,7 @@ function cmdStance(msg, args) {
           <code>!mp sv BC [mod]</code> - Save using EN, AG, IN, or CL<br/>
           <code>!mp hthmass [--push 1]</code> - Combined HTH + Mass roll for every selected token; push costs 2 PR for +2<br/>
           <code>!mp atkinfo --row ROWID</code> - Show a selected character's attack-row details<br/>
+          <code>!mp atkrows</code> - List a selected character's attack rows with rowids and save-field state<br/>
           <code>!mp attackcodes</code> - Show the Attack Notes code reference<br/>
           <code>!mp initselected [--sort desc|asc|none]</code> - Roll initiative for all selected represented tokens; descending is the default<br/>
           <code>!mp clearturnorder</code> - Clear the entire Roll20 Turn Tracker (<b>GM</b>)` },
