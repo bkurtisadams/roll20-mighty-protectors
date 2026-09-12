@@ -1,4 +1,16 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.92 - Career button: label order fix
+<!-- Mighty Protectors Roll20 Character Sheet v44.93 - Save-attack field labels
+        v44.93: The save-attack row's BC / Init / Rec labels described where a
+          number comes from rather than what it does, and Rec's tooltip said
+          "for Poison use same value as Init" - which is backwards: the engine
+          ADDS Rec on top of the first save's number, so duplicating Init there
+          doubles the penalty, and Damaging Poison's recurring saves use the
+          same adjusted number with no further modifier. Relabelled to
+          "Save vs:" / "1st save:" / "Extra on recovery:", with tooltips that
+          say Rec is an extra on top of the first save (blank for Damaging
+          Poison, -12 for Paralytic Poison / Paralysis Ray / Flash) and that a
+          blank BC is refused on single-target saves and assumed EN on area
+          saves. Rec's placeholder changed from "-12" to "blank" so the hint
+          stops implying every save attack wants a recovery penalty.
         v44.92: Difficulty/Culture dropdown labels reordered to text-then-number
           ("Routine (+2)", "Fantasy vs Mystical (+6)") to match Background's existing
           convention exactly - v44.91 had it number-first ("+2 (Routine)"). Also dropped
@@ -1195,8 +1207,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <label title="This is a Save Attack (target rolls to resist)" style="color:#f4d03f;">Save Attack</label>
           </div>
           <div class="sheet-panel-field">
-            <label title="Basic Characteristic the target saves against">BC:</label>
-            <select name="attr_attack_save_bc" title="Basic Characteristic the target saves against" style="width:45px !important;">
+            <label title="Which Basic Characteristic the target rolls to resist. Required - a save attack with no BC is refused (single target) or assumed to be EN (area).">Save vs:</label>
+            <select name="attr_attack_save_bc" title="Which Basic Characteristic the target rolls to resist. Required - a save attack with no BC is refused (single target) or assumed to be EN (area)." style="width:45px !important;">
               <option value="">--</option>
               <option value="EN">EN</option>
               <option value="AG">AG</option>
@@ -1205,12 +1217,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             </select>
           </div>
           <div class="sheet-panel-field">
-            <label title="Modifier to the initial save TN (from CP table)">Init:</label>
-            <input type="text" name="attr_attack_save_mod" style="width:32px !important;" title="Modifier to the initial save TN (from CP table)" placeholder="-8" />
+            <label title="Difficulty modifier on the target's FIRST save, from the Ability's CP table. Negative is harder. Example: Damaging Poison is -8.">1st save:</label>
+            <input type="text" name="attr_attack_save_mod" style="width:32px !important;" title="Difficulty modifier on the target's FIRST save, from the Ability's CP table. Negative is harder. Example: Damaging Poison is -8." placeholder="-8" />
           </div>
           <div class="sheet-panel-field">
-            <label title="Modifier to recovery save TN (separate from init; for Poison use same value as Init)">Rec:</label>
-            <input type="text" name="attr_attack_save_rec" style="width:32px !important;" title="Modifier to recovery save TN (separate from init; for Poison use same value as Init)" placeholder="-12" />
+            <label title="EXTRA modifier added on top of the first save's number for each recovery save - not the recovery number itself, and not a repeat of 1st save. Blank for Damaging Poison (recurring saves use the same adjusted number). -12 for Paralytic Poison, Paralysis Ray and Flash.">Extra on recovery:</label>
+            <input type="text" name="attr_attack_save_rec" style="width:32px !important;" title="EXTRA modifier added on top of the first save's number for each recovery save - not the recovery number itself, and not a repeat of 1st save. Blank for Damaging Poison (recurring saves use the same adjusted number). -12 for Paralytic Poison, Paralysis Ray and Flash." placeholder="blank" />
           </div>
           <div class="sheet-panel-field">
             <label title="Time between recovery save attempts">Rec Time:</label>
