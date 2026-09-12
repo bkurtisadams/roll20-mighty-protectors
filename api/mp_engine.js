@@ -1,4 +1,16 @@
-/* Mighty Protectors Roll20 API Engine v2.167.1 - 2026-09-09
+/* Mighty Protectors Roll20 API Engine v2.167.2 - 2026-09-12
+ * v2.167.2: MOOK TOKEN NAMES ON ONGOING-EFFECT CARDS. An area attack labelled
+ *   its save/damage cards by token name ("Mutant (1)") via areaRec.tokens[].name,
+ *   but every follow-up card for the condition it applied fell back to
+ *   char.get("name") - so a group of unlinked mook tokens all reported as the
+ *   shared character ("Pinky"), making round-by-round poison/paralysis prompts
+ *   impossible to tell apart. All of these now route through displayName(tok,
+ *   char): the round-advance "recovery saves due" list, the Recovery Roll card
+ *   and the pending damage record it creates (so the apply card matches too),
+ *   duration-tick damage/expiry lines, !mp conditions, !mp clearcond --all,
+ *   the status card, !mp restore, and the bleed tick / list / stop messages.
+ *   Linked (PC) tokens are unaffected - displayName only prefers the token
+ *   name for mook tokens (represents the character, bar1 unlinked).
  * v2.167.1: RW MAX ALL FOR NPC AREA DAMAGE. A large-group area hit (a 5"
  *   grenade blast, say) offered three roll-with buttons per NPC target,
  *   which doesn't scale. 4.8.3 lets any conscious, aware target roll with a
@@ -19,21 +31,13 @@
  *   time. Each now has a matching (Dive Prone) button; !mp arearollnpcs/
  *   areaforceall take an optional --prone flag applied to every NPC rolled in
  *   that call. Individual areaescape --prone on one token is unaffected.
- * v2.166.2: The attack card's cost line showed "PR:-1" for a PR-1 spend -
- *   a debit indicator (same convention as Chg:-1c), not the raw sheet field,
- *   but easily misread as the field being negative. Reworded to "PR: 1 spent".
- * v2.166.1: !mp help SPLIT INTO SECTIONS. The help whisper had grown to ~8.9KB
- *   of single-message HTML across the night's additions, which some clients
- *   render as an unreadable wall of text. !mp help now whispers a short list
- *   of section names; !mp help <section> shows one category; !mp help ALL
- *   reproduces the old single-message dump for anyone who wants it.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.167.1";
+var MP_VERSION = "2.167.2";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -10746,7 +10750,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // 0 or below, which would otherwise make recovery impossible.
     const pass = (d20 === CFG.CRIT_SUCCESS_NAT) || (!isFumble && (d20 <= tn));
 
-    let msg_out = `<b>Recovery Roll</b> (${esc(char.get("name"))})`;
+    // v2.167.2: mook tokens are labelled by token name, not character name
+    const recName = displayName(tok, char);
+    let msg_out = `<b>Recovery Roll</b> (${esc(recName)})`;
     if (cond) {
       msg_out += `<br/><span style="font-size:11px;">${esc(cond.effectDesc)} from ${esc(cond.sourceAtk)}</span>`;
     }
@@ -10779,7 +10785,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
             rollId: poisonRollId,
             defTokenId: tokId,
             defCharId: char.id,
-            defName: char.get("name"),
+            defName: recName,
             damageTotal: penetrating,
             dmgTypeStr: cond.dmgType || "Biochemical",
             protKey: null,  // Protection already applied
@@ -10829,10 +10835,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const conditions = state.MP_Engine.conditions[tokId] || [];
     
     if (conditions.length === 0) {
-      return ch("MP", `${wt(msg)}<b>${esc(char.get("name"))}</b> has no active conditions.`);
+      return ch("MP", `${wt(msg)}<b>${esc(displayName(tok, char))}</b> has no active conditions.`);
     }
     
-    let msg_out = `<b>Conditions on ${esc(char.get("name"))}</b>`;
+    let msg_out = `<b>Conditions on ${esc(displayName(tok, char))}</b>`;
     const now = state.MP_Engine.gameClock.ms;
     
     conditions.forEach((cond, idx) => {
@@ -10920,7 +10926,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         setMarker(tok, "purple", false);
       }
       state.MP_Engine.conditions[tokId] = [];
-      return ch("MP", `/w gm All conditions cleared from <b>${esc(char.get("name"))}</b>.`);
+      return ch("MP", `/w gm All conditions cleared from <b>${esc(displayName(tok, char))}</b>.`);
     }
     
     if (condIdx < 0 || condIdx >= conditions.length) {
@@ -10963,7 +10969,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
     
-    ch("MP", `/w gm <b>${esc(char.get("name"))}</b>: ${condLabel} removed.${restoredNote}`);
+    ch("MP", `/w gm <b>${esc(displayName(tok, char))}</b>: ${condLabel} removed.${restoredNote}`);
   }
   
   // Check for expired absorption effects (called periodically or on status check)
@@ -12030,7 +12036,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const hitsMax = isVeh ? getAttrNum(char.id, "vehicle_hits_max", 20) : getResourceMax(tok, char.id, CFG.HITS_BAR, CFG.HITS_MAX_ATTR, 20);
     const pow = isVeh ? getVehiclePower(tok, char.id) : getResource(tok, char.id, CFG.POWER_BAR, CFG.POWER_ATTR);
     const powMax = isVeh ? getAttrNum(char.id, "vehicle_power_max", 40) : getResourceMax(tok, char.id, CFG.POWER_BAR, CFG.POWER_MAX_ATTR, 40);
-    const label = isVeh ? (getAttr(char.id, "vehicle_name") || char.get("name")) : char.get("name");
+    const label = isVeh ? (getAttr(char.id, "vehicle_name") || char.get("name")) : displayName(tok, char);
 
     const hitsColor = hits <= 0 ? "#ff6b6b" : (hits <= hitsMax / 2 ? "#f4d03f" : "#2ecc71");
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px; overflow:hidden;">`;
@@ -12295,7 +12301,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         delete state.MP_Engine.conditions[tokId];
       }
       
-      restored.push(char.get("name") + ` (H:${hitsMax} P:${powMax})`);
+      restored.push(displayName(tok, char) + ` (H:${hitsMax} P:${powMax})`);
     });
     
     if (restored.length > 0) {
@@ -15749,7 +15755,8 @@ function cmdStance(msg, args) {
       if (!conds.some(c => c.type === "duration")) return;
       const tok = getObj("graphic", tokId);
       const char = tok ? getCharFromToken(tok) : null;
-      const name = char ? char.get("name") : "Target";
+      // v2.167.2: mook tokens are labelled by token name, not character name
+      const name = char ? displayName(tok, char) : (tok ? (tok.get("name") || "Target") : "Target");
       const keep = [];
       conds.forEach(cond => {
         if (cond.type !== "duration") { keep.push(cond); return; }
@@ -15815,7 +15822,8 @@ function cmdStance(msg, args) {
       if (!list.length) return;
       const tok = getObj("graphic", tokId);
       const char = tok ? getCharFromToken(tok) : null;
-      const name = char ? char.get("name") : (tok ? (tok.get("name") || "Target") : "Target");
+      // v2.167.2: mook tokens are labelled by token name, not character name
+      const name = char ? displayName(tok, char) : (tok ? (tok.get("name") || "Target") : "Target");
       const seenTypes = {};
       list.forEach((cond, idx) => {
         if (cond.type === "duration" || cond.type === "absorption") return;
@@ -16336,7 +16344,8 @@ function cmdStance(msg, args) {
       const tok = getObj("graphic", tokenId);
       const char = getObj("character", rec.charId);
       if (!tok || !char) { delete state.MP_Engine.bleeds[tokenId]; return; }
-      const name = char.get("name");
+      // v2.167.2: mook tokens are labelled by token name, not character name
+      const name = displayName(tok, char);
       const hits = getResource(tok, rec.charId, CFG.HITS_BAR, CFG.HITS_ATTR);
       if (hits > 0) {
         delete state.MP_Engine.bleeds[tokenId];
@@ -16511,7 +16520,7 @@ function cmdStance(msg, args) {
         const char = getObj("character", rec.charId);
         const tok = getObj("graphic", tokenId);
         const pow = tok ? getResource(tok, rec.charId, CFG.POWER_BAR, CFG.POWER_ATTR) : 0;
-        out += `<br/>• <b>${esc(char ? char.get("name") : rec.charId)}</b> — ${pow} Power (${pow} min to death)`;
+        out += `<br/>• <b>${esc(char ? displayName(tok, char) : rec.charId)}</b> — ${pow} Power (${pow} min to death)`;
       });
       return ch("MP", `/w gm ${out}`);
     }
@@ -16521,7 +16530,7 @@ function cmdStance(msg, args) {
       if (!state.MP_Engine.bleeds[tok.id]) return ch("MP", `/w gm <b>MP:</b> Not bleeding.`);
       delete state.MP_Engine.bleeds[tok.id];
       const char = getObj("character", tok.get("represents"));
-      return ch("MP", `<b>MP:</b> Bleeding stopped for <b>${esc(char ? char.get("name") : "target")}</b> (Medical task check).`);
+      return ch("MP", `<b>MP:</b> Bleeding stopped for <b>${esc(char ? displayName(tok, char) : "target")}</b> (Medical task check).`);
     }
     if (action === "start") {
       const charId = tok.get("represents");

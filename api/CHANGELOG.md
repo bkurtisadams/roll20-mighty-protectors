@@ -6,6 +6,35 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.167.2: MOOK TOKEN NAMES ON ONGOING-EFFECT CARDS. An area attack labelled
+  its save/damage cards by token name ("Mutant (1)") via areaRec.tokens[].name,
+  but every follow-up card for the condition it applied fell back to
+  char.get("name") - so a group of unlinked mook tokens all reported as the
+  shared character ("Pinky"), making round-by-round poison/paralysis prompts
+  impossible to tell apart. All of these now route through displayName(tok,
+  char): the round-advance "recovery saves due" list, the Recovery Roll card
+  and the pending damage record it creates (so the apply card matches too),
+  duration-tick damage/expiry lines, !mp conditions, !mp clearcond (single and
+  --all), the status card, !mp restore, and the bleed tick / list / stop
+  messages. Linked (PC) tokens are unaffected - displayName only prefers the
+  token name for mook tokens (represents the character, bar1 unlinked).
+
+v2.167.1: RW MAX ALL FOR NPC AREA DAMAGE. A large-group area hit (a 5"
+  grenade blast, say) offered three roll-with buttons per NPC target,
+  which doesn't scale. 4.8.3 lets any conscious, aware target roll with a
+  hit - PC or NPC alike - so there's no rule distinction here, just a GM
+  speed shortcut for the common case: new GM button "RW Max All (NPCs)"
+  (shown once 2+ NPC targets are pending) resolves every pending NPC at
+  Roll-With Max in one click via new !mp arearwmaxall. Player-controlled
+  targets and any NPC already flagged sleepy/dead (no roll-with offered
+  at all, per 4.8.3's conscious-and-aware requirement) are unaffected.
+
+v2.167.0: CHANGELOG SPLIT OUT. The header changelog had grown to 1,707
+  lines / ~115KB / 214 entries (12% of the file). All entries moved
+  verbatim, in original order, to CHANGELOG.md in the repo root; header
+  keeps only the current version and the last 3 entries plus a pointer.
+  No entry text changed or was reordered - this is a pure relocation.
+
 v2.166.3: AREA ESCAPE STANCE CHOICE FOR NPC BATCHES. Auto-Roll NPCs and
   Force All Escapes were always standing (never applied the Dive Prone +6),
   with no way to choose for a batch of mooks without rolling them one at a
