@@ -1,4 +1,21 @@
-/* Mighty Protectors Roll20 API Engine v2.167.2 - 2026-09-12
+/* Mighty Protectors Roll20 API Engine v2.167.3 - 2026-09-12
+ * v2.167.3: ROLL-WITH ON AREA SAVES. 4.8.3.1 lets a target spend Power to add
+ *   to a save attack's target number, and nothing in 4.8.3.1 or 4.9 exempts
+ *   an attack delivered as an Area Effect - but the area path offered no
+ *   roll-with on the save (only on damage) and rebuilt the recovery TN from
+ *   components, so a target caught in an area Damaging Poison could not do
+ *   what the same attack allows when aimed at it directly. resolveAreaSave
+ *   now takes a roll-with amount: capped at floor(current Power / 10) as in
+ *   cmdSave, Power spent whether the save then succeeds or not, added into
+ *   the save TN, and the recovery TN is derived as tn + Rec mod so the
+ *   roll-with carries into the per-round saves (4.9's Tigress example counts
+ *   her +2 inside the number her recovery is measured against; Damaging
+ *   Poison p.60 says recurring saves use "the same adjusted target number as
+ *   they had for their initial save"). Area save targets now defer like
+ *   damage targets do: Make Save / Save + RW Max / Save + RW Custom, whispered
+ *   to the controlling player or collected for the GM, with RW Max All and
+ *   Apply Rest covering the batch. Recovery TN is otherwise unchanged - the
+ *   derived value is arithmetically identical to the old rebuild.
  * v2.167.2: MOOK TOKEN NAMES ON ONGOING-EFFECT CARDS. An area attack labelled
  *   its save/damage cards by token name ("Mutant (1)") via areaRec.tokens[].name,
  *   but every follow-up card for the condition it applied fell back to
@@ -25,19 +42,13 @@
  *   verbatim, in original order, to CHANGELOG.md in the repo root; header
  *   keeps only the current version and the last 3 entries plus a pointer.
  *   No entry text changed or was reordered - this is a pure relocation.
- * v2.166.3: AREA ESCAPE STANCE CHOICE FOR NPC BATCHES. Auto-Roll NPCs and
- *   Force All Escapes were always standing (never applied the Dive Prone +6),
- *   with no way to choose for a batch of mooks without rolling them one at a
- *   time. Each now has a matching (Dive Prone) button; !mp arearollnpcs/
- *   areaforceall take an optional --prone flag applied to every NPC rolled in
- *   that call. Individual areaescape --prone on one token is unaffected.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.167.2";
+var MP_VERSION = "2.167.3";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7595,6 +7606,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     return maxDivert;
   }
 
+  // Roll-with capacity for an area SAVE (4.8.3.1: spend Power to add to the
+  // save TN). Mirrors cmdSave's cap of floor(current Power / 10); Fortitude's
+  // doubling applies to damage diverts, not save bonuses. Vehicles can't.
+  function areaSaveMaxBonus(tokData, tok) {
+    if (!tok || isVehicleMode(tokData.charId)) return 0;
+    const pow0 = getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+    return Math.floor(pow0 / 10);
+  }
+
   // Resolve one area target with a chosen roll-with divert. Returns an html result line.
   // Per-target save for ANY save attack delivered as an Area Effect. Mirrors
   // cmdSave: condition type inferred from the attack, Damaging Poison keeps
@@ -7602,7 +7622,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // (Flash, Light Control B) reports vision levels. Fumbled INITIAL save on a
   // sense-loss attack is permanent blindness (rules). Optional forcedRoll for
   // the test harness.
-  function resolveAreaSave(areaRec, tokId, forcedRoll) {
+  function resolveAreaSave(areaRec, tokId, forcedRoll, rwWanted) {
     const tokData = areaRec.tokens[tokId];
     const tok = getObj("graphic", tokId);
     const char = getObj("character", tokData.charId);
@@ -7642,14 +7662,27 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       : { protMod: 0, dmgMod: 0, notes: [] };
     const vulnSaveMod = (vulnData && vulnData.dmgMod) ? -Math.abs(num(vulnData.dmgMod, 0)) : 0;
 
-    const tn = baseSave + num(areaRec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + vulnSaveMod + discomfort;
+    // 4.8.3.1: a target may roll with a save attack, spending Power to add to
+    // the saving roll target number. Nothing in 4.8.3.1 or 4.9 exempts an
+    // attack delivered as an Area Effect, so area saves get the same option
+    // the single-target path has. Power is spent whether or not the save then
+    // succeeds, as in cmdSave.
+    const rwMax = areaSaveMaxBonus(tokData, tok);
+    const rwPaid = Math.max(0, Math.min(num(rwWanted, 0), rwMax));
+    if (rwPaid > 0) {
+      const rwPow0 = getResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR);
+      setResource(tok, tokData.charId, CFG.POWER_BAR, CFG.POWER_ATTR, Math.max(0, rwPow0 - rwPaid));
+    }
+    const rwNote = rwPaid > 0 ? ` <span style="color:#5dade2;">[RW +${rwPaid}, -${rwPaid} Power]</span>` : "";
+
+    const tn = baseSave + num(areaRec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + rwPaid + vulnSaveMod + discomfort;
     const d20 = (forcedRoll !== undefined) ? forcedRoll : randomInteger(20);
     const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
     // 3.0.1: a saving roll of 1 always succeeds, a roll of 20 always fails.
     const pass = (d20 === CFG.CRIT_SUCCESS_NAT) || (!isFumble && (d20 <= tn));
 
     if (pass) {
-      return `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> saves (${tn}-, rolled ${d20})${isSenseLoss ? " \u2014 vision unaffected" : " \u2014 no effect"}</span>`;
+      return `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> saves (${tn}-, rolled ${d20})${isSenseLoss ? " \u2014 vision unaffected" : " \u2014 no effect"}</span>${rwNote}`;
     }
 
     const levels = isSenseLoss ? Math.max(1, Math.min(3, num(areaRec.senseLoss, 2))) : 0;
@@ -7661,8 +7694,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const marker = CONDITION_MARKERS[condType] || CONDITION_MARKERS.generic;
     const hasDamage = conditionDealsDamage(condType);
     const condDamage = hasDamage ? rawCondDamage : 0;
-    const recTN = baseSave + num(areaRec.saveMod, 0) + num(areaRec.recMod, 0)
-      + protForSave + invulnForSave + adaptForSave + vulnSaveMod + discomfort;
+    // Recovery keeps the initial save's adjusted target number plus the row's
+    // Rec modifier (4.9; Damaging Poison p.60 "the same adjusted target number
+    // as they had for their initial save"). Derived from tn rather than
+    // rebuilt, so a roll-with the target paid Power for carries over - 4.9's
+    // Tigress example counts her +2 roll-with inside the number her recovery
+    // rolls are measured against.
+    const recTN = tn + num(areaRec.recMod, 0);
 
     if (!state.MP_Engine.conditions[tokId]) state.MP_Engine.conditions[tokId] = [];
     const condList = state.MP_Engine.conditions[tokId];
@@ -7691,7 +7729,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     else { condList.push(condition); condIdx = condList.length - 1; }
     setMarker(tok, marker, true);
 
-    let out = `<br/><span style="color:#e94560;">\u2717 <b>${esc(tokData.name)}</b> FAILS (${tn}-, rolled ${d20}${isFumble ? " FUMBLE" : ""})`;
+    let out = `<br/><span style="color:#e94560;">\u2717 <b>${esc(tokData.name)}</b> FAILS (${tn}-${rwPaid > 0 ? ` incl. RW +${rwPaid}` : ""}, rolled ${d20}${isFumble ? " FUMBLE" : ""})`;
     if (isPermanent) {
       out += ` \u2014 <b style="color:#ff6b6b;">PERMANENTLY BLINDED</b></span>`;
     } else if (isSenseLoss) {
@@ -7751,7 +7789,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // damage directly. Covers sense loss (Flash), Damaging/Paralytic Poison,
     // Fear, Mind Control and any other save condition delivered as Area Effect.
     if (areaRec.isSaveAttack) {
-      return resolveAreaSave(areaRec, tokId);
+      return resolveAreaSave(areaRec, tokId, undefined, divertWanted);
     }
     const c = computeAreaPen(areaRec, tokData);
     const tokIsVehicle = c.tokIsVehicle;
@@ -7909,6 +7947,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Save attacks resolve their own per-target save (and their own damage
       // roll-with buttons), so they skip the damage-deferral path entirely.
       if (isSaveArea) {
+        const rwMaxSave = areaSaveMaxBonus(tokData, tok);
+        const svKoFlag = tok.get("status_sleepy") === true || tok.get("status_dead") === true;
+        // 4.8.3's conscious-and-aware requirement gates rolling with a save
+        // the same way it gates rolling with damage.
+        if (rwMaxSave > 0 && !svKoFlag) {
+          tokData.rwPending = true;
+          deferred++;
+          const svBtns = `${btn(`Make Save`, `!mp arearw --id ${rollId} --target ${tokId} --amt 0`)} ` +
+            `${btn(`Save + RW Max (+${rwMaxSave})`, `!mp arearw --id ${rollId} --target ${tokId} --amt ${rwMaxSave}`)} ` +
+            `${btn(`Save + RW Custom`, `!mp arearw --id ${rollId} --target ${tokId} --amt ?{Power to add to save|0}`)}`;
+          if (tokData.controller !== "gm" && tokData.controller !== "all") {
+            chToChar("MP", `<b>AREA SAVE vs ${esc(tokData.name)}</b> \u2014 ${esc(areaRec.saveBC || "EN")} save (roll-with up to +${rwMaxSave})<br/>${svBtns}`, tokData.charId);
+            html += `<br/><span style="color:#f1c40f;">\u23f3 <b>${esc(tokData.name)}</b>: save \u2014 roll-with offered to player</span>`;
+          } else {
+            html += `<br/><span style="color:#f1c40f;">\u23f3 <b>${esc(tokData.name)}</b> (NPC): save pending (roll-with up to +${rwMaxSave})</span>`;
+            npcBtns += `<br/><b>${esc(tokData.name)}</b>: ${svBtns}`;
+          }
+          return;
+        }
         html += resolveAreaTarget(areaRec, tokId, 0);
         return;
       }
@@ -7967,11 +8024,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!areaRec) return ch("MP", `${wt(msg)}<b>MP:</b> Area effect expired or not found.`);
     const tokData = areaRec.tokens[tokId];
     if (!tokData) return ch("MP", `${wt(msg)}<b>MP:</b> Token not in area effect.`);
-    if (!requireControl(msg, tokData.charId, "choose Roll-With for this area damage")) return;
+    if (!requireControl(msg, tokData.charId, areaRec.isSaveAttack ? "choose Roll-With for this area save" : "choose Roll-With for this area damage")) return;
     if (tokData.applied) return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(tokData.name)} already resolved.`);
     
     const line = resolveAreaTarget(areaRec, tokId, Math.max(0, num(args.amt, 0)));
-    const resultHtml = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>AREA DAMAGE</b>${line}</div>`;
+    const resultHtml = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>${areaRec.isSaveAttack ? "AREA SAVE" : "AREA DAMAGE"}</b>${line}</div>`;
     chCombat("MP", resultHtml, tokData.charId);
     finalizeAreaIfDone(rollId);
   }
@@ -7985,7 +8042,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const areaRec = state.MP_Engine.pendingArea[rollId];
     if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
 
-    let html = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>AREA DAMAGE</b> (Roll-With Max, NPCs)`;
+    let html = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>${areaRec.isSaveAttack ? "AREA SAVE" : "AREA DAMAGE"}</b> (Roll-With Max, NPCs)`;
     let any = 0;
     Object.keys(areaRec.tokens).forEach(tokId => {
       const tokData = areaRec.tokens[tokId];
@@ -7993,8 +8050,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (tokData.controller !== "gm" && tokData.controller !== "all") return;  // leave player choices alone
       const tok = getObj("graphic", tokId);
       if (!tok) return;
-      const c = computeAreaPen(areaRec, tokData);
-      const maxDivert = Math.min(areaMaxDivert(tokData, tok), c.penetrating);
+      // Save areas spend Power for save-TN bonus, capped by 4.8.3.1, not by
+      // penetrating damage.
+      const maxDivert = areaRec.isSaveAttack
+        ? areaSaveMaxBonus(tokData, tok)
+        : Math.min(areaMaxDivert(tokData, tok), computeAreaPen(areaRec, tokData).penetrating);
       html += resolveAreaTarget(areaRec, tokId, maxDivert);
       any++;
     });
@@ -8010,7 +8070,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const areaRec = state.MP_Engine.pendingArea[rollId];
     if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
     
-    let html = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>AREA DAMAGE</b> (no roll-with)`;
+    let html = `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b>${areaRec.isSaveAttack ? "AREA SAVE" : "AREA DAMAGE"}</b> (no roll-with)`;
     let any = 0;
     Object.keys(areaRec.tokens).forEach(tokId => {
       const tokData = areaRec.tokens[tokId];

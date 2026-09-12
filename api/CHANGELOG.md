@@ -6,6 +6,24 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.167.3: ROLL-WITH ON AREA SAVES. 4.8.3.1 lets a target spend Power to add
+  to a save attack's target number, and nothing in 4.8.3.1 or 4.9 exempts
+  an attack delivered as an Area Effect - but the area path offered no
+  roll-with on the save (only on damage) and rebuilt the recovery TN from
+  components, so a target caught in an area Damaging Poison could not do
+  what the same attack allows when aimed at it directly. resolveAreaSave
+  now takes a roll-with amount: capped at floor(current Power / 10) as in
+  cmdSave, Power spent whether the save then succeeds or not, added into
+  the save TN, and the recovery TN is derived as tn + Rec mod so the
+  roll-with carries into the per-round saves (4.9's Tigress example counts
+  her +2 inside the number her recovery is measured against; Damaging
+  Poison p.60 says recurring saves use "the same adjusted target number as
+  they had for their initial save"). Area save targets now defer like
+  damage targets do: Make Save / Save + RW Max / Save + RW Custom, whispered
+  to the controlling player or collected for the GM, with RW Max All and
+  Apply Rest covering the batch. Recovery TN is otherwise unchanged - the
+  derived value is arithmetically identical to the old rebuild.
+
 v2.167.2: MOOK TOKEN NAMES ON ONGOING-EFFECT CARDS. An area attack labelled
   its save/damage cards by token name ("Mutant (1)") via areaRec.tokens[].name,
   but every follow-up card for the condition it applied fell back to
