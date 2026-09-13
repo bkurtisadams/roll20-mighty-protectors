@@ -1,4 +1,17 @@
-/* Mighty Protectors Roll20 API Engine v2.167.5 - 2026-09-12
+/* Mighty Protectors Roll20 API Engine v2.167.6 - 2026-09-13
+ * v2.167.6: DIAGONAL MOVEMENT IN AREA ESCAPE DISTANCE. 4.7.5.2 sets the escape
+ *   TN from "inches of movement to the closest safe space", but the engine used
+ *   radius minus distance-from-center - a radial gap, which charges the
+ *   Pythagorean rate for a diagonal exit. A token one diagonal square from the
+ *   blast point of a 7" area reads 2.07" of radial gap and was billed 3",
+ *   though two diagonal steps clear the circle for 2" of movement on a 1-1-1
+ *   grid, costing it 3 on its escape TN. New areaDistToEdge searches outward
+ *   for the cheapest grid square lying outside the area and returns that
+ *   movement cost, using the page's own Diagonals setting (Roll20's default
+ *   "foure" counts a diagonal as one square; threefive/manhattan/pythagorean
+ *   honoured as set). Computed once in getTokensInRadius so the area card and
+ *   the stored escape record can't disagree. Areas are diameters in inches
+ *   (1" = 5 feet), unchanged.
  * v2.167.5: DIVE PRONE SETS THE PRONE MARKER. 4.7.5.2 grants the +6 escape
  *   bonus to a character "willing to dive to a Prone position" - the dive is
  *   what's being paid for, so it happens whether or not the leap then clears
@@ -37,25 +50,13 @@
  *   to the controlling player or collected for the GM, with RW Max All and
  *   Apply Rest covering the batch. Recovery TN is otherwise unchanged - the
  *   derived value is arithmetically identical to the old rebuild.
- * v2.167.2: MOOK TOKEN NAMES ON ONGOING-EFFECT CARDS. An area attack labelled
- *   its save/damage cards by token name ("Mutant (1)") via areaRec.tokens[].name,
- *   but every follow-up card for the condition it applied fell back to
- *   char.get("name") - so a group of unlinked mook tokens all reported as the
- *   shared character ("Pinky"), making round-by-round poison/paralysis prompts
- *   impossible to tell apart. All of these now route through displayName(tok,
- *   char): the round-advance "recovery saves due" list, the Recovery Roll card
- *   and the pending damage record it creates (so the apply card matches too),
- *   duration-tick damage/expiry lines, !mp conditions, !mp clearcond --all,
- *   the status card, !mp restore, and the bleed tick / list / stop messages.
- *   Linked (PC) tokens are unaffected - displayName only prefers the token
- *   name for mook tokens (represents the character, bar1 unlinked).
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.167.5";
+var MP_VERSION = "2.167.6";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -4454,6 +4455,7 @@ function generateRowID() {
     const snap = page.get("snapping_increment") || 1;
     const pixelsPerInch = 70 * snap;  // 70 pixels per grid square at snap=1
     const radiusPx = radiusInches * pixelsPerInch;
+    const diagType = page.get("diagonaltype") || "foure";
     
     const tokens = findObjs({ _type: "graphic", _pageid: pageId, _subtype: "token", layer: "objects" }) || [];
     const results = [];
@@ -4484,6 +4486,7 @@ function generateRowID() {
           charId: charId,
           name: displayName(tok, char),
           distance: distInches,
+          distToEdge: areaDistToEdge(dx / pixelsPerInch, dy / pixelsPerInch, radiusInches, diagType),
           controller: controller
         });
       }
@@ -4492,10 +4495,41 @@ function generateRowID() {
     return results;
   }
   
-  // Calculate distance to edge of area effect (for escape TN calculation)
-  function calculateDistanceToEdge(distanceFromCenter, radius) {
-    const distToEdge = radius - distanceFromCenter;
-    return Math.max(1, Math.ceil(distToEdge));  // Minimum 1"
+  // Movement cost, in inches, of stepping (i, j) grid squares under the page's
+  // diagonal rule. Roll20's "foure" (its default) counts a diagonal as one
+  // square, which is what MP's inch-per-square movement assumes.
+  function gridStepCost(i, j, diagType) {
+    const a = Math.abs(i), b = Math.abs(j);
+    const mn = Math.min(a, b), mx = Math.max(a, b);
+    switch (diagType) {
+      case "manhattan": return a + b;
+      case "threefive": return mx + Math.floor(mn / 2);   // 1-2-1 alternating
+      case "pythagorean": return Math.sqrt(a * a + b * b);
+      default: return mx;                                  // "foure": diagonal = 1
+    }
+  }
+
+  // 4.7.5.2 sets the escape TN by "inches of movement to the closest safe
+  // space" - a movement cost, not a radial gap. Measuring radius minus
+  // distance-from-center silently charged the Pythagorean rate for a diagonal
+  // exit: a token one diagonal square from the blast point reads 2.07" of
+  // radial gap, but two diagonal steps clear the circle for 2" of movement
+  // under a 1-1-1 grid. Search outward for the cheapest square that lies
+  // outside the area and return that cost instead.
+  // dxIn/dyIn are the token's offset from the blast center in inches.
+  function areaDistToEdge(dxIn, dyIn, radius, diagType) {
+    const lim = Math.ceil(radius) + 2;
+    let best = Infinity;
+    for (let i = -lim; i <= lim; i++) {
+      for (let j = -lim; j <= lim; j++) {
+        const ex = dxIn + i, ey = dyIn + j;
+        if (Math.sqrt(ex * ex + ey * ey) <= radius) continue;   // still inside
+        const cost = gridStepCost(i, j, diagType);
+        if (cost < best) best = cost;
+      }
+    }
+    if (!isFinite(best)) return 1;
+    return Math.max(1, Math.ceil(best));  // Minimum 1"
   }
   
   // Draw a dashed circle path marking the area effect (map layer, unmovable by players)
@@ -7267,7 +7301,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const markerId = drawAreaMarker(pageId, centerX, centerY, rec.areaRadius, pixelsPerInch);
     const areaTokens = {};
     tokensInArea.forEach(t => {
-      const distToEdge = calculateDistanceToEdge(t.distance, rec.areaRadius);
+      const distToEdge = t.distToEdge;
       areaTokens[t.tokenId] = {
         tokenId: t.tokenId,
         charId: t.charId,
@@ -7354,7 +7388,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // attack type (4.7.1): mental_def vs mental/emotional area attacks.
       const areaIsMental = rec.atkTypeCode === "M" || rec.atkTypeCode === "E";
       tokensInArea.forEach(t => {
-        const distToEdge = calculateDistanceToEdge(t.distance, rec.areaRadius);
+        const distToEdge = t.distToEdge;
         const baseDef = getAttrNum(t.charId, areaIsMental ? "mental_def" : "physical_def", 0);
         const escapeTN = baseDef + 9 - (3 * distToEdge);
         const escapeTNProne = escapeTN + 6;

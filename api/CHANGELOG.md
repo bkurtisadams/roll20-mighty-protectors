@@ -6,6 +6,20 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.167.6: DIAGONAL MOVEMENT IN AREA ESCAPE DISTANCE. 4.7.5.2 sets the escape
+  TN from "inches of movement to the closest safe space", but the engine used
+  radius minus distance-from-center - a radial gap, which charges the
+  Pythagorean rate for a diagonal exit. A token one diagonal square from the
+  blast point of a 7" area reads 2.07" of radial gap and was billed 3",
+  though two diagonal steps clear the circle for 2" of movement on a 1-1-1
+  grid, costing it 3 on its escape TN. New areaDistToEdge searches outward
+  for the cheapest grid square lying outside the area and returns that
+  movement cost, using the page's own Diagonals setting (Roll20's default
+  "foure" counts a diagonal as one square; threefive/manhattan/pythagorean
+  honoured as set). Computed once in getTokensInRadius so the area card and
+  the stored escape record can't disagree. Areas are diameters in inches
+  (1" = 5 feet), unchanged.
+
 v2.167.5: DIVE PRONE SETS THE PRONE MARKER. 4.7.5.2 grants the +6 escape
   bonus to a character "willing to dive to a Prone position" - the dive is
   what's being paid for, so it happens whether or not the leap then clears
