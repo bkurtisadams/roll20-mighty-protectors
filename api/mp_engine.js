@@ -1,4 +1,21 @@
-/* Mighty Protectors Roll20 API Engine v2.167.7 - 2026-09-13
+/* Mighty Protectors Roll20 API Engine v2.168.0 - 2026-09-13
+ * v2.168.0: PRONE (4.4.5). Three code paths set the prone marker (knockdown,
+ *   called-shot leg hit, and diving to escape an area) and nothing removed it
+ *   except right-clicking the token, so prone tokens kept feeding 4.7.2's +3
+ *   into every attack against them long after they'd have stood. New
+ *   !mp stand clears it across a multi-select with one summary line, which is
+ *   4.4.5's default case (standing normally takes a full turn). !mp stand
+ *   --check rolls the optional AG-based acrobatics task check that rises at
+ *   the cost of the movement OR action phase (--cost move|action records
+ *   which), with 3.0.1 confirm rolls so a critical success costs no time at
+ *   all; --mod N for GM adjustments. Separately, 4.4.5's -3 for a prone
+ *   attacker hitting a target under 2" away is now applied automatically from
+ *   the marker and the measured range, shown as its own "Prone" row in the
+ *   to-hit breakdown - scoped to physical attacks for the same reason 4.7.2's
+ *   +3 is. Crawling at 1/4 rate, the flying "disoriented" equivalent, and the
+ *   GM's discretionary task checks stay off-engine; the helper side of the
+ *   assist rule is not built yet, but !mp stand --check already spends a
+ *   banked stand_assist +3 if something else sets one.
  * v2.167.7: ESCAPE CARD LEADS WITH THE DISTANCE. The area escape result said
  *   only "X ESCAPES/FAILS to escape!" and a bare TN, so the movement the roll
  *   was actually made against - the one number that explains where the TN came
@@ -27,26 +44,15 @@
  *   back-pain marker that 4.7.2's +3-vs-prone lookup reads: diving was a free
  *   +6 with no downside, and a failed diver ended up halfway to the edge
  *   standing. Now any dive sets the marker and records tokData.prone, and the
- *   failure card says the target ends up prone. Standing back up stays manual
- *   (clear the marker) as it was for knockdown and called-shot leg hits.
- * v2.167.4: !mp atkrows. Roll20 exposes no UI for repeating-row ids, so
- *   !mp atkinfo --row was unusable without a hand-built @{repeating_attacks_$N_
- *   attack_rowid} macro, and a blank Save BC on a card could mean three
- *   different things: the attribute was never written, it exists but is empty,
- *   or the engine is reading a ghost duplicate row. New !mp atkrows lists every
- *   attack row on the selected character in sheet display order with its rowid
- *   and, for save rows, whether BC/Init/Rec are set, empty, or have no
- *   attribute at all - plus a ghost-row warning pointing at !mp fixrows, and a
- *   note when a value is coming from an Attack Notes code rather than the
- *   dropdown. Row ordering was extracted from findAttackRowByIndex into
- *   orderedAttackRowIds so both count rows identically.
+ *   failure card says the target ends up prone. (Standing back up became
+ *   !mp stand in v2.168.0.)
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.167.7";
+var MP_VERSION = "2.168.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -95,6 +101,7 @@ MP.Engine = (function () {
     // grappling someone; -9 while fully restrained (grapple lock, or a
     // called-shot snare that binds the limbs)
     RESTRAINT_PENALTY: -3,
+    PRONE_CLOSE_PENALTY: -3,   // 4.4.5: prone attacker vs a target under 2" away
     FULL_RESTRAINT_PENALTY: -9,
 
     // Area effect map marker (dashed circle drawn at blast center)
@@ -6495,6 +6502,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
 
+    // 4.4.5: a prone character takes -3 to hit targets less than 2" away.
+    // Scoped to physical attacks for the same reason 4.7.2's +3-vs-prone is
+    // (lying down doesn't hamper a mental or emotional attack), and range is
+    // the profile-adjusted measure already in hand - minimum 1", so this fires
+    // on adjacent targets. "Any other task checks the GM deems appropriate"
+    // stays GM-applied via --mod.
+    let atkPronePenalty = 0;
+    if (atkTok && atkTypeCode !== "M" && atkTypeCode !== "E"
+        && atkTok.get("status_back-pain") === true
+        && rangeData && num(rangeData.inches, 99) < 2) {
+      atkPronePenalty = CFG.PRONE_CLOSE_PENALTY;
+    }
+
     const baseToHit =
       atkSave +
       3 +
@@ -6504,6 +6524,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       atkStancePenalty +
       rangePenalty +
       atkRestraintPenalty +
+      atkPronePenalty +
       atkVisionPenalty +
       atkDiscomfortPenalty;
 
@@ -6838,6 +6859,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     if (atkStancePenalty !== 0) addCalcRow("Stance", fmtMod(atkStancePenalty));
     if (atkRestraintPenalty !== 0) addCalcRow("Restraint", fmtMod(atkRestraintPenalty));
+    if (atkPronePenalty !== 0) addCalcRow("Prone", fmtMod(atkPronePenalty), "vs target under 2\"");
     if (atkVisionPenalty !== 0) {
       const senseName = String(obs.label || "sense").replace(/\s*\([^)]*\)\s*$/, "").trim();
       let senseResult = "";
@@ -12778,7 +12800,94 @@ function cmdAttackInfo(msg, args) {
   
   // ------------------------------------------------------------------------
 
-function cmdStance(msg, args) {
+  // !mp stand [--check] [--cost move|action] [--mod N]
+  // 4.4.5: standing normally takes a full turn, so the default just clears the
+  // prone marker and works across a multi-select (five mooks flat in a cloud
+  // shouldn't be five right-click menus). --check is the optional AG-based
+  // acrobatics task check that rises at the cost of the character's movement
+  // OR action phase, their choice; a critical success costs no time at all.
+  // Crawling at 1/4 rate and the GM's discretionary task checks stay off-engine.
+  function cmdStand(msg, args) {
+    const sel = (msg.selected || []).filter(x => x._type === "graphic")
+      .map(x => getObj("graphic", x._id)).filter(Boolean);
+    if (!sel.length) return ch("MP", `${wt(msg)}<b>MP:</b> Select a token first. Usage: <code>!mp stand</code> or <code>!mp stand --check</code>`);
+
+    const wantCheck = ("check" in args) || args.check === "1";
+
+    if (!wantCheck) {
+      const stood = [];
+      const already = [];
+      sel.forEach(tok => {
+        const char = getCharFromToken(tok);
+        if (!char) return;
+        if (!requireControl(msg, char.id, "stand this character up")) return;
+        const label = displayName(tok, char);
+        if (tok.get("status_back-pain") !== true) { already.push(label); return; }
+        setMarker(tok, "back-pain", false);
+        stood.push(label);
+      });
+      if (!stood.length) {
+        return ch("MP", `${wt(msg)}<b>MP:</b> ${already.length ? `${esc(already.join(", "))} — already standing.` : "Nothing to stand up."}`);
+      }
+      return ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(stood.join(", "))}</b> stand${stood.length === 1 ? "s" : ""} up <span style="color:#8a84a8;">(full turn)</span>.${already.length ? ` <span style="font-size:10px; color:#8a84a8;">Already up: ${esc(already.join(", "))}</span>` : ""}`);
+    }
+
+    // --check: one token, one card.
+    const tok = sel[0];
+    const char = getCharFromToken(tok);
+    if (!char) return ch("MP", `${wt(msg)}<b>MP:</b> Token not linked to a character.`);
+    if (!requireControl(msg, char.id, "make this stand-up check")) return;
+    const label = displayName(tok, char);
+    if (tok.get("status_back-pain") !== true) {
+      return ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(label)}</b> isn't prone.`);
+    }
+
+    const costArg = String(args.cost || "").toLowerCase();
+    const costLabel = costArg === "action" ? "action phase"
+      : (costArg === "move" || costArg === "movement" ? "movement phase" : "movement or action phase");
+
+    // Assist bonus banked by a helper too weak to lift them (4.4.5) is spent on
+    // this attempt whether it succeeds or not.
+    const conds = (state.MP_Engine.conditions && state.MP_Engine.conditions[tok.id]) || [];
+    const assistRec = conds.find(c => c.type === "stand_assist");
+    const assistMod = assistRec ? 3 : 0;
+
+    const agSave = getAttrNum(char.id, "agility_save", 10);
+    const mod = num(args.mod, 0) + assistMod;
+    const tn = agSave + mod;
+    const d1 = randomInteger(20);
+    let outcome, d2 = null;
+    if (d1 === 1) {
+      d2 = randomInteger(20);
+      outcome = d20TaskSucceeds(d2, tn) ? "critSuccess" : "succeed";
+    } else if (d1 === 20) {
+      d2 = randomInteger(20);
+      outcome = d20TaskSucceeds(d2, tn) ? "fail" : "critFumble";
+    } else {
+      outcome = (d1 <= tn) ? "succeed" : "fail";
+    }
+    const rose = (outcome === "succeed" || outcome === "critSuccess");
+    if (rose) setMarker(tok, "back-pain", false);
+    if (assistRec) {
+      state.MP_Engine.conditions[tok.id] = conds.filter(c => c !== assistRec);
+    }
+
+    let out = `<b>Stand From Prone</b> (${esc(label)})<br/>`;
+    out += `<span style="color:#aab;">AG acrobatics: <b style="color:#eee;">${agSave}</b>${mod !== 0 ? ` ${mod > 0 ? "+" : "-"} ${Math.abs(mod)}` : ""} = TN <b style="color:#eee;">${tn}-</b>${assistMod ? ` <span style="color:#5dade2;">(+3 assist)</span>` : ""}</span><br/>`;
+    out += `<span style="color:#aab;">Roll: <b style="color:#eee;">${d1}</b>${d2 !== null ? ` &middot; confirm <b style="color:#eee;">${d2}</b>` : ""}</span><br/>`;
+    if (outcome === "critSuccess") {
+      out += `<b style="color:#2ecc71;">CRITICAL — up instantly, no time spent!</b>`;
+    } else if (outcome === "succeed") {
+      out += `<b style="color:#2ecc71;">STANDS UP</b> <span style="color:#8a84a8;">(costs ${esc(costLabel)})</span>`;
+    } else if (outcome === "critFumble") {
+      out += `<b style="color:#ff6b6b;">CRITICAL FUMBLE — still prone</b> <span style="color:#8a84a8;">(${esc(costLabel)} spent)</span>`;
+    } else {
+      out += `<b style="color:#ff6b6b;">Still prone</b> <span style="color:#8a84a8;">(${esc(costLabel)} spent)</span>`;
+    }
+    chCombat("MP", out, char.id);
+  }
+
+  function cmdStance(msg, args) {
     const tok = getSelectedToken(msg);
     if (!tok) {
       return ch("MP", `${wt(msg)}Select a token first.`);
@@ -14801,6 +14910,7 @@ function cmdStance(msg, args) {
           }
         }
         return cmdTest(msg, testArgs);
+      case "stand": return cmdStand(msg, args);
       case "stance":
         const stanceParts = msg.content.split(/\s+/);
         return cmdStance(msg, { stance: stanceParts[2] || "" });
@@ -15178,6 +15288,7 @@ function cmdStance(msg, args) {
           <code>!mp ffreinforce --id ID</code> - Reinforce a collapsing Force Field` },
           time: { label: "Stances, Range, and Time", body: `
           <code>!mp stance normal|def|full|offbal|N</code><br/>
+          <code>!mp stand [--check] [--cost move|action] [--mod N]</code> - Stand selected token(s) from prone; plain form is 4.4.5's full turn and works on a multi-select, --check rolls the AG acrobatics task check<br/>
           <code>!mp clearstances</code> - Clear page stances (<b>GM</b>)<br/>
           <code>!mp offbal</code> - Apply Off Balance to selected token (<b>GM</b>)<br/>
           <code>!mp range</code> - Check range between two selected tokens<br/>
