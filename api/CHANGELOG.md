@@ -6,6 +6,12 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.168.1: The v2.168.0 Stand From Prone card styled its text light (#eee /
+  #aab) but sent it without the dark card wrapper every other combat card
+  uses, so on Roll20's white chat background the AG save, TN and roll were
+  white on white and the labels were washed out. Wrapped it, with a green
+  or red border matching the outcome as the escape and save cards do.
+
 v2.168.0: PRONE (4.4.5). Three code paths set the prone marker (knockdown,
   called-shot leg hit, and diving to escape an area) and nothing removed it
   except right-clicking the token, so prone tokens kept feeding 4.7.2's +3

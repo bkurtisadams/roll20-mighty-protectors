@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.168.0 - 2026-09-13
+/* Mighty Protectors Roll20 API Engine v2.168.1 - 2026-09-13
+ * v2.168.1: The v2.168.0 Stand From Prone card styled its text light (#eee /
+ *   #aab) but sent it without the dark card wrapper every other combat card
+ *   uses, so on Roll20's white chat background the AG save, TN and roll were
+ *   white on white and the labels were washed out. Wrapped it, with a green
+ *   or red border matching the outcome as the escape and save cards do.
  * v2.168.0: PRONE (4.4.5). Three code paths set the prone marker (knockdown,
  *   called-shot leg hit, and diving to escape an area) and nothing removed it
  *   except right-clicking the token, so prone tokens kept feeding 4.7.2's +3
@@ -36,23 +41,13 @@
  *   honoured as set). Computed once in getTokensInRadius so the area card and
  *   the stored escape record can't disagree. Areas are diameters in inches
  *   (1" = 5 feet), unchanged.
- * v2.167.5: DIVE PRONE SETS THE PRONE MARKER. 4.7.5.2 grants the +6 escape
- *   bonus to a character "willing to dive to a Prone position" - the dive is
- *   what's being paid for, so it happens whether or not the leap then clears
- *   the area. cmdAreaEscape only recorded prone on the area record (deleted
- *   once the area resolved) and only on success, so the token never got the
- *   back-pain marker that 4.7.2's +3-vs-prone lookup reads: diving was a free
- *   +6 with no downside, and a failed diver ended up halfway to the edge
- *   standing. Now any dive sets the marker and records tokData.prone, and the
- *   failure card says the target ends up prone. (Standing back up became
- *   !mp stand in v2.168.0.)
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.168.0";
+var MP_VERSION = "2.168.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -12872,7 +12867,11 @@ function cmdAttackInfo(msg, args) {
       state.MP_Engine.conditions[tok.id] = conds.filter(c => c !== assistRec);
     }
 
-    let out = `<b>Stand From Prone</b> (${esc(label)})<br/>`;
+    // Light-on-dark text needs the dark card wrapper the other combat cards
+    // use - on Roll20's white chat background #eee and #aab are unreadable.
+    const borderColor = rose ? "#27ae60" : "#e74c3c";
+    let out = `<div style="background:#16213e; border:2px solid ${borderColor}; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
+    out += `<b style="color:#f4d03f;">Stand From Prone</b> <span style="color:#fff;">(${esc(label)})</span><br/>`;
     out += `<span style="color:#aab;">AG acrobatics: <b style="color:#eee;">${agSave}</b>${mod !== 0 ? ` ${mod > 0 ? "+" : "-"} ${Math.abs(mod)}` : ""} = TN <b style="color:#eee;">${tn}-</b>${assistMod ? ` <span style="color:#5dade2;">(+3 assist)</span>` : ""}</span><br/>`;
     out += `<span style="color:#aab;">Roll: <b style="color:#eee;">${d1}</b>${d2 !== null ? ` &middot; confirm <b style="color:#eee;">${d2}</b>` : ""}</span><br/>`;
     if (outcome === "critSuccess") {
@@ -12884,6 +12883,7 @@ function cmdAttackInfo(msg, args) {
     } else {
       out += `<b style="color:#ff6b6b;">Still prone</b> <span style="color:#8a84a8;">(${esc(costLabel)} spent)</span>`;
     }
+    out += `</div>`;
     chCombat("MP", out, char.id);
   }
 
