@@ -6,6 +6,17 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.167.5: DIVE PRONE SETS THE PRONE MARKER. 4.7.5.2 grants the +6 escape
+  bonus to a character "willing to dive to a Prone position" - the dive is
+  what's being paid for, so it happens whether or not the leap then clears
+  the area. cmdAreaEscape only recorded prone on the area record (deleted
+  once the area resolved) and only on success, so the token never got the
+  back-pain marker that 4.7.2's +3-vs-prone lookup reads: diving was a free
+  +6 with no downside, and a failed diver ended up halfway to the edge
+  standing. Now any dive sets the marker and records tokData.prone, and the
+  failure card says the target ends up prone. Standing back up stays manual
+  (clear the marker) as it was for knockdown and called-shot leg hits.
+
 v2.167.4: !mp atkrows. Roll20 exposes no UI for repeating-row ids, so
   !mp atkinfo --row was unusable without a hand-built @{repeating_attacks_$N_
   attack_rowid} macro, and a blank Save BC on a card could mean three

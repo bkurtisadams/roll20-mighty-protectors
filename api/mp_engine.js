@@ -1,4 +1,14 @@
-/* Mighty Protectors Roll20 API Engine v2.167.4 - 2026-09-12
+/* Mighty Protectors Roll20 API Engine v2.167.5 - 2026-09-12
+ * v2.167.5: DIVE PRONE SETS THE PRONE MARKER. 4.7.5.2 grants the +6 escape
+ *   bonus to a character "willing to dive to a Prone position" - the dive is
+ *   what's being paid for, so it happens whether or not the leap then clears
+ *   the area. cmdAreaEscape only recorded prone on the area record (deleted
+ *   once the area resolved) and only on success, so the token never got the
+ *   back-pain marker that 4.7.2's +3-vs-prone lookup reads: diving was a free
+ *   +6 with no downside, and a failed diver ended up halfway to the edge
+ *   standing. Now any dive sets the marker and records tokData.prone, and the
+ *   failure card says the target ends up prone. Standing back up stays manual
+ *   (clear the marker) as it was for knockdown and called-shot leg hits.
  * v2.167.4: !mp atkrows. Roll20 exposes no UI for repeating-row ids, so
  *   !mp atkinfo --row was unusable without a hand-built @{repeating_attacks_$N_
  *   attack_rowid} macro, and a blank Save BC on a card could mean three
@@ -39,22 +49,13 @@
  *   the status card, !mp restore, and the bleed tick / list / stop messages.
  *   Linked (PC) tokens are unaffected - displayName only prefers the token
  *   name for mook tokens (represents the character, bar1 unlinked).
- * v2.167.1: RW MAX ALL FOR NPC AREA DAMAGE. A large-group area hit (a 5"
- *   grenade blast, say) offered three roll-with buttons per NPC target,
- *   which doesn't scale. 4.8.3 lets any conscious, aware target roll with a
- *   hit - PC or NPC alike - so there's no rule distinction here, just a GM
- *   speed shortcut for the common case: new GM button "RW Max All (NPCs)"
- *   (shown once 2+ NPC targets are pending) resolves every pending NPC at
- *   Roll-With Max in one click via new !mp arearwmaxall. Player-controlled
- *   targets and any NPC already flagged sleepy/dead (no roll-with offered
- *   at all, per 4.8.3's conscious-and-aware requirement) are unaffected.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.167.4";
+var MP_VERSION = "2.167.5";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7426,7 +7427,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const success = (roll !== 20) && (roll <= escapeTN);
     
     tokData.escaped = success;
-    tokData.prone = isProne && success;
+    // 4.7.5.2 buys the +6 with a willingness to "dive to a Prone position" -
+    // the dive is what's paid for, so it happens whether or not the leap then
+    // clears the area. A failed diver ends up halfway to the edge AND prone.
+    // The marker is what 4.7.2's +3-vs-prone lookup reads (status_back-pain),
+    // so without setting it the dive was a free +6 with no downside.
+    tokData.prone = isProne;
+    if (isProne) setMarker(tok, "back-pain", true);
     
     let resultHtml;
     if (success) {
@@ -7440,7 +7447,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       resultHtml = `<div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
       resultHtml += `<b style="color:#ff6b6b;">${esc(tokData.name)}</b> FAILS to escape!`;
       resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${roll === 20 ? " (fumble)" : ""}</span>`;
-      resultHtml += `<br/><span style="color:#aab;">Ends ${halfwayDist}" from edge (still in area)</span>`;
+      resultHtml += `<br/><span style="color:#aab;">Ends ${halfwayDist}" from edge (still in area)${isProne ? ", prone" : ""}</span>`;
       resultHtml += `</div>`;
     }
     
