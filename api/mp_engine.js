@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.167.6 - 2026-09-13
+/* Mighty Protectors Roll20 API Engine v2.167.7 - 2026-09-13
+ * v2.167.7: ESCAPE CARD LEADS WITH THE DISTANCE. The area escape result said
+ *   only "X ESCAPES/FAILS to escape!" and a bare TN, so the movement the roll
+ *   was actually made against - the one number that explains where the TN came
+ *   from under 4.7.5.2 - appeared on the area card and then vanished. Both
+ *   results now read "X needs N\" to escape!" with the outcome moved onto the
+ *   roll line as (ESCAPES!) / (FAILS!), and a failed dive reports "(dove
+ *   prone)" as a successful one already did.
  * v2.167.6: DIAGONAL MOVEMENT IN AREA ESCAPE DISTANCE. 4.7.5.2 sets the escape
  *   TN from "inches of movement to the closest safe space", but the engine used
  *   radius minus distance-from-center - a radial gap, which charges the
@@ -33,30 +40,13 @@
  *   note when a value is coming from an Attack Notes code rather than the
  *   dropdown. Row ordering was extracted from findAttackRowByIndex into
  *   orderedAttackRowIds so both count rows identically.
- * v2.167.3: ROLL-WITH ON AREA SAVES. 4.8.3.1 lets a target spend Power to add
- *   to a save attack's target number, and nothing in 4.8.3.1 or 4.9 exempts
- *   an attack delivered as an Area Effect - but the area path offered no
- *   roll-with on the save (only on damage) and rebuilt the recovery TN from
- *   components, so a target caught in an area Damaging Poison could not do
- *   what the same attack allows when aimed at it directly. resolveAreaSave
- *   now takes a roll-with amount: capped at floor(current Power / 10) as in
- *   cmdSave, Power spent whether the save then succeeds or not, added into
- *   the save TN, and the recovery TN is derived as tn + Rec mod so the
- *   roll-with carries into the per-round saves (4.9's Tigress example counts
- *   her +2 inside the number her recovery is measured against; Damaging
- *   Poison p.60 says recurring saves use "the same adjusted target number as
- *   they had for their initial save"). Area save targets now defer like
- *   damage targets do: Make Save / Save + RW Max / Save + RW Custom, whispered
- *   to the controlling player or collected for the GM, with RW Max All and
- *   Apply Rest covering the batch. Recovery TN is otherwise unchanged - the
- *   derived value is arithmetically identical to the old rebuild.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.167.6";
+var MP_VERSION = "2.167.7";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7472,15 +7462,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let resultHtml;
     if (success) {
       resultHtml = `<div style="background:#16213e; border:2px solid #27ae60; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
-      resultHtml += `<b style="color:#2ecc71;">${esc(tokData.name)}</b> ESCAPES area effect!`;
-      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${isProne ? " (dove prone)" : ""}</span>`;
+      // Lead with the movement the escape actually required (4.7.5.2), so the
+      // TN is readable as Defense + 9 - 3 per inch rather than a bare number.
+      resultHtml += `<b style="color:#2ecc71;">${esc(tokData.name)}</b> needs ${distToEdge}" to escape!`;
+      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${isProne ? " (dove prone)" : ""} <b style="color:#2ecc71;">(ESCAPES!)</b></span>`;
       resultHtml += `</div>`;
     } else {
       // Failed - character ends up halfway to edge
       const halfwayDist = Math.ceil(distToEdge / 2);
       resultHtml = `<div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
-      resultHtml += `<b style="color:#ff6b6b;">${esc(tokData.name)}</b> FAILS to escape!`;
-      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${roll === 20 ? " (fumble)" : ""}</span>`;
+      resultHtml += `<b style="color:#ff6b6b;">${esc(tokData.name)}</b> needs ${distToEdge}" to escape!`;
+      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${roll === 20 ? " (fumble)" : ""}${isProne ? " (dove prone)" : ""} <b style="color:#ff6b6b;">(FAILS!)</b></span>`;
       resultHtml += `<br/><span style="color:#aab;">Ends ${halfwayDist}" from edge (still in area)${isProne ? ", prone" : ""}</span>`;
       resultHtml += `</div>`;
     }
