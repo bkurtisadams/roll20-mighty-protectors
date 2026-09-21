@@ -1,4 +1,19 @@
-/* Mighty Protectors Roll20 API Engine v2.168.1 - 2026-09-13
+/* Mighty Protectors Roll20 API Engine v2.169.0 - 2026-09-21
+ * v2.169.0: REFLECTION PER RAW. Protection rows gain a Specific Forms list
+ *   (Bullets, Flames, Lasers) matched against a new attack-row Form field, so
+ *   one row can cover full types, sub-types and specific forms; applies to
+ *   Absorption too. A blank Reflection Limit now means 13 (the 0 CP row of the
+ *   Reflection Effect table) instead of unlimited. Breaking Point implemented:
+ *   Lose Reflection sets the row Off after the reflect; Take All leaves the
+ *   attack to the normal Apply buttons; Explosion deals the full incoming
+ *   damage to everything in a ceil(points/5)" diameter, the reflector
+ *   included with no roll-with. The redirected attack now rolls to hit:
+ *   reflector's AG save (IN/CL for mental/emotional attack types) + 3 +
+ *   global Ability to-hit + the row's Reflect To-Hit + stance, discomfort,
+ *   range and a prompted modifier, against the target's PDef/MDef and stance,
+ *   with crit/fumble confirms. Hits create a normal pending attack on the
+ *   target, so protection, Force Field, roll-with, knockback and crits use
+ *   the standard Apply path. Saved action stays GM-adjudicated.
  * v2.168.1: The v2.168.0 Stand From Prone card styled its text light (#eee /
  *   #aab) but sent it without the dark card wrapper every other combat card
  *   uses, so on Roll20's white chat background the AG save, TN and roll were
@@ -28,26 +43,13 @@
  *   results now read "X needs N\" to escape!" with the outcome moved onto the
  *   roll line as (ESCAPES!) / (FAILS!), and a failed dive reports "(dove
  *   prone)" as a successful one already did.
- * v2.167.6: DIAGONAL MOVEMENT IN AREA ESCAPE DISTANCE. 4.7.5.2 sets the escape
- *   TN from "inches of movement to the closest safe space", but the engine used
- *   radius minus distance-from-center - a radial gap, which charges the
- *   Pythagorean rate for a diagonal exit. A token one diagonal square from the
- *   blast point of a 7" area reads 2.07" of radial gap and was billed 3",
- *   though two diagonal steps clear the circle for 2" of movement on a 1-1-1
- *   grid, costing it 3 on its escape TN. New areaDistToEdge searches outward
- *   for the cheapest grid square lying outside the area and returns that
- *   movement cost, using the page's own Diagonals setting (Roll20's default
- *   "foure" counts a diagonal as one square; threefive/manhattan/pythagorean
- *   honoured as set). Computed once in getTokensInRadius so the area card and
- *   the stored escape record can't disagree. Areas are diameters in inches
- *   (1" = 5 feet), unchanged.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.168.1";
+var MP_VERSION = "2.169.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -3861,7 +3863,7 @@ function generateRowID() {
 
     const critType = rec.critResult ? rec.critResult.type : null;
     const p = damageApplyProfile(rec, critType);
-    if (p.defIsVeh) return [applyModeName(p.parts, null)];
+    if (p.defIsVeh || rec.noRollWith) return [applyModeName(p.parts, null)];
     return [applyModeName(p.parts, null), applyModeName(p.rwParts, "rwmax"), applyModeName(p.rwParts, "rw")];
   }
 
@@ -4364,11 +4366,13 @@ function generateRowID() {
 
   // Get Absorption or Reflection data for a character and damage type
   // Returns { mode: "absorption"|"reflection"|null, limit, rowId, absorbsTo, current } or null
-  function getAbsorptionReflection(charId, protKey, atkSubtype) {
+  function getAbsorptionReflection(charId, protKey, atkSubtype, atkForm) {
     if (!protKey || isDisintegrationSubtype(atkSubtype)) return null;
     
     const attrs = findObjs({ _type: "attribute", _characterid: charId }) || [];
     const atkSub = (atkSubtype || "").trim().toLowerCase();
+    const atkFrm = (atkForm || "").trim().toLowerCase();
+    const splitList = v => String(v || "").split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
     const veh = isVehicleMode(charId);
     const sec = veh ? "repeating_vehprotection" : "repeating_protection";
     const pre = veh ? "vprot" : "prot";
@@ -4401,35 +4405,37 @@ function generateRowID() {
       const protValue = protAttr.get("current");
       if (!protValue || protValue === "0" || protValue === "") continue;
       
-      // Check subtype matching
       const subtypeAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_subtype`);
-      const protSubtype = subtypeAttr ? (subtypeAttr.get("current") || "").trim().toLowerCase() : "";
-      
-      let subtypeMatches = false;
-      if (protSubtype === "") {
-        subtypeMatches = true;
-      } else if (atkSub === "") {
-        subtypeMatches = false;
-      } else {
-        const protSubtypes = protSubtype.split(",").map(s => s.trim().toLowerCase());
-        subtypeMatches = protSubtypes.includes(atkSub);
-      }
-      
-      if (!subtypeMatches) continue;
+      const formsAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_forms`);
+      const protSubs = splitList(subtypeAttr ? subtypeAttr.get("current") : "");
+      const protForms = splitList(formsAttr ? formsAttr.get("current") : "");
+      const fullType = !protSubs.length && !protForms.length;
+      const matches = fullType ||
+        (!!atkSub && protSubs.includes(atkSub)) ||
+        (!!atkFrm && protForms.includes(atkFrm));
+      if (!matches) continue;
       
       // Found a matching Absorption/Reflection row
       const limitAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_limit`);
       const absorbsToAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_absorbs_to`);
       const absorbsPowerAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_absorbs_power`);
       const nameAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_name`);
+      const breakAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_reflect_break`);
+      const toHitAttr = attrs.find(a => a.get("name") === `${sec}_${rowId}_${pre}_reflect_tohit`);
+      const rawLimit = num(limitAttr ? limitAttr.get("current") : "", 0);
       
       return {
         mode: mode,
         rowId: rowId,
+        sec: sec,
+        pre: pre,
         name: nameAttr ? nameAttr.get("current") : mode,
-        limit: num(limitAttr ? limitAttr.get("current") : "", 0),
+        limit: (mode === "reflection" && rawLimit <= 0) ? 13 : rawLimit,
+        limitDefaulted: mode === "reflection" && rawLimit <= 0,
         absorbsTo: absorbsToAttr ? (absorbsToAttr.get("current") || "hits").toLowerCase() : "hits",
-        absorbsPower: absorbsPowerAttr ? absorbsPowerAttr.get("current") : ""
+        absorbsPower: absorbsPowerAttr ? absorbsPowerAttr.get("current") : "",
+        breakPoint: breakAttr ? (breakAttr.get("current") || "none").toLowerCase() : "none",
+        reflectToHit: num(toHitAttr ? toHitAttr.get("current") : "", 0)
       };
     }
     
@@ -6193,6 +6199,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const abilityTohitBonus = abilityTohitGlobal + abilityTohitTargeted;
     const dmgTypeStr = resolveDmgType(getAtk("attack_dmgtype") || "Kin", fields.type);
     const dmgSubtype = (getAtk("attack_subtype") || fields.subtype || "").trim().toLowerCase();
+    const attackForm = (getAtk("attack_form") || fields.form || "").trim().toLowerCase();
     
     const isSaveAttack = (getAtk("attack_is_save") === "1") || (atkType === "sav") || isDazzleShot;
     const saveBC = getAtk("attack_save_bc") || (isDazzleShot ? "EN" : "");
@@ -6780,7 +6787,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       rollId: uniqueRollId, playerid: originalPlayerId, atkCharId, atkName, defTokenId, 
       defCharId: defChar.id, defName, rowId, nat, roll, confirm, targetTotal,
       outcome, isCrit, isFumble, critResult, fumbleResult,
-      damageTotal, dmgTypeStr, dmgSubtype, protKey, atkType, atkTypeCode,
+      damageTotal, dmgTypeStr, dmgSubtype, attackForm, protKey, atkType, atkTypeCode,
       atkAP, isSaveAttack, saveBC, saveMod, recMod, recTime, noDamage, saveDamage,
       senseLoss, isDazzleShot,
       snBP, snMaxBP, snType, causesKB,
@@ -8403,7 +8410,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!defTok) return ch("MP", `/w gm <b>MP:</b> Defender token not found.`);
     
     // Verify character has Absorption for this damage type
-    const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
+    const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype, rec.attackForm);
     if (!absRef || absRef.mode !== "absorption") {
       return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(rec.defName)} doesn't have Absorption for this damage type.`);
     }
@@ -8563,30 +8570,35 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!defChar) return ch("MP", `/w gm <b>MP:</b> Defender not found.`);
     if (!defTok) return ch("MP", `/w gm <b>MP:</b> Defender token not found.`);
     
-    // Verify character has Reflection for this damage type
-    const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
+    const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype, rec.attackForm);
     if (!absRef || absRef.mode !== "reflection") {
       return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(rec.defName)} doesn't have Reflection for this damage type.`);
     }
+    
+    const rawDamage = num(rec.damageTotal, 0);
+    const limit = absRef.limit;
+    const limitLabel = `limit ${limit}${absRef.limitDefaulted ? " - blank Limit = 13" : ""}`;
+    const excess = Math.max(0, rawDamage - limit);
+    const bp = excess > 0 ? absRef.breakPoint : "none";
+    
+    if (bp === "full") {
+      return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(rec.defName)}'s Reflection is overwhelmed (${rawDamage} vs ${limitLabel}). Breaking Point: takes all of the damage and can't reflect it - use Apply (roll-with allowed).`);
+    }
     markResolution(rec, "damage", msg);
     
-    const rawDamage = rec.damageTotal;
-    const quarterDamage = Math.floor(rawDamage / 4);  // 1/4 damage, rounded down
+    if (bp === "explode") return reflectExplosion(rec, rollId, defTok, rawDamage, limitLabel);
     
-    // Calculate reflected points (capped at limit)
-    const reflectedPoints = absRef.limit > 0 ? Math.min(rawDamage, absRef.limit) : rawDamage;
-    const excess = absRef.limit > 0 ? Math.max(0, rawDamage - absRef.limit) : 0;
+    const quarterDamage = Math.floor(rawDamage / 4);
+    const reflectedPoints = Math.min(rawDamage, limit);
     
-    // Apply 1/4 damage to Hits
     const refDefIsVeh = isVehicleMode(rec.defCharId);
     const hits0 = refDefIsVeh ? getVehicleHits(defTok, rec.defCharId) : getResource(defTok, rec.defCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
     const pow0 = refDefIsVeh ? getVehiclePower(defTok, rec.defCharId) : getResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
     
     const toHits = quarterDamage;
-    const hitsAfterDmg = Math.max(0, hits0 - toHits);
+    const hits1 = Math.max(0, hits0 - toHits);
     const overflow = refDefIsVeh ? 0 : Math.max(0, toHits - hits0);
     const pow1 = refDefIsVeh ? pow0 : Math.max(0, pow0 - overflow);
-    const hits1 = hitsAfterDmg;
     
     if (refDefIsVeh) {
       setVehicleHits(defTok, rec.defCharId, hits1);
@@ -8595,7 +8607,6 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       setResource(defTok, rec.defCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
     }
     
-    // Status effects
     const hasPainResistance = refDefIsVeh ? true : (num(getAttr(rec.defCharId, "willpower_pain_resistance"), 0) === 1);
     const unconscious = !refDefIsVeh && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
     const incapacitated = (hits1 === 0);
@@ -8603,32 +8614,46 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (incapacitated) setMarker(defTok, "dead", true);
     else if (unconscious) setMarker(defTok, "sleepy", true);
     
-    // Store reflection data for counter-attack
-    const reflectRollId = "reflect_" + String(Date.now()) + "_" + randomInteger(999999);
-    state.MP_Engine.pending[reflectRollId] = {
-      rollId: reflectRollId,
-      atkCharId: rec.defCharId,  // Reflector is now the attacker
-      atkName: rec.defName + " (Reflection)",
-      defTokenId: null,  // Will be chosen by player
-      defCharId: null,
-      damageTotal: reflectedPoints,
-      dmgTypeStr: rec.dmgTypeStr,
-      dmgSubtype: rec.dmgSubtype,
-      protKey: rec.protKey,
-      atkAP: 0,
-      causesKB: rec.causesKB,
-      created: Date.now(),
-      originalAtkCharId: rec.atkCharId  // Track original attacker for "back at attacker" option
-    };
+    if (bp === "loss") {
+      setAttr(rec.defCharId, `${absRef.sec}_${absRef.rowId}_${absRef.pre}_state`, "Off");
+      if (absRef.pre === "prot") setAttr(rec.defCharId, `${absRef.sec}_${absRef.rowId}_prot_state_on`, "0");
+    }
     
-    // Build output
+    const canRedirect = reflectedPoints > 0 && !incapacitated && !unconscious;
+    const reflectRollId = "reflect_" + String(Date.now()) + "_" + randomInteger(999999);
+    if (canRedirect) {
+      state.MP_Engine.pending[reflectRollId] = {
+        rollId: reflectRollId,
+        atkCharId: rec.defCharId,
+        atkName: rec.defName + " (Reflection)",
+        reflectorTokenId: defTok.id,
+        defTokenId: null,
+        defCharId: null,
+        damageTotal: reflectedPoints,
+        dmgTypeStr: rec.dmgTypeStr,
+        dmgSubtype: rec.dmgSubtype,
+        attackForm: rec.attackForm,
+        protKey: rec.protKey,
+        atkType: rec.atkType,
+        atkTypeCode: rec.atkTypeCode,
+        atkAP: 0,
+        causesKB: rec.causesKB,
+        reflectToHit: absRef.reflectToHit,
+        created: Date.now(),
+        originalAtkCharId: rec.atkCharId
+      };
+    }
+    
     let html = `<div style="background:#e67e22; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
     html += `<span style="color:#fff; font-weight:bold; font-size:14px;">🔄 REFLECTION!</span>`;
-    html += `<br/><span style="color:#fff;"><b>${esc(rec.defName)}</b> reflects ${rawDamage} ${rec.dmgTypeStr}${rec.dmgSubtype ? ` (${rec.dmgSubtype})` : ""}</span>`;
+    html += `<br/><span style="color:#fff;"><b>${esc(rec.defName)}</b> reflects ${rawDamage} ${rec.dmgTypeStr}${rec.dmgSubtype ? ` (${rec.dmgSubtype})` : ""}${rec.attackForm ? ` [${esc(rec.attackForm)}]` : ""}</span>`;
     html += `<br/><span style="color:#fff;">Takes ¼ damage: ${quarterDamage} → Hits: ${hits0}→${hits1}</span>`;
-    html += `<br/><span style="color:#fff;">Reflects: <b>${reflectedPoints}</b> damage${absRef.limit > 0 ? ` (limit ${absRef.limit})` : ""}</span>`;
+    html += `<br/><span style="color:#fff;">Can redirect: <b>${reflectedPoints}</b> damage (${limitLabel})</span>`;
     if (excess > 0) {
-      html += `<br/><span style="color:#f1c40f;">⚠ ${excess} points exceeded limit (not reflected)</span>`;
+      html += `<br/><span style="color:#f1c40f;">⚠ ${excess} points exceeded the limit (not redirected)</span>`;
+    }
+    if (bp === "loss") {
+      html += `<br/><span style="color:#f1c40f; font-weight:bold;">Breaking Point: ${esc(absRef.name || "Reflection")} is lost until recovery (~1 day) - row set to Off.</span>`;
     }
     html += `<br/><span style="color:#ddd; font-size:11px;"><i>Used saved action.</i></span>`;
     
@@ -8637,18 +8662,59 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     html += `</div>`;
     
-    // Add counter-attack buttons
-    let buttons = `<br/>${btn(`Reflect at Original Attacker`, `!mp reflecthit --id ${reflectRollId} --target original`)}`;
-    buttons += ` ${btn(`Reflect at Target...`, `!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id}`)}`;
-    
     chCardBody("MP", html, [rec.defCharId, rec.atkCharId]);
-    chToChar("MP", buttons, rec.defCharId);
+    if (canRedirect) {
+      let buttons = `<br/><span style="font-size:11px;">Redirect as an attack (rolls to hit; target must be within range and line of sight):</span>`;
+      buttons += `<br/>${btn(`At Original Attacker`, `!mp reflecthit --id ${reflectRollId} --target original --mod ?{Other to-hit modifier|0}`)}`;
+      buttons += ` ${btn(`At Target...`, `!mp reflecthit --id ${reflectRollId} --target &#64;{target|token_id} --mod ?{Other to-hit modifier|0}`)}`;
+      chToChar("MP", buttons, rec.defCharId);
+    }
     
-    // Clean up original pending record
     delete state.MP_Engine.pending[rollId];
   }
   
-  // Apply reflected damage to a target
+  function reflectExplosion(rec, rollId, defTok, rawDamage, limitLabel) {
+    const diameter = Math.ceil(rawDamage / 5);
+    const victims = getTokensInRadius(defTok.get("_pageid"), defTok.get("left"), defTok.get("top"), diameter / 2)
+      .filter(v => v.token.id !== defTok.id);
+    
+    const makeRec = (tok, charId, name, extra) => {
+      const id = "rexp_" + String(Date.now()) + "_" + randomInteger(999999);
+      const r = Object.assign({
+        rollId: id, atkCharId: rec.defCharId, atkName: rec.defName + " (Reflection explosion)",
+        defTokenId: tok.id, defCharId: charId, defName: name,
+        outcome: "HIT", isCrit: false, isFumble: false, critResult: null, fumbleResult: null,
+        damageTotal: rawDamage, dmgTypeStr: rec.dmgTypeStr, dmgSubtype: rec.dmgSubtype, attackForm: rec.attackForm,
+        protKey: rec.protKey, atkType: rec.atkType, atkTypeCode: rec.atkTypeCode, atkAP: 0, causesKB: false,
+        atkTokenId: defTok.id, created: Date.now()
+      }, extra || {});
+      state.MP_Engine.pending[id] = r;
+      return r;
+    };
+    const post = (r, label) => {
+      const buttons = buildStandardAttackButtonsAfterAF(r.rollId, null, false, r);
+      chPendingCard("MP", `<div style="margin-top:4px;"><b>${esc(label)}</b> - ${rawDamage} ${esc(r.dmgTypeStr)} from the explosion:</div>`, r,
+        r.buttonGroups || { attacker: "", defender: buttons });
+    };
+    
+    let html = `<div style="background:#c0392b; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
+    html += `<span style="color:#fff; font-weight:bold; font-size:14px;">💥 REFLECTION BREAKING POINT - EXPLOSION!</span>`;
+    html += `<br/><span style="color:#fff;"><b>${esc(rec.defName)}</b> can't hold ${rawDamage} ${esc(rec.dmgTypeStr)} (${limitLabel}) and explodes.</span>`;
+    html += `<br/><span style="color:#fff;">${rawDamage} damage to everything within a ${diameter}" diameter. ${esc(rec.defName)} can't redirect it or roll with it; others may roll with.</span>`;
+    html += `<br/><span style="color:#fff;">In the blast: ${victims.length ? victims.map(v => esc(v.name)).join(", ") : "no one else"}</span>`;
+    html += `<br/><span style="color:#ddd; font-size:11px;"><i>Used saved action.</i></span></div>`;
+    chCardBody("MP", html, [rec.defCharId, rec.atkCharId]);
+    
+    post(makeRec(defTok, rec.defCharId, rec.defName, { noRollWith: true, noAbsRef: true }), rec.defName);
+    victims.forEach(v => {
+      const vChar = getObj("character", v.charId);
+      const vName = displayName(v.token, vChar);
+      post(makeRec(v.token, v.charId, vName), vName);
+    });
+    
+    delete state.MP_Engine.pending[rollId];
+  }
+  
   function cmdReflectHit(msg, args) {
     const rollId = args.id;
     const targetArg = args.target;
@@ -8658,14 +8724,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (!requirePendingRole(msg, rec, "attacker", "direct this reflected attack")) return;
     if (!requireOpenResolution(msg, rec, "reflectionHit", "This reflected attack")) return;
     
-    // Determine target
+    const reflId = rec.atkCharId;
+    const reflTok = rec.reflectorTokenId ? getObj("graphic", rec.reflectorTokenId) : null;
+    const pageId = reflTok ? reflTok.get("_pageid") : Campaign().get("playerpageid");
+    
     let targetTokId;
     if (targetArg === "original") {
-      // Find the original attacker's token
       const atkChar = getObj("character", rec.originalAtkCharId);
       if (!atkChar) return ch("MP", `/w gm <b>MP:</b> Original attacker not found.`);
-      
-      const pageId = Campaign().get("playerpageid");
       const tokens = findObjs({ _type: "graphic", _pageid: pageId, _subtype: "token", represents: rec.originalAtkCharId });
       if (tokens.length === 0) return ch("MP", `/w gm <b>MP:</b> Original attacker has no token on this page.`);
       targetTokId = tokens[0].id;
@@ -8675,87 +8741,89 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const targetTok = getObj("graphic", targetTokId);
     if (!targetTok) return ch("MP", `/w gm <b>MP:</b> Target token not found.`);
-    
     const targetCharId = targetTok.get("represents");
     if (!targetCharId) return ch("MP", `/w gm <b>MP:</b> Target token has no character.`);
-    
     const targetChar = getObj("character", targetCharId);
     if (!targetChar) return ch("MP", `/w gm <b>MP:</b> Target character not found.`);
+    const targetName = displayName(targetTok, targetChar);
     
-    const targetName = targetChar.get("name");
     markResolution(rec, "reflectionHit", msg);
     
-    // Get target's protection
-    const rhTargetIsVeh = isVehicleMode(targetCharId);
-    const protData = rhTargetIsVeh
-      ? getVehicleProtection(targetCharId, rec.protKey, rec.dmgSubtype)
-      : sumProtectionWithHardened(targetCharId, rec.protKey, rec.dmgSubtype);
-    const prot = protData.prot;
-    const hasInvuln = protData.invuln;
-    const hasAdapt = protData.adapt;
-    const isOtherType = (rec.dmgTypeStr === "Other");
+    const code = rec.atkTypeCode;
+    const mental = code === "M" || code === "E";
+    const reflVeh = isVehicleMode(reflId);
+    const saveName = reflVeh
+      ? (code === "M" ? "vehicle_in_save" : (code === "E" ? "vehicle_cl_save" : "vehicle_ag_save"))
+      : (code === "M" ? "intelligence_save" : (code === "E" ? "cool_save" : "agility_save"));
+    const saveLabel = code === "M" ? "IN save" : (code === "E" ? "CL save" : "AG save");
     
-    // Calculate penetrating damage
-    let penetrating = Math.max(0, rec.damageTotal - prot);
+    const parts = [];
+    const add = (label, val) => { if (val) parts.push(`${val >= 0 && parts.length ? "+ " : (val < 0 ? "- " : "")}${Math.abs(val)} ${label}`); return val; };
+    let tn = 0;
+    tn += add(saveLabel, getAttrNum(reflId, saveName, 10));
+    tn += add("base", 3);
+    tn += add(reflVeh ? "targeting" : "Ability to-hit", reflVeh ? getAttrNum(reflId, "vehicle_targeting_bonus", 0) : getAttrNum(reflId, "ability_tohit_bonus", 0));
+    tn += add("Reflect row", num(rec.reflectToHit, 0));
+    tn += add("stance", reflTok && num(reflTok.get(CFG.DEF_MOD_BAR), 0) === 3 ? -3 : 0);
+    tn += add("discomfort", reflTok && hasDiscomfort(reflTok.id) ? -3 : 0);
+    const rangeData = reflTok ? calculateRangeWithProfile(reflTok, targetTok, reflId, targetCharId) : { inches: 0, penalty: 0 };
+    tn += add(`range ${Math.round(num(rangeData.inches, 0) * 10) / 10}"`, num(rangeData.penalty, 0));
+    tn += add("other", num(args.mod, 0));
+    tn += add(mental ? "target MDef" : "target PDef", -getAttrNum(targetCharId, mental ? "mental_def" : "physical_def", 0));
+    tn += add("target stance", -num(targetTok.get(CFG.DEF_MOD_BAR), 0));
     
-    // Invulnerability: 1/4 damage
-    if (hasInvuln && penetrating > 0) {
-      penetrating = Math.floor(penetrating / 4);
-    }
-    
-    // Adaptation: 1/2 damage (or immune for Other type)
-    if (hasAdapt && penetrating > 0) {
-      if (isOtherType) {
-        penetrating = 0;
-      } else {
-        penetrating = Math.floor(penetrating / 2);
+    const nat = randomInteger(20);
+    const confirm = randomInteger(20);
+    let outcome = "MISS";
+    let critResult = null;
+    let fumbleResult = null;
+    if (nat === 20) {
+      if (!d20TaskSucceeds(confirm, tn)) {
+        outcome = "FUMBLE";
+        fumbleResult = applyFumbleDefault(rollFumbleTable(), { atkIsVehicle: reflVeh });
       }
+    } else if (nat === 1) {
+      outcome = "HIT";
+      if (d20TaskSucceeds(confirm, tn)) {
+        outcome = "CRIT";
+        critResult = applyCritDefault(rollCriticalTable(), {
+          defIsVehicle: isVehicleMode(targetCharId), atkIsVehicle: reflVeh,
+          isHeadShot: false, isLegShot: false, isArmShot: false, isGearShot: false,
+          defCharId: targetCharId, defTokenId: targetTok.id,
+          protKey: rec.protKey, dmgSubtype: rec.dmgSubtype
+        });
+      }
+    } else if (nat <= tn) {
+      outcome = "HIT";
     }
+    const hit = outcome === "HIT" || outcome === "CRIT";
     
-    // Apply damage
-    const hits0 = rhTargetIsVeh ? getVehicleHits(targetTok, targetCharId) : getResource(targetTok, targetCharId, CFG.HITS_BAR, CFG.HITS_ATTR);
-    const pow0 = rhTargetIsVeh ? getVehiclePower(targetTok, targetCharId) : getResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR);
-    
-    const toHits = penetrating;
-    const hitsAfterDmg = Math.max(0, hits0 - toHits);
-    const overflow = rhTargetIsVeh ? 0 : Math.max(0, toHits - hits0);
-    const pow1 = rhTargetIsVeh ? pow0 : Math.max(0, pow0 - overflow);
-    const hits1 = hitsAfterDmg;
-    
-    if (rhTargetIsVeh) {
-      setVehicleHits(targetTok, targetCharId, hits1);
-    } else {
-      setResource(targetTok, targetCharId, CFG.HITS_BAR, CFG.HITS_ATTR, hits1);
-      setResource(targetTok, targetCharId, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
-    }
-    
-    // Status effects
-    const hasPainResistance = rhTargetIsVeh ? true : (num(getAttr(targetCharId, "willpower_pain_resistance"), 0) === 1);
-    const unconscious = !rhTargetIsVeh && !hasPainResistance && (toHits > Math.floor(hits0 / 2)) && hits0 > 0;
-    const incapacitated = (hits1 === 0);
-    
-    if (incapacitated) setMarker(targetTok, "dead", true);
-    else if (unconscious) setMarker(targetTok, "sleepy", true);
-    
-    // Build output
     let html = `<div style="background:#e67e22; border:3px solid #000; padding:4px 8px; margin-top:4px;">`;
-    html += `<span style="color:#fff; font-weight:bold; font-size:14px;">🔄 REFLECTED DAMAGE!</span>`;
-    html += `<br/><span style="color:#fff;"><b>${esc(targetName)}</b> hit by reflected ${rec.dmgTypeStr}</span>`;
-    html += `<br/><span style="color:#fff;">Raw: ${rec.damageTotal} ${prot < 0 ? `+ ${-prot} <span style="color:#e67e22;">(vulnerable)</span>` : `- ${prot} prot`}`;
-    if (hasInvuln) html += ` [×¼]`;
-    if (hasAdapt) html += isOtherType ? ` [IMMUNE]` : ` [×½]`;
-    html += ` = ${penetrating} penetrating</span>`;
-    html += `<br/><span style="color:#fff;">Hits: ${hits0}→${hits1}</span>`;
-    
-    if (incapacitated) html += `<br/><span style="color:#c0392b; font-weight:bold;">INCAPACITATED!</span>`;
-    else if (unconscious) html += `<br/><span style="color:#c0392b; font-weight:bold;">UNCONSCIOUS!</span>`;
-    
+    html += `<span style="color:#fff; font-weight:bold; font-size:14px;">🔄 REFLECTED ATTACK</span>`;
+    html += `<br/><span style="color:#fff;"><b>${esc(rec.atkName)}</b> → <b>${esc(targetName)}</b>: ${num(rec.damageTotal, 0)} ${esc(rec.dmgTypeStr)}${rec.dmgSubtype ? ` (${esc(rec.dmgSubtype)})` : ""}</span>`;
+    html += `<br/><span style="color:#fff; font-size:11px;">To hit: ${parts.join(" ")} = <b>${tn}</b></span>`;
+    html += `<br/><span style="color:#fff;">Roll: <b>${nat}</b>${(nat === 1 || nat === 20) ? ` (confirm ${confirm})` : ""} vs ${tn} → <b>${outcome}</b></span>`;
+    if (critResult) html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;">CRIT: ${esc(critResult.desc)}</span>`;
+    if (fumbleResult) html += `<br/><span style="color:#000; font-size:11px; font-weight:bold;">FUMBLE: ${esc(fumbleResult.desc)} (GM applies)</span>`;
     html += `</div>`;
     
-    chCombat("MP", html, targetCharId);
-    
-    // Clean up
+    playSFX(hit ? "SFX-Hit" : "SFX-Miss");
     delete state.MP_Engine.pending[rollId];
+    
+    if (!hit) return chCombat("MP", html, targetCharId, reflId);
+    
+    const newId = "reflhit_" + String(Date.now()) + "_" + randomInteger(999999);
+    const newRec = state.MP_Engine.pending[newId] = {
+      rollId: newId, atkCharId: reflId, atkName: rec.atkName,
+      defTokenId: targetTok.id, defCharId: targetCharId, defName: targetName,
+      nat, roll: nat, confirm, targetTotal: tn,
+      outcome, isCrit: outcome === "CRIT", isFumble: false, critResult, fumbleResult: null,
+      damageTotal: num(rec.damageTotal, 0), dmgTypeStr: rec.dmgTypeStr, dmgSubtype: rec.dmgSubtype, attackForm: rec.attackForm,
+      protKey: rec.protKey, atkType: rec.atkType, atkTypeCode: rec.atkTypeCode, atkAP: 0,
+      causesKB: rec.causesKB, rangeData, atkTokenId: reflTok ? reflTok.id : null, created: Date.now()
+    };
+    const buttons = buildStandardAttackButtons(newId, critResult, rec.causesKB, newRec);
+    chPendingCard("MP", html, newRec, newRec.buttonGroups || { attacker: "", defender: buttons });
   }
 
   // -------------------------
@@ -9339,7 +9407,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const prof = damageApplyProfile(rec, critType);
     buttons = `${btnDanger(applyModeLabel(`Apply`, prof.tags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.parts, null)}`)}`;
-    if (!prof.defIsVeh) {
+    if (!prof.defIsVeh && !(rec && rec.noRollWith)) {
       buttons += ` ${btn(applyModeLabel(`RW Max`, prof.rwTags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.rwParts, "rwmax")}`)} `;
       buttons += `${btn(applyModeLabel(`RW Custom`, prof.rwTags), `!mp apply --id ${rollId} --mode ${applyModeName(prof.rwParts, "rw")} --amt ?{Divert to Power|0}`)}`;
     }
@@ -9350,17 +9418,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     // Check for Absorption or Reflection
-    if (rec && rec.defCharId && rec.protKey) {
-      const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype);
+    if (rec && rec.defCharId && rec.protKey && !rec.noAbsRef) {
+      const absRef = getAbsorptionReflection(rec.defCharId, rec.protKey, rec.dmgSubtype, rec.attackForm);
       if (absRef) {
         if (absRef.mode === "absorption") {
           const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
           buttons += `<br/><span style="color:#9b59b6; font-weight:bold;">🔮 Absorption available${limitNote}</span>`;
           buttons += ` ${btn(`Absorb (¼ dmg, saved action)`, `!mp absorb --id ${rollId}`)}`;
         } else if (absRef.mode === "reflection") {
-          const limitNote = absRef.limit > 0 ? ` (limit ${absRef.limit})` : "";
-          buttons += `<br/><span style="color:#e67e22; font-weight:bold;">🔄 Reflection available${limitNote}</span>`;
-          buttons += ` ${btn(`Reflect (¼ dmg, saved action)`, `!mp reflect --id ${rollId}`)}`;
+          const over = num(rec.damageTotal, 0) > absRef.limit;
+          const bp = over ? absRef.breakPoint : "none";
+          buttons += `<br/><span style="color:#e67e22; font-weight:bold;">🔄 Reflection available (limit ${absRef.limit})</span>`;
+          if (bp === "full") {
+            buttons += `<br/><span style="color:#f1c40f;">${num(rec.damageTotal, 0)} exceeds the limit - Breaking Point: takes all of the damage and can't reflect it. Use Apply.</span>`;
+          } else {
+            const tag = bp === "explode" ? "saved action - EXCEEDS LIMIT: EXPLODES"
+              : bp === "loss" ? "¼ dmg, saved action - exceeds limit: loses Reflection"
+              : "¼ dmg, saved action";
+            buttons += ` ${btn(`Reflect (${tag})`, `!mp reflect --id ${rollId}`)}`;
+          }
         }
       }
     }

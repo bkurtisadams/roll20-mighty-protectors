@@ -6,38 +6,6 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
-v2.168.1: The v2.168.0 Stand From Prone card styled its text light (#eee /
-  #aab) but sent it without the dark card wrapper every other combat card
-  uses, so on Roll20's white chat background the AG save, TN and roll were
-  white on white and the labels were washed out. Wrapped it, with a green
-  or red border matching the outcome as the escape and save cards do.
-
-v2.168.0: PRONE (4.4.5). Three code paths set the prone marker (knockdown,
-  called-shot leg hit, and diving to escape an area) and nothing removed it
-  except right-clicking the token, so prone tokens kept feeding 4.7.2's +3
-  into every attack against them long after they'd have stood. New
-  !mp stand clears it across a multi-select with one summary line, which is
-  4.4.5's default case (standing normally takes a full turn). !mp stand
-  --check rolls the optional AG-based acrobatics task check that rises at
-  the cost of the movement OR action phase (--cost move|action records
-  which), with 3.0.1 confirm rolls so a critical success costs no time at
-  all; --mod N for GM adjustments. Separately, 4.4.5's -3 for a prone
-  attacker hitting a target under 2" away is now applied automatically from
-  the marker and the measured range, shown as its own "Prone" row in the
-  to-hit breakdown - scoped to physical attacks for the same reason 4.7.2's
-  +3 is. Crawling at 1/4 rate, the flying "disoriented" equivalent, and the
-  GM's discretionary task checks stay off-engine; the helper side of the
-  assist rule is not built yet, but !mp stand --check already spends a
-  banked stand_assist +3 if something else sets one.
-
-v2.167.7: ESCAPE CARD LEADS WITH THE DISTANCE. The area escape result said
-  only "X ESCAPES/FAILS to escape!" and a bare TN, so the movement the roll
-  was actually made against - the one number that explains where the TN came
-  from under 4.7.5.2 - appeared on the area card and then vanished. Both
-  results now read "X needs N" to escape!" with the outcome moved onto the
-  roll line as (ESCAPES!) / (FAILS!), and a failed dive reports "(dove
-  prone)" as a successful one already did.
-
 v2.167.6: DIAGONAL MOVEMENT IN AREA ESCAPE DISTANCE. 4.7.5.2 sets the escape
   TN from "inches of movement to the closest safe space", but the engine used
   radius minus distance-from-center - a radial gap, which charges the
@@ -51,76 +19,6 @@ v2.167.6: DIAGONAL MOVEMENT IN AREA ESCAPE DISTANCE. 4.7.5.2 sets the escape
   honoured as set). Computed once in getTokensInRadius so the area card and
   the stored escape record can't disagree. Areas are diameters in inches
   (1" = 5 feet), unchanged.
-
-v2.167.5: DIVE PRONE SETS THE PRONE MARKER. 4.7.5.2 grants the +6 escape
-  bonus to a character "willing to dive to a Prone position" - the dive is
-  what's being paid for, so it happens whether or not the leap then clears
-  the area. cmdAreaEscape only recorded prone on the area record (deleted
-  once the area resolved) and only on success, so the token never got the
-  back-pain marker that 4.7.2's +3-vs-prone lookup reads: diving was a free
-  +6 with no downside, and a failed diver ended up halfway to the edge
-  standing. Now any dive sets the marker and records tokData.prone, and the
-  failure card says the target ends up prone. Standing back up stays manual
-  (clear the marker) as it was for knockdown and called-shot leg hits.
-
-v2.167.4: !mp atkrows. Roll20 exposes no UI for repeating-row ids, so
-  !mp atkinfo --row was unusable without a hand-built @{repeating_attacks_$N_
-  attack_rowid} macro, and a blank Save BC on a card could mean three
-  different things: the attribute was never written, it exists but is empty,
-  or the engine is reading a ghost duplicate row. New !mp atkrows lists every
-  attack row on the selected character in sheet display order with its rowid
-  and, for save rows, whether BC/Init/Rec are set, empty, or have no
-  attribute at all - plus a ghost-row warning pointing at !mp fixrows, and a
-  note when a value is coming from an Attack Notes code rather than the
-  dropdown. Row ordering was extracted from findAttackRowByIndex into
-  orderedAttackRowIds so both count rows identically.
-
-v2.167.3: ROLL-WITH ON AREA SAVES. 4.8.3.1 lets a target spend Power to add
-  to a save attack's target number, and nothing in 4.8.3.1 or 4.9 exempts
-  an attack delivered as an Area Effect - but the area path offered no
-  roll-with on the save (only on damage) and rebuilt the recovery TN from
-  components, so a target caught in an area Damaging Poison could not do
-  what the same attack allows when aimed at it directly. resolveAreaSave
-  now takes a roll-with amount: capped at floor(current Power / 10) as in
-  cmdSave, Power spent whether the save then succeeds or not, added into
-  the save TN, and the recovery TN is derived as tn + Rec mod so the
-  roll-with carries into the per-round saves (4.9's Tigress example counts
-  her +2 inside the number her recovery is measured against; Damaging
-  Poison p.60 says recurring saves use "the same adjusted target number as
-  they had for their initial save"). Area save targets now defer like
-  damage targets do: Make Save / Save + RW Max / Save + RW Custom, whispered
-  to the controlling player or collected for the GM, with RW Max All and
-  Apply Rest covering the batch. Recovery TN is otherwise unchanged - the
-  derived value is arithmetically identical to the old rebuild.
-
-v2.167.2: MOOK TOKEN NAMES ON ONGOING-EFFECT CARDS. An area attack labelled
-  its save/damage cards by token name ("Mutant (1)") via areaRec.tokens[].name,
-  but every follow-up card for the condition it applied fell back to
-  char.get("name") - so a group of unlinked mook tokens all reported as the
-  shared character ("Pinky"), making round-by-round poison/paralysis prompts
-  impossible to tell apart. All of these now route through displayName(tok,
-  char): the round-advance "recovery saves due" list, the Recovery Roll card
-  and the pending damage record it creates (so the apply card matches too),
-  duration-tick damage/expiry lines, !mp conditions, !mp clearcond (single and
-  --all), the status card, !mp restore, and the bleed tick / list / stop
-  messages. Linked (PC) tokens are unaffected - displayName only prefers the
-  token name for mook tokens (represents the character, bar1 unlinked).
-
-v2.167.1: RW MAX ALL FOR NPC AREA DAMAGE. A large-group area hit (a 5"
-  grenade blast, say) offered three roll-with buttons per NPC target,
-  which doesn't scale. 4.8.3 lets any conscious, aware target roll with a
-  hit - PC or NPC alike - so there's no rule distinction here, just a GM
-  speed shortcut for the common case: new GM button "RW Max All (NPCs)"
-  (shown once 2+ NPC targets are pending) resolves every pending NPC at
-  Roll-With Max in one click via new !mp arearwmaxall. Player-controlled
-  targets and any NPC already flagged sleepy/dead (no roll-with offered
-  at all, per 4.8.3's conscious-and-aware requirement) are unaffected.
-
-v2.167.0: CHANGELOG SPLIT OUT. The header changelog had grown to 1,707
-  lines / ~115KB / 214 entries (12% of the file). All entries moved
-  verbatim, in original order, to CHANGELOG.md in the repo root; header
-  keeps only the current version and the last 3 entries plus a pointer.
-  No entry text changed or was reordered - this is a pure relocation.
 
 v2.166.3: AREA ESCAPE STANCE CHOICE FOR NPC BATCHES. Auto-Roll NPCs and
   Force All Escapes were always standing (never applied the Dive Prone +6),

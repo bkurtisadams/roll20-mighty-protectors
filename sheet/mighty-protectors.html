@@ -1,4 +1,13 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.93 - Save-attack field labels
+<!-- Mighty Protectors Roll20 Character Sheet v44.94 - Reflection per RAW
+        v44.94: Attack rows gain a Form field (specific damage form such as
+          Bullets, Flames, Lasers) sent to the API as {{form=}}. Protection rows
+          gain a Specific Forms list next to Absorbs To, so an Absorption or
+          Reflection row can cover full types, a sub-type and specific forms.
+          Reflection rows show a new settings row: Reflect To-Hit (Heightened
+          Expertise that applies to redirected attacks) and Breaking Point
+          (None / Lose Reflection -5 / Take All -10 / Explode -15). Limit tooltip
+          notes a blank Reflection Limit means 13. Vehicle protection rows get
+          the same fields plus an Active/Off State. Requires engine v2.169.0+.
         v44.93: The save-attack row's BC / Init / Rec labels described where a
           number comes from rather than what it does, and Rec's tooltip said
           "for Poison use same value as Init" - which is backwards: the engine
@@ -1030,7 +1039,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <input type="hidden" name="attr_attack_is_physical" value="1" />
             <input type="hidden" name="attr_attack_is_mental" value="0" />
             <input type="checkbox" name="attr_attack_broken" value="1" class="sheet-atk-broken-flag2" />
-            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{hitmod=[[0+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[0+@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[0+@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_cost}}} {{ch=@{attack_charges}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3}]]}} {{deftype=@{attack_atk_full}}} {{rngmod=[[0+@{range_query}]]}} {{aim=[[0+@{aim_query}]]}} {{multi=[[0+@{multi_query}]]}} {{other=[[0+@{other_query}]]}} {{called=[[0+@{called_mod_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{hitmod=[[0+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[0+@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[0+@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{form=@{attack_form}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_cost}}} {{ch=@{attack_charges}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3}]]}} {{deftype=@{attack_atk_full}}} {{rngmod=[[0+@{range_query}]]}} {{aim=[[0+@{aim_query}]]}} {{multi=[[0+@{multi_query}]]}} {{other=[[0+@{other_query}]]}} {{called=[[0+@{called_mod_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -1142,6 +1151,10 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
                 <option value="time">Time</option>
               </optgroup>
             </select>
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Specific damage form (Bullets, Flames, Lasers). Matched by Absorption/Reflection Specific Forms.">Form:</label>
+            <input type="text" name="attr_attack_form" style="width:70px !important;" placeholder="e.g. Lasers" title="Specific damage form (Bullets, Flames, Lasers). Matched by Absorption/Reflection Specific Forms." />
           </div>
           <div class="sheet-panel-field">
             <input type="checkbox" name="attr_attack_gear" value="1" title="Gear-based: Can be broken/disarmed, cannot Push" />
@@ -1682,8 +1695,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </div>
           <input type="checkbox" name="attr_prot_ff_flag" class="sheet-prot-ff-flag" value="1" />
           <div class="sheet-panel-field sheet-prot-absref-field">
-            <label title="Maximum points (Absorption Effect / Reflection Effect limit)">Limit:</label>
-            <input type="text" name="attr_prot_limit" maxlength="3" style="width:28px !important;" title="Maximum points from Absorption/Reflection Effect table" />
+            <label title="Maximum points (Absorption Effect / Reflection Effect limit). Reflection: blank = 13.">Limit:</label>
+            <input type="text" name="attr_prot_limit" maxlength="3" style="width:28px !important;" title="Maximum points from Absorption/Reflection Effect table. Reflection: blank = 13 (0 CP)." />
           </div>
           <div class="sheet-panel-field sheet-prot-absref-field">
             <label title="Where absorbed points go (Absorption only)">Absorbs To:</label>
@@ -1702,6 +1715,28 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           <div class="sheet-panel-field sheet-prot-absref-field">
             <label title="Power name when Absorbs To = Other">Power:</label>
             <input type="text" name="attr_prot_absorbs_power" style="width:70px !important;" title="Power name (when Absorbs To = Other)" placeholder="Flame Aura" />
+          </div>
+          <div class="sheet-panel-field sheet-prot-absref-field">
+            <label title="Specific damage forms, comma-separated (Bullets, Flames, Lasers). Matched against the attack's Form. With Sub also set, either one matches; both blank = full damage type.">Forms:</label>
+            <input type="text" name="attr_prot_forms" style="width:90px !important;" placeholder="e.g. Bullets" title="Specific damage forms, comma-separated (Bullets, Flames, Lasers). Matched against the attack's Form. With Sub also set, either one matches; both blank = full damage type." />
+          </div>
+        </div>
+
+        <!-- Row 4a: Reflection Settings (visible when mode=reflection) -->
+        <input type="checkbox" name="attr_prot_ref_flag" class="sheet-prot-ref-flag" value="1" />
+        <div class="sheet-prot-ref-row sheet-panel-row" style="border-top:1px solid #3a3050; margin-top:4px; padding-top:4px;">
+          <div class="sheet-panel-field">
+            <label style="color:#e67e22;" title="Heightened Expertise levels that apply to redirected attacks. Added to AG save + 3 + global Ability to-hit.">Reflect To-Hit +</label>
+            <input type="text" name="attr_prot_reflect_tohit" maxlength="3" style="width:28px !important;" title="Heightened Expertise levels that apply to redirected attacks. Added to AG save + 3 + global Ability to-hit." />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="Reflection Effect Modifier: what happens when incoming damage exceeds the Limit">Breaking Point:</label>
+            <select name="attr_prot_reflect_break" style="width:150px !important;" title="Reflection Effect Modifier: what happens when incoming damage exceeds the Limit">
+              <option value="none" selected>None (excess not redirected)</option>
+              <option value="loss">Lose Reflection ~1 day (-5)</option>
+              <option value="full">Take all damage (-10)</option>
+              <option value="explode">Explode (-15)</option>
+            </select>
           </div>
         </div>
 
@@ -2378,8 +2413,34 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
               <input type="text" name="attr_vprot_ff_remaining" value="" readonly style="width:44px !important; color:#27ae60;" />
             </div>
             <div class="sheet-panel-field">
-              <label title="Max points from the Absorption/Reflection Effect table">Limit:</label>
+              <label title="Max points from the Absorption/Reflection Effect table. Reflection: blank = 13.">Limit:</label>
               <input type="text" name="attr_vprot_limit" maxlength="3" style="width:30px !important;" />
+            </div>
+          </div>
+          <div class="sheet-panel-row">
+            <div class="sheet-panel-field">
+              <label title="Absorption/Reflection rows only: Off = unavailable (e.g. recovering from a Reflection Breaking Point)">State:</label>
+              <select name="attr_vprot_state" style="width:66px !important;">
+                <option value="Active" selected>Active</option>
+                <option value="Off">Off</option>
+              </select>
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Absorption/Reflection specific damage forms, comma-separated (Bullets, Flames, Lasers)">Forms:</label>
+              <input type="text" name="attr_vprot_forms" style="width:90px !important;" placeholder="e.g. Bullets" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Reflection: to-hit bonus for redirected attacks (added to vehicle AG save + 3 + targeting)">Reflect To-Hit +</label>
+              <input type="text" name="attr_vprot_reflect_tohit" maxlength="3" style="width:28px !important;" />
+            </div>
+            <div class="sheet-panel-field">
+              <label title="Reflection Effect Modifier: what happens when incoming damage exceeds the Limit">Breaking Point:</label>
+              <select name="attr_vprot_reflect_break" style="width:150px !important;">
+                <option value="none" selected>None (excess not redirected)</option>
+                <option value="loss">Lose Reflection ~1 day (-5)</option>
+                <option value="full">Take all damage (-10)</option>
+                <option value="explode">Explode (-15)</option>
+              </select>
             </div>
           </div>
           <div class="sheet-panel-row">
@@ -5701,6 +5762,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
       var update = {};
       update[rowPrefix + "_prot_ff_flag"] = isFF;
       update[rowPrefix + "_prot_ff_flag2"] = isFF;
+      update[rowPrefix + "_prot_ref_flag"] = (mode === "reflection") ? "1" : "0";
       setAttrs(update, { silent: true });
     });
   });
@@ -5858,6 +5920,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         attrList.push("repeating_protection_" + id + "_prot_activation");
         attrList.push("repeating_protection_" + id + "_prot_state");
         attrList.push("repeating_protection_" + id + "_prot_broken");
+        attrList.push("repeating_protection_" + id + "_prot_mode");
       });
       getAttrs(attrList, function(values) {
         var updates = {};
@@ -5868,6 +5931,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           updates["repeating_protection_" + id + "_prot_activation_ind"] = type;
           updates["repeating_protection_" + id + "_prot_activation_c"] = (type === "C") ? "1" : "0";
           updates["repeating_protection_" + id + "_prot_state_on"] = (state === "Active" && !broken) ? "1" : "0";
+          updates["repeating_protection_" + id + "_prot_ref_flag"] = ((values["repeating_protection_" + id + "_prot_mode"] || "").toLowerCase() === "reflection") ? "1" : "0";
         });
         setAttrs(updates, { silent: true });
       });

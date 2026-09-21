@@ -1,4 +1,4 @@
-/* Mighty Protectors Character Sheet CSS v44.90 - Compact attack/protection grid fits the sheet width */
+/* Mighty Protectors Character Sheet CSS v44.94 - Reflection settings row toggle */
 
 /* Super Speed extra-turn count: compact field without browser spinner arrows. */
 input[name="attr_super_speed_turns"] {
@@ -1358,6 +1358,13 @@ input[name="attr_super_speed_turns"]::-webkit-inner-spin-button {
   display: none !important;
 }
 .charsheet input.sheet-prot-ff-flag:checked ~ .sheet-prot-ff-row {
+  display: flex !important;
+}
+.charsheet input.sheet-prot-ref-flag,
+.charsheet .sheet-prot-ref-row {
+  display: none !important;
+}
+.charsheet input.sheet-prot-ref-flag:checked + .sheet-prot-ref-row {
   display: flex !important;
 }
 /* Hide Absorption/Reflection fields when Force Field mode is selected */
