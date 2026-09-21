@@ -15391,7 +15391,7 @@ function cmdAttackInfo(msg, args) {
 
     // Story/Bio from character bio field (not an attribute)
     char.get('bio', function(bio) {
-      if (bio) {
+      if (bio && bio !== 'null') {
         // Strip HTML
         data.story = bio.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
       } else {
@@ -15530,12 +15530,21 @@ function cmdAttackInfo(msg, args) {
 
     handout.get('gmnotes', function(gmnotes) {
       handout.get('notes', function(notes) {
-        let raw = gmnotes || notes || '';
+        // Roll20 hands back the literal string "null" for an empty notes/gmnotes
+        // field, which is truthy — so an empty GM Notes used to shadow the real
+        // JSON in Notes and JSON.parse("null") produced a null data object.
+        const clean = v => (v && v !== 'null') ? v : '';
+        const g = clean(gmnotes), n = clean(notes);
+        // Prefer whichever field actually contains a JSON object.
+        let raw = (g.indexOf('{') !== -1 ? g : '') || (n.indexOf('{') !== -1 ? n : '') || g || n;
         raw = raw.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;|\u00a0/g, ' ').replace(/[\u201c\u201d]/g, '"').replace(/[\u2018\u2019]/g, "'").trim();
 
         let data;
         try { data = JSON.parse(extractFirstJSONObject(raw) || raw); } catch(e) {
           return ch("MP", `/w gm Failed to parse JSON: ${esc(e.message)}`);
+        }
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+          return ch("MP", `/w gm Handout <b>${esc(handoutName)}</b> has no MP Builder JSON object in its Notes or GM Notes.`);
         }
         if (data && (data.type === "mp-vehicle" || (data.version === 10 && Array.isArray(data.systems)))) {
           return buildVehicleCharacterFromMPData(data, `handout <b>${esc(handoutName)}</b>`);
@@ -15549,6 +15558,9 @@ function cmdAttackInfo(msg, args) {
   // !mp import (handout JSON) and !mp gwspawn (embedded bestiary block).
   // sourceLabel is shown in the confirmation whisper.
   function buildCharacterFromMPData(data, sourceLabel) {
+        if (!data || typeof data !== 'object') {
+          return ch("MP", `/w gm Import failed: no character data from ${sourceLabel || 'source'}.`);
+        }
         const charName = data.name || 'Imported Character';
         let char = findObjs({ type: 'character', name: charName })[0];
         if (!char) char = createObj('character', { name: charName });
