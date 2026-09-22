@@ -6,6 +6,14 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.167.7: ESCAPE CARD LEADS WITH THE DISTANCE. The area escape result said
+  only "X ESCAPES/FAILS to escape!" and a bare TN, so the movement the roll
+  was actually made against - the one number that explains where the TN came
+  from under 4.7.5.2 - appeared on the area card and then vanished. Both
+  results now read "X needs N\" to escape!" with the outcome moved onto the
+  roll line as (ESCAPES!) / (FAILS!), and a failed dive reports "(dove
+  prone)" as a successful one already did.
+
 v2.167.6: DIAGONAL MOVEMENT IN AREA ESCAPE DISTANCE. 4.7.5.2 sets the escape
   TN from "inches of movement to the closest safe space", but the engine used
   radius minus distance-from-center - a radial gap, which charges the

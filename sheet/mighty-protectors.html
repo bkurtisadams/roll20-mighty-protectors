@@ -1,4 +1,7 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.95 - Multi-Ability Max active
+<!-- Mighty Protectors Roll20 Character Sheet v44.96 - Invisibility notes code
+        v44.96: Ability Notes tooltip lists the invis / invis:blur / blur codes.
+          Rows named Invisibility or Blur work without a code; with engine
+          v2.170.0+ the row's State On/Off turns the token's invisibility on/off.
         v44.95: Multi-Ability gains a Max selector per RAW: 1 active (-10 each, 2+
           abilities), 2 active (-5 each, 3+ abilities), 3 active (-2.5 each, 4+
           abilities). The group uses the lowest Max set on any of its rows.
@@ -2221,7 +2224,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Row 4: Codes -->
         <div style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
           <label style="color:#888; font-size:9px; display:block; margin-bottom:2px;" title="Effect Codes for API automation">Codes:</label>
-          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, field:darkness:2:1:9..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | aura:Dmg:Type:PR | field:darkness|glare:RANKS:SENSES:DIAM | field:glow:DIAM | sense:TYPE:LEVEL[:rng,glob,tele4,chk+3,weak=nearsighted,...]" />
+          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, field:darkness:2:1:9..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | invis / invis:blur / blur (State On = token invisible) | aura:Dmg:Type:PR | field:darkness|glare:RANKS:SENSES:DIAM | field:glow:DIAM | sense:TYPE:LEVEL[:rng,glob,tele4,chk+3,weak=nearsighted,...]" />
         </div>
 
         <!-- Info button -->

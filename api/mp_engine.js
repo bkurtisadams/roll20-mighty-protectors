@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.169.0 - 2026-09-21
+/* Mighty Protectors Roll20 API Engine v2.170.0 - 2026-09-21
+ * v2.170.0: INVISIBILITY FROM THE ABILITY ROW. An Ability row named
+ *   Invisibility or Blur (or tagged with notes code invis, invis:blur or blur)
+ *   now drives the condition: setting its State to On makes every token of
+ *   that character invisible/blurred, and Off or Held clears it. Because the
+ *   engine watches the State attribute, Linked and Multi-Ability groups that
+ *   switch the row off drop invisibility too. The reverse also holds: !mp invis
+ *   --off and the round-advance PR drain at 0 Power set the row back to Off.
+ *   PR 1/round upkeep unchanged; upkeep lines now use token names for mooks.
  * v2.169.0: REFLECTION PER RAW. Protection rows gain a Specific Forms list
  *   (Bullets, Flames, Lasers) matched against a new attack-row Form field, so
  *   one row can cover full types, sub-types and specific forms; applies to
@@ -36,20 +44,13 @@
  *   GM's discretionary task checks stay off-engine; the helper side of the
  *   assist rule is not built yet, but !mp stand --check already spends a
  *   banked stand_assist +3 if something else sets one.
- * v2.167.7: ESCAPE CARD LEADS WITH THE DISTANCE. The area escape result said
- *   only "X ESCAPES/FAILS to escape!" and a bare TN, so the movement the roll
- *   was actually made against - the one number that explains where the TN came
- *   from under 4.7.5.2 - appeared on the area card and then vanished. Both
- *   results now read "X needs N\" to escape!" with the outcome moved onto the
- *   roll line as (ESCAPES!) / (FAILS!), and a failed dive reports "(dove
- *   prone)" as a successful one already did.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.169.0";
+var MP_VERSION = "2.170.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -1647,6 +1648,62 @@ MP.Engine = (function () {
     };
   }
 
+  function setInvisible(tok, opts) {
+    const marker = CONDITION_MARKERS.invisible;
+    if (!state.MP_Engine.conditions[tok.id]) state.MP_Engine.conditions[tok.id] = [];
+    const conds = state.MP_Engine.conditions[tok.id];
+    const idx = conds.findIndex(c => c.type === "invisible");
+    const prevSneak = idx >= 0 && conds[idx].sneaking;
+    const condition = {
+      type: "invisible",
+      sourceAtk: opts.blur ? "Blur" : "Invisibility",
+      blur: !!opts.blur,
+      sneaking: opts.sneaking === undefined ? !!prevSneak : !!opts.sneaking,
+      marker: marker,
+      permanent: false,
+      environmental: true,
+      effectDesc: getConditionDesc("invisible", "Invisibility"),
+      startRound: state.MP_Engine.currentRound,
+      created: Date.now(),
+      charId: opts.charId || null,
+      sourceRow: opts.sourceRow || null
+    };
+    if (idx >= 0) conds[idx] = condition; else conds.push(condition);
+    setMarker(tok, marker, true);
+    return condition;
+  }
+
+  function clearInvisible(tok) {
+    const marker = CONDITION_MARKERS.invisible;
+    const conds = state.MP_Engine.conditions[tok.id] || [];
+    const idx = conds.findIndex(c => c.type === "invisible");
+    if (idx < 0) return null;
+    const removed = conds.splice(idx, 1)[0];
+    if (!conds.some(c => c.marker === marker)) setMarker(tok, marker, false);
+    return removed;
+  }
+
+  function invisRowStillUsed(charId, rowId) {
+    const condMap = state.MP_Engine.conditions || {};
+    return Object.keys(condMap).some(tid => (condMap[tid] || []).some(c =>
+      c.type === "invisible" && c.charId === charId && c.sourceRow === rowId));
+  }
+
+  function setAbilityRowOff(charId, rowId) {
+    const want = abilityAttr(rowId, "state").toLowerCase();
+    const attr = (findObjs({ _type: "attribute", _characterid: charId }) || [])
+      .find(a => String(a.get("name")).toLowerCase() === want);
+    if (!attr || attr.get("current") !== "Active") return;
+    if (typeof attr.setWithWorker === "function") attr.setWithWorker({ current: "Off" });
+    else attr.set("current", "Off");
+  }
+
+  function releaseInvisRow(removed) {
+    if (removed && removed.sourceRow && removed.charId && !invisRowStillUsed(removed.charId, removed.sourceRow)) {
+      setAbilityRowOff(removed.charId, removed.sourceRow);
+    }
+  }
+
   // !mp invis --on [--blur] [--sneaking] | --off  (selected tokens or --target)
   // Voluntary: an action to activate, PR 1/round (auto-drained on round
   // advance; drops at 0 Power). Free to drop. Not GM-gated - players may
@@ -1655,7 +1712,6 @@ MP.Engine = (function () {
     const turnOff = ("off" in args);
     const isBlur = ("blur" in args);
     const isSneaking = ("sneaking" in args) || ("sneak" in args);
-    const marker = CONDITION_MARKERS.invisible;
 
     const ids = [];
     if (args.target) ids.push(args.target);
@@ -1671,45 +1727,65 @@ MP.Engine = (function () {
       const tok = getObj("graphic", tokId);
       if (!tok) return;
       const tokChar = getCharFromToken(tok);
-      const tokName = tokChar ? tokChar.get("name") : (tok.get("name") || "token");
-      if (!state.MP_Engine.conditions[tokId]) state.MP_Engine.conditions[tokId] = [];
-      const conds = state.MP_Engine.conditions[tokId];
-      const idx = conds.findIndex(c => c.type === "invisible");
-
+      const tokName = displayName(tok, tokChar);
       if (turnOff) {
-        if (idx >= 0) {
-          conds.splice(idx, 1);
-          if (!conds.some(c => c.marker === marker)) setMarker(tok, marker, false);
+        const removed = clearInvisible(tok);
+        if (removed) {
+          releaseInvisRow(removed);
           lines.push(`<b>${esc(tokName)}</b> — visible again (no action or Power to drop).`);
         } else {
           lines.push(`<b>${esc(tokName)}</b> — wasn't invisible.`);
         }
         return;
       }
-
-      const condition = {
-        type: "invisible",
-        sourceAtk: isBlur ? "Blur" : "Invisibility",
-        blur: isBlur,
-        sneaking: isSneaking,
-        marker: marker,
-        permanent: false,
-        environmental: true, // voluntary - no recovery roll
-        effectDesc: getConditionDesc("invisible", "Invisibility"),
-        startRound: state.MP_Engine.currentRound,
-        created: Date.now()
-      };
-      if (idx >= 0) conds[idx] = condition; else conds.push(condition);
-      setMarker(tok, marker, true);
+      setInvisible(tok, { blur: isBlur, sneaking: isSneaking, charId: tokChar ? tokChar.id : null });
       lines.push(`<b>${esc(tokName)}</b> — ${isBlur ? "BLURRED (observers -1 sense level)" : "INVISIBLE (vision blocked)"}${isSneaking ? ", sneaking (opposed AG)" : ""}. <span style="font-size:11px; color:#8a84a8;">Takes an action; PR 1/round auto-drains on round advance. Gear carried turns invisible too; drops become visible.</span>`);
     });
 
+    postInvisCard(lines, !turnOff, msg);
+  }
+
+  function postInvisCard(lines, on, msg) {
     let out = `<div style="background:#1a1a2e; border:2px solid #5a4fcf; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
     out += `<b style="color:#c8b8ff;">🫥 Invisibility</b>`;
     lines.forEach(l => out += `<br/>` + l);
-    if (!turnOff) out += `<br/><span style="font-size:11px; color:#8a84a8;">Undetected characters get the Surprise bonus (4.6). Basic senses (hearing) still detect a non-sneaking invisible character.</span>`;
+    if (on) out += `<br/><span style="font-size:11px; color:#8a84a8;">Undetected characters get the Surprise bonus (4.6). Basic senses (hearing) still detect a non-sneaking invisible character.</span>`;
     out += `</div>`;
-    ch("MP", `${wt(msg)}` + out);
+    ch("MP", `${msg ? wt(msg) : ""}` + out);
+  }
+
+  // Ability row tagged by notes code invis / invis:blur / blur, or named
+  // Invisibility / Blur. Returns "invis", "blur" or null.
+  function invisRowKind(charId, rowId) {
+    const notes = String(getAttr(charId, abilityAttr(rowId, "notes")) || "").toLowerCase();
+    const code = notes.match(/(?:^|[\s,;])(invis(?::blur)?|blur)(?=$|[\s,;])/);
+    if (code) return code[1] === "invis" ? "invis" : "blur";
+    const name = String(getAttr(charId, abilityAttr(rowId, "name")) || "").toLowerCase();
+    if (/invisib/.test(name)) return "invis";
+    if (/\bblur\b/.test(name)) return "blur";
+    return null;
+  }
+
+  function syncInvisRow(charId, rowId, active) {
+    const kind = invisRowKind(charId, rowId);
+    if (!kind) return;
+    const char = getObj("character", charId);
+    const toks = findObjs({ _type: "graphic", _subtype: "token", represents: charId }) || [];
+    const lines = [];
+    toks.forEach(tok => {
+      const name = displayName(tok, char);
+      const conds = state.MP_Engine.conditions[tok.id] || [];
+      const cur = conds.find(c => c.type === "invisible");
+      if (active) {
+        if (cur && cur.sourceRow === rowId && cur.blur === (kind === "blur")) return;
+        setInvisible(tok, { blur: kind === "blur", charId: charId, sourceRow: rowId });
+        lines.push(`<b>${esc(name)}</b> — ${kind === "blur" ? "BLURRED (observers -1 sense level)" : "INVISIBLE (vision blocked)"}. <span style="font-size:11px; color:#8a84a8;">Takes an action; PR 1/round auto-drains on round advance.</span>`);
+      } else if (cur && (cur.sourceRow === rowId || !cur.sourceRow)) {
+        clearInvisible(tok);
+        lines.push(`<b>${esc(name)}</b> — visible again.`);
+      }
+    });
+    if (lines.length) postInvisCard(lines, active, null);
   }
 
   // !mp sneak [--off] (selected tokens or --target). 3.1.5.1: move at 1/2
@@ -2465,14 +2541,13 @@ MP.Engine = (function () {
       const tok = getObj("graphic", tokId);
       if (!tok) { conds.splice(idx, 1); return; } // token gone - clean up
       const char = getCharFromToken(tok);
-      const name = char ? char.get("name") : (tok.get("name") || "token");
+      const name = displayName(tok, char);
       const pow0 = getResource(tok, char ? char.id : null, CFG.POWER_BAR, CFG.POWER_ATTR);
       const cost = Math.min(n, pow0);
       const pow1 = Math.max(0, pow0 - n);
       setResource(tok, char ? char.id : null, CFG.POWER_BAR, CFG.POWER_ATTR, pow1);
       if (pow1 <= 0) {
-        conds.splice(idx, 1);
-        if (!conds.some(c => c.marker === CONDITION_MARKERS.invisible)) setMarker(tok, CONDITION_MARKERS.invisible, false);
+        releaseInvisRow(clearInvisible(tok));
         frag += `<br/><span style="color:#ff6b6b;">🫥 <b>${esc(name)}</b> can't pay PR (Power ${pow0}→${pow1}) — <b>invisibility DROPS</b></span>`;
       } else {
         frag += `<br/><span style="color:#8a84a8; font-size:11px;">🫥 ${esc(name)} invisible: -${cost} Power (${pow0}→${pow1})</span>`;
@@ -16570,8 +16645,10 @@ function cmdAttackInfo(msg, args) {
       const after = String(attr.get("current") || "");
       if (after === "Active" && before !== "Active") {
         armTimedAbility(info.charId, info.rowId, { consumeCharge: true, silent: false });
+        syncInvisRow(info.charId, info.rowId, true);
       } else if (after !== "Active") {
         cancelTimedAbility(info.charId, info.rowId);
+        if (before === "Active") syncInvisRow(info.charId, info.rowId, false);
       }
       return;
     }
@@ -17785,6 +17862,7 @@ function cmdAttackInfo(msg, args) {
           if (!state.MP_Engine.timedAbilities[abilityTimerKey(info.charId, info.rowId)]) {
             armTimedAbility(info.charId, info.rowId, { consumeCharge: false, silent: true });
           }
+          syncInvisRow(info.charId, info.rowId, true);
         }, 100);
       }
     });
