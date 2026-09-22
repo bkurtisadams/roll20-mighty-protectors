@@ -1,4 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.94 - Reflection per RAW
+<!-- Mighty Protectors Roll20 Character Sheet v44.95 - Multi-Ability Max active
+        v44.95: Multi-Ability gains a Max selector per RAW: 1 active (-10 each, 2+
+          abilities), 2 active (-5 each, 3+ abilities), 3 active (-2.5 each, 4+
+          abilities). The group uses the lowest Max set on any of its rows.
+          Activating past the limit turns off the longest-active ability in the
+          group (1 active behaves as before). Tooltip no longer claims -10 CP for
+          every Multi group.
         v44.94: Attack rows gain a Form field (specific damage form such as
           Bullets, Flames, Lasers) sent to the API as {{form=}}. Protection rows
           gain a Specific Forms list next to Absorbs To, so an Absorption or
@@ -1948,8 +1954,16 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <input type="text" name="attr_ability_linked_group" style="width:50px !important;" title="Group ID - abilities with same ID toggle together (-2.5 CP each)" placeholder="A" />
           </div>
           <div class="sheet-panel-field">
-            <label title="Only one ability with same Group ID can be active at a time (-10 CP each)">Multi:</label>
-            <input type="text" name="attr_ability_multi_group" style="width:50px !important;" title="Group ID - only one ability in group active at a time (-10 CP each)" placeholder="B" />
+            <label title="Multi-Ability: abilities with the same Group ID are mutually exclusive up to the Max active">Multi:</label>
+            <input type="text" name="attr_ability_multi_group" style="width:50px !important;" title="Group ID - abilities in the group share the Max active limit" placeholder="B" />
+          </div>
+          <div class="sheet-panel-field">
+            <label title="How many abilities in the Multi group may be active at once. Set the same on every row in the group.">Max:</label>
+            <select name="attr_ability_multi_max" style="width:108px !important;" title="1 = 2+ abilities, -10 CP each. 2 = 3+ abilities, -5 CP each. 3 = 4+ abilities, -2.5 CP each. Activating past the limit turns off the longest-active one.">
+              <option value="1" selected>1 active (-10)</option>
+              <option value="2">2 active (-5)</option>
+              <option value="3">3 active (-2.5)</option>
+            </select>
           </div>
         </div>
 
@@ -6133,10 +6147,14 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           attrList.push("repeating_abilities_" + id + "_ability_multi_group");
           attrList.push("repeating_abilities_" + id + "_ability_state");
           attrList.push("repeating_abilities_" + id + "_ability_broken");
+          attrList.push("repeating_abilities_" + id + "_ability_multi_max");
+          attrList.push("repeating_abilities_" + id + "_ability_multi_since");
         });
         
         getAttrs(attrList, function(values) {
           var updates = {};
+          var multiActive = [];
+          var multiCap = 3;
           
           ids.forEach(function(id) {
             // Skip the source row
@@ -6159,15 +6177,25 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
               }
             }
             
-            // MULTI: if source went Active, turn off others in same multi-group
             if (multiGroup && otherMulti === multiGroup && newState === "Active") {
-              if (otherState === "Active") {
-                updates[otherPrefix + "state"] = "Off";
-                updates[otherPrefix + "state_active"] = "0";
-                updates[otherPrefix + "state_held"] = "0";
+              multiCap = Math.min(multiCap, parseInt(values[otherPrefix + "multi_max"], 10) || 1);
+              if (otherState === "Active" && updates[otherPrefix + "state"] !== "Off") {
+                multiActive.push({ p: otherPrefix, since: parseInt(values[otherPrefix + "multi_since"], 10) || 0 });
               }
             }
           });
+          
+          if (multiGroup && newState === "Active") {
+            multiCap = Math.max(1, Math.min(multiCap, parseInt(values[prefix + "multi_max"], 10) || 1));
+            multiActive.sort(function(a, b) { return a.since - b.since; });
+            while (multiActive.length >= multiCap) {
+              var oldest = multiActive.shift();
+              updates[oldest.p + "state"] = "Off";
+              updates[oldest.p + "state_active"] = "0";
+              updates[oldest.p + "state_held"] = "0";
+            }
+            updates[prefix + "multi_since"] = String(Date.now());
+          }
           
           if (Object.keys(updates).length > 0) {
             setAttrs(updates, {silent: true}, function() {
