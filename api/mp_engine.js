@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.172.0 - 2026-09-22
+/* Mighty Protectors Roll20 API Engine v2.172.1 - 2026-09-22
+ * v2.172.1: FIX - v2.172.0 put a raw inch mark (") in the to-hit Range row,
+ *   which closed the To-Hit hover's title attribute early and cut the tooltip
+ *   off at "Range: -1 (8". The altitude difference now rides on the escaped
+ *   range text in the hover only.
  * v2.172.0: ALTITUDE. New !mp alt N | +N | -N | 0 | list sets, climbs, dives
  *   or lands the selected tokens (players for their own, GM for any), stored
  *   per token in inches so mooks sharing a sheet can fly at different heights.
@@ -31,28 +35,13 @@
  *   switch the row off drop invisibility too. The reverse also holds: !mp invis
  *   --off and the round-advance PR drain at 0 Power set the row back to Off.
  *   PR 1/round upkeep unchanged; upkeep lines now use token names for mooks.
- * v2.169.0: REFLECTION PER RAW. Protection rows gain a Specific Forms list
- *   (Bullets, Flames, Lasers) matched against a new attack-row Form field, so
- *   one row can cover full types, sub-types and specific forms; applies to
- *   Absorption too. A blank Reflection Limit now means 13 (the 0 CP row of the
- *   Reflection Effect table) instead of unlimited. Breaking Point implemented:
- *   Lose Reflection sets the row Off after the reflect; Take All leaves the
- *   attack to the normal Apply buttons; Explosion deals the full incoming
- *   damage to everything in a ceil(points/5)" diameter, the reflector
- *   included with no roll-with. The redirected attack now rolls to hit:
- *   reflector's AG save (IN/CL for mental/emotional attack types) + 3 +
- *   global Ability to-hit + the row's Reflect To-Hit + stance, discomfort,
- *   range and a prompted modifier, against the target's PDef/MDef and stance,
- *   with crit/fumble confirms. Hits create a normal pending attack on the
- *   target, so protection, Force Field, roll-with, knockback and crits use
- *   the standard Apply path. Saved action stays GM-adjudicated.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.172.0";
+var MP_VERSION = "2.172.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7131,7 +7120,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       addCalcRow("Sense", fmtMod(atkVisionPenalty), `${senseName}${senseResult ? `, ${senseResult}` : ""}`);
     }
     if (atkDiscomfortPenalty !== 0) addCalcRow("Discomfort", fmtMod(atkDiscomfortPenalty));
-    if (rangePenalty !== 0) addCalcRow("Range", fmtMod(rangePenalty), rangeData.altDiff > 0 ? `${rangeData.inches}", ${rangeData.altDiff}" alt diff` : undefined);
+    if (rangePenalty !== 0) addCalcRow("Range", fmtMod(rangePenalty));
     if (isAreaAttack) {
       addCalcRow("Area", "+6");
     } else {
@@ -7148,7 +7137,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Hover: every line a signed to-hit delta so the column sums to Final.
     // Defense shows raw value and applied sign; range inches hover-only.
     const rangeInchesTxt = (rangeData && typeof rangeData.inches === "number")
-      ? `${(rangeData.profileAdjusted ? rangeData.adjustedInches : rangeData.inches).toFixed(1).replace(/\.0$/, "")}&quot;`
+      ? `${(rangeData.profileAdjusted ? rangeData.adjustedInches : rangeData.inches).toFixed(1).replace(/\.0$/, "")}&quot;` +
+        (num(rangeData.altDiff, 0) > 0 ? `, ${rangeData.altDiff}&quot; alt diff` : "")
       : "";
     const hoverBreakdown = calcRows
       .map(row => {

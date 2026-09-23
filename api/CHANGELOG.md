@@ -6,6 +6,22 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.169.0: REFLECTION PER RAW. Protection rows gain a Specific Forms list
+  (Bullets, Flames, Lasers) matched against a new attack-row Form field, so
+  one row can cover full types, sub-types and specific forms; applies to
+  Absorption too. A blank Reflection Limit now means 13 (the 0 CP row of the
+  Reflection Effect table) instead of unlimited. Breaking Point implemented:
+  Lose Reflection sets the row Off after the reflect; Take All leaves the
+  attack to the normal Apply buttons; Explosion deals the full incoming
+  damage to everything in a ceil(points/5)" diameter, the reflector
+  included with no roll-with. The redirected attack now rolls to hit:
+  reflector's AG save (IN/CL for mental/emotional attack types) + 3 +
+  global Ability to-hit + the row's Reflect To-Hit + stance, discomfort,
+  range and a prompted modifier, against the target's PDef/MDef and stance,
+  with crit/fumble confirms. Hits create a normal pending attack on the
+  target, so protection, Force Field, roll-with, knockback and crits use
+  the standard Apply path. Saved action stays GM-adjudicated.
+
 v2.168.1: The v2.168.0 Stand From Prone card styled its text light (#eee /
   #aab) but sent it without the dark card wrapper every other combat card
   uses, so on Roll20's white chat background the AG save, TN and roll were
