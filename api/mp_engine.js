@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.173.1 - 2026-09-22
+/* Mighty Protectors Roll20 API Engine v2.173.2 - 2026-09-22
+ * v2.173.2: FIX - a stale siphon pool blocked new gains. The
+ *   cap check counts what's in the pool, but !mp test reset put Hits/Power
+ *   back to max without zeroing the pool, so the next siphon gained nothing
+ *   (pool 23 against a cap of 21 left no room). Test reset now zeroes the
+ *   character's siphon pools too, and a gain that the cap fully blocks says
+ *   "No gain: pool already at cap (pool/cap)" instead of "Gains 0", with a
+ *   pointer to !mp siphon reset when the pool is over the cap.
  * v2.173.1: !mp siphon reset --target TOKID zeroes every siphon pool on the
  *   character, including a pool with no timer record, without touching
  *   Hits/Power (clear still removes the pooled points from the bar). For a
@@ -15,21 +22,13 @@
  *   which closed the To-Hit hover's title attribute early and cut the tooltip
  *   off at "Range: -1 (8". The altitude difference now rides on the escaped
  *   range text in the hover only.
- * v2.172.0: ALTITUDE. New !mp alt N | +N | -N | 0 | list sets, climbs, dives
- *   or lands the selected tokens (players for their own, GM for any), stored
- *   per token in inches so mooks sharing a sheet can fly at different heights.
- *   Airborne tokens carry the fluffy-wing marker, numbered 1-9 (no number at
- *   10"+). calculateRange adds the vertical edge gap to the map distance under
- *   the page's diagonal rule, so every range-based roll (attacks, perception,
- *   reflection) sees it; the to-hit Range row shows the altitude difference.
- *   Reach limits for HTH/Touch vs flyers and area spheres are not modelled.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.173.1";
+var MP_VERSION = "2.173.2";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -8547,12 +8546,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const excess = gain - kept;
 
     let html = "";
+    if (kept <= 0) {
+      html += `<br/><span style="color:#e67e22;">No gain: pool already at cap (${pool0}/${capUnits}); ${gain} ${esc(unitLabel)} lost.</span>${capSrc}`;
+      if (pool0 > capUnits) html += `<br/><span style="font-size:11px; color:#aab;">Pool is over the cap - if it's stale (points no longer on the bar), <code>!mp siphon reset --target TOKID</code>.</span>`;
+      if (!overload) return html;
+    }
     const isLedger = (siphonDrain === "ability" || siphonDrain === "bc");
     const atkIsVeh = isVehicleMode(atkCharId);
     const atkTok = findObjs({ _type: "graphic", represents: atkCharId, _pageid: pageId })[0]
       || findObjs({ _type: "graphic", represents: atkCharId })[0];
 
-    if (isLedger || atkIsVeh) {
+    if (kept <= 0) {
+      // Reported above; only Overload remains to resolve.
+    } else if (isLedger || atkIsVeh) {
       const pool1 = pool0 + kept;
       setAttr(atkCharId, pfx + "attack_siphon_pool", pool1);
       registerSiphonPool(atkCharId, rowId, siphonDrain, state.MP_Engine.gameClock.ms + 3600000);
@@ -8578,7 +8584,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     if (excess > 0) {
       if (!overload) {
-        html += `<br/><span style="color:#e67e22;">+${excess} over cap — lost.</span>${capSrc}`;
+        if (kept > 0) html += `<br/><span style="color:#e67e22;">+${excess} over cap — lost.</span>${capSrc}`;
       } else {
         const wiped = wipeSiphonPool(atkCharId, rowId, siphonDrain);
         const wipedPts = Math.ceil(wiped / perPt);
@@ -8595,6 +8601,24 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       }
     }
     return html;
+  }
+
+  // Bookkeeping only: zero every siphon pool on the character (including ones
+  // with no timer record) without touching Hits/Power.
+  function resetSiphonPools(charId) {
+    let total = 0, rows = 0;
+    findObjs({ _type: "attribute", _characterid: charId }).forEach(a => {
+      if (!/^repeating_attacks_.+_attack_siphon_pool$/.test(a.get("name"))) return;
+      const v = num(a.get("current"), 0);
+      if (v === 0) return;
+      total += v;
+      rows++;
+      a.set("current", 0);
+    });
+    Object.keys(state.MP_Engine.siphonPools).forEach(k => {
+      if (state.MP_Engine.siphonPools[k].charId === charId) delete state.MP_Engine.siphonPools[k];
+    });
+    return { rows, total };
   }
 
   function siphonKey(charId, rowId, resource) {
@@ -8743,21 +8767,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       return ch("MP", `/w gm <b>MP:</b> Forced dissipation on ${found} pool(s).`);
     }
     if (action === "reset") {
-      // Bookkeeping only: zero every siphon pool on the character (including
-      // ones with no timer record) without touching Hits/Power.
-      let total = 0, rows = 0;
-      findObjs({ _type: "attribute", _characterid: charId }).forEach(a => {
-        if (!/^repeating_attacks_.+_attack_siphon_pool$/.test(a.get("name"))) return;
-        const v = num(a.get("current"), 0);
-        if (v === 0) return;
-        total += v;
-        rows++;
-        a.set("current", 0);
-      });
-      Object.keys(state.MP_Engine.siphonPools).forEach(k => {
-        if (state.MP_Engine.siphonPools[k].charId === charId) delete state.MP_Engine.siphonPools[k];
-      });
-      return ch("MP", `/w gm <b>MP:</b> Reset ${rows} siphon pool(s) (${total} points) to 0. Hits/Power unchanged.`);
+      const r = resetSiphonPools(charId);
+      return ch("MP", `/w gm <b>MP:</b> Reset ${r.rows} siphon pool(s) (${r.total} points) to 0. Hits/Power unchanged.`);
     }
     if (action === "adjust") {
       const amt = num(args.amt, 0);
@@ -14259,6 +14270,9 @@ function cmdAttackInfo(msg, args) {
 
     // Clear snares
     delete state.MP_Engine.snares[tok.id];
+    // Hits/Power are back at max, so any siphoned points are gone too; a pool
+    // left behind would block future gains against the cap.
+    resetSiphonPools(char.id);
 
     ch("MP", `/w gm <b>🧪 RESET</b> ${esc(char.get("name"))}: Hits ${hitsMax}, Power ${powMax}, defense mod 0, all status cleared.`);
   }

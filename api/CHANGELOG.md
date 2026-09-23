@@ -6,6 +6,15 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.172.0: ALTITUDE. New !mp alt N | +N | -N | 0 | list sets, climbs, dives
+  or lands the selected tokens (players for their own, GM for any), stored
+  per token in inches so mooks sharing a sheet can fly at different heights.
+  Airborne tokens carry the fluffy-wing marker, numbered 1-9 (no number at
+  10"+). calculateRange adds the vertical edge gap to the map distance under
+  the page's diagonal rule, so every range-based roll (attacks, perception,
+  reflection) sees it; the to-hit Range row shows the altitude difference.
+  Reach limits for HTH/Touch vs flyers and area spheres are not modelled.
+
 v2.171.0: AREA SIPHON FIXES + AREA RULES. Offset: the Roll button asks for
   a direction (Toward target / N..NW) before the roll; token rotation no
   longer aims it. A Touch-range offset area puts its edge at the attacker's
