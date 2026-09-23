@@ -6,6 +6,15 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.173.0: PER-TARGET AREA BUTTONS. The GM's area whisper now lists every
+  target on its own row: Jump N- and Dive N- escape rolls (each prompting
+  for a modifier), Shield when the target has one, Hit (apply to that
+  target now; Save on save/flash areas) and Skip (not affected). The batch
+  Auto-Roll / Force All / Apply All buttons stay below as All targets, and
+  the only:<tag> Unaffected row is folded into Skip. !mp areadamageall
+  takes --only TOKID; a partial apply, or Apply All while roll-with
+  choices are pending, keeps the area open until every target is done.
+
 v2.172.1: FIX - v2.172.0 put a raw inch mark (") in the to-hit Range row,
   which closed the To-Hit hover's title attribute early and cut the tooltip
   off at "Range: -1 (8". The altitude difference now rides on the escaped

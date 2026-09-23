@@ -1,4 +1,9 @@
-/* Mighty Protectors Roll20 API Engine v2.174.0 - 2026-09-23
+/* Mighty Protectors Roll20 API Engine v2.174.1 - 2026-09-23
+ * v2.174.1: ALTITUDE MARKER DIAGNOSTICS. When the alt-0..alt-9 set isn't
+ *   found the fallback to wings is no longer silent: the !mp alt reply says
+ *   which digits are missing. New !mp alt markers reports how many markers
+ *   the game has, which altitude digits were found (with their tags) and any
+ *   near-miss names. Names match alt-N, alt_N, altN or "alt N".
  * v2.174.0: ALTITUDE MARKERS. Altitude now shows as custom token markers
  *   named alt-0 .. alt-9, one per digit, most significant first (12" shows
  *   alt-1 then alt-2), found by name from the game's marker list since custom
@@ -16,21 +21,13 @@
  *   character, including a pool with no timer record, without touching
  *   Hits/Power (clear still removes the pooled points from the bar). For a
  *   stale Pool value the read-only sheet field can't be edited to fix.
- * v2.173.0: PER-TARGET AREA BUTTONS. The GM's area whisper now lists every
- *   target on its own row: Jump N- and Dive N- escape rolls (each prompting
- *   for a modifier), Shield when the target has one, Hit (apply to that
- *   target now; Save on save/flash areas) and Skip (not affected). The batch
- *   Auto-Roll / Force All / Apply All buttons stay below as All targets, and
- *   the only:<tag> Unaffected row is folded into Skip. !mp areadamageall
- *   takes --only TOKID; a partial apply, or Apply All while roll-with
- *   choices are pending, keeps the area open until every target is done.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.174.0";
+var MP_VERSION = "2.174.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -5864,22 +5861,29 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   // full set in the game, falls back to the fluffy-wing badge (1-9).
   const ALT_MARKER_PREFIX = "alt-";
 
-  function getAltDigitTags() {
+  // Returns { tags: {digit: tag}, missing: [digits], total: markers in game }
+  function scanAltDigitMarkers() {
     let list = [];
     try { list = JSON.parse(Campaign().get("token_markers") || "[]"); } catch (e) { list = []; }
     const tags = {};
     list.forEach(m => {
-      const mm = String(m.name || "").toLowerCase().match(/^alt-(\d)$/);
+      const mm = String(m.name || "").trim().toLowerCase().match(/^alt[-_ ]?(\d)$/);
       if (mm && !tags[mm[1]]) tags[mm[1]] = m.tag;
     });
-    for (let d = 0; d <= 9; d++) if (!tags[String(d)]) return null;
-    return tags;
+    const missing = [];
+    for (let d = 0; d <= 9; d++) if (!tags[String(d)]) missing.push(d);
+    return { tags, missing, total: list.length, names: list.map(m => String(m.name || "")) };
+  }
+
+  function getAltDigitTags() {
+    const s = scanAltDigitMarkers();
+    return s.missing.length ? null : s.tags;
   }
 
   function showAltitudeMarkers(tok, v) {
     const isAltEntry = e => {
       const base = String(e).split("@")[0].toLowerCase();
-      return base === "fluffy-wing" || new RegExp("^" + ALT_MARKER_PREFIX + "\\d(::\\d+)?$").test(base);
+      return base === "fluffy-wing" || /^alt[-_]?\d(::\d+)?$/.test(base);
     };
     const kept = String(tok.get("statusmarkers") || "").split(",").filter(e => e && !isAltEntry(e));
     const whole = Math.round(v);
@@ -5908,8 +5912,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const alts = state.MP_Engine.altitude || (state.MP_Engine.altitude = {});
     const words = String(msg.content || "").trim().split(/\s+/).slice(2);
     const first = (words[0] && !words[0].startsWith("--")) ? words[0] : "";
-    const usage = `Usage: <code>!mp alt 6</code> (set), <code>!mp alt +2</code> / <code>-2</code> (climb/dive), <code>!mp alt 0</code> (land), <code>!mp alt list</code>`;
+    const usage = `Usage: <code>!mp alt 6</code> (set), <code>!mp alt +2</code> / <code>-2</code> (climb/dive), <code>!mp alt 0</code> (land), <code>!mp alt list</code>, <code>!mp alt markers</code> (check the digit markers)`;
 
+    if (first.toLowerCase() === "markers") {
+      const s = scanAltDigitMarkers();
+      const found = Object.keys(s.tags).sort().map(d => `${esc(s.tags[d])}`).join(", ") || "none";
+      const alts = s.names.filter(n => /^alt/i.test(n));
+      return ch("MP", `${wt(msg)}<b>MP:</b> Game has ${s.total} token markers. Altitude digits found: ${found}.` +
+        (s.missing.length ? ` Missing: ${s.missing.map(d => "alt-" + d).join(", ")} - using fluffy-wing.` : " All ten present.") +
+        (alts.length && s.missing.length ? ` Markers starting with "alt": ${alts.map(esc).join(", ")}.` : ""));
+    }
     if (first.toLowerCase() === "list" || "list" in args) {
       const rows = [];
       Object.keys(alts).forEach(id => {
@@ -5940,7 +5952,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const next = setTokenAltitude(t, m[1] === "+" ? cur + amt : (m[1] === "-" ? cur - amt : amt));
       lines.push(`${esc(displayName(t, c))}: ${cur}" \u2192 ${next}"${next === 0 ? " (landed)" : ""}`);
     });
-    if (lines.length) ch("MP", `${wt(msg)}<b>MP:</b> Altitude - ${lines.join(", ")}`);
+    const scan = scanAltDigitMarkers();
+    const fallbackNote = scan.missing.length && lines.length
+      ? ` <span style="color:#e67e22;">(alt-0..alt-9 markers not found: ${scan.missing.length === 10 ? "none in game" : "missing " + scan.missing.map(d => "alt-" + d).join(", ")}; showing wings. <code>!mp alt markers</code> for details)</span>` : "";
+    if (lines.length) ch("MP", `${wt(msg)}<b>MP:</b> Altitude - ${lines.join(", ")}${fallbackNote}`);
   }
 
 
