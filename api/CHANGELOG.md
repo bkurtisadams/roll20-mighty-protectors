@@ -6,6 +6,15 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.170.0: INVISIBILITY FROM THE ABILITY ROW. An Ability row named
+  Invisibility or Blur (or tagged with notes code invis, invis:blur or blur)
+  now drives the condition: setting its State to On makes every token of
+  that character invisible/blurred, and Off or Held clears it. Because the
+  engine watches the State attribute, Linked and Multi-Ability groups that
+  switch the row off drop invisibility too. The reverse also holds: !mp invis
+  --off and the round-advance PR drain at 0 Power set the row back to Off.
+  PR 1/round upkeep unchanged; upkeep lines now use token names for mooks.
+
 v2.169.0: REFLECTION PER RAW. Protection rows gain a Specific Forms list
   (Bullets, Flames, Lasers) matched against a new attack-row Form field, so
   one row can cover full types, sub-types and specific forms; applies to

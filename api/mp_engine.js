@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.172.1 - 2026-09-22
+/* Mighty Protectors Roll20 API Engine v2.173.0 - 2026-09-22
+ * v2.173.0: PER-TARGET AREA BUTTONS. The GM's area whisper now lists every
+ *   target on its own row: Jump N- and Dive N- escape rolls (each prompting
+ *   for a modifier), Shield when the target has one, Hit (apply to that
+ *   target now; Save on save/flash areas) and Skip (not affected). The batch
+ *   Auto-Roll / Force All / Apply All buttons stay below as All targets, and
+ *   the only:<tag> Unaffected row is folded into Skip. !mp areadamageall
+ *   takes --only TOKID; a partial apply, or Apply All while roll-with
+ *   choices are pending, keeps the area open until every target is done.
  * v2.172.1: FIX - v2.172.0 put a raw inch mark (") in the to-hit Range row,
  *   which closed the To-Hit hover's title attribute early and cut the tooltip
  *   off at "Range: -1 (8". The altitude difference now rides on the escaped
@@ -27,21 +35,13 @@
  *   overflow into Power per 4.8.4; the Ability Cap counts points, so Power
  *   pools cap at 2x; Overload fires once per attack and later area targets
  *   add nothing. !mp atk accepts --size and --dir. Requires sheet v44.97.
- * v2.170.0: INVISIBILITY FROM THE ABILITY ROW. An Ability row named
- *   Invisibility or Blur (or tagged with notes code invis, invis:blur or blur)
- *   now drives the condition: setting its State to On makes every token of
- *   that character invisible/blurred, and Off or Held clears it. Because the
- *   engine watches the State attribute, Linked and Multi-Ability groups that
- *   switch the row off drop invisibility too. The reverse also holds: !mp invis
- *   --off and the round-advance PR drain at 0 Power set the row back to Off.
- *   PR 1/round upkeep unchanged; upkeep lines now use token names for mooks.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.172.1";
+var MP_VERSION = "2.173.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -7693,14 +7693,23 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // List tokens with escape buttons. 4.7.5.2's "Defense" follows the
       // attack type (4.7.1): mental_def vs mental/emotional area attacks.
       const areaIsMental = rec.atkTypeCode === "M" || rec.atkTypeCode === "E";
+      // GM card: one row per target with its own escape, apply and skip
+      // buttons, so a target that shouldn't be affected is never swept up by
+      // a batch button.
+      const hitLabel = (num(rec.senseLoss, 0) > 0 || rec.isSaveAttack) ? "Save" : "Hit";
+      const hitBtn = t => btnDanger(hitLabel, `!mp areadamageall --id ${rollId} --only ${t.tokenId}`);
+      const skipBtn = t => btn(`Skip`, `!mp areaunaffected --id ${rollId} --target ${t.tokenId}`);
+      let gmRows = "";
       tokensInArea.forEach(t => {
         const td = areaTokens[t.tokenId];
         if (td.unaffected) {
           html += `<br/><b style="color:#fff;">${esc(t.name)}</b> <span style="color:#27ae60;">unaffected (not ${esc(rec.onlyTag)})</span>`;
+          gmRows += `<div style="margin-top:4px;"><b>${esc(t.name)}</b> <span style="color:#27ae60;">unaffected (not ${esc(rec.onlyTag)})</span></div>`;
           return;
         }
         if (td.escapeBlocked) {
           html += `<br/><b style="color:#fff;">${esc(t.name)}</b> <span style="color:#e67e22;">cannot escape (${esc(td.escapeBlocked)})</span>`;
+          gmRows += `<div style="margin-top:4px;"><b>${esc(t.name)}</b> (can't escape: ${esc(td.escapeBlocked)}) ${hitBtn(t)} ${skipBtn(t)}</div>`;
           return;
         }
         const distToEdge = t.distToEdge;
@@ -7715,6 +7724,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         html += `<br/><b style="color:#fff;">${esc(t.name)}</b> <span style="color:#aab;">(${distToEdge}" to edge)</span>`;
         if (td.onlyStatus === "assumed") html += ` <span style="color:#f1c40f; font-size:11px;">(assumed ${esc(rec.onlyTag)})</span>`;
         html += `<br/><span style="color:#aab; font-size:11px;">Escape TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Prone: <b style="color:#eee;">${escapeTNProne}-</b></span>`;
+        const isPlayerTok = t.controller !== "gm" && t.controller !== "all";
+        gmRows += `<div style="margin-top:4px;"><b>${esc(t.name)}</b> (${distToEdge}" to edge${isPlayerTok ? ", player" : ""}) ` +
+          `${btn(`Jump ${escapeTN}-`, `!mp areaescape --id ${rollId} --target ${t.tokenId} --mod ?{Escape modifier|0}`)} ` +
+          `${btn(`Dive ${escapeTNProne}-`, `!mp areaescape --id ${rollId} --target ${t.tokenId} --prone --mod ?{Escape modifier|0}`)}` +
+          (shield ? ` ${btn(`Shield ${shieldTN}-`, `!mp areashield --id ${rollId} --target ${t.tokenId}`)}` : "") +
+          ` ${hitBtn(t)} ${skipBtn(t)}</div>`;
         
         // Player/GM buttons
         if (t.controller !== "gm" && t.controller !== "all") {
@@ -7731,16 +7746,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // GM buttons
       const applyLabel = (num(rec.senseLoss, 0) > 0) ? "Resolve All Saves" : "Apply All Damage";
       const batchMod = `--mod ?{Escape modifier (all)|0}`;
-      gmButtons = `<div style="margin-top:6px;">${btn(`Auto-Roll NPCs (Standing)`, `!mp arearollnpcs --id ${rollId} ${batchMod}`)}` +
+      gmButtons = `<div><b>Targets</b> <span style="font-size:11px;">(Jump/Dive roll escape; Hit applies to that target; Skip = not affected)</span></div>` + gmRows +
+        `<div style="margin-top:8px; font-size:11px;"><b>All targets</b></div><div style="margin-top:2px;">${btn(`Auto-Roll NPCs (Standing)`, `!mp arearollnpcs --id ${rollId} ${batchMod}`)}` +
         ` ${btn(`Auto-Roll NPCs (Dive Prone)`, `!mp arearollnpcs --id ${rollId} --prone ${batchMod}`)}</div><div style="margin-top:4px;">` +
         `${btn(`Force All (Standing)`, `!mp areaforceall --id ${rollId} ${batchMod}`)}` +
         ` ${btn(`Force All (Dive Prone)`, `!mp areaforceall --id ${rollId} --prone ${batchMod}`)}` +
         ` ${btnDanger(applyLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
-      if (rec.onlyTag) {
-        const ua = tokensInArea.filter(t => !areaTokens[t.tokenId].unaffected)
-          .map(t => btn(`${esc(t.name)}: Unaffected`, `!mp areaunaffected --id ${rollId} --target ${t.tokenId}`)).join(" ");
-        if (ua) gmButtons += `<div style="margin-top:4px; font-size:11px;">Not ${esc(rec.onlyTag)}? ${ua}</div>`;
-      }
       html += `</div>`;
     }
     
@@ -7908,8 +7919,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     tokData.escaped = true;
     tokData.unaffected = true;
     tokData.escapeBlocked = "";
-    ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} marked unaffected${areaRec.onlyTag ? ` (not ${esc(areaRec.onlyTag)})` : ""}.`);
+    ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} skipped - not affected by this area.`);
     checkAreaResolved(args.id);
+    finalizeAreaIfDone(args.id);
   }
 
   // Auto-roll escapes for NPC tokens
@@ -8319,12 +8331,22 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     
     let deferred = 0;
+    // --only TOKID: the per-target Hit button resolves just that token.
+    const onlyTok = args.only ? String(args.only) : "";
+    if (onlyTok) {
+      const od = areaRec.tokens[onlyTok];
+      if (!od) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
+      if (od.applied) return ch("MP", `/w gm <b>MP:</b> ${esc(od.name)} already resolved.`);
+      if (od.rwPending) return ch("MP", `/w gm <b>MP:</b> ${esc(od.name)} is waiting on a roll-with choice.`);
+      if (od.escaped === true) return ch("MP", `/w gm <b>MP:</b> ${esc(od.name)} ${od.unaffected ? "is not affected" : "already escaped"} - nothing to apply.`);
+    }
     // NPC roll-with buttons are kept out of the card body so the body can be
     // public without handing every player control of the GM's tokens.
     let npcBtns = "";
     Object.keys(areaRec.tokens).forEach(tokId => {
       const tokData = areaRec.tokens[tokId];
-      if (tokData.applied) return;
+      if (onlyTok && tokId !== onlyTok) return;
+      if (tokData.applied || tokData.rwPending) return;
       
       if (tokData.escaped === true) {
         tokData.applied = true;
@@ -8334,7 +8356,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       if (tokData.escaped === null) {
         tokData.escaped = false;
-        html += `<br/><span style="color:#e67e22;">\u26a0 <b>${esc(tokData.name)}</b> no response - auto-fail</span>`;
+        html += `<br/><span style="color:#e67e22;">\u26a0 <b>${esc(tokData.name)}</b> ${onlyTok ? "no escape attempt" : "no response - auto-fail"}</span>`;
       }
       
       const tok = getObj("graphic", tokId);
@@ -8413,7 +8435,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += `</div></div>`;
     chCardBody("MP", html, [areaRec.atkCharId]);
     
-    // Clean up
+    // Clean up once every target is resolved (a per-target Hit leaves the rest pending)
+    const rwStillPending = Object.values(areaRec.tokens).some(t => t.rwPending && !t.applied);
+    if (onlyTok || rwStillPending) { finalizeAreaIfDone(rollId); return; }
     removeAreaMarker(areaRec);
     delete state.MP_Engine.pendingArea[rollId];
   }
