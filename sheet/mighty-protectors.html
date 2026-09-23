@@ -1,4 +1,6 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.97 - Area size / offset direction prompts
+<!-- Mighty Protectors Roll20 Character Sheet v44.98 - Notes tags help lists area codes
+        v44.98: The attack panel's Notes tags line now lists offset,
+          adjustable and only:tag.
         v44.97: Attack rows whose Notes carry adjustable and/or offset (with an
           area) prompt before the roll for area size (full, smaller Diameter
           steps, Single target) and offset direction (Toward target, N..NW),
@@ -1423,7 +1425,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Help text with Info button -->
         <div class="sheet-panel-help" style="display:flex; align-items:center; gap:8px;">
           <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{title=Attack #@{attack_num}: @{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit_num}}} {{damage=@{attack_damage}}} {{dtype=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{cost=@{attack_cost}}} {{charges=@{attack_charges}}} {{area=@{attack_area}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_save_rec}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{snaretype=@{attack_snare_type}}} {{duration=@{attack_duration_num} @{attack_duration_unit}}} {{notes=@{attack_notes}}}" title="Show attack details" style="flex-shrink:0;">Info</button>
-          <span>Notes tags: <code>save:BC:mod:rec</code> | <code>snare:type:bp/max</code> | <code>grapple[:remote] grip:dice</code> | <code>af:N</code> | <code>area:N</code> | <code>dur:N:unit</code> | <code>gear</code> | <code>immune</code> | <code>deathtouch</code> | <code>siphon:type</code> | <code>ap[:N]</code></span>
+          <span>Notes tags: <code>save:BC:mod:rec</code> | <code>snare:type:bp/max</code> | <code>grapple[:remote] grip:dice</code> | <code>af:N</code> | <code>area:N</code> | <code>dur:N:unit</code> | <code>gear</code> | <code>immune</code> | <code>deathtouch</code> | <code>siphon:type</code> | <code>ap[:N]</code> | <code>offset</code> | <code>adjustable</code> | <code>only:tag</code></span>
         </div>
       </div>
 

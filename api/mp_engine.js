@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.173.0 - 2026-09-22
+/* Mighty Protectors Roll20 API Engine v2.173.1 - 2026-09-22
+ * v2.173.1: !mp siphon reset --target TOKID zeroes every siphon pool on the
+ *   character, including a pool with no timer record, without touching
+ *   Hits/Power (clear still removes the pooled points from the bar). For a
+ *   stale Pool value the read-only sheet field can't be edited to fix.
  * v2.173.0: PER-TARGET AREA BUTTONS. The GM's area whisper now lists every
  *   target on its own row: Jump N- and Dive N- escape rolls (each prompting
  *   for a modifier), Shield when the target has one, Hit (apply to that
@@ -19,29 +23,13 @@
  *   the page's diagonal rule, so every range-based roll (attacks, perception,
  *   reflection) sees it; the to-hit Range row shows the altitude difference.
  *   Reach limits for HTH/Touch vs flyers and area spheres are not modelled.
- * v2.171.0: AREA SIPHON FIXES + AREA RULES. Offset: the Roll button asks for
- *   a direction (Toward target / N..NW) before the roll; token rotation no
- *   longer aims it. A Touch-range offset area puts its edge at the attacker's
- *   reach (center radius + 1/2" out), a ranged one puts its edge on the target
- *   point, and the attacker's token is never swept. Adjustable: the roll asks
- *   for the size (full, any smaller Diameter-table step, or Single target,
- *   which resolves as a normal attack). 4.7.5.2: area damage is rolled
- *   separately for each target (dice rerolled, flat/Push bonuses kept); area
- *   save damage likewise. Escapes take a per-roll modifier (--mod, prompted on
- *   the buttons) and only conscious, mobile tokens may try (unconscious,
- *   incapacitated, paralyzed, held or snared stay in). New only:<tag> attack
- *   code with tags in the target's Notes (-tag excludes, untagged assumed),
- *   plus a GM Unaffected button (!mp areaunaffected). Siphon: Hits drains
- *   overflow into Power per 4.8.4; the Ability Cap counts points, so Power
- *   pools cap at 2x; Overload fires once per attack and later area targets
- *   add nothing. !mp atk accepts --size and --dir. Requires sheet v44.97.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.173.0";
+var MP_VERSION = "2.173.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -8713,7 +8701,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     ch("MP", `/w gm <b>Button color candidates</b> (inert samples; reply with a letter):${out}`);
   }
 
-  // GM command: !mp siphon list | clear --target <tokenId> | adjust --target <tokenId> --amt -N
+  // GM command: !mp siphon list | clear --target <tokenId> | reset --target <tokenId> | adjust --target <tokenId> --amt -N
   function cmdSiphon(msg, args) {
     const parts = msg.content.split(/\s+/);
     const action = (parts[2] || "list").toLowerCase();
@@ -8754,6 +8742,23 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       checkSiphonExpiry();
       return ch("MP", `/w gm <b>MP:</b> Forced dissipation on ${found} pool(s).`);
     }
+    if (action === "reset") {
+      // Bookkeeping only: zero every siphon pool on the character (including
+      // ones with no timer record) without touching Hits/Power.
+      let total = 0, rows = 0;
+      findObjs({ _type: "attribute", _characterid: charId }).forEach(a => {
+        if (!/^repeating_attacks_.+_attack_siphon_pool$/.test(a.get("name"))) return;
+        const v = num(a.get("current"), 0);
+        if (v === 0) return;
+        total += v;
+        rows++;
+        a.set("current", 0);
+      });
+      Object.keys(state.MP_Engine.siphonPools).forEach(k => {
+        if (state.MP_Engine.siphonPools[k].charId === charId) delete state.MP_Engine.siphonPools[k];
+      });
+      return ch("MP", `/w gm <b>MP:</b> Reset ${rows} siphon pool(s) (${total} points) to 0. Hits/Power unchanged.`);
+    }
     if (action === "adjust") {
       const amt = num(args.amt, 0);
       if (amt >= 0) return ch("MP", `/w gm <b>MP:</b> --amt must be negative (points spent outside the engine).`);
@@ -8761,7 +8766,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       consumeSiphonPool(charId, "power", -amt);
       return ch("MP", `/w gm <b>MP:</b> Consumed ${-amt} points from active pools.`);
     }
-    return ch("MP", `/w gm <b>MP:</b> Usage: !mp siphon list | clear --target &lt;tokenId&gt; | expire --target &lt;tokenId&gt; | adjust --target &lt;tokenId&gt; --amt -N`);
+    return ch("MP", `/w gm <b>MP:</b> Usage: !mp siphon list | clear --target &lt;tokenId&gt; | reset --target &lt;tokenId&gt; | expire --target &lt;tokenId&gt; | adjust --target &lt;tokenId&gt; --amt -N`);
   }
 
   // -------------------------
@@ -15696,7 +15701,7 @@ function cmdAttackInfo(msg, args) {
           <code>!mp initselected [--sort desc|asc|none]</code> - Roll initiative for all selected represented tokens; descending is the default<br/>
           <code>!mp clearturnorder</code> - Clear the entire Roll20 Turn Tracker (<b>GM</b>)` },
           powers: { label: "Powers and Senses", body: `
-          <code>!mp siphon list | clear | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>)<br/>
+          <code>!mp siphon list | clear | reset | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>): clear also removes the pooled Hits/Power, reset only zeroes the pool<br/>
           <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Darkness (<b>GM</b>)<br/>
           <code>!mp glare --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Glare (<b>GM</b>)<br/>
           <code>!mp darkness|glare --circle N | --circle off</code> - Draw/remove a field ring (<b>GM</b>)<br/>

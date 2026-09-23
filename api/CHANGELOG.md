@@ -6,6 +6,23 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.171.0: AREA SIPHON FIXES + AREA RULES. Offset: the Roll button asks for
+  a direction (Toward target / N..NW) before the roll; token rotation no
+  longer aims it. A Touch-range offset area puts its edge at the attacker's
+  reach (center radius + 1/2" out), a ranged one puts its edge on the target
+  point, and the attacker's token is never swept. Adjustable: the roll asks
+  for the size (full, any smaller Diameter-table step, or Single target,
+  which resolves as a normal attack). 4.7.5.2: area damage is rolled
+  separately for each target (dice rerolled, flat/Push bonuses kept); area
+  save damage likewise. Escapes take a per-roll modifier (--mod, prompted on
+  the buttons) and only conscious, mobile tokens may try (unconscious,
+  incapacitated, paralyzed, held or snared stay in). New only:<tag> attack
+  code with tags in the target's Notes (-tag excludes, untagged assumed),
+  plus a GM Unaffected button (!mp areaunaffected). Siphon: Hits drains
+  overflow into Power per 4.8.4; the Ability Cap counts points, so Power
+  pools cap at 2x; Overload fires once per attack and later area targets
+  add nothing. !mp atk accepts --size and --dir. Requires sheet v44.97.
+
 v2.170.0: INVISIBILITY FROM THE ABILITY ROW. An Ability row named
   Invisibility or Blur (or tagged with notes code invis, invis:blur or blur)
   now drives the condition: setting its State to On makes every token of
