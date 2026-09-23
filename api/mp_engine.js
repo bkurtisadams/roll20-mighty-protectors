@@ -1,4 +1,10 @@
-/* Mighty Protectors Roll20 API Engine v2.173.2 - 2026-09-22
+/* Mighty Protectors Roll20 API Engine v2.174.0 - 2026-09-23
+ * v2.174.0: ALTITUDE MARKERS. Altitude now shows as custom token markers
+ *   named alt-0 .. alt-9, one per digit, most significant first (12" shows
+ *   alt-1 then alt-2), found by name from the game's marker list since custom
+ *   tags carry an id. Without all ten in the game it falls back to the
+ *   fluffy-wing badge (1-9, no number at 10"+). Setting or landing clears
+ *   any earlier altitude markers of either kind.
  * v2.173.2: FIX - a stale siphon pool blocked new gains. The
  *   cap check counts what's in the pool, but !mp test reset put Hits/Power
  *   back to max without zeroing the pool, so the next siphon gained nothing
@@ -18,17 +24,13 @@
  *   the only:<tag> Unaffected row is folded into Skip. !mp areadamageall
  *   takes --only TOKID; a partial apply, or Apply All while roll-with
  *   choices are pending, keeps the area open until every target is done.
- * v2.172.1: FIX - v2.172.0 put a raw inch mark (") in the to-hit Range row,
- *   which closed the To-Hit hover's title attribute early and cut the tooltip
- *   off at "Range: -1 (8". The altitude difference now rides on the escaped
- *   range text in the hover only.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.173.2";
+var MP_VERSION = "2.174.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -5856,18 +5858,48 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
   }
 
+  // Altitude display: custom markers named alt-0 .. alt-9 (a digit drawn into
+  // each image), one per digit, most significant first. Custom marker tags
+  // carry an id ("alt-4::4821"), so they're looked up by name. Without the
+  // full set in the game, falls back to the fluffy-wing badge (1-9).
+  const ALT_MARKER_PREFIX = "alt-";
+
+  function getAltDigitTags() {
+    let list = [];
+    try { list = JSON.parse(Campaign().get("token_markers") || "[]"); } catch (e) { list = []; }
+    const tags = {};
+    list.forEach(m => {
+      const mm = String(m.name || "").toLowerCase().match(/^alt-(\d)$/);
+      if (mm && !tags[mm[1]]) tags[mm[1]] = m.tag;
+    });
+    for (let d = 0; d <= 9; d++) if (!tags[String(d)]) return null;
+    return tags;
+  }
+
+  function showAltitudeMarkers(tok, v) {
+    const isAltEntry = e => {
+      const base = String(e).split("@")[0].toLowerCase();
+      return base === "fluffy-wing" || new RegExp("^" + ALT_MARKER_PREFIX + "\\d(::\\d+)?$").test(base);
+    };
+    const kept = String(tok.get("statusmarkers") || "").split(",").filter(e => e && !isAltEntry(e));
+    const whole = Math.round(v);
+    if (whole > 0) {
+      const tags = getAltDigitTags();
+      if (tags) {
+        String(whole).split("").forEach(d => kept.push(tags[d]));
+      } else {
+        kept.push(whole <= 9 ? `fluffy-wing@${whole}` : "fluffy-wing");
+      }
+    }
+    tok.set("statusmarkers", kept.join(","));
+  }
+
   function setTokenAltitude(tok, inches) {
     const alts = state.MP_Engine.altitude || (state.MP_Engine.altitude = {});
     const v = Math.max(0, Math.round(num(inches, 0) * 10) / 10);
-    if (v > 0) {
-      alts[tok.id] = v;
-      setMarker(tok, "fluffy-wing", true);
-      const badge = Math.round(v);
-      if (badge >= 1 && badge <= 9) tok.set("status_fluffy-wing", String(badge));
-    } else {
-      delete alts[tok.id];
-      setMarker(tok, "fluffy-wing", false);
-    }
+    if (v > 0) alts[tok.id] = v;
+    else delete alts[tok.id];
+    showAltitudeMarkers(tok, v);
     return v;
   }
 
