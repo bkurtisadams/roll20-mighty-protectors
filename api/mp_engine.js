@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.171.0 - 2026-09-22
+/* Mighty Protectors Roll20 API Engine v2.172.0 - 2026-09-22
+ * v2.172.0: ALTITUDE. New !mp alt N | +N | -N | 0 | list sets, climbs, dives
+ *   or lands the selected tokens (players for their own, GM for any), stored
+ *   per token in inches so mooks sharing a sheet can fly at different heights.
+ *   Airborne tokens carry the fluffy-wing marker, numbered 1-9 (no number at
+ *   10"+). calculateRange adds the vertical edge gap to the map distance under
+ *   the page's diagonal rule, so every range-based roll (attacks, perception,
+ *   reflection) sees it; the to-hit Range row shows the altitude difference.
+ *   Reach limits for HTH/Touch vs flyers and area spheres are not modelled.
  * v2.171.0: AREA SIPHON FIXES + AREA RULES. Offset: the Roll button asks for
  *   a direction (Toward target / N..NW) before the roll; token rotation no
  *   longer aims it. A Touch-range offset area puts its edge at the attacker's
@@ -38,18 +46,13 @@
  *   with crit/fumble confirms. Hits create a normal pending attack on the
  *   target, so protection, Force Field, roll-with, knockback and crits use
  *   the standard Apply path. Saved action stays GM-adjudicated.
- * v2.168.1: The v2.168.0 Stand From Prone card styled its text light (#eee /
- *   #aab) but sent it without the dark card wrapper every other combat card
- *   uses, so on Roll20's white chat background the AG save, TN and roll were
- *   white on white and the labels were washed out. Wrapped it, with a green
- *   or red border matching the outcome as the escape and save cards do.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.171.0";
+var MP_VERSION = "2.172.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -387,6 +390,8 @@ MP.Engine = (function () {
   // Ensure siphon pool registry exists for existing state
   // { key: { charId, rowId, resource, expiry } } — points authoritative in row attr
   if (!state.MP_Engine.siphonPools) state.MP_Engine.siphonPools = {};
+  // Token altitude in MP inches: { tokenId: inches } (absent = on the ground)
+  if (!state.MP_Engine.altitude) state.MP_Engine.altitude = {};
   // Ensure game clock exists for existing state (default: 2519-07-14 08:00, GW campaign start)
   if (!state.MP_Engine.gameClock) state.MP_Engine.gameClock = { ms: Date.UTC(2519, 6, 14, 8, 0, 0), combatStartMs: null, combatStartRound: 0, roundAnchor: null, topId: null, leftAnchor: false };
   // One-time migration from the v2.83.0 placeholder default
@@ -5841,6 +5846,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const inchesPerRoll20Unit = getPageScaleInMpInches(page);
     const inchesPerGridCell = inchesPerRoll20Unit * snapping;
 
+    // Altitude: vertical edge gap (tokens are one cell tall) combined with the
+    // map distance under the page's diagonal rule.
+    const altDiff = Math.abs(getTokenAltitude(atkTok) - getTokenAltitude(defTok));
+    if (altDiff > 0 && inchesPerGridCell > 0) {
+      const dz = Math.max(0, altDiff / inchesPerGridCell - 1);
+      if (dz > 0) distCells = combineRangeAxes(distCells, dz, diag);
+    }
+
     const distInches = distCells * inchesPerGridCell;
     
     // MP minimum range is 1" (adjacent tokens are at 1" range, not 0")
@@ -5848,8 +5861,78 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     return {
       inches: Math.round(finalInches * 10) / 10,
-      penalty: getRangePenalty(finalInches)
+      penalty: getRangePenalty(finalInches),
+      altDiff: Math.round(altDiff * 10) / 10
     };
+  }
+
+  function getTokenAltitude(tok) {
+    if (!tok || !state.MP_Engine.altitude) return 0;
+    return Math.max(0, num(state.MP_Engine.altitude[tok.id], 0));
+  }
+
+  function combineRangeAxes(a, b, diag) {
+    switch (diag) {
+      case "threefive": return Math.max(a, b) + Math.floor(Math.min(a, b) / 2);
+      case "manhattan": return a + b;
+      case "pythagorean": return Math.sqrt(a * a + b * b);
+      default: return Math.max(a, b);
+    }
+  }
+
+  function setTokenAltitude(tok, inches) {
+    const alts = state.MP_Engine.altitude || (state.MP_Engine.altitude = {});
+    const v = Math.max(0, Math.round(num(inches, 0) * 10) / 10);
+    if (v > 0) {
+      alts[tok.id] = v;
+      setMarker(tok, "fluffy-wing", true);
+      const badge = Math.round(v);
+      if (badge >= 1 && badge <= 9) tok.set("status_fluffy-wing", String(badge));
+    } else {
+      delete alts[tok.id];
+      setMarker(tok, "fluffy-wing", false);
+    }
+    return v;
+  }
+
+  // !mp alt N | +N | -N | 0 [--target TOKID] | !mp alt (show) | !mp alt list
+  function cmdAlt(msg, args) {
+    const alts = state.MP_Engine.altitude || (state.MP_Engine.altitude = {});
+    const words = String(msg.content || "").trim().split(/\s+/).slice(2);
+    const first = (words[0] && !words[0].startsWith("--")) ? words[0] : "";
+    const usage = `Usage: <code>!mp alt 6</code> (set), <code>!mp alt +2</code> / <code>-2</code> (climb/dive), <code>!mp alt 0</code> (land), <code>!mp alt list</code>`;
+
+    if (first.toLowerCase() === "list" || "list" in args) {
+      const rows = [];
+      Object.keys(alts).forEach(id => {
+        const t = getObj("graphic", id);
+        if (!t) { delete alts[id]; return; }
+        const c = getCharFromToken(t);
+        rows.push(`${esc(displayName(t, c))}: ${alts[id]}"`);
+      });
+      return ch("MP", `${wt(msg)}<b>MP:</b> ${rows.length ? `Altitudes: ${rows.join(", ")}` : "No tokens are airborne."}`);
+    }
+
+    const toks = args.target
+      ? [getObj("graphic", args.target)].filter(Boolean)
+      : (msg.selected || []).filter(x => x._type === "graphic").map(x => getObj("graphic", x._id)).filter(Boolean);
+    if (!toks.length) return ch("MP", `${wt(msg)}<b>MP:</b> Select a token first. ${usage}`);
+
+    const m = first.match(/^([+-]?)(\d+(?:\.\d+)?)$/);
+    if (!m) {
+      const cur = toks.map(t => `${esc(displayName(t, getCharFromToken(t)))}: ${getTokenAltitude(t)}"`).join(", ");
+      return ch("MP", `${wt(msg)}<b>MP:</b> Altitude - ${cur}. ${usage}`);
+    }
+    const amt = parseFloat(m[2]);
+    const lines = [];
+    toks.forEach(t => {
+      const c = getCharFromToken(t);
+      if (c ? !requireControl(msg, c.id, "change this token's altitude") : !playerIsGM(msg.playerid)) return;
+      const cur = getTokenAltitude(t);
+      const next = setTokenAltitude(t, m[1] === "+" ? cur + amt : (m[1] === "-" ? cur - amt : amt));
+      lines.push(`${esc(displayName(t, c))}: ${cur}" \u2192 ${next}"${next === 0 ? " (landed)" : ""}`);
+    });
+    if (lines.length) ch("MP", `${wt(msg)}<b>MP:</b> Altitude - ${lines.join(", ")}`);
   }
 
 
@@ -5914,11 +5997,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     // 4.7.3.1: actual range × acting observer/attacker Profile ÷ target Profile.
-    return profileAdjustedRange(
+    const out = profileAdjustedRange(
       baseRange.inches,
       getProfileValue(atkCharId),
       getProfileValue(defCharId)
     );
+    out.altDiff = baseRange.altDiff || 0;
+    return out;
   }
 
   // -------------------------
@@ -7046,7 +7131,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       addCalcRow("Sense", fmtMod(atkVisionPenalty), `${senseName}${senseResult ? `, ${senseResult}` : ""}`);
     }
     if (atkDiscomfortPenalty !== 0) addCalcRow("Discomfort", fmtMod(atkDiscomfortPenalty));
-    if (rangePenalty !== 0) addCalcRow("Range", fmtMod(rangePenalty));
+    if (rangePenalty !== 0) addCalcRow("Range", fmtMod(rangePenalty), rangeData.altDiff > 0 ? `${rangeData.inches}", ${rangeData.altDiff}" alt diff` : undefined);
     if (isAreaAttack) {
       addCalcRow("Area", "+6");
     } else {
@@ -15264,6 +15349,7 @@ function cmdAttackInfo(msg, args) {
         }
         return cmdTest(msg, testArgs);
       case "stand": return cmdStand(msg, args);
+      case "alt": return cmdAlt(msg, args);
       case "stance":
         const stanceParts = msg.content.split(/\s+/);
         return cmdStance(msg, { stance: stanceParts[2] || "" });
@@ -15643,6 +15729,7 @@ function cmdAttackInfo(msg, args) {
           time: { label: "Stances, Range, and Time", body: `
           <code>!mp stance normal|def|full|offbal|N</code><br/>
           <code>!mp stand [--check] [--cost move|action] [--mod N]</code> - Stand selected token(s) from prone; plain form is 4.4.5's full turn and works on a multi-select, --check rolls the AG acrobatics task check<br/>
+          <code>!mp alt N | +N | -N | 0 | list</code> - Set, climb, dive or land the selected token(s); altitude in inches is added to range<br/>
           <code>!mp clearstances</code> - Clear page stances (<b>GM</b>)<br/>
           <code>!mp offbal</code> - Apply Off Balance to selected token (<b>GM</b>)<br/>
           <code>!mp range</code> - Check range between two selected tokens<br/>
