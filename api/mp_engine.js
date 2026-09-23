@@ -1,4 +1,20 @@
-/* Mighty Protectors Roll20 API Engine v2.170.0 - 2026-09-21
+/* Mighty Protectors Roll20 API Engine v2.171.0 - 2026-09-22
+ * v2.171.0: AREA SIPHON FIXES + AREA RULES. Offset: the Roll button asks for
+ *   a direction (Toward target / N..NW) before the roll; token rotation no
+ *   longer aims it. A Touch-range offset area puts its edge at the attacker's
+ *   reach (center radius + 1/2" out), a ranged one puts its edge on the target
+ *   point, and the attacker's token is never swept. Adjustable: the roll asks
+ *   for the size (full, any smaller Diameter-table step, or Single target,
+ *   which resolves as a normal attack). 4.7.5.2: area damage is rolled
+ *   separately for each target (dice rerolled, flat/Push bonuses kept); area
+ *   save damage likewise. Escapes take a per-roll modifier (--mod, prompted on
+ *   the buttons) and only conscious, mobile tokens may try (unconscious,
+ *   incapacitated, paralyzed, held or snared stay in). New only:<tag> attack
+ *   code with tags in the target's Notes (-tag excludes, untagged assumed),
+ *   plus a GM Unaffected button (!mp areaunaffected). Siphon: Hits drains
+ *   overflow into Power per 4.8.4; the Ability Cap counts points, so Power
+ *   pools cap at 2x; Overload fires once per attack and later area targets
+ *   add nothing. !mp atk accepts --size and --dir. Requires sheet v44.97.
  * v2.170.0: INVISIBILITY FROM THE ABILITY ROW. An Ability row named
  *   Invisibility or Blur (or tagged with notes code invis, invis:blur or blur)
  *   now drives the condition: setting its State to On makes every token of
@@ -27,30 +43,13 @@
  *   uses, so on Roll20's white chat background the AG save, TN and roll were
  *   white on white and the labels were washed out. Wrapped it, with a green
  *   or red border matching the outcome as the escape and save cards do.
- * v2.168.0: PRONE (4.4.5). Three code paths set the prone marker (knockdown,
- *   called-shot leg hit, and diving to escape an area) and nothing removed it
- *   except right-clicking the token, so prone tokens kept feeding 4.7.2's +3
- *   into every attack against them long after they'd have stood. New
- *   !mp stand clears it across a multi-select with one summary line, which is
- *   4.4.5's default case (standing normally takes a full turn). !mp stand
- *   --check rolls the optional AG-based acrobatics task check that rises at
- *   the cost of the movement OR action phase (--cost move|action records
- *   which), with 3.0.1 confirm rolls so a critical success costs no time at
- *   all; --mod N for GM adjustments. Separately, 4.4.5's -3 for a prone
- *   attacker hitting a target under 2" away is now applied automatically from
- *   the marker and the measured range, shown as its own "Prone" row in the
- *   to-hit breakdown - scoped to physical attacks for the same reason 4.7.2's
- *   +3 is. Crawling at 1/4 rate, the flying "disoriented" equivalent, and the
- *   GM's discretionary task checks stay off-engine; the helper side of the
- *   assist rule is not built yet, but !mp stand --check already spends a
- *   banked stand_assist +3 if something else sets one.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.170.0";
+var MP_VERSION = "2.171.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -4582,6 +4581,91 @@ function generateRowID() {
     }
   }
 
+  const OFFSET_DIRS = { N: [0, -1], NE: [1, -1], E: [1, 0], SE: [1, 1], S: [0, 1], SW: [-1, 1], W: [-1, 0], NW: [-1, -1] };
+
+  // {{areaq=}} from the sheet's per-row query (Adjustable / Offset rows) or
+  // !mp atk --size/--dir: "size:full|single|N dir:target|N|NE|..."
+  function parseAreaQuery(raw) {
+    const s = String(raw || "");
+    const out = { size: "", dir: "" };
+    let m = s.match(/\bsize:\s*(full|single|\d+(?:\.\d+)?)/i);
+    if (m) out.size = m[1].toLowerCase();
+    m = s.match(/\bdir:\s*(target|NE|NW|SE|SW|N|E|S|W)\b/i);
+    if (m) out.dir = m[1].toLowerCase() === "target" ? "target" : m[1].toUpperCase();
+    return out;
+  }
+
+  // "Only vs <tag>" limitation: tags live in the character's Notes. "-tag"
+  // excludes, "tag" asserts, untagged is assumed to qualify.
+  function onlyTagStatus(charId, tag) {
+    if (!charId || !tag) return "none";
+    const notes = String(getAttr(charId, "notes") || "").toLowerCase();
+    const t = String(tag).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp("(^|[\\s,;(\\[])-" + t + "(?=$|[\\s,;).\\]])").test(notes)) return "excluded";
+    if (new RegExp("(^|[\\s,;(\\[])" + t + "(?=$|[\\s,;).\\]])").test(notes)) return "tagged";
+    return "assumed";
+  }
+
+  // 4.7.5.2: only conscious, mobile characters may leap clear.
+  function areaEscapeBlock(tok) {
+    if (!tok) return "token missing";
+    if (tok.get("status_dead") === true) return "incapacitated";
+    if (tok.get("status_sleepy") === true) return "unconscious";
+    const conds = (state.MP_Engine.conditions && state.MP_Engine.conditions[tok.id]) || [];
+    if (conds.some(c => c.type === "paralyzed")) return "paralyzed";
+    const sn = (state.MP_Engine.snares || {})[tok.id];
+    if (sn) return sn.type === "Grapple" ? "held" : "snared";
+    if (tok.get("status_cobweb") === true) return "snared";
+    if (tok.get("status_grab") === true) return "held";
+    return "";
+  }
+
+  // 4.7.5.2 rolls area damage separately per target. Capture the dice of the
+  // sheet's damage roll so each target can reroll them; everything else in the
+  // roll (flat bonuses, Push) carries over as a constant.
+  function inlineDiceSpec(msg, token) {
+    const m = /\$\[\[(\d+)\]\]/.exec(token || "");
+    if (!m) return null;
+    const ir = msg.inlinerolls && msg.inlinerolls[parseInt(m[1], 10)];
+    if (!ir || !ir.results) return null;
+    const groups = [];
+    let diceSum = 0, sign = 1;
+    for (const r of (ir.results.rolls || [])) {
+      if (r.type === "R") {
+        if (r.mods && Object.keys(r.mods).length) return null;
+        const n = num(r.dice, 0), sides = num(r.sides, 0);
+        if (n <= 0 || sides <= 0 || !r.results) return null;
+        groups.push({ n, sides, sign });
+        diceSum += sign * r.results.reduce((a, d) => a + num(d.v, 0), 0);
+        sign = 1;
+      } else if (r.type === "M") {
+        sign = /-\s*$/.test(String(r.expr || "")) ? -1 : 1;
+      } else {
+        return null;
+      }
+    }
+    if (!groups.length) return null;
+    return { groups, flat: num(ir.results.total, 0) - diceSum };
+  }
+
+  function rollDiceSpec(spec, fallback) {
+    if (!spec || !spec.groups || !spec.groups.length) return fallback;
+    let t = spec.flat;
+    spec.groups.forEach(g => { for (let i = 0; i < g.n; i++) t += g.sign * randomInteger(g.sides); });
+    return Math.max(0, t);
+  }
+
+  function diceSpecLabel(spec) {
+    if (!spec || !spec.groups || !spec.groups.length) return "";
+    let s = spec.groups.map((g, i) => `${g.sign < 0 ? "-" : (i ? "+" : "")}${g.n}d${g.sides}`).join("");
+    if (spec.flat) s += (spec.flat > 0 ? "+" : "") + spec.flat;
+    return s;
+  }
+
+  function areaTokDamage(areaRec, tokData) {
+    return (tokData && typeof tokData.damage === "number") ? tokData.damage : num(areaRec.damage, 0);
+  }
+
   // 4.7.5.2 sets the escape TN by "inches of movement to the closest safe
   // space" - a movement cost, not a radial gap. Measuring radius minus
   // distance-from-center silently charged the Pythagorean rate for a diagonal
@@ -6096,9 +6180,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Substitute a stub character so downstream attr lookups fall through to
     // defaults (getAttr/chToChars/getTokensInRadius all skip null charIds).
     let defIsPointTarget = false;
+    const areaQ = parseAreaQuery(fields.areaq);
     const defIsGroundChar = !!(defChar && defChar.id && isPointTargetChar(defChar.id));
     if (atkChar && defTok && (!defChar || defIsGroundChar)) {
-      const rowAreaPeek = isVehicleMode(atkCharId)
+      const rowAreaPeek = areaQ.size === "single" ? 0 : isVehicleMode(atkCharId)
         ? num(fields.area, 0)
         : num(makeNoteAwareAttackGetter((name) => getRepeatingAttackAttr(atkCharId, rowId, name))("attack_area"), num(fields.area, 0));
       if (rowAreaPeek > 0) {
@@ -6342,11 +6427,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const siphonCat = getAtk("attack_siphon_cat") || "";
     
     const areaRaw = getAtk("attack_area") || fields.area || "";
-    const areaDiameter = num(areaRaw, 0);
+    const rowAreaDiameter = num(areaRaw, 0);
+    // Adjustable (+5): size chosen before the roll via {{areaq=}}; Single
+    // target resolves as a normal (non-area) attack.
+    const areaAdjusted = rowAreaDiameter > 0 && !!areaQ.size && areaQ.size !== "full";
+    const areaDiameter = !areaAdjusted ? rowAreaDiameter
+      : (areaQ.size === "single" ? 0 : Math.min(rowAreaDiameter, num(areaQ.size, rowAreaDiameter)));
     const isAreaAttack = areaDiameter > 0;
     const areaOffset = isAreaAttack && /(^|[\s,;\[])offset(?=$|[\s,;\]])/i.test(atkNotes);
+    const areaOffsetDir = areaOffset ? (areaQ.dir || "target") : "";
+    const rowRangeText = String(getAtk("attack_range") || fields.range || "").trim();
+    const areaOffsetTouch = areaOffset && (/touch/i.test(rowRangeText) || num(rowRangeText, 0) <= 1);
     const areaRadius = areaDiameter / 2;
     const hasImmunity = (getAtk("attack_immunity") === "1");
+    const onlyTagM = atkNotes.match(/(^|[\s,;\[])only:([a-z0-9_-]+)/i);
+    const onlyTag = onlyTagM ? onlyTagM[2].toLowerCase() : "";
+    if (onlyTag && !isAreaAttack && defChar.id && onlyTagStatus(defChar.id, onlyTag) === "excluded") {
+      ch("MP", `${wt(msg)}<b>MP:</b> <b>${esc(defName)}</b> is not ${esc(onlyTag)} - ${esc(weaponName)} (only:${esc(onlyTag)}) has no effect. No PR or charges spent.`);
+      return;
+    }
     
     const skipCosts = (fields.nopr === "1");
     const atkPR = skipCosts ? 0 : num(getAtk("attack_cost") || fields.cost || "", 0);
@@ -6872,6 +6971,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       isPushing, pushAmount, rangeData, created: Date.now(),
       noDamageType,
       isAreaAttack, areaRadius, areaDiameter, hasImmunity, areaOffset,
+      areaOffsetDir, areaOffsetTouch, areaAdjusted, rowAreaDiameter, onlyTag,
+      dmgSpec: inlineDiceSpec(msg, fields.damage),
       atkTokenId: atkTok ? atkTok.id : null,
       calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot,
       hasDuration, durNum, durUnit, durRounds, durEscape, durDamageExpr: atkDamageExpr
@@ -7320,6 +7421,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let centerX, centerY;
     let scatterDist = 0;
     let scatterNote = "";
+    let scatterDx = 0, scatterDy = 0;
     
     if (outcome === "HIT" || outcome === "CRIT") {
       // Area centered on target location
@@ -7352,30 +7454,43 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       centerX = targetTok.get("left") + offsetX;
       centerY = targetTok.get("top") + offsetY;
+      scatterDx = offsetX;
+      scatterDy = offsetY;
       
       scatterNote = ` Scatter: ${scatterDist}" ${direction}`;
     }
     
-    // Area Effect: Offset (+2.5) - the edge sits on the point of creation, so
-    // the center moves one radius directly away from the attacker. A
-    // self-centered origin (touch on own space) uses the token's rotation.
+    // Area Effect: Offset (+2.5) - the edge sits on the point of creation.
+    // Direction is the chosen compass point, or toward the aimed token. A
+    // Touch-range area originates at the attacker's reach: center radius + 1/2"
+    // from the attacker's square, so it fills the squares beside them and never
+    // includes them. A ranged area puts its edge on the (scattered) point.
     let offsetNote = "";
     if (rec.areaOffset && rec.areaRadius > 0) {
       const oTok = rec.atkTokenId ? getObj("graphic", rec.atkTokenId) : null;
-      let ux = 0, uy = 0, how = "";
-      if (oTok) {
-        const dx = centerX - oTok.get("left"), dy = centerY - oTok.get("top");
+      const dirKey = rec.areaOffsetDir || "target";
+      let ux = 0, uy = 0, dirLabel = "";
+      if (dirKey !== "target" && OFFSET_DIRS[dirKey]) {
+        const v = OFFSET_DIRS[dirKey];
+        const L = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+        ux = v[0] / L; uy = v[1] / L; dirLabel = dirKey;
+      } else if (oTok) {
+        const dx = targetTok.get("left") - oTok.get("left"), dy = targetTok.get("top") - oTok.get("top");
         const d = Math.sqrt(dx * dx + dy * dy);
-        if (d >= 1) { ux = dx / d; uy = dy / d; how = "away from attacker"; }
-        else {
-          const a = ((num(oTok.get("rotation"), 0) - 90) * Math.PI) / 180;
-          ux = Math.cos(a); uy = Math.sin(a); how = "along attacker facing (self-centered origin)";
-        }
-      } else { uy = -1; how = "north (attacker token not found)"; }
-      const shift = rec.areaRadius * pixelsPerInch;
-      centerX += ux * shift;
-      centerY += uy * shift;
-      offsetNote = `Offset: edge on target point, center ${rec.areaRadius}" ${how}`;
+        if (d >= 1) { ux = dx / d; uy = dy / d; dirLabel = "toward target"; }
+      }
+      if (!dirLabel) { uy = -1; dirLabel = "N (no direction given; target was own space)"; }
+      if (rec.areaOffsetTouch && oTok) {
+        const shift = (rec.areaRadius + 0.5) * pixelsPerInch;
+        centerX = oTok.get("left") + ux * shift + scatterDx;
+        centerY = oTok.get("top") + uy * shift + scatterDy;
+        offsetNote = `Offset ${dirLabel}: edge at reach, center ${rec.areaRadius + 0.5}" out`;
+      } else {
+        const shift = rec.areaRadius * pixelsPerInch;
+        centerX += ux * shift;
+        centerY += uy * shift;
+        offsetNote = `Offset ${dirLabel}: edge on target point, center ${rec.areaRadius}" beyond`;
+      }
     }
 
     // Find all tokens in the area; Immunity (+2.5) excludes the attacker
@@ -7384,6 +7499,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (rec.hasImmunity) {
       tokensInArea = tokensInArea.filter(t => t.charId !== rec.atkCharId);
     }
+    if (rec.areaOffset && rec.atkTokenId) {
+      tokensInArea = tokensInArea.filter(t => t.tokenId !== rec.atkTokenId);
+    }
+    const perTargetDmg = !!(rec.dmgSpec && rec.dmgSpec.groups && rec.dmgSpec.groups.length);
+    const dmgLabel = perTargetDmg ? `${diceSpecLabel(rec.dmgSpec)} per target` : String(rec.damageTotal);
+    const saveDmgExpr = String(rec.durDamageExpr || "").trim();
+    const saveDmgPerTarget = num(rec.saveDamage, 0) > 0 && /d/i.test(saveDmgExpr);
     
     // Store area effect data
     cleanupPendingArea();
@@ -7400,8 +7522,19 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         controller: t.controller,
         escaped: null,  // null = pending, true = escaped, false = failed
         shieldBlocked: false,
-        prone: false
+        prone: false,
+        damage: rollDiceSpec(rec.dmgSpec, num(rec.damageTotal, 0))
       };
+      const td = areaTokens[t.tokenId];
+      if (saveDmgPerTarget) td.saveDamage = rollExpr(saveDmgExpr) || num(rec.saveDamage, 0);
+      if (rec.onlyTag) {
+        td.onlyStatus = onlyTagStatus(t.charId, rec.onlyTag);
+        if (td.onlyStatus === "excluded") { td.escaped = true; td.unaffected = true; }
+      }
+      if (!td.unaffected) {
+        const blk = areaEscapeBlock(t.token);
+        if (blk) { td.escaped = false; td.escapeBlocked = blk; }
+      }
     });
     
     state.MP_Engine.pendingArea[rollId] = {
@@ -7416,6 +7549,12 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       atkAP: rec.atkAP,
       radius: rec.areaRadius,
       diameter: rec.areaDiameter,
+      rowDiameter: rec.rowAreaDiameter,
+      areaAdjusted: !!rec.areaAdjusted,
+      onlyTag: rec.onlyTag || "",
+      dmgLabel: dmgLabel,
+      saveDmgLabel: saveDmgPerTarget ? `${saveDmgExpr} per target` : "",
+      siphonOverloaded: false,
       centerX: centerX,
       centerY: centerY,
       pageId: pageId,
@@ -7454,14 +7593,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden; margin-top:4px;">`;
     html += `<div style="background:${hdrBg}; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">💥 AREA ${outcome}</div>`;
     html += `<div style="padding:6px 10px; background:#16213e; border-bottom:1px solid #2a2a4a;">`;
+    const areaSizeTxt = `Area: <b style="color:#fff;">${rec.areaDiameter}"</b>${rec.areaAdjusted ? ` <span style="color:#aab; font-size:11px;">(adjusted from ${rec.rowAreaDiameter}")</span>` : ""}`;
     if (num(rec.senseLoss, 0) > 0) {
-      html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; <b style="color:#f4d03f;">FLASH</b> — ${esc(rec.saveBC || "EN")} save or lose <b style="color:#fff;">${rec.senseLoss}</b> vision level(s)`;
+      html += `${areaSizeTxt} &middot; <b style="color:#f4d03f;">FLASH</b> — ${esc(rec.saveBC || "EN")} save or lose <b style="color:#fff;">${rec.senseLoss}</b> vision level(s)`;
     } else if (rec.isSaveAttack) {
-      const areaSaveDmg = num(rec.saveDamage, 0) || (rec.noDamage ? 0 : num(rec.damageTotal, 0));
-      html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; <b style="color:#f4d03f;">SAVE</b> — ${esc(rec.saveBC || "EN")} save${areaSaveDmg > 0 ? ` or <b style="color:#fff;">${areaSaveDmg}</b> ${esc(rec.dmgTypeStr)}/round` : ""}`;
+      const areaSaveDmg = saveDmgPerTarget ? `${saveDmgExpr} per target`
+        : (num(rec.saveDamage, 0) || (rec.noDamage ? 0 : dmgLabel));
+      html += `${areaSizeTxt} &middot; <b style="color:#f4d03f;">SAVE</b> — ${esc(rec.saveBC || "EN")} save${areaSaveDmg ? ` or <b style="color:#fff;">${esc(String(areaSaveDmg))}</b> ${esc(rec.dmgTypeStr)}/round` : ""}`;
     } else {
-      html += `Area: <b style="color:#fff;">${rec.areaDiameter}"</b> &middot; Damage: <b style="color:#fff;">${rec.damageTotal}</b> ${esc(rec.dmgTypeStr)}`;
+      html += `${areaSizeTxt} &middot; Damage: <b style="color:#fff;">${esc(dmgLabel)}</b> ${esc(rec.dmgTypeStr)}`;
     }
+    if (rec.onlyTag) html += `<br/><span style="color:#c88fff; font-size:11px;">Only vs ${esc(rec.onlyTag)}</span>`;
     html += `<br/>To-Hit: <b style="color:#fff;">${rec.targetTotal}-</b> <span style="color:#aab; font-size:11px;">(+6 immobile, no def)</span> &middot; Roll: <b style="color:#fff;">${rec.roll}</b>`;
     if (scatterNote) html += `<br/><span style="color:#f1c40f; font-weight:bold;">${scatterNote.trim()}</span>`;
     if (offsetNote) html += `<br/><span style="color:#9ecbff; font-size:11px;">${esc(offsetNote)}</span>`;
@@ -7477,6 +7619,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // attack type (4.7.1): mental_def vs mental/emotional area attacks.
       const areaIsMental = rec.atkTypeCode === "M" || rec.atkTypeCode === "E";
       tokensInArea.forEach(t => {
+        const td = areaTokens[t.tokenId];
+        if (td.unaffected) {
+          html += `<br/><b style="color:#fff;">${esc(t.name)}</b> <span style="color:#27ae60;">unaffected (not ${esc(rec.onlyTag)})</span>`;
+          return;
+        }
+        if (td.escapeBlocked) {
+          html += `<br/><b style="color:#fff;">${esc(t.name)}</b> <span style="color:#e67e22;">cannot escape (${esc(td.escapeBlocked)})</span>`;
+          return;
+        }
         const distToEdge = t.distToEdge;
         const baseDef = getAttrNum(t.charId, areaIsMental ? "mental_def" : "physical_def", 0);
         const escapeTN = baseDef + 9 - (3 * distToEdge);
@@ -7487,13 +7638,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         const shieldTN = shield ? (9 + baseDef + shield.defense) : 0;
         
         html += `<br/><b style="color:#fff;">${esc(t.name)}</b> <span style="color:#aab;">(${distToEdge}" to edge)</span>`;
+        if (td.onlyStatus === "assumed") html += ` <span style="color:#f1c40f; font-size:11px;">(assumed ${esc(rec.onlyTag)})</span>`;
         html += `<br/><span style="color:#aab; font-size:11px;">Escape TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Prone: <b style="color:#eee;">${escapeTNProne}-</b></span>`;
         
         // Player/GM buttons
         if (t.controller !== "gm" && t.controller !== "all") {
           // Whisper buttons to player
-          const playerButtons = `${btn(`Leap Clear (${escapeTN}-)`, `!mp areaescape --id ${rollId} --target ${t.tokenId}`)} ` +
-            `${btn(`Dive Prone (${escapeTNProne}-)`, `!mp areaescape --id ${rollId} --target ${t.tokenId} --prone`)}` +
+          const playerButtons = `${btn(`Leap Clear (${escapeTN}-)`, `!mp areaescape --id ${rollId} --target ${t.tokenId} --mod ?{Escape modifier|0}`)} ` +
+            `${btn(`Dive Prone (${escapeTNProne}-)`, `!mp areaescape --id ${rollId} --target ${t.tokenId} --prone --mod ?{Escape modifier|0}`)}` +
             (shield ? ` ${btn(`Shield Block (${shieldTN}-)`, `!mp areashield --id ${rollId} --target ${t.tokenId}`)}` : "");
           // chToChar resolves the character's controllers to display names;
           // t.controller is a player ID (not a display name) so /w "${t.controller}" silently fails.
@@ -7503,11 +7655,17 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       // GM buttons
       const applyLabel = (num(rec.senseLoss, 0) > 0) ? "Resolve All Saves" : "Apply All Damage";
-      gmButtons = `<div style="margin-top:6px;">${btn(`Auto-Roll NPCs (Standing)`, `!mp arearollnpcs --id ${rollId}`)}` +
-        ` ${btn(`Auto-Roll NPCs (Dive Prone)`, `!mp arearollnpcs --id ${rollId} --prone`)}</div><div style="margin-top:4px;">` +
-        `${btn(`Force All (Standing)`, `!mp areaforceall --id ${rollId}`)}` +
-        ` ${btn(`Force All (Dive Prone)`, `!mp areaforceall --id ${rollId} --prone`)}` +
+      const batchMod = `--mod ?{Escape modifier (all)|0}`;
+      gmButtons = `<div style="margin-top:6px;">${btn(`Auto-Roll NPCs (Standing)`, `!mp arearollnpcs --id ${rollId} ${batchMod}`)}` +
+        ` ${btn(`Auto-Roll NPCs (Dive Prone)`, `!mp arearollnpcs --id ${rollId} --prone ${batchMod}`)}</div><div style="margin-top:4px;">` +
+        `${btn(`Force All (Standing)`, `!mp areaforceall --id ${rollId} ${batchMod}`)}` +
+        ` ${btn(`Force All (Dive Prone)`, `!mp areaforceall --id ${rollId} --prone ${batchMod}`)}` +
         ` ${btnDanger(applyLabel, `!mp areadamageall --id ${rollId}`)}</div>`;
+      if (rec.onlyTag) {
+        const ua = tokensInArea.filter(t => !areaTokens[t.tokenId].unaffected)
+          .map(t => btn(`${esc(t.name)}: Unaffected`, `!mp areaunaffected --id ${rollId} --target ${t.tokenId}`)).join(" ");
+        if (ua) gmButtons += `<div style="margin-top:4px; font-size:11px;">Not ${esc(rec.onlyTag)}? ${ua}</div>`;
+      }
       html += `</div>`;
     }
     
@@ -7536,14 +7694,25 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const tok = getObj("graphic", targetId);
     const char = getObj("character", tokData.charId);
     if (!tok || !char) return ch("MP", `/w gm <b>MP:</b> Token or character not found.`);
+
+    const blocked = areaEscapeBlock(tok);
+    if (blocked) {
+      tokData.escaped = false;
+      tokData.escapeBlocked = blocked;
+      chCombat("MP", `<div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#e67e22;">${esc(tokData.name)}</b> cannot escape (${esc(blocked)}) and stays in the area.</div>`, char.id);
+      checkAreaResolved(rollId);
+      return;
+    }
+    const escMod = num(args.mod, 0);
     
     // Calculate escape TN: Defense + 9 - (3 * distance to edge) + 6 if prone.
     // Defense follows the attack type: mental_def vs mental/emotional areas.
     const escIsMental = areaRec.atkTypeCode === "M" || areaRec.atkTypeCode === "E";
     const baseDef = getAttrNum(tokData.charId, escIsMental ? "mental_def" : "physical_def", 0);
     const distToEdge = tokData.distToEdge;
-    let escapeTN = baseDef + 9 - (3 * distToEdge);
+    let escapeTN = baseDef + 9 - (3 * distToEdge) + escMod;
     if (isProne) escapeTN += 6;
+    const modTxt = escMod ? ` (${escMod > 0 ? "+" : ""}${escMod} mod)` : "";
     
     const hasForcedRoll = playerIsGM(msg.playerid) && args.roll !== undefined && args.roll !== null && String(args.roll).trim() !== "";
     const roll = hasForcedRoll ? num(args.roll, 0) : randomInteger(20);
@@ -7564,14 +7733,14 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       // Lead with the movement the escape actually required (4.7.5.2), so the
       // TN is readable as Defense + 9 - 3 per inch rather than a bare number.
       resultHtml += `<b style="color:#2ecc71;">${esc(tokData.name)}</b> needs ${distToEdge}" to escape!`;
-      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${isProne ? " (dove prone)" : ""} <b style="color:#2ecc71;">(ESCAPES!)</b></span>`;
+      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b>${modTxt} &middot; Roll: <b style="color:#eee;">${roll}</b>${isProne ? " (dove prone)" : ""} <b style="color:#2ecc71;">(ESCAPES!)</b></span>`;
       resultHtml += `</div>`;
     } else {
       // Failed - character ends up halfway to edge
       const halfwayDist = Math.ceil(distToEdge / 2);
       resultHtml = `<div style="background:#16213e; border:2px solid #e74c3c; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
       resultHtml += `<b style="color:#ff6b6b;">${esc(tokData.name)}</b> needs ${distToEdge}" to escape!`;
-      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b> &middot; Roll: <b style="color:#eee;">${roll}</b>${roll === 20 ? " (fumble)" : ""}${isProne ? " (dove prone)" : ""} <b style="color:#ff6b6b;">(FAILS!)</b></span>`;
+      resultHtml += `<br/><span style="color:#aab;">TN: <b style="color:#eee;">${escapeTN}-</b>${modTxt} &middot; Roll: <b style="color:#eee;">${roll}</b>${roll === 20 ? " (fumble)" : ""}${isProne ? " (dove prone)" : ""} <b style="color:#ff6b6b;">(FAILS!)</b></span>`;
       resultHtml += `<br/><span style="color:#aab;">Ends ${halfwayDist}" from edge (still in area)${isProne ? ", prone" : ""}</span>`;
       resultHtml += `</div>`;
     }
@@ -7600,6 +7769,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     
     const char = getObj("character", tokData.charId);
     if (!char) return ch("MP", `/w gm <b>MP:</b> Character not found.`);
+    const shieldBlk = areaEscapeBlock(getObj("graphic", targetId));
+    if (shieldBlk) return ch("MP", `${wt(msg)}<b>MP:</b> ${esc(tokData.name)} can't block (${esc(shieldBlk)}).`);
     
     if (areaRec.atkTypeCode === "M" || areaRec.atkTypeCode === "E") {
       return ch("MP", `${wt(msg)}<b>MP:</b> Shields can't block mental/emotional area attacks.`);
@@ -7620,7 +7791,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       tokData.escaped = true;  // Blocked = escaped the direct damage
       tokData.shieldBlocked = true;
       
-      const damage = areaRec.damage;
+      const damage = areaTokDamage(areaRec, tokData);
       const shieldBroken = damage >= shield.bp;
       
       resultHtml = `<div style="background:#16213e; border:2px solid #3498db; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
@@ -7651,6 +7822,21 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     checkAreaResolved(rollId);
   }
 
+  // GM: remove one target from a pending area (only:<tag> judgment calls).
+  function cmdAreaUnaffected(msg, args) {
+    if (!playerIsGM(msg.playerid)) return ch("MP", `${wt(msg)}<b>MP:</b> GM only.`);
+    const areaRec = state.MP_Engine.pendingArea[args.id];
+    if (!areaRec) return ch("MP", `/w gm <b>MP:</b> Area effect expired or not found.`);
+    const tokData = areaRec.tokens[args.target];
+    if (!tokData) return ch("MP", `/w gm <b>MP:</b> Token not in area effect.`);
+    if (tokData.applied) return ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} already resolved.`);
+    tokData.escaped = true;
+    tokData.unaffected = true;
+    tokData.escapeBlocked = "";
+    ch("MP", `/w gm <b>MP:</b> ${esc(tokData.name)} marked unaffected${areaRec.onlyTag ? ` (not ${esc(areaRec.onlyTag)})` : ""}.`);
+    checkAreaResolved(args.id);
+  }
+
   // Auto-roll escapes for NPC tokens
   // --prone applies Dive Prone (+6 TN, ends prone on success) to every NPC
   // rolled here; omitted, every NPC stays standing. GM picks per batch rather
@@ -7669,7 +7855,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (tokData.controller !== "gm") return;  // Skip player-controlled
       
       // Auto-roll escape for NPC
-      cmdAreaEscape(msg, Object.assign({ id: rollId, target: tokId }, prone));
+      cmdAreaEscape(msg, Object.assign({ id: rollId, target: tokId, mod: args.mod }, prone));
     });
   }
 
@@ -7687,13 +7873,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       if (tokData.escaped !== null) return;  // Already resolved
       
       // Force-roll escape
-      cmdAreaEscape(msg, Object.assign({ id: rollId, target: tokId }, prone));
+      cmdAreaEscape(msg, Object.assign({ id: rollId, target: tokId, mod: args.mod }, prone));
     });
   }
 
   // Coverage-adjusted penetrating damage for one area target (4.7.5.3)
   function computeAreaPen(areaRec, tokData) {
-    const raw = areaRec.damage;
+    const raw = areaTokDamage(areaRec, tokData);
     const tokIsVehicle = isVehicleMode(tokData.charId);
     const protData = tokIsVehicle
       ? getVehicleProtection(tokData.charId, areaRec.protKey, areaRec.dmgSubtype)
@@ -7771,7 +7957,8 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const isSenseLoss = num(areaRec.senseLoss, 0) > 0;
     const atkNameLower = String(areaRec.atkName || "").toLowerCase();
     const hasPoisonInName = atkNameLower.includes("poison") || atkNameLower.includes("venom");
-    const rawCondDamage = num(areaRec.saveDamage, 0) || (areaRec.noDamage ? 0 : num(areaRec.damage, 0));
+    const rawCondDamage = (num(tokData.saveDamage, 0) > 0 ? num(tokData.saveDamage, 0) : num(areaRec.saveDamage, 0)) ||
+      (areaRec.noDamage ? 0 : areaTokDamage(areaRec, tokData));
     const isDamagingPoison = hasPoisonInName && rawCondDamage > 0 && !atkNameLower.includes("paralytic");
     // v2.160.0: radiation / Change Environment recurring damage — same
     // protection-applies-to-damage rule as Damaging Poison.
@@ -7949,9 +8136,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         sipPowerDrain = sipDrained;
         toHits = 0;
       } else if (areaRec.siphonDrain === "hits") {
-        sipDrained = (sMode === "mimicry") ? 0 : Math.min(toHits, hits0);
+        // 4.8.4: Hits past 0 come off Power, so the drain overflows too.
+        const hitsAvail = tokIsVehicle ? hits0 : hits0 + powAvail;
+        sipDrained = (sMode === "mimicry") ? 0 : Math.min(toHits, hitsAvail);
         sipGain = (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? toHits : sipDrained);
-        toHits = sipDrained;
+        if (sMode === "mimicry") toHits = 0;
       } else {
         sipDrained = (sMode === "mimicry") ? 0 : toHits;
         sipGain = (sMode === "suppress") ? 0 : toHits;
@@ -7963,7 +8152,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let repKB = 0;
     if (areaRec.isRepulsion) { repKB = toHits; toHits = 0; }
     const hits1 = Math.max(0, hits0 - toHits);
-    const overflow = (tokIsVehicle || areaRec.isSiphon) ? 0 : Math.max(0, toHits - hits0);
+    const overflow = tokIsVehicle ? 0 : Math.max(0, toHits - hits0);
     const pow1 = tokIsVehicle
       ? Math.max(0, pow0 - sipPowerDrain)
       : Math.max(0, pow0 - divert - overflow - sipPowerDrain);
@@ -7992,7 +8181,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     if (sipGain > 0 && areaRec.rowId) {
-      const gainHtml = applySiphonGain(areaRec.atkCharId, areaRec.rowId, areaRec.siphonDrain, areaRec.siphonBC, areaRec.siphonCat, sipGain, areaRec.pageId);
+      const gainHtml = applySiphonGain(areaRec.atkCharId, areaRec.rowId, areaRec.siphonDrain, areaRec.siphonBC, areaRec.siphonCat, sipGain, areaRec.pageId, areaRec);
       if (gainHtml) {
         const atkChar = getObj("character", areaRec.atkCharId);
         chToChar("MP", `<div style="background:#16213e; border:2px solid #8040c0; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;"><b style="color:#c88fff;">${esc(atkChar ? atkChar.get("name") : "Attacker")}</b> \u2014 ${esc(areaRec.atkName || "Siphon")}${gainHtml}</div>`, areaRec.atkCharId);
@@ -8008,7 +8197,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (areaRec.isSiphon) {
       const sU = areaRec.siphonDrain === "power" ? "Power" : (areaRec.siphonDrain === "hits" ? "Hits" : "CPs");
       line += ` = <span style="color:#c88fff;">siphons ${sipDrained} ${sU}</span>`;
-      if (areaRec.siphonDrain === "hits") line += ` \u2192 Hits: ${hits0}\u2192${hits1}${statusNote}`;
+      if (areaRec.siphonDrain === "hits") line += ` \u2192 Hits: ${hits0}\u2192${hits1}${overflow > 0 ? `, Pow: ${pow0}\u2192${pow1}` : ""}${statusNote}`;
       else if (areaRec.siphonDrain === "power") line += ` \u2192 Pow: ${pow0}\u2192${pow1}`;
       line += `</span>`;
     } else if (areaRec.isRepulsion) {
@@ -8048,10 +8237,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     if (isSenseArea) {
       html += `${esc(areaRec.saveBC || "EN")} save or lose <b style="color:#fff;">${areaRec.senseLoss}</b> vision level(s)`;
     } else if (isSaveArea) {
-      const saveAreaDmg = num(areaRec.saveDamage, 0) || (areaRec.noDamage ? 0 : num(areaRec.damage, 0));
-      html += `${esc(areaRec.saveBC || "EN")} save${saveAreaDmg > 0 ? ` or <b style="color:#fff;">${saveAreaDmg}</b> ${esc(areaRec.damageType)}/round` : ""}`;
+      const saveAreaDmg = areaRec.saveDmgLabel || num(areaRec.saveDamage, 0) || (areaRec.noDamage ? 0 : (areaRec.dmgLabel || num(areaRec.damage, 0)));
+      html += `${esc(areaRec.saveBC || "EN")} save${saveAreaDmg ? ` or <b style="color:#fff;">${esc(String(saveAreaDmg))}</b> ${esc(areaRec.damageType)}/round` : ""}`;
     } else {
-      html += `<b style="color:#fff;">${areaRec.damage}</b> ${esc(areaRec.damageType)}`;
+      html += `<b style="color:#fff;">${esc(String(areaRec.dmgLabel || areaRec.damage))}</b> ${esc(areaRec.damageType)}`;
     }
     
     let deferred = 0;
@@ -8064,7 +8253,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       
       if (tokData.escaped === true) {
         tokData.applied = true;
-        html += `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> escaped${tokData.shieldBlocked ? " (shield)" : ""}${tokData.prone ? " (prone)" : ""}</span>`;
+        html += `<br/><span style="color:#27ae60;">\u2713 <b>${esc(tokData.name)}</b> ${tokData.unaffected ? `unaffected${areaRec.onlyTag ? ` (not ${esc(areaRec.onlyTag)})` : ""}` : "escaped"}${tokData.shieldBlocked ? " (shield)" : ""}${tokData.prone ? " (prone)" : ""}</span>`;
         return;
       }
       
@@ -8243,8 +8432,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
   // Apply siphoned points to the attacker. Returns HTML for the attacker whisper.
   // gain is in drained-pool units (Hits, Power, or CPs/BC pts for ledger types).
-  function applySiphonGain(atkCharId, rowId, siphonDrain, siphonBC, siphonCat, gain, pageId) {
+  // ctx: the area record for area siphons. Overload resolves once per attack:
+  // after it fires, later targets still lose points but add nothing.
+  function applySiphonGain(atkCharId, rowId, siphonDrain, siphonBC, siphonCat, gain, pageId, ctx) {
     if (gain <= 0) return "";
+    if (ctx && ctx.siphonOverloaded) return `<br/><span style="color:#e67e22;">Overloaded earlier this attack - no further gain.</span>`;
     const pfx = `repeating_attacks_${rowId}_`;
     const pool0 = getAttrNum(atkCharId, pfx + "attack_siphon_pool", 0);
     // 2.1.16.5: Ability Cap = floor(total CPs / 5). Row Cap field overrides;
@@ -8259,7 +8451,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const overload = getAttr(atkCharId, pfx + "attack_siphon_overload") || "";
     const unitLabel = siphonDrain === "power" ? "Power" : (siphonDrain === "hits" ? "Hits" : (siphonDrain === "bc" ? `${siphonBC || "BC"} pts` : `${siphonCat || "Ability"} CPs`));
 
-    const allowed = cap > 0 ? Math.max(0, cap - pool0) : gain;
+    // The cap counts siphoned points (CPs); Power is 2 per point, like Energy.
+    const perPt = siphonDrain === "power" ? 2 : 1;
+    const capUnits = cap * perPt;
+    if (capSrc && perPt > 1) capSrc = capSrc.replace(" / 5)", ` / 5, x${perPt} Power)`);
+    const allowed = capUnits > 0 ? Math.max(0, capUnits - pool0) : gain;
     const kept = Math.min(gain, allowed);
     const excess = gain - kept;
 
@@ -8273,7 +8469,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const pool1 = pool0 + kept;
       setAttr(atkCharId, pfx + "attack_siphon_pool", pool1);
       registerSiphonPool(atkCharId, rowId, siphonDrain, state.MP_Engine.gameClock.ms + 3600000);
-      html += `<br/><span style="color:#c88fff;">Siphons <b>${kept}</b> ${esc(unitLabel)} (pool ${pool1}${cap > 0 ? `/${cap}` : ""}) — apply to a Siphoned (S) row. Dissipates in 1 game hour.</span>`;
+      html += `<br/><span style="color:#c88fff;">Siphons <b>${kept}</b> ${esc(unitLabel)} (pool ${pool1}${capUnits > 0 ? `/${capUnits}` : ""}) — apply to a Siphoned (S) row. Dissipates in 1 game hour.</span>`;
     } else {
       const barProp = siphonDrain === "power" ? CFG.POWER_BAR : CFG.HITS_BAR;
       const attrName = siphonDrain === "power" ? CFG.POWER_ATTR : CFG.HITS_ATTR;
@@ -8290,7 +8486,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const pool1 = pool0 + kept;
       setAttr(atkCharId, pfx + "attack_siphon_pool", pool1);
       registerSiphonPool(atkCharId, rowId, siphonDrain, state.MP_Engine.gameClock.ms + 3600000);
-      html += `<br/><span style="color:#c88fff;">Gains <b>${kept}</b> ${esc(unitLabel)} (${cur}→${cur + kept}, pool ${pool1}${cap > 0 ? `/${cap}` : ""}). Dissipates in 1 game hour.</span>`;
+      html += `<br/><span style="color:#c88fff;">Gains <b>${kept}</b> ${esc(unitLabel)} (${cur}→${cur + kept}, pool ${pool1}${capUnits > 0 ? `/${capUnits}` : ""}). Dissipates in 1 game hour.</span>`;
     }
 
     if (excess > 0) {
@@ -8298,14 +8494,16 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         html += `<br/><span style="color:#e67e22;">+${excess} over cap — lost.</span>${capSrc}`;
       } else {
         const wiped = wipeSiphonPool(atkCharId, rowId, siphonDrain);
+        const wipedPts = Math.ceil(wiped / perPt);
+        if (ctx) ctx.siphonOverloaded = true;
         if (overload === "lose") {
-          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! All ${wiped} siphoned points lost.</span>`;
+          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! All ${wiped} siphoned ${esc(unitLabel)} lost.</span>`;
         } else if (overload === "damage") {
-          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! Takes ${wiped} damage (may roll with); all siphoned points lost.</span>`;
+          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! Takes ${wipedPts} damage (may roll with); all siphoned points lost.</span>`;
         } else if (overload === "explode") {
-          let dia = Math.ceil(wiped / 5);
+          let dia = Math.ceil(wipedPts / 5);
           if (dia % 2 === 0) dia += 1;
-          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! EXPLODES — ${wiped} damage to all within ${dia}" diameter (attacker may NOT roll with; others may). All siphoned points lost.</span>`;
+          html += `<br/><span style="color:#ff6b6b; font-weight:bold;">OVERLOAD! EXPLODES — ${wipedPts} damage to all within ${dia}" diameter (attacker may NOT roll with; others may). All siphoned points lost.</span>`;
         }
       }
     }
@@ -9909,7 +10107,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Damage to Hits after roll-with
     let toHits = Math.max(0, penetrating - divert);
     
-    // --- SIPHON ROUTING (4.7: drain capped at what the pool holds, no 4.8.4 overflow) ---
+    // --- SIPHON ROUTING (drain capped at what the victim holds; Hits overflow to Power per 4.8.4) ---
     let siphonDrained = 0;      // points removed from the drained pool (in that pool's units)
     let siphonGain = 0;         // points the attacker stands to gain (same units)
     let siphonPowerDrain = 0;   // Power drained by a power-type siphon
@@ -9924,9 +10122,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         siphonPowerDrain = siphonDrained;
         toHits = 0;
       } else if (rec.siphonDrain === "hits") {
-        siphonDrained = (sMode === "mimicry") ? 0 : Math.min(pts, hits0);
+        const hitsAvail = defIsVehicle ? hits0 : hits0 + Math.max(0, pow0 - divert);
+        siphonDrained = (sMode === "mimicry") ? 0 : Math.min(pts, hitsAvail);
         siphonGain = (sMode === "suppress") ? 0 : ((sMode === "mimicry") ? pts : siphonDrained);
-        toHits = siphonDrained;
+        if (sMode === "mimicry") toHits = 0;
       } else {
         siphonDrained = (sMode === "mimicry") ? 0 : pts;
         siphonGain = (sMode === "suppress") ? 0 : pts;
@@ -9952,9 +10151,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Apply to Hits; overflow spills to Power for characters (4.8.4)
     // Vehicles: damage to Hits only, no overflow to Power
-    // Siphon: no overflow (hits drain is pre-capped at hits0; power drain routed directly)
+    // Siphon: Hits drains overflow like any damage; Power/ability drains set toHits = 0
     const hitsAfterDmg = Math.max(0, hits0 - toHits);
-    const overflow = (defIsVehicle || isSiphon) ? 0 : Math.max(0, toHits - hits0);
+    const overflow = defIsVehicle ? 0 : Math.max(0, toHits - hits0);
 
     // Power reduction: diverted amount + overflow + power siphon drain (vehicles: divert/overflow do not apply)
     const pow1 = defIsVehicle
@@ -12751,7 +12950,9 @@ function cmdAttackCodes(msg) {
   out += `<div style="color:#f4d03f; font-weight:bold; margin-top:7px;">Attack Options</div>`;
   out += row('af:4', 'Autofire rate 4. Alias: ' + alias('autofire:4') + '; valid rates 2-7.');
   out += row('area:2.5', 'Area diameter in inches.');
-  out += row('offset', 'Area Effect: Offset - edge on the target point, center one radius away from the attacker.');
+  out += row('offset', 'Area Effect: Offset - edge at the point of creation. Touch range: edge at the attacker\'s reach, never includes them. The roll asks for a direction (or toward target).');
+  out += row('adjustable', 'Area Effect: Adjustable - the roll asks for the area size (full, any smaller diameter, or single target).');
+  out += row('only:redblood', 'Only affects targets with that tag. Tags go in the target\'s Notes; -redblood excludes, untagged counts as affected.');
   out += row('ap:4', 'Ignore 4 points of protection.');
   out += row('ap', 'Ignore all protection. Alias: ' + alias('ap:ALL') + '.');
   out += row('gear', 'Mark the attack as Gear.');
@@ -14709,11 +14910,12 @@ function cmdAttackInfo(msg, args) {
     };
     const calledType = calledMap[calledRaw.toLowerCase()] || calledRaw;
 
+    const areaq = [args.size ? `size:${args.size}` : "", args.dir ? `dir:${args.dir}` : ""].filter(Boolean).join(" ");
     // Build and send the roll template - this triggers handleMpAttack
     // Push (positive) adds damage, Hold Back (negative) reduces damage
     const pushDmg = pushAmount !== 0 ? (pushAmount > 0 ? `+${pushAmount}` : `${pushAmount}`) : "";
     
-    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{playerid=${msg.playerid}}} {{atk=${atkCharId}}} {{atktok=${atkTokenId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{calledtype=${calledType}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}}`;
+    const rollMsg = `&{template:mpattack} {{mpapi=1}} {{playerid=${msg.playerid}}} {{atk=${atkCharId}}} {{atktok=${atkTokenId}}} {{def=${defTokenId}}} {{row=${rowId}}} {{push=${pushAmount}}} {{hitmod=${hitMod}}} {{calledtype=${calledType}}} {{name=${atkName} - ${attackName}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[${tohitNum}]]}} {{damage=[[${damage}${pushDmg}]]}} {{type=${dmgTypeFull}}} {{range=${range}}} {{kb=${kbDisplay}}} {{ap=${ap}}} {{areaq=${areaq}}}`;
 
     sendChat(`character|${atkCharId}`, rollMsg);
   }
@@ -15162,6 +15364,7 @@ function cmdAttackInfo(msg, args) {
 
       // Area effect commands
       case "areaescape": return cmdAreaEscape(msg, args);
+      case "areaunaffected": return cmdAreaUnaffected(msg, args);
       case "areashield": return cmdAreaShield(msg, args);
       case "arearollnpcs":
         if (gmOnly(msg)) return;
@@ -15465,7 +15668,7 @@ function cmdAttackInfo(msg, args) {
           <code>!mp buttondemo</code> - Inert button-color samples (<b>GM</b>)<br/>
           <b>Aliases:</b> <code>might</code>=<code>hthmass</code>, <code>invisible</code>=<code>invis</code>, <code>sneaking</code>=<code>sneak</code>, <code>veh</code>=<code>vehicle</code>, <code>clearstance</code>=<code>clearstances</code>, <code>offbalance</code>=<code>offbal</code>.<br/>
           <b>Generated Button Callbacks:</b> These are implemented commands, but normally come from engine-generated chat buttons rather than typed macros:<br/>
-          <code>locate apply limbsave save snare break kb kbsave areaescape areashield arearollnpcs areaforceall areadamageall arearw arearwmaxall arearwrest absorb reflect reflecthit afield afresume afcancel afcounter</code` }
+          <code>locate apply limbsave save snare break kb kbsave areaescape areaunaffected areashield arearollnpcs areaforceall areadamageall arearw arearwmaxall arearwrest absorb reflect reflecthit afield afresume afcancel afcounter</code` }
         };
         const sec = String(args.subcmd || (msg.content.split(/\s+/)[2] || "")).toLowerCase();
         if (sec === "all") {

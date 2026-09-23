@@ -6,6 +6,24 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.168.0: PRONE (4.4.5). Three code paths set the prone marker (knockdown,
+  called-shot leg hit, and diving to escape an area) and nothing removed it
+  except right-clicking the token, so prone tokens kept feeding 4.7.2's +3
+  into every attack against them long after they'd have stood. New
+  !mp stand clears it across a multi-select with one summary line, which is
+  4.4.5's default case (standing normally takes a full turn). !mp stand
+  --check rolls the optional AG-based acrobatics task check that rises at
+  the cost of the movement OR action phase (--cost move|action records
+  which), with 3.0.1 confirm rolls so a critical success costs no time at
+  all; --mod N for GM adjustments. Separately, 4.4.5's -3 for a prone
+  attacker hitting a target under 2" away is now applied automatically from
+  the marker and the measured range, shown as its own "Prone" row in the
+  to-hit breakdown - scoped to physical attacks for the same reason 4.7.2's
+  +3 is. Crawling at 1/4 rate, the flying "disoriented" equivalent, and the
+  GM's discretionary task checks stay off-engine; the helper side of the
+  assist rule is not built yet, but !mp stand --check already spends a
+  banked stand_assist +3 if something else sets one.
+
 v2.167.7: ESCAPE CARD LEADS WITH THE DISTANCE. The area escape result said
   only "X ESCAPES/FAILS to escape!" and a bare TN, so the movement the roll
   was actually made against - the one number that explains where the TN came

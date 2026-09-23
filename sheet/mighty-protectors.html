@@ -1,4 +1,10 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.96 - Invisibility notes code
+<!-- Mighty Protectors Roll20 Character Sheet v44.97 - Area size / offset direction prompts
+        v44.97: Attack rows whose Notes carry adjustable and/or offset (with an
+          area) prompt before the roll for area size (full, smaller Diameter
+          steps, Single target) and offset direction (Toward target, N..NW),
+          sent as {{areaq=}} from a hidden per-row attack_area_query kept in
+          sync by a sheet worker. Other rows send it blank. Requires engine
+          v2.171.0+.
         v44.96: Ability Notes tooltip lists the invis / invis:blur / blur codes.
           Rows named Invisibility or Blur work without a code; with engine
           v2.170.0+ the row's State On/Off turns the token's invisibility on/off.
@@ -1044,11 +1050,12 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="hidden" name="attr_attack_rowid" />
+            <input type="hidden" name="attr_attack_area_query" value="" />
             <input type="hidden" name="attr_attack_num" />
             <input type="hidden" name="attr_attack_is_physical" value="1" />
             <input type="hidden" name="attr_attack_is_mental" value="0" />
             <input type="checkbox" name="attr_attack_broken" value="1" class="sheet-atk-broken-flag2" />
-            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{hitmod=[[0+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[0+@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[0+@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{form=@{attack_form}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_cost}}} {{ch=@{attack_charges}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3}]]}} {{deftype=@{attack_atk_full}}} {{rngmod=[[0+@{range_query}]]}} {{aim=[[0+@{aim_query}]]}} {{multi=[[0+@{multi_query}]]}} {{other=[[0+@{other_query}]]}} {{called=[[0+@{called_mod_query}]]}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{hitmod=[[0+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[0+@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[0+@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{form=@{attack_form}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_cost}}} {{ch=@{attack_charges}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3}]]}} {{deftype=@{attack_atk_full}}} {{rngmod=[[0+@{range_query}]]}} {{aim=[[0+@{aim_query}]]}} {{multi=[[0+@{multi_query}]]}} {{other=[[0+@{other_query}]]}} {{called=[[0+@{called_mod_query}]]}} {{areaq=@{attack_area_query}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -5323,6 +5330,50 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
   }
 
   on("change:repeating_attacks remove:repeating_attacks", syncAttackRowMeta);
+
+  // Adjustable / Offset rows prompt before the roll: the Roll button sends
+  // {{areaq=@{attack_area_query}}}, filled here only for rows whose Notes
+  // carry those codes (every other row sends it blank).
+  var AREA_DIAMETERS = [1, 3, 5, 7, 9, 11, 15, 19, 23, 27, 33, 39, 45, 51, 59, 67, 75, 83, 93];
+  function buildAreaQuery(notes, areaField) {
+    var n = String(notes || "").toLowerCase();
+    var m = n.match(/\barea:(\d+(?:\.\d+)?)\b/);
+    var area = m ? parseFloat(m[1]) : (parseFloat(areaField) || 0);
+    if (!(area > 0)) return "";
+    var parts = [];
+    if (/(^|[\s,;\[])adjustable(?=$|[\s,;\]])/.test(n)) {
+      var opts = ["Full " + area + "\",full"];
+      AREA_DIAMETERS.filter(function(d) { return d < area; }).reverse().forEach(function(d) { opts.push(d + "\"," + d); });
+      opts.push("Single target,single");
+      parts.push("size:?{Area size|" + opts.join("|") + "}");
+    }
+    if (/(^|[\s,;\[])offset(?=$|[\s,;\]])/.test(n)) {
+      parts.push("dir:?{Offset direction|Toward target,target|N,N|NE,NE|E,E|SE,SE|S,S|SW,SW|W,W|NW,NW}");
+    }
+    return parts.join(" ");
+  }
+
+  function syncAttackAreaQueries() {
+    getSectionIDs("repeating_attacks", function(ids) {
+      if (!ids || !ids.length) return;
+      var fields = [];
+      ids.forEach(function(id) {
+        var p = "repeating_attacks_" + id + "_";
+        fields.push(p + "attack_notes", p + "attack_area", p + "attack_area_query");
+      });
+      getAttrs(fields, function(v) {
+        var updates = {};
+        ids.forEach(function(id) {
+          var p = "repeating_attacks_" + id + "_";
+          var q = buildAreaQuery(v[p + "attack_notes"], v[p + "attack_area"]);
+          if ((v[p + "attack_area_query"] || "") !== q) updates[p + "attack_area_query"] = q;
+        });
+        if (Object.keys(updates).length) setAttrs(updates, { silent: true });
+      });
+    });
+  }
+
+  on("change:repeating_attacks:attack_notes change:repeating_attacks:attack_area sheet:opened", syncAttackAreaQueries);
 
   on("change:repeating_attacks:attack_atk", function(eventInfo) {
     var rowPrefix = eventInfo.sourceAttribute.replace("_attack_atk", "");
