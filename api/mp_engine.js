@@ -1,4 +1,17 @@
-/* Mighty Protectors Roll20 API Engine v2.174.1 - 2026-09-23
+/* Mighty Protectors Roll20 API Engine v2.175.0 - 2026-09-24
+ * v2.175.0: ALTITUDE IN AREAS, REACH AND FALLING. Areas are spheres: a
+ *   token is swept only if its 3D distance (map distance plus altitude
+ *   difference) is within the radius. The area sits at the aimed token's
+ *   altitude (0 for a ground point; the attacker's for a Touch offset area),
+ *   shown on the card when above ground. Airborne tokens may escape up or
+ *   down (never below ground). Touch/HTH-range attacks on a target more than
+ *   1" above or below get an Out of reach warning (not enforced, like
+ *   horizontal reach). 5.3 Falling: !mp fall [--target] [--dist] rolls
+ *   inches (max 355) x mass on the Carrying Capacity column to Base HTH
+ *   Damage and applies it as Kinetic through the area pipeline (Protection,
+ *   roll-with, KO), then lands the token; the card notes the AG save to stay
+ *   standing and the GM's instant-death option. A token going Unconscious or
+ *   Dead while airborne prompts the GM with a Resolve Fall button.
  * v2.174.1: ALTITUDE MARKER DIAGNOSTICS. When the alt-0..alt-9 set isn't
  *   found the fallback to wings is no longer silent: the !mp alt reply says
  *   which digits are missing. New !mp alt markers reports how many markers
@@ -17,17 +30,13 @@
  *   character's siphon pools too, and a gain that the cap fully blocks says
  *   "No gain: pool already at cap (pool/cap)" instead of "Gains 0", with a
  *   pointer to !mp siphon reset when the pool is over the cap.
- * v2.173.1: !mp siphon reset --target TOKID zeroes every siphon pool on the
- *   character, including a pool with no timer record, without touching
- *   Hits/Power (clear still removes the pooled points from the bar). For a
- *   stale Pool value the read-only sheet field can't be edited to fix.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.174.1";
+var MP_VERSION = "2.175.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -3519,6 +3528,7 @@ MP.Engine = (function () {
     const nextStr = next.join(",");
     tok.set("status_" + base, !!on);
     if (nextStr !== before) tok.set("statusmarkers", nextStr);
+    if (on && !hasIt && (base === "sleepy" || base === "dead")) noteAirborneKO(tok);
   }
 
   function restoreTokenSnapshot(snap) {
@@ -4500,7 +4510,10 @@ function generateRowID() {
   
   // Get all tokens within radius of a center point
   // Returns array of { token, distance, charId, name, controller }
-  function getTokensInRadius(pageId, centerX, centerY, radiusInches) {
+  // centerAlt: the area's altitude in inches. Areas are spheres (the Shapes
+  // modifier's "sphere of effect"), so a token's altitude difference counts.
+  function getTokensInRadius(pageId, centerX, centerY, radiusInches, centerAlt) {
+    const cAlt = Math.max(0, num(centerAlt, 0));
     const page = getObj("page", pageId);
     if (!page) return [];
     
@@ -4525,7 +4538,9 @@ function generateRowID() {
       const dx = tx - centerX;
       const dy = ty - centerY;
       const distPx = Math.sqrt(dx * dx + dy * dy);
-      const distInches = distPx / pixelsPerInch;
+      const tokAlt = getTokenAltitude(tok);
+      const dzIn = tokAlt - cAlt;
+      const distInches = Math.sqrt(Math.pow(distPx / pixelsPerInch, 2) + dzIn * dzIn);
       
       if (distInches <= radiusInches) {
         // Get controller for whisper targeting
@@ -4538,7 +4553,8 @@ function generateRowID() {
           charId: charId,
           name: displayName(tok, char),
           distance: distInches,
-          distToEdge: areaDistToEdge(dx / pixelsPerInch, dy / pixelsPerInch, radiusInches, diagType),
+          distToEdge: areaDistToEdge(dx / pixelsPerInch, dy / pixelsPerInch, radiusInches, diagType, dzIn, tokAlt),
+          altitude: tokAlt,
           controller: controller
         });
       }
@@ -4654,15 +4670,36 @@ function generateRowID() {
   // under a 1-1-1 grid. Search outward for the cheapest square that lies
   // outside the area and return that cost instead.
   // dxIn/dyIn are the token's offset from the blast center in inches.
-  function areaDistToEdge(dxIn, dyIn, radius, diagType) {
+  // dzIn: the token's height above (+) or below (-) the area center. Only an
+  // airborne token (tokAlt > 0) may escape vertically, and never below ground.
+  function areaDistToEdge(dxIn, dyIn, radius, diagType, dzIn, tokAlt) {
     const lim = Math.ceil(radius) + 2;
+    const dz = num(dzIn, 0), alt = Math.max(0, num(tokAlt, 0));
+    // Full 3D search for normal sizes; for very large areas only straight up/down
+    // is added to the flat search, to keep the sweep fast.
+    const full3d = alt > 0 && lim <= 12;
+    const kLo = full3d ? -Math.min(lim, Math.floor(alt)) : 0;
+    const kHi = full3d ? lim : 0;
     let best = Infinity;
-    for (let i = -lim; i <= lim; i++) {
-      for (let j = -lim; j <= lim; j++) {
-        const ex = dxIn + i, ey = dyIn + j;
-        if (Math.sqrt(ex * ex + ey * ey) <= radius) continue;   // still inside
-        const cost = gridStepCost(i, j, diagType);
-        if (cost < best) best = cost;
+    for (let k = kLo; k <= kHi; k++) {
+      for (let i = -lim; i <= lim; i++) {
+        for (let j = -lim; j <= lim; j++) {
+          const ex = dxIn + i, ey = dyIn + j, ez = dz + k;
+          if (Math.sqrt(ex * ex + ey * ey + ez * ez) <= radius) continue;   // still inside
+          const flat = gridStepCost(i, j, diagType);
+          const cost = k ? combineRangeAxes(flat, Math.abs(k), diagType) : flat;
+          if (cost < best) best = cost;
+        }
+      }
+    }
+    if (alt > 0 && !full3d) {
+      const h2 = dxIn * dxIn + dyIn * dyIn;
+      if (h2 < radius * radius) {
+        const half = Math.sqrt(radius * radius - h2);
+        const up = Math.max(0, Math.floor(half - dz) + 1);
+        const down = Math.max(0, Math.floor(half + dz) + 1);
+        best = Math.min(best, up);
+        if (down <= Math.floor(alt)) best = Math.min(best, down);
       }
     }
     if (!isFinite(best)) return 1;
@@ -5902,9 +5939,89 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const alts = state.MP_Engine.altitude || (state.MP_Engine.altitude = {});
     const v = Math.max(0, Math.round(num(inches, 0) * 10) / 10);
     if (v > 0) alts[tok.id] = v;
-    else delete alts[tok.id];
+    else {
+      delete alts[tok.id];
+      if (state.MP_Engine.fallPending) delete state.MP_Engine.fallPending[tok.id];
+    }
     showAltitudeMarkers(tok, v);
     return v;
+  }
+
+  // --- 5.3 FALLING ---
+  // Impact = inches fallen (max 355, terminal velocity) x mass in lbs, looked
+  // up in the BC table's Carrying Capacity column (nearest row, ties to the
+  // lower row, as the sheet does for Mass) and read across to Base HTH Damage.
+  const FALL_CARRY = [8, 10, 12, 15, 30, 60, 120, 240, 480, 960, 1920, 3840, 7680, 15360, 30720,
+    61440, 122880, 245760, 491520, 983040, 1966080, 3932160, 7864320, 15728640, 31457280,
+    62914560, 125829120, 251658240, 503316480, 1006632960, 2013265920, 4026531840,
+    8053063680, 16106127360, 32212254720];
+  const FALL_ROLL = ["1d2-1", "1d2-1", "1d2-1", "1d2", "1d3", "1d4", "1d6", "1d6+1", "1d8+1", "1d10+1",
+    "2d6", "1d6+1d8", "2d8", "1d8+1d10", "2d10", "1d10+1d12", "2d12", "3d8", "2d8+1d10", "1d8+2d10",
+    "3d10", "2d10+1d12", "1d10+2d12", "3d12", "3d12+1", "3d12+2", "4d10", "3d10+1d12", "2d10+2d12",
+    "1d10+3d12", "4d12", "4d12+1", "5d10", "4d10+1d12", "3d10+2d12"];
+  const FALL_TERMINAL = 355;
+
+  function fallDamageExpr(charId, inches) {
+    const weight = num(String(getAttr(charId, "effective_weight") || getAttr(charId, "weight") || "").replace(/,/g, ""), 0);
+    const dist = Math.min(FALL_TERMINAL, Math.max(0, num(inches, 0)));
+    const product = dist * weight;
+    let idx = 0, diff = Math.abs(FALL_CARRY[0] - product);
+    for (let i = 1; i < FALL_CARRY.length; i++) {
+      const d = Math.abs(FALL_CARRY[i] - product);
+      if (d < diff) { diff = d; idx = i; }
+    }
+    return { weight, dist, product, expr: FALL_ROLL[idx] };
+  }
+
+  // A token knocked out or killed while airborne falls (flag once per KO).
+  function noteAirborneKO(tok) {
+    if (!tok) return;
+    const alt = getTokenAltitude(tok);
+    if (alt <= 0) return;
+    const pend = state.MP_Engine.fallPending || (state.MP_Engine.fallPending = {});
+    if (pend[tok.id]) return;
+    pend[tok.id] = true;
+    const c = getCharFromToken(tok);
+    setTimeout(() => {
+      ch("MP", `/w gm <div style="background:#16213e; border:2px solid #e67e22; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">` +
+        `<b style="color:#e67e22;">${esc(displayName(tok, c))}</b> is down at <b>${alt}"</b> altitude and falls (5.3). ` +
+        `${btnDanger(`Resolve Fall (${alt}")`, `!mp fall --target ${tok.id}`)}</div>`);
+    }, 0);
+  }
+
+  // !mp fall [--target TOKID] [--dist N]  (GM) - roll and apply falling damage,
+  // through the area pipeline so Protection, roll-with and KO all apply.
+  function cmdFall(msg, args) {
+    if (!playerIsGM(msg.playerid)) return ch("MP", `${wt(msg)}<b>MP:</b> GM only.`);
+    const tok = args.target ? getObj("graphic", args.target)
+      : ((msg.selected || [])[0] ? getObj("graphic", msg.selected[0]._id) : null);
+    if (!tok) return ch("MP", `/w gm <b>MP:</b> Select a token or use --target. Usage: <code>!mp fall [--dist N]</code>`);
+    const c = getCharFromToken(tok);
+    if (!c) return ch("MP", `/w gm <b>MP:</b> That token doesn't represent a character.`);
+    const dist = args.dist !== undefined ? num(args.dist, 0) : getTokenAltitude(tok);
+    if (dist <= 0) return ch("MP", `/w gm <b>MP:</b> ${esc(displayName(tok, c))} isn't airborne. Use <code>--dist N</code> for a fall from a height.`);
+    const f = fallDamageExpr(c.id, dist);
+    if (f.weight <= 0) return ch("MP", `/w gm <b>MP:</b> ${esc(displayName(tok, c))} has no weight on the sheet; falling damage needs mass in lbs.`);
+    const roll = rollExpr(f.expr);
+    const rollId = `fall-${tok.id}-${Date.now()}`;
+    const name = displayName(tok, c);
+    const cb = String(c.get("controlledby") || "");
+    const controller = cb.includes("all") ? "all" : (cb.split(",")[0] || "gm");
+    state.MP_Engine.pendingArea[rollId] = {
+      rollId, playerid: msg.playerid, atkCharId: c.id,
+      damage: roll, damageType: "Kinetic", atkTypeCode: "P", dmgSubtype: "",
+      protKey: typeToProtKey("Kinetic"), atkAP: 0, radius: 0, diameter: 0,
+      pageId: tok.get("_pageid"), markerId: null, timestamp: Date.now(), timeout: 60000,
+      atkName: "Falling", causesKB: false,
+      resultTitle: "FALLING DAMAGE (5.3)",
+      dmgLabel: `${roll}`,
+      resultNote: `${f.dist}" fall${num(dist, 0) > FALL_TERMINAL ? ` (terminal velocity, from ${dist}")` : ""} &times; ${f.weight.toLocaleString("en-US")} lbs = ${f.product.toLocaleString("en-US")} &rarr; ${esc(f.expr)}` +
+        `<br/><span style="font-size:11px; color:#aab;">If conscious after: AG save at -1 per damage point taken to stay standing (else prone). At 0 Hits the GM may rule an instant death.</span>`,
+      tokens: { [tok.id]: { tokenId: tok.id, charId: c.id, name, controller, escaped: false, shieldBlocked: false, prone: false, damage: roll } }
+    };
+    setTokenAltitude(tok, 0);
+    if (state.MP_Engine.fallPending) delete state.MP_Engine.fallPending[tok.id];
+    cmdAreaDamageAll(msg, { id: rollId });
   }
 
   // !mp alt N | +N | -N | 0 [--target TOKID] | !mp alt (show) | !mp alt list
@@ -7350,6 +7467,10 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     html += ` · Rng: <span style="color:#ddd; font-weight:bold;">${rangeFooter}</span>`;
     html += costStr;
     html += `</div>`;
+    const reachAltDiff = num(rangeData && rangeData.altDiff, 0);
+    if (!isAreaAttack && reachAltDiff > 1 && (/touch/i.test(rowRangeText) || num(rowRangeText, 0) <= 1)) {
+      html += `<div style="padding:4px 10px; font-size:12px; color:#e67e22; background:#2a1a10; border-bottom:1px solid #2a2a4a; text-align:center;">\u26a0 Out of reach: target is ${reachAltDiff}" ${getTokenAltitude(defTok) > getTokenAltitude(atkTok) ? "above" : "below"} (Touch/HTH reaches 1"). GM call.</div>`;
+    }
 
     // --- Modifiers Section ---
     html += `<div style="padding:5px 10px; font-size:11px; color:#889; background:#1a1a2e;">`;
@@ -7604,7 +7725,13 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     // Find all tokens in the area; Immunity (+2.5) excludes the attacker
     // from their own Area Effect (RAW: ignore negative effects of own Ability)
-    let tokensInArea = getTokensInRadius(pageId, centerX, centerY, rec.areaRadius);
+    // Area altitude: a Touch-range offset area starts at the attacker's height;
+    // otherwise it sits at the aimed token's height (0 for a ground point).
+    let areaAlt = getTokenAltitude(targetTok);
+    if (rec.areaOffset && rec.areaOffsetTouch && rec.atkTokenId) {
+      areaAlt = getTokenAltitude(getObj("graphic", rec.atkTokenId));
+    }
+    let tokensInArea = getTokensInRadius(pageId, centerX, centerY, rec.areaRadius, areaAlt);
     if (rec.hasImmunity) {
       tokensInArea = tokensInArea.filter(t => t.charId !== rec.atkCharId);
     }
@@ -7659,6 +7786,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       radius: rec.areaRadius,
       diameter: rec.areaDiameter,
       rowDiameter: rec.rowAreaDiameter,
+      altitude: areaAlt,
       areaAdjusted: !!rec.areaAdjusted,
       onlyTag: rec.onlyTag || "",
       dmgLabel: dmgLabel,
@@ -7713,6 +7841,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       html += `${areaSizeTxt} &middot; Damage: <b style="color:#fff;">${esc(dmgLabel)}</b> ${esc(rec.dmgTypeStr)}`;
     }
     if (rec.onlyTag) html += `<br/><span style="color:#c88fff; font-size:11px;">Only vs ${esc(rec.onlyTag)}</span>`;
+    if (areaAlt > 0) html += `<br/><span style="color:#8be9fd; font-size:11px;">Center at ${areaAlt}" altitude (sphere)</span>`;
     html += `<br/>To-Hit: <b style="color:#fff;">${rec.targetTotal}-</b> <span style="color:#aab; font-size:11px;">(+6 immobile, no def)</span> &middot; Roll: <b style="color:#fff;">${rec.roll}</b>`;
     if (scatterNote) html += `<br/><span style="color:#f1c40f; font-weight:bold;">${scatterNote.trim()}</span>`;
     if (offsetNote) html += `<br/><span style="color:#9ecbff; font-size:11px;">${esc(offsetNote)}</span>`;
@@ -8353,7 +8482,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let html = `<div style="background:#1a1a2e; border:2px solid #444; border-radius:6px; font-family:Arial,sans-serif; font-size:13px; max-width:280px; color:#eee; overflow:hidden;">`;
     const isSenseArea = num(areaRec.senseLoss, 0) > 0;
     const isSaveArea = !!areaRec.isSaveAttack;
-    html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">${isSenseArea ? "AREA FLASH RESULTS" : (isSaveArea ? "AREA SAVE RESULTS" : "AREA DAMAGE RESULTS")}</div>`;
+    html += `<div style="background:#e67e22; padding:6px 10px; font-size:14px; font-weight:bold; color:#fff;">${areaRec.resultTitle ? esc(areaRec.resultTitle) : (isSenseArea ? "AREA FLASH RESULTS" : (isSaveArea ? "AREA SAVE RESULTS" : "AREA DAMAGE RESULTS"))}</div>`;
     html += `<div style="padding:6px 10px;">`;
     if (isSenseArea) {
       html += `${esc(areaRec.saveBC || "EN")} save or lose <b style="color:#fff;">${areaRec.senseLoss}</b> vision level(s)`;
@@ -8363,6 +8492,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     } else {
       html += `<b style="color:#fff;">${esc(String(areaRec.dmgLabel || areaRec.damage))}</b> ${esc(areaRec.damageType)}`;
     }
+    if (areaRec.resultNote) html += `<br/>${areaRec.resultNote}`;
     
     let deferred = 0;
     // --only TOKID: the per-target Hit button resolves just that token.
@@ -9110,7 +9240,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
   
   function reflectExplosion(rec, rollId, defTok, rawDamage, limitLabel) {
     const diameter = Math.ceil(rawDamage / 5);
-    const victims = getTokensInRadius(defTok.get("_pageid"), defTok.get("left"), defTok.get("top"), diameter / 2)
+    const victims = getTokensInRadius(defTok.get("_pageid"), defTok.get("left"), defTok.get("top"), diameter / 2, getTokenAltitude(defTok))
       .filter(v => v.token.id !== defTok.id);
     
     const makeRec = (tok, charId, name, extra) => {
@@ -15430,6 +15560,7 @@ function cmdAttackInfo(msg, args) {
         return cmdTest(msg, testArgs);
       case "stand": return cmdStand(msg, args);
       case "alt": return cmdAlt(msg, args);
+      case "fall": return cmdFall(msg, args);
       case "stance":
         const stanceParts = msg.content.split(/\s+/);
         return cmdStance(msg, { stance: stanceParts[2] || "" });
@@ -15809,7 +15940,8 @@ function cmdAttackInfo(msg, args) {
           time: { label: "Stances, Range, and Time", body: `
           <code>!mp stance normal|def|full|offbal|N</code><br/>
           <code>!mp stand [--check] [--cost move|action] [--mod N]</code> - Stand selected token(s) from prone; plain form is 4.4.5's full turn and works on a multi-select, --check rolls the AG acrobatics task check<br/>
-          <code>!mp alt N | +N | -N | 0 | list</code> - Set, climb, dive or land the selected token(s); altitude in inches is added to range<br/>
+          <code>!mp alt N | +N | -N | 0 | list | markers</code> - Set, climb, dive or land the selected token(s); altitude counts toward range and area spheres<br/>
+          <code>!mp fall [--target TOKID] [--dist N]</code> - Falling damage per 5.3 (<b>GM</b>); lands the token<br/>
           <code>!mp clearstances</code> - Clear page stances (<b>GM</b>)<br/>
           <code>!mp offbal</code> - Apply Off Balance to selected token (<b>GM</b>)<br/>
           <code>!mp range</code> - Check range between two selected tokens<br/>
@@ -18222,6 +18354,14 @@ function cmdAttackInfo(msg, args) {
       if (!gc.topId) gc.topId = top;
       if (!gc.roundAnchor) gc.roundAnchor = top;
     }
+
+    // A GM toggling Unconscious/Dead by hand on an airborne token (API-made
+    // changes don't fire this; setMarker covers those).
+    on("change:graphic:statusmarkers", function(tok, prev) {
+      const had = String((prev && prev.statusmarkers) || "").split(",").map(x => x.split("@")[0]);
+      const now = String(tok.get("statusmarkers") || "").split(",").map(x => x.split("@")[0]);
+      if (["sleepy", "dead"].some(m => now.includes(m) && !had.includes(m))) noteAirborneKO(tok);
+    });
 
     // Roll20 replays pre-existing objects as add events if add handlers are
     // registered before ready. Register this only after initial sheet sync.

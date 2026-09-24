@@ -6,6 +6,11 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.173.1: !mp siphon reset --target TOKID zeroes every siphon pool on the
+  character, including a pool with no timer record, without touching
+  Hits/Power (clear still removes the pooled points from the bar). For a
+  stale Pool value the read-only sheet field can't be edited to fix.
+
 v2.173.0: PER-TARGET AREA BUTTONS. The GM's area whisper now lists every
   target on its own row: Jump N- and Dive N- escape rolls (each prompting
   for a modifier), Shield when the target has one, Hit (apply to that
