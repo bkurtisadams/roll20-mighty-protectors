@@ -6,6 +6,20 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.175.0: ALTITUDE IN AREAS, REACH AND FALLING. Areas are spheres: a
+  token is swept only if its 3D distance (map distance plus altitude
+  difference) is within the radius. The area sits at the aimed token's
+  altitude (0 for a ground point; the attacker's for a Touch offset area),
+  shown on the card when above ground. Airborne tokens may escape up or
+  down (never below ground). Touch/HTH-range attacks on a target more than
+  1" above or below get an Out of reach warning (not enforced, like
+  horizontal reach). 5.3 Falling: !mp fall [--target] [--dist] rolls
+  inches (max 355) x mass on the Carrying Capacity column to Base HTH
+  Damage and applies it as Kinetic through the area pipeline (Protection,
+  roll-with, KO), then lands the token; the card notes the AG save to stay
+  standing and the GM's instant-death option. A token going Unconscious or
+  Dead while airborne prompts the GM with a Resolve Fall button.
+
 v2.174.0: ALTITUDE MARKERS. Altitude now shows as custom token markers
   named alt-0 .. alt-9, one per digit, most significant first (12" shows
   alt-1 then alt-2), found by name from the game's marker list since custom

@@ -1,4 +1,8 @@
-/* Mighty Protectors Roll20 API Engine v2.176.2 - 2026-09-30
+/* Mighty Protectors Roll20 API Engine v2.177.0 - 2026-10-04
+ * v2.177.0: !mp half toggles the selected token(s) between half size and
+ *   original size (70x70 -> 35x35 -> 70x70). Original size is kept in
+ *   state.MP_Engine.halfSize, and range still measures from it, so a halved
+ *   token doesn't gain distance.
  * v2.176.2: no engine change; version bump to pair with sheet v45.01, whose
  *   Roll button now sends Push/Hold Back from pushhb_query (the stale
  *   push_query copy sent 0, so noholdback never saw a Hold Back).
@@ -19,26 +23,13 @@
  *   rest skip the character). New GM !mp exposure --dmg N [--name] | --off
  *   | list for Susceptibility: death-zone marker, per-round Apply button, no
  *   Protection or roll-with. New !mp test weakness.
- * v2.175.0: ALTITUDE IN AREAS, REACH AND FALLING. Areas are spheres: a
- *   token is swept only if its 3D distance (map distance plus altitude
- *   difference) is within the radius. The area sits at the aimed token's
- *   altitude (0 for a ground point; the attacker's for a Touch offset area),
- *   shown on the card when above ground. Airborne tokens may escape up or
- *   down (never below ground). Touch/HTH-range attacks on a target more than
- *   1" above or below get an Out of reach warning (not enforced, like
- *   horizontal reach). 5.3 Falling: !mp fall [--target] [--dist] rolls
- *   inches (max 355) x mass on the Carrying Capacity column to Base HTH
- *   Damage and applies it as Kinetic through the area pipeline (Protection,
- *   roll-with, KO), then lands the token; the card notes the AG save to stay
- *   standing and the GM's instant-death option. A token going Unconscious or
- *   Dead while airborne prompts the GM with a Resolve Fall button.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.176.2";
+var MP_VERSION = "2.177.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -6018,13 +6009,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     // Get center positions and token sizes
     const ax = atkTok.get("left");
     const ay = atkTok.get("top");
-    const aw = atkTok.get("width") || 70;
-    const ah = atkTok.get("height") || 70;
+    const { w: aw, h: ah } = tokenFootprint(atkTok);
     
     const bx = defTok.get("left");
     const by = defTok.get("top");
-    const bw = defTok.get("width") || 70;
-    const bh = defTok.get("height") || 70;
+    const { w: bw, h: bh } = tokenFootprint(defTok);
 
     // Calculate edge-to-edge distance (gap between bounding boxes)
     // Negative gap means overlap = 0 distance
@@ -13662,6 +13651,49 @@ function cmdAttackInfo(msg, args) {
   
   // ------------------------------------------------------------------------
 
+  // !mp half - toggle selected token(s) between half size and original size.
+  // Original size kept in state.MP_Engine.halfSize; range still uses it.
+  function canResizeToken(msg, tok, char) {
+    if (playerIsGM(msg.playerid)) return true;
+    if (char && canControl(msg, char.id)) return true;
+    const c = String(tok.get("controlledby") || "").split(",").map(s => s.trim());
+    return c.includes(msg.playerid) || c.includes("all");
+  }
+  function tokenFootprint(tok) {
+    const rec = state.MP_Engine.halfSize && state.MP_Engine.halfSize[tok.id];
+    if (rec) return { w: rec.w, h: rec.h };
+    return { w: tok.get("width") || 70, h: tok.get("height") || 70 };
+  }
+  function cmdHalf(msg, args) {
+    const sel = (msg.selected || []).filter(x => x._type === "graphic")
+      .map(x => getObj("graphic", x._id)).filter(Boolean);
+    if (!sel.length) return ch("MP", `${wt(msg)}<b>MP:</b> Select a token first. Usage: <code>!mp half</code>`);
+    if (!state.MP_Engine.halfSize) state.MP_Engine.halfSize = {};
+    const store = state.MP_Engine.halfSize;
+    const halved = [], restored = [], denied = [];
+    sel.forEach(tok => {
+      const char = getCharFromToken(tok);
+      const label = displayName(tok, char);
+      if (!canResizeToken(msg, tok, char)) { denied.push(label); return; }
+      const rec = store[tok.id];
+      if (rec) {
+        tok.set({ width: rec.w, height: rec.h });
+        delete store[tok.id];
+        restored.push(`${label} (${rec.w}x${rec.h})`);
+      } else {
+        const w = num(tok.get("width"), 70), h = num(tok.get("height"), 70);
+        store[tok.id] = { w, h };
+        tok.set({ width: w / 2, height: h / 2 });
+        halved.push(`${label} (${w / 2}x${h / 2})`);
+      }
+    });
+    const lines = [];
+    if (halved.length) lines.push(`Half size: <b>${esc(halved.join(", "))}</b>`);
+    if (restored.length) lines.push(`Full size: <b>${esc(restored.join(", "))}</b>`);
+    if (denied.length) lines.push(`<span style="color:#8a84a8;">Not yours to resize: ${esc(denied.join(", "))}</span>`);
+    return ch("MP", `${wt(msg)}<b>MP:</b> ${lines.join("<br/>") || "Nothing resized."}`);
+  }
+
   // !mp stand [--check] [--cost move|action] [--mod N]
   // 4.4.5: standing normally takes a full turn, so the default just clears the
   // prone marker and works across a multi-select (five mooks flat in a cloud
@@ -15785,6 +15817,7 @@ function cmdAttackInfo(msg, args) {
         }
         return cmdTest(msg, testArgs);
       case "stand": return cmdStand(msg, args);
+      case "half": return cmdHalf(msg, args);
       case "alt": return cmdAlt(msg, args);
       case "fall": return cmdFall(msg, args);
       case "stance":
@@ -16175,6 +16208,7 @@ function cmdAttackInfo(msg, args) {
           time: { label: "Stances, Range, and Time", body: `
           <code>!mp stance normal|def|full|offbal|N</code><br/>
           <code>!mp stand [--check] [--cost move|action] [--mod N]</code> - Stand selected token(s) from prone; plain form is 4.4.5's full turn and works on a multi-select, --check rolls the AG acrobatics task check<br/>
+          <code>!mp half</code> - Toggle selected token(s) between half size and original size; range still measures from the original size<br/>
           <code>!mp alt N | +N | -N | 0 | list | markers</code> - Set, climb, dive or land the selected token(s); altitude counts toward range and area spheres<br/>
           <code>!mp fall [--target TOKID] [--dist N]</code> - Falling damage per 5.3 (<b>GM</b>); lands the token<br/>
           <code>!mp clearstances</code> - Clear page stances (<b>GM</b>)<br/>
@@ -18570,6 +18604,7 @@ function cmdAttackInfo(msg, args) {
   on("destroy:attribute", onAbilityAttributeDestroy);
   on("destroy:graphic", function(t) {
     if (state.MP_Engine && state.MP_Engine.tokenCharges && state.MP_Engine.tokenCharges[t.id]) delete state.MP_Engine.tokenCharges[t.id];
+    if (state.MP_Engine && state.MP_Engine.halfSize && state.MP_Engine.halfSize[t.id]) delete state.MP_Engine.halfSize[t.id];
   });
 
   // On ready: migrate any wall-clock siphon expiries (pre-v2.84.0) to game
