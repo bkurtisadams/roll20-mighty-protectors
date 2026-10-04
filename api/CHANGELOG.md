@@ -6,6 +6,21 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.174.0: ALTITUDE MARKERS. Altitude now shows as custom token markers
+  named alt-0 .. alt-9, one per digit, most significant first (12" shows
+  alt-1 then alt-2), found by name from the game's marker list since custom
+  tags carry an id. Without all ten in the game it falls back to the
+  fluffy-wing badge (1-9, no number at 10"+). Setting or landing clears
+  any earlier altitude markers of either kind.
+
+v2.173.2: FIX - a stale siphon pool blocked new gains. The
+  cap check counts what's in the pool, but !mp test reset put Hits/Power
+  back to max without zeroing the pool, so the next siphon gained nothing
+  (pool 23 against a cap of 21 left no room). Test reset now zeroes the
+  character's siphon pools too, and a gain that the cap fully blocks says
+  "No gain: pool already at cap (pool/cap)" instead of "Gains 0", with a
+  pointer to !mp siphon reset when the pool is over the cap.
+
 v2.173.1: !mp siphon reset --target TOKID zeroes every siphon pool on the
   character, including a pool with no timer record, without touching
   Hits/Power (clear still removes the pooled points from the bar). For a

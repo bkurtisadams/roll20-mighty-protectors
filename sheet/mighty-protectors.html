@@ -1,4 +1,15 @@
-<!-- Mighty Protectors Roll20 Character Sheet v44.98 - Notes tags help lists area codes
+<!-- Mighty Protectors Roll20 Character Sheet v45.01 - Roll button sends Push/HB from pushhb_query
+        v45.01: FIX - the attack Roll button sent {{push=}} from push_query, a
+          hidden copy that stays blank until a query checkbox is toggled, so on
+          older characters the engine saw Push 0 while the damage roll took the
+          Hold Back (noholdback never fired). {{push=}} now reads pushhb_query,
+          the same value the damage roll uses.
+        v45.00: Attack panel Notes tags line lists noholdback (Can't Hold Back
+          for that attack). Requires engine v2.176.1+.
+        v44.99: Ability Notes tooltip lists the weakness tags fumble:N,
+          noholdback, imperceptive:-N, unliving:PCT and nopain. Dayblind
+          tooltip no longer says "GM toggle": it applies under Glare, Roll20
+          daylight/bright light, or !mp brightlight. Requires engine v2.176.0+.
         v44.98: The attack panel's Notes tags line now lists offset,
           adjustable and only:tag.
         v44.97: Attack rows whose Notes carry adjustable and/or offset (with an
@@ -1057,7 +1068,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             <input type="hidden" name="attr_attack_is_physical" value="1" />
             <input type="hidden" name="attr_attack_is_mental" value="0" />
             <input type="checkbox" name="attr_attack_broken" value="1" class="sheet-atk-broken-flag2" />
-            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{push_query}}} {{hitmod=[[0+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[0+@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[0+@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{form=@{attack_form}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_cost}}} {{ch=@{attack_charges}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3}]]}} {{deftype=@{attack_atk_full}}} {{rngmod=[[0+@{range_query}]]}} {{aim=[[0+@{aim_query}]]}} {{multi=[[0+@{multi_query}]]}} {{other=[[0+@{other_query}]]}} {{called=[[0+@{called_mod_query}]]}} {{areaq=@{attack_area_query}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
+            <button type="roll" name="roll_attack" value="&{template:mpattack} {{mpapi=@{use_api}}} {{is_api=[[0@{use_api}]]}} {{atk=@{character_id}}} {{def=@{target|Target|token_id}}} {{row=@{attack_rowid}}} {{push=@{pushhb_query}}} {{hitmod=[[0+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{name=@{character_name} - @{attack_name}}} {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[0+@{attack_tohit_num}-((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))-@{target|Target|bar3}+@{range_query}+@{aim_query}+@{multi_query}+@{other_query}+@{called_mod_query}]]}} {{calledtype=@{called_type_query}}} {{damage=[[0+@{attack_damage}+@{pushhb_query}]]}} {{type=@{attack_dmgtype_full}}} {{subtype=@{attack_subtype}}} {{form=@{attack_form}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{pr=@{attack_cost}}} {{ch=@{attack_charges}}} {{ap=@{attack_ap}}} {{area=@{attack_area}}} {{tname=@{target|Target|token_name}}} {{tdef=[[0+((@{target|Target|physical_def}*@{attack_is_physical})+(@{target|Target|mental_def}*@{attack_is_mental}))]]}} {{tstance=[[0+@{target|Target|bar3}]]}} {{deftype=@{attack_atk_full}}} {{rngmod=[[0+@{range_query}]]}} {{aim=[[0+@{aim_query}]]}} {{multi=[[0+@{multi_query}]]}} {{other=[[0+@{other_query}]]}} {{called=[[0+@{called_mod_query}]]}} {{areaq=@{attack_area_query}}}" style="background:#e63946; color:#fff; border:none; padding:2px 6px; cursor:pointer; border-radius:3px; font-size:9px;">Roll</button>
           </td>
           <td style="text-align:center; padding:1px;">
             <input type="text" name="attr_attack_mod" value="0" title="To-hit modifier" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:1px; text-align:center; box-sizing:border-box;" />
@@ -1425,7 +1436,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Help text with Info button -->
         <div class="sheet-panel-help" style="display:flex; align-items:center; gap:8px;">
           <button type="roll" name="roll_attack_info" class="sheet-panel-btn" value="&{template:mpatkinfo} {{title=Attack #@{attack_num}: @{attack_name}}} {{atype=@{attack_atk_full}}} {{mod=@{attack_mod}}} {{tohit=@{attack_tohit_num}}} {{damage=@{attack_damage}}} {{dtype=@{attack_dmgtype_full}}} {{range=@{attack_range}}} {{kb=@{attack_kb_display}}} {{ap=@{attack_ap}}} {{cost=@{attack_cost}}} {{charges=@{attack_charges}}} {{area=@{attack_area}}} {{savebc=@{attack_save_bc}}} {{savemod=@{attack_save_mod}}} {{recovery=@{attack_save_rec}}} {{bp=@{attack_bp}}} {{maxbp=@{attack_max_bp}}} {{snaretype=@{attack_snare_type}}} {{duration=@{attack_duration_num} @{attack_duration_unit}}} {{notes=@{attack_notes}}}" title="Show attack details" style="flex-shrink:0;">Info</button>
-          <span>Notes tags: <code>save:BC:mod:rec</code> | <code>snare:type:bp/max</code> | <code>grapple[:remote] grip:dice</code> | <code>af:N</code> | <code>area:N</code> | <code>dur:N:unit</code> | <code>gear</code> | <code>immune</code> | <code>deathtouch</code> | <code>siphon:type</code> | <code>ap[:N]</code> | <code>offset</code> | <code>adjustable</code> | <code>only:tag</code></span>
+          <span>Notes tags: <code>save:BC:mod:rec</code> | <code>snare:type:bp/max</code> | <code>grapple[:remote] grip:dice</code> | <code>af:N</code> | <code>area:N</code> | <code>dur:N:unit</code> | <code>gear</code> | <code>immune</code> | <code>deathtouch</code> | <code>siphon:type</code> | <code>ap[:N]</code> | <code>offset</code> | <code>adjustable</code> | <code>only:tag</code> | <code>noholdback</code></span>
         </div>
       </div>
 
@@ -2053,8 +2064,8 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
             </select>
           </div>
           <div class="sheet-panel-field">
-            <label title="Standard Diminished Senses. Nearsighted/Farsighted/No Depth apply automatically from attack range; Dayblind is a GM toggle; color-blindness is narrative.">Weakness:</label>
-            <select name="attr_ability_sense_weakness" title="Standard Diminished Senses. Nearsighted/Farsighted/No Depth apply automatically from attack range; Dayblind is a GM toggle; color-blindness is narrative." style="width:118px !important;">
+            <label title="Standard Diminished Senses. Nearsighted/Farsighted/No Depth apply automatically from attack range; Dayblind applies under Glare, Roll20 daylight/bright light, or !mp brightlight; color-blindness is narrative.">Weakness:</label>
+            <select name="attr_ability_sense_weakness" title="Standard Diminished Senses. Nearsighted/Farsighted/No Depth apply automatically from attack range; Dayblind applies under Glare, Roll20 daylight/bright light, or !mp brightlight; color-blindness is narrative." style="width:118px !important;">
               <option value="" selected>--</option>
               <option value="dayblind">Dayblind (-2.5)</option>
               <option value="nearsighted">Nearsighted (-2.5)</option>
@@ -2233,7 +2244,7 @@ This allows different hardened values per damage type (e.g., 5 Kinetic prot with
         <!-- Row 4: Codes -->
         <div style="margin-top:4px; border-top:1px solid #3a3050; padding-top:4px;">
           <label style="color:#888; font-size:9px; display:block; margin-bottom:2px;" title="Effect Codes for API automation">Codes:</label>
-          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, field:darkness:2:1:9..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | invis / invis:blur / blur (State On = token invisible) | aura:Dmg:Type:PR | field:darkness|glare:RANKS:SENSES:DIAM | field:glow:DIAM | sense:TYPE:LEVEL[:rng,glob,tele4,chk+3,weak=nearsighted,...]" />
+          <input type="text" name="attr_ability_notes" class="sheet-codes-input" style="width:100%; background:#0d0d1a; color:#eaeaea; border:1px solid #2a2040; padding:4px 6px; font-size:10px; box-sizing:border-box;" placeholder="vuln:Kinetic:+2, field:darkness:2:1:9..." title="vuln:Type:+N | absorb:Type:Limit | reflect:Type:Limit | invis / invis:blur / blur (State On = token invisible) | aura:Dmg:Type:PR | field:darkness|glare:RANKS:SENSES:DIAM | field:glow:DIAM | sense:TYPE:LEVEL[:rng,glob,tele4,chk+3,weak=nearsighted,...] | Weaknesses: fumble:18 | noholdback | imperceptive:-3 | unliving:50 | nopain" />
         </div>
 
         <!-- Info button -->

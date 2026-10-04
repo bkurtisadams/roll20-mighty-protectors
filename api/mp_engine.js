@@ -1,4 +1,24 @@
-/* Mighty Protectors Roll20 API Engine v2.175.0 - 2026-09-24
+/* Mighty Protectors Roll20 API Engine v2.176.2 - 2026-09-30
+ * v2.176.2: no engine change; version bump to pair with sheet v45.01, whose
+ *   Roll button now sends Push/Hold Back from pushhb_query (the stale
+ *   push_query copy sent 0, so noholdback never saw a Hold Back).
+ * v2.176.1: noholdback also works in an attack row's Notes, applying to
+ *   that attack only (an ability-row tag still covers every attack).
+ * v2.176.0: WEAKNESSES - FUMBLE-PRONE, CAN'T HOLD BACK, DAYBLIND, HARM /
+ *   FATIGUE / SUSCEPTIBILITY, IMPERCEPTIVE. New ability-row Notes tags read
+ *   by getWeaknessFlags: fumble:N (fumble check on N-20: a 20 always checks,
+ *   N-19 check only when the roll also fails; attacks, reflected attacks,
+ *   acquisition, stand checks, area/attack/recovery saves), noholdback (a
+ *   negative Push is refused and the damage restored, incl. per-target area
+ *   re-rolls) and imperceptive:-N (added inside rollAcquisition, so every
+ *   perception check gets it). Dayblind now works: vision drops to Basic
+ *   when the observer has Glare, is lit by page daylight/global illum or a
+ *   bright light source, or the page is marked with new GM !mp brightlight.
+ *   !mp require takes --consequence harm [--dmg N] (overdue = per-round
+ *   Apply button on the round report) and fatigue (!mp dailyheal and !mp
+ *   rest skip the character). New GM !mp exposure --dmg N [--name] | --off
+ *   | list for Susceptibility: death-zone marker, per-round Apply button, no
+ *   Protection or roll-with. New !mp test weakness.
  * v2.175.0: ALTITUDE IN AREAS, REACH AND FALLING. Areas are spheres: a
  *   token is swept only if its 3D distance (map distance plus altitude
  *   difference) is within the radius. The area sits at the aimed token's
@@ -12,31 +32,13 @@
  *   roll-with, KO), then lands the token; the card notes the AG save to stay
  *   standing and the GM's instant-death option. A token going Unconscious or
  *   Dead while airborne prompts the GM with a Resolve Fall button.
- * v2.174.1: ALTITUDE MARKER DIAGNOSTICS. When the alt-0..alt-9 set isn't
- *   found the fallback to wings is no longer silent: the !mp alt reply says
- *   which digits are missing. New !mp alt markers reports how many markers
- *   the game has, which altitude digits were found (with their tags) and any
- *   near-miss names. Names match alt-N, alt_N, altN or "alt N".
- * v2.174.0: ALTITUDE MARKERS. Altitude now shows as custom token markers
- *   named alt-0 .. alt-9, one per digit, most significant first (12" shows
- *   alt-1 then alt-2), found by name from the game's marker list since custom
- *   tags carry an id. Without all ten in the game it falls back to the
- *   fluffy-wing badge (1-9, no number at 10"+). Setting or landing clears
- *   any earlier altitude markers of either kind.
- * v2.173.2: FIX - a stale siphon pool blocked new gains. The
- *   cap check counts what's in the pool, but !mp test reset put Hits/Power
- *   back to max without zeroing the pool, so the next siphon gained nothing
- *   (pool 23 against a cap of 21 left no room). Test reset now zeroes the
- *   character's siphon pools too, and a gain that the cap fully blocks says
- *   "No gain: pool already at cap (pool/cap)" instead of "Gains 0", with a
- *   pointer to !mp siphon reset when the pool is over the cap.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.175.0";
+var MP_VERSION = "2.176.2";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -422,6 +424,7 @@ MP.Engine = (function () {
     invisible: "half-haze",
     sneaking: "tread",
     discomfort: "drink-me",
+    exposure: "death-zone",
     succumbed: "screaming",
     generic: "padlock"
   };
@@ -752,16 +755,18 @@ MP.Engine = (function () {
     return roll <= target;
   }
 
-  function rollAcquisition(charId, senseLevel, forcedRolls, modifier, sneakGate) {
+  function rollAcquisition(charId, senseLevel, forcedRolls, modifier, sneakGate, weakFlags) {
     const inSave = getAttrNum(charId, "intelligence_save", 10);
-    const mod = num(modifier, 0);
+    const wf = weakFlags || getWeaknessFlags(charId);
+    const imperceptive = num(wf.imperceptive, 0);
+    const mod = num(modifier, 0) + imperceptive;
     const tn = inSave + mod;
     const d1 = (forcedRolls && forcedRolls[0] !== undefined) ? forcedRolls[0] : randomInteger(20);
     let outcome, d2 = null;
     if (d1 === 1) {
       d2 = (forcedRolls && forcedRolls[1] !== undefined) ? forcedRolls[1] : randomInteger(20);
       outcome = d20TaskSucceeds(d2, tn) ? "critSuccess" : "succeed";
-    } else if (d1 === 20) {
+    } else if (fumbleCheckDue(d1, tn, wf.fumbleAt)) {
       d2 = (forcedRolls && forcedRolls[1] !== undefined) ? forcedRolls[1] : randomInteger(20);
       outcome = d20TaskSucceeds(d2, tn) ? "fail" : "critFumble";
     } else {
@@ -777,7 +782,7 @@ MP.Engine = (function () {
     const eff = acqTierEffect(tier);
     return {
       tier, outcome, blocked: eff.blocked, toHitMod: eff.toHitMod, label: eff.label,
-      inSave, mod, tn, d1, d2, gated
+      inSave, mod, tn, d1, d2, gated, imperceptive
     };
   }
 
@@ -1405,6 +1410,37 @@ MP.Engine = (function () {
     return true;
   }
 
+  // Dayblind: the observer is in full sunlight or bright artificial light -
+  // Glare on the observer, the page's !mp brightlight toggle, Roll20
+  // daylight / global illumination, or a bright light source reaching it.
+  function dayblindExposure(tokId, lossInfo) {
+    if (lossInfo && num(lossInfo.glare, 0) > 0) return "glare";
+    const tok = getObj("graphic", tokId);
+    if (!tok) return null;
+    const pageId = tok.get("_pageid");
+    if (state.MP_Engine.brightLight && state.MP_Engine.brightLight[pageId]) return "bright light";
+    const light = roll20Illumination(tok, tok, getObj("page", pageId), roll20BarrierSegments(pageId));
+    if (light.level !== "bright") return null;
+    return light.source === "page daylight" ? "daylight" : "bright light";
+  }
+
+  // !mp brightlight [--off] (GM): marks the current page as full sunlight /
+  // bright light for Dayblind when Roll20 lighting doesn't show it.
+  function cmdBrightLight(msg, args) {
+    const sel = (msg.selected || []).find(s => s._type === "graphic");
+    const selTok = sel ? getObj("graphic", sel._id) : null;
+    const pageId = selTok ? selTok.get("_pageid") : Campaign().get("playerpageid");
+    const page = getObj("page", pageId);
+    if (!state.MP_Engine.brightLight) state.MP_Engine.brightLight = {};
+    const pageName = page ? (page.get("name") || "this page") : "this page";
+    if ("off" in args) {
+      delete state.MP_Engine.brightLight[pageId];
+      return ch("MP", `/w gm <b>MP:</b> Bright light OFF on <b>${esc(pageName)}</b>. Dayblind now follows Roll20 lighting and Glare only.`);
+    }
+    state.MP_Engine.brightLight[pageId] = true;
+    return ch("MP", `/w gm <b>MP:</b> Bright light ON on <b>${esc(pageName)}</b> — Dayblind characters here see at Basic. ${btn(`Turn Off`, `!mp brightlight --off`)}`);
+  }
+
   function observationLevel(atkTokId, defTokId, defCharId, atkCharId, rangeInches, rangePenalty, options) {
     const atkVision = visionLossInfo(atkTokId, atkCharId);
     const senses = atkCharId ? getCharacterSenses(atkCharId) : defaultSenses();
@@ -1435,6 +1471,14 @@ MP.Engine = (function () {
 
     if (inv) {
       visLevel = inv.blur ? Math.max(0, visLevel - 1) : 0;
+    }
+
+    if (vis.weak === "dayblind" && visLevel > 1) {
+      const glareSrc = dayblindExposure(atkTokId, atkVision);
+      if (glareSrc) {
+        visLevel = 1;
+        weakNote = `Dayblind (${glareSrc})`;
+      }
     }
 
     if (visLevel > 0 && rangeInches != null) {
@@ -1941,6 +1985,7 @@ MP.Engine = (function () {
     if (rngNote) modBits.push(rngNote.trim());
     if (environmentMod) modBits.push(`${environmentMod} barrier/environment`);
     if (discMod) modBits.push(`${discMod} discomfort`);
+    if (acq.imperceptive) modBits.push(`${acq.imperceptive} imperceptive`);
 
     let out = `<div style="background:#1a1a2e; border:2px solid #3d5a80; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
     out += `<b style="color:#7fb3d5;">🔎 Perception</b> — <b>${esc(obsName)}</b> by ${esc(s.label || key)} (${lvlLabel})<br/>`;
@@ -2135,10 +2180,12 @@ MP.Engine = (function () {
 
     // one d20 for the whole sweep; confirm pre-rolled so nat 1/20 is
     // shared, only the per-target TN varies
+    const obsWeak = getWeaknessFlags(obsChar.id);
     const d1 = randomInteger(20);
-    const d2 = (d1 === 1 || d1 === 20) ? randomInteger(20) : undefined;
+    const d2 = (d1 === 1 || d1 >= obsWeak.fumbleAt) ? randomInteger(20) : undefined;
 
     const disc = hasDiscomfort(obsTok.id) ? -3 : 0;
+    const imperc = num(obsWeak.imperceptive, 0);
     const situational = num(args.mod, 0);
     if (!state.MP_Engine.acquired) state.MP_Engine.acquired = {};
 
@@ -2191,7 +2238,7 @@ MP.Engine = (function () {
       }
 
       const acqMod = num(obs.oppMod, 0) + num(obs.chkMod, 0) + num(obs.rngMod, 0) + disc + situational;
-      const acq = rollAcquisition(obsChar.id, obs.level, [d1, d2], acqMod, obs.sneakGate);
+      const acq = rollAcquisition(obsChar.id, obs.level, [d1, d2], acqMod, obs.sneakGate, obsWeak);
 
       if (acq.blocked) {
         delete state.MP_Engine.acquired[acqKey];
@@ -2231,10 +2278,11 @@ MP.Engine = (function () {
     out += isFree
       ? ` <span style="color:#2ecc71; font-size:10px;">FREE CHECK (1/turn, 3.1.5)</span>`
       : ` <span style="color:#f39c12; font-size:10px;">⚠ ADDITIONAL CHECK — costs an Action (3.1.5)</span>`;
-    if (situational || disc) {
+    if (situational || disc || imperc) {
       const bits = [];
       if (situational) bits.push(`${situational} situational`);
       if (disc) bits.push(`${disc} discomfort`);
+      if (imperc) bits.push(`${imperc} imperceptive`);
       out += `<div style="color:#8a84a8; font-size:10px;">${bits.join(", ")} applied to all TNs</div>`;
     }
 
@@ -2300,20 +2348,48 @@ MP.Engine = (function () {
   // WEAKNESSES (v2.93.0)
   // -------------------------
   // Static trait tags on ability-row notes: unliving:PCT (self-repair %),
-  // nopain (Can't Feel Pain). Read like the sense rows - no new sheet UI.
+  // nopain (Can't Feel Pain), fumble:N (Fumble-Prone: fumble check on N-20),
+  // noholdback (Can't Hold Back), imperceptive:-N (all perception checks).
+  // Read like the sense rows - no new sheet UI.
+  function newWeaknessFlags() {
+    return { unliving: null, nopain: false, fumbleAt: CFG.FUMBLE_FAIL_NAT, noholdback: false, imperceptive: 0 };
+  }
+
+  function parseWeaknessNotes(notes, flags) {
+    const s = String(notes || "").toLowerCase();
+    const um = s.match(/unliving:(\d+)/);
+    if (um) flags.unliving = num(um[1], 0);
+    if (/\bnopain\b/.test(s)) flags.nopain = true;
+    const fm = s.match(/\bfumble:(\d+)/);
+    if (fm) flags.fumbleAt = Math.min(flags.fumbleAt, Math.max(2, Math.min(20, num(fm[1], 20))));
+    if (/\bnoholdback\b/.test(s)) flags.noholdback = true;
+    const im = s.match(/\bimperceptive:([+-]?\d+)/);
+    if (im) flags.imperceptive -= Math.abs(num(im[1], 0));
+    return flags;
+  }
+
   function getWeaknessFlags(charId) {
-    const flags = { unliving: null, nopain: false };
+    const flags = newWeaknessFlags();
     if (!charId) return flags;
     const attrs = findObjs({ _type: "attribute", _characterid: charId });
     attrs.forEach(a => {
       const n = a.get("name");
       if (!/^repeating_abilities_.+_ability_notes$/.test(n)) return;
-      const notes = String(a.get("current") || "").toLowerCase();
-      const um = notes.match(/unliving:(\d+)/);
-      if (um) flags.unliving = num(um[1], 0);
-      if (/\bnopain\b/.test(notes)) flags.nopain = true;
+      parseWeaknessNotes(a.get("current"), flags);
     });
     return flags;
+  }
+
+  // 3.0.1 + Fumble-Prone: a roll of 20 always checks; a roll from the
+  // lowered threshold up checks only when it also fails.
+  function fumbleCheckDue(d20, tn, fumbleAt) {
+    return d20 === CFG.FUMBLE_FAIL_NAT || (d20 >= num(fumbleAt, CFG.FUMBLE_FAIL_NAT) && d20 > tn);
+  }
+
+  // Can't Hold Back: a negative push already reduced the rolled damage, so
+  // the refused amount is added back. Returns the amount restored.
+  function holdBackRefusal(pushAmount, flags) {
+    return (num(pushAmount, 0) < 0 && flags && flags.noholdback) ? -num(pushAmount, 0) : 0;
   }
 
   // Unliving healing gate (RAW): 50% self-repair heals only below half Hits;
@@ -2472,7 +2548,7 @@ MP.Engine = (function () {
       tok = s ? getObj("graphic", s._id) : null;
       char = tok ? getCharFromToken(tok) : null;
     }
-    if (!char) return ch("MP", `/w gm <b>MP:</b> Select the character's token (or --charid). Usage: <code>!mp require --interval 7d --consequence discomfort --name "Life Leech"</code> | <code>--met</code> | <code>--off</code> | <code>list</code>`);
+    if (!char) return ch("MP", `/w gm <b>MP:</b> Select the character's token (or --charid). Usage: <code>!mp require --interval 7d --consequence discomfort|harm|fatigue [--dmg N] --name "Life Leech"</code> | <code>--met</code> | <code>--off</code> | <code>list</code>`);
 
     if ("off" in args) {
       delete reqs[char.id];
@@ -2493,10 +2569,107 @@ MP.Engine = (function () {
       name: args.name || "Special Requirement",
       intervalSec, intervalLabel: args.interval,
       consequence: (args.consequence || "discomfort").toLowerCase(),
+      dmg: Math.max(1, num(args.dmg, 1)),
       lastMetMs: state.MP_Engine.gameClock.ms,
       nagged: false
     };
-    return ch("MP", `/w gm <b>MP:</b> Registered: <b>${esc(char.get("name"))}</b> needs <b>${esc(reqs[char.id].name)}</b> every ${esc(args.interval)} (consequence: ${esc(reqs[char.id].consequence)}). Clock starts now (${fmtGameClock()}).`);
+    return ch("MP", `/w gm <b>MP:</b> Registered: <b>${esc(char.get("name"))}</b> needs <b>${esc(reqs[char.id].name)}</b> every ${esc(args.interval)} (consequence: ${esc(reqs[char.id].consequence)}${reqs[char.id].consequence === "harm" ? ` ${reqs[char.id].dmg}/round` : ""}). Clock starts now (${fmtGameClock()}).`);
+  }
+
+  function requirementOverdue(r) {
+    return !!r && state.MP_Engine.gameClock.ms > r.lastMetMs + r.intervalSec * 1000;
+  }
+
+  // Special Requirement (Fatigue): no Hits, Power or Charges regained
+  // (except Gear) while the requirement is unmet.
+  function requirementFatigueBlock(charId) {
+    const r = (state.MP_Engine.requirements || {})[charId];
+    if (!r || r.consequence !== "fatigue" || !requirementOverdue(r)) return null;
+    return `Special Requirement unmet (${esc(r.name)}) — Fatigue: cannot regain Hits or Power until it's met (<code>!mp require --met</code>).`;
+  }
+
+  // !mp exposure --dmg N [--name "x"] | --off | list (GM, selected tokens or
+  // --target). Susceptibility: damage once per round while exposed. Each
+  // round advance whispers an Apply button per exposed token (no
+  // Protection, no roll-with). Harm requirements that are overdue join the
+  // same list automatically.
+  function cmdExposure(msg, args) {
+    if (!state.MP_Engine.exposures) state.MP_Engine.exposures = {};
+    const ex = state.MP_Engine.exposures;
+    const sub = (msg.content.split(/\s+/)[2] || "").toLowerCase();
+    if (sub === "list") {
+      const keys = Object.keys(ex);
+      if (!keys.length) return ch("MP", `/w gm <b>MP:</b> No tokens are exposed.`);
+      let out = `<b>Exposures</b>`;
+      keys.forEach(tokId => {
+        const e = ex[tokId];
+        const tok = getObj("graphic", tokId);
+        out += `<br/><b>${esc(tok ? (tok.get("name") || e.label) : e.label)}</b>: ${e.dmg}/round from ${esc(e.name)} ${btn(`End`, `!mp exposure --off --target ${tokId}`)}`;
+      });
+      return ch("MP", `/w gm ` + out);
+    }
+    const ids = [];
+    if (args.target) ids.push(args.target);
+    else (msg.selected || []).forEach(s => { if (s._type === "graphic") ids.push(s._id); });
+    if (!ids.length) return ch("MP", `/w gm <b>MP:</b> Select token(s) or use --target. Usage: <code>!mp exposure --dmg 3 --name "Kryptonite"</code> | <code>--off</code> | <code>list</code>`);
+    const marker = CONDITION_MARKERS.exposure;
+    const lines = [];
+    ids.forEach(tokId => {
+      const tok = getObj("graphic", tokId);
+      const char = tok ? getCharFromToken(tok) : null;
+      if (!tok || !char) return;
+      const tokName = displayName(tok, char);
+      if ("off" in args) {
+        if (ex[tokId]) {
+          delete ex[tokId];
+          setMarker(tok, marker, false);
+          lines.push(`<b>${esc(tokName)}</b> — no longer exposed.`);
+        } else lines.push(`<b>${esc(tokName)}</b> — wasn't exposed.`);
+        return;
+      }
+      const dmg = Math.max(1, num(args.dmg, 3));
+      ex[tokId] = { dmg, name: args.name || "Susceptibility", label: tokName, startRound: state.MP_Engine.currentRound };
+      setMarker(tok, marker, true);
+      lines.push(`<b>${esc(tokName)}</b> — EXPOSED to ${esc(ex[tokId].name)}: ${dmg} damage per round. ${btn(`End`, `!mp exposure --off --target ${tokId}`)}`);
+    });
+    if (!lines.length) return ch("MP", `/w gm <b>MP:</b> No linked tokens found.`);
+    return ch("MP", `/w gm ` + lines.join("<br/>"));
+  }
+
+  // Round-advance upkeep: one Apply button per exposed token and per overdue
+  // Harm requirement. Damage bypasses Protection (pending record protKey null).
+  function tickExposure(n) {
+    const rows = [];
+    const ex = state.MP_Engine.exposures || {};
+    Object.keys(ex).forEach(tokId => {
+      const e = ex[tokId];
+      const tok = getObj("graphic", tokId);
+      const char = tok ? getCharFromToken(tok) : null;
+      if (!tok || !char) { delete ex[tokId]; return; }
+      rows.push({ tok, char, dmg: e.dmg * n, label: e.name });
+    });
+    const reqs = state.MP_Engine.requirements || {};
+    Object.keys(reqs).forEach(cid => {
+      const r = reqs[cid];
+      if (r.consequence !== "harm" || !r.tokId || !requirementOverdue(r)) return;
+      const tok = getObj("graphic", r.tokId);
+      const char = tok ? getCharFromToken(tok) : null;
+      if (!tok || !char) return;
+      rows.push({ tok, char, dmg: Math.max(1, num(r.dmg, 1)) * n, label: `${r.name} unmet` });
+    });
+    if (!rows.length) return "";
+    let frag = `<br/><span style="color:#e67e22;">☣️ Per-round damage (no Protection):</span>`;
+    rows.forEach(x => {
+      const id = String(Date.now()) + "_expo_" + randomInteger(999999);
+      const name = displayName(x.tok, x.char);
+      state.MP_Engine.pending[id] = {
+        rollId: id, defTokenId: x.tok.id, defCharId: x.char.id, defName: name,
+        damageTotal: x.dmg, dmgTypeStr: "Other", protKey: null,
+        atkName: x.label, created: Date.now()
+      };
+      frag += `<br/><b>${esc(name)}</b>: ${x.dmg} (${esc(x.label)}) ${btnDanger(`Apply`, `!mp apply --id ${id} --mode straight`)}`;
+    });
+    return frag;
   }
 
   // Called after game-clock advances: nag once per starvation period.
@@ -2511,6 +2684,8 @@ MP.Engine = (function () {
       let card = `<div style="background:#1a1a2e; border:2px solid #b03a2e; border-radius:6px; padding:6px 10px; font-family:Arial,sans-serif; font-size:13px; color:#eee; max-width:280px;">`;
       card += `<b style="color:#f1948a;">⏳ ${esc(r.charName)}</b> — <b>${esc(r.name)}</b> is ~${days} day(s) overdue.<br/>`;
       if (r.consequence === "discomfort" && r.tokId) card += `${btn(`Apply Discomfort`, `!mp discomfort --target ${r.tokId}`)} `;
+      else if (r.consequence === "harm") card += `<span style="font-size:11px; color:#aab;">Harm: ${Math.max(1, num(r.dmg, 1))} damage per round until met${r.tokId ? " (round advance adds an Apply button)" : " — no token registered, GM applies"}. </span>`;
+      else if (r.consequence === "fatigue") card += `<span style="font-size:11px; color:#aab;">Fatigue: no natural Hits/Power recovery until met (!mp dailyheal and !mp rest skip this character). </span>`;
       else card += `<span style="font-size:11px; color:#aab;">Consequence: ${esc(r.consequence)} (GM applies). </span>`;
       card += `${btn(`Met — reset clock`, `!mp require --met --charid ${cid}`)}`;
       card += `</div>`;
@@ -3066,6 +3241,40 @@ MP.Engine = (function () {
 
     const passCount = results.filter(r => r.startsWith("\u2705")).length;
     ch("MP", `/w gm <b style="color:#c88fff;">TEST AREA POISON</b> (${dmg} dmg) \u2014 ${passCount}/${results.length} passed<br/>` + results.join("<br/>"));
+  }
+
+  // Self-test: !mp test weakness (GM). v2.176.0. Pure-function checks of
+  // the notes-tag parser, the Fumble-Prone check window and Can't Hold Back.
+  function testWeakness(msg, args) {
+    const results = [];
+    const check = (name, cond) => results.push(`${cond ? "\u2705" : "\u274c"} ${name}`);
+    const p = (s) => parseWeaknessNotes(s, newWeaknessFlags());
+    let f = p("");
+    check(`no tags => fumbleAt 20, no flags`, f.fumbleAt === 20 && !f.noholdback && f.imperceptive === 0 && f.unliving === null && !f.nopain);
+    f = p("Fumble-Prone (-10 CP) fumble:18");
+    check(`fumble:18 => fumbleAt 18`, f.fumbleAt === 18);
+    f = p("fumble:25");
+    check(`fumble:25 clamps to 20`, f.fumbleAt === 20);
+    f = p("NoHoldBack");
+    check(`noholdback (any case)`, f.noholdback === true);
+    f = p("imperceptive:-3");
+    check(`imperceptive:-3 => -3`, f.imperceptive === -3);
+    f = p("imperceptive:6");
+    check(`imperceptive:6 => -6 (sign forced)`, f.imperceptive === -6);
+    f = parseWeaknessNotes("imperceptive:-3", p("imperceptive:-3"));
+    check(`two rows stack => -6`, f.imperceptive === -6);
+    f = p("unliving:50 nopain");
+    check(`unliving:50 + nopain still parse`, f.unliving === 50 && f.nopain === true);
+    check(`nat 20 always checks (TN 25)`, fumbleCheckDue(20, 25, 20) === true);
+    check(`nat 19 normal => no check`, fumbleCheckDue(19, 10, 20) === false);
+    check(`fumble:18, 19 vs TN 10 (miss) => check`, fumbleCheckDue(19, 10, 18) === true);
+    check(`fumble:18, 18 vs TN 18 (hit) => no check`, fumbleCheckDue(18, 18, 18) === false);
+    check(`fumble:18, 17 vs TN 10 => no check`, fumbleCheckDue(17, 10, 18) === false);
+    check(`Hold Back -4, no flag => 0 refused`, holdBackRefusal(-4, newWeaknessFlags()) === 0);
+    check(`Hold Back -4, noholdback => 4 refused`, holdBackRefusal(-4, p("noholdback")) === 4);
+    check(`Push +2, noholdback => 0 refused`, holdBackRefusal(2, p("noholdback")) === 0);
+    const pass = results.filter(r => r.indexOf("\u2705") === 0).length;
+    ch("MP", `/w gm <b>Weakness self-test</b> — ${pass}/${results.length} passed<br/>` + results.join("<br/>"));
   }
 
   // Self-test: !mp test arearadiation [DMG] (GM, 1 selected token). v2.160.0.
@@ -6393,8 +6602,15 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       const controllerPid = getControllingPlayerId(atkCharId);
       if (controllerPid) originalPlayerId = controllerPid;
     }
-    const pushAmount = num(fields.push, 0);  // 0=no push, 2=normal, 4+=special ability
+    let pushAmount = num(fields.push, 0);  // 0=no push, 2=normal, 4+=special ability
     const isPushing = pushAmount > 0;
+    const atkWeak = getWeaknessFlags(atkCharId);
+    if (!atkWeak.noholdback && rowId &&
+        /\bnoholdback\b/i.test(String(getRepeatingAttackAttr(atkCharId, rowId, "attack_notes") || ""))) {
+      atkWeak.noholdback = true;
+    }
+    const holdBackRefused = holdBackRefusal(pushAmount, atkWeak);
+    if (holdBackRefused) pushAmount = 0;
 
     const atkChar = getObj("character", atkCharId);
     const defTok = getObj("graphic", defTokenId);
@@ -6444,8 +6660,9 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const nat = inlineNatD20(rollIR);
     const roll = num(rollIR.total, 0);
     const confirm = confIR ? num(confIR.total, 0) : 10;
-    const damageTotal = dmgIR ? num(dmgIR.total, 0) : 0;
-    const damageBreakdown = inlineRollBreakdown(msg, fields.damage) || String(damageTotal);
+    const damageTotal = (dmgIR ? num(dmgIR.total, 0) : 0) + holdBackRefused;
+    const damageBreakdown = (inlineRollBreakdown(msg, fields.damage) || String(damageTotal)) +
+      (holdBackRefused ? ` +${holdBackRefused} (Can't Hold Back)` : "");
     const templateTarget = targetIR ? num(targetIR.total, 0) : null;
     
     // Called shot parsing - handles both type names and numeric penalties
@@ -6869,6 +7086,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
         if (obs.chkMod) modParts.push(`${obs.chkMod > 0 ? "+" : ""}${obs.chkMod} chk`);
         if (obs.rngMod || rangeData.profileAdjusted) modParts.push(`${obs.rngMod} range [${profileRangeText(rangeData)}]`);
         if (acqDisc) modParts.push(`${acqDisc} discomfort`);
+        if (acq.imperceptive) modParts.push(`${acq.imperceptive} imperceptive`);
         const rollTxt = `IN ${acq.inSave}-${acq.mod !== 0 ? ` ${acq.mod} (${modParts.join(", ")}) = ${acq.tn}-` : ""}, rolled ${acq.d1}${acq.d2 != null ? `/${acq.d2}` : ""}${acq.gated ? " — needed a CRIT (3.1.5.1)" : ""}`;
         const causeTxt = [
           atkVision.causes.length ? atkVision.causes.join(", ") : null,
@@ -7141,7 +7359,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       protKey: protKey, dmgSubtype: dmgSubtype
     };
 
-    if (nat === 20) {
+    if (fumbleCheckDue(nat, targetTotal, atkWeak.fumbleAt)) {
       if (!d20TaskSucceeds(confirm, targetTotal)) {
         isFumble = true;
         outcome = "FUMBLE";
@@ -7197,7 +7415,11 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
       noDamageType,
       isAreaAttack, areaRadius, areaDiameter, hasImmunity, areaOffset,
       areaOffsetDir, areaOffsetTouch, areaAdjusted, rowAreaDiameter, onlyTag,
-      dmgSpec: inlineDiceSpec(msg, fields.damage),
+      dmgSpec: (() => {
+        const sp = inlineDiceSpec(msg, fields.damage);
+        if (sp && holdBackRefused) sp.flat += holdBackRefused;
+        return sp;
+      })(),
       atkTokenId: atkTok ? atkTok.id : null,
       calledShotType, isHeadShot, isLegShot, isArmShot, isAvoidArmor, isGearShot,
       hasDuration, durNum, durUnit, durRounds, durEscape, durDamageExpr: atkDamageExpr
@@ -7492,6 +7714,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
     html += `<span style="color:#aaa;">Called: <b style="color:${modColor(calledShotPenalty)};">${calledShotPenalty}</b></span> `;
     html += `<span style="color:#aaa;">Push: <b style="color:${modColor(pushAmount)};">${pushAmount}</b></span>`;
+    if (holdBackRefused) html += ` <span style="color:#e67e22; cursor:help;" title="Can't Hold Back: Hold Back refused, damage restored">HB -${holdBackRefused} refused</span>`;
     html += `</div>`;
 
     // --- Crit / Fumble / Called Shot Results ---
@@ -8252,7 +8475,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
 
     const tn = baseSave + num(areaRec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + rwPaid + vulnSaveMod + discomfort;
     const d20 = (forcedRoll !== undefined) ? forcedRoll : randomInteger(20);
-    const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
+    const isFumble = fumbleCheckDue(d20, tn, getWeaknessFlags(tokData.charId).fumbleAt);
     // 3.0.1: a saving roll of 1 always succeeds, a roll of 20 always fails.
     const pass = (d20 === CFG.CRIT_SUCCESS_NAT) || (!isFumble && (d20 <= tn));
 
@@ -9342,7 +9565,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     let outcome = "MISS";
     let critResult = null;
     let fumbleResult = null;
-    if (nat === 20) {
+    if (fumbleCheckDue(nat, tn, getWeaknessFlags(reflId).fumbleAt)) {
       if (!d20TaskSucceeds(confirm, tn)) {
         outcome = "FUMBLE";
         fumbleResult = applyFumbleDefault(rollFumbleTable(), { atkIsVehicle: reflVeh });
@@ -11272,7 +11495,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     const tn = baseSave + num(rec.saveMod, 0) + protForSave + invulnForSave + adaptForSave + rwPaid + critMod + pushMod + vulnSaveMod + saveDiscomfort;
 
     const d20 = randomInteger(20);
-    const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
+    const isFumble = fumbleCheckDue(d20, tn, getWeaknessFlags(rec.defCharId).fumbleAt);
     // 3.0.1: a saving roll of 1 always succeeds, a roll of 20 always fails.
     // Without this, save modifiers can drive the TN to 0 or below and the
     // defender cannot succeed at all.
@@ -11502,7 +11725,7 @@ function getRepeatingAttackAttr(charId, rowId, shortName) {
     }
 
     const d20 = randomInteger(20);
-    const isFumble = (d20 === CFG.FUMBLE_FAIL_NAT);
+    const isFumble = fumbleCheckDue(d20, tn, getWeaknessFlags(char.id).fumbleAt);
     // 3.0.1: a saving roll of 1 always succeeds, a roll of 20 always fails.
     // Recovery TNs carry the attack's difficulty modifier and can easily be
     // 0 or below, which would otherwise make recovery impossible.
@@ -13499,7 +13722,7 @@ function cmdAttackInfo(msg, args) {
     if (d1 === 1) {
       d2 = randomInteger(20);
       outcome = d20TaskSucceeds(d2, tn) ? "critSuccess" : "succeed";
-    } else if (d1 === 20) {
+    } else if (fumbleCheckDue(d1, tn, getWeaknessFlags(char.id).fumbleAt)) {
       d2 = randomInteger(20);
       outcome = d20TaskSucceeds(d2, tn) ? "fail" : "critFumble";
     } else {
@@ -13731,6 +13954,8 @@ function cmdAttackInfo(msg, args) {
         return testAreaPoison(msg, args);
       case "arearadiation":
         return testAreaRadiation(msg, args);
+      case "weakness":
+        return testWeakness(msg, args);
       case "acquire":
         return testAcquire(msg, args);
       case "invis":
@@ -13757,6 +13982,7 @@ function cmdAttackInfo(msg, args) {
           <code>!mp test flash [LEVELS]</code> - Flash save/condition self-test (select 1 token; non-destructive)<br/>
           <code>!mp test areapoison [DMG]</code> - Damaging Poison area-save self-test (select 1 token; non-destructive)<br/>
           <code>!mp test arearadiation [DMG]</code> - Change Environment / Hard Radiation area-save self-test (select 1 token; non-destructive)<br/>
+          <code>!mp test weakness</code> - Weakness tag parsing, Fumble-Prone, Can't Hold Back self-test (no selection needed)<br/>
           <code>!mp test acquire</code> - 4.6 target-acquisition table self-test (select 1 token)<br/>
           <code>!mp test invis</code> - Invisibility/observation self-test (select 2 tokens: observer, target)<br/>
           <code>!mp test senses</code> - Report the selected token's resolved sense map + acquisition fallback<br/>
@@ -15312,7 +15538,7 @@ function cmdAttackInfo(msg, args) {
     
     html += `<div style="font-size:16px; font-weight:bold; color:${success ? '#27ae60' : '#e94560'};">`;
     if (nat === 1) html += `💥 CRITICAL SUCCESS!`;
-    else if (nat === 20) html += `💀 CRITICAL FAILURE!`;
+    else if (fumbleCheckDue(nat, target, getWeaknessFlags(charId).fumbleAt)) html += `💀 CRITICAL FAILURE!`;
     else if (success) html += `✓ SUCCESS`;
     else html += `✗ FAILURE`;
     html += `</div>`;
@@ -15644,6 +15870,12 @@ function cmdAttackInfo(msg, args) {
         if (gmOnly(msg)) return;
         return cmdWillCheck(msg, args);
       case "discomfort": return cmdDiscomfort(msg, args);
+      case "brightlight":
+        if (gmOnly(msg)) return;
+        return cmdBrightLight(msg, args);
+      case "exposure":
+        if (gmOnly(msg)) return;
+        return cmdExposure(msg, args);
       case "require":
         if (gmOnly(msg)) return;
         return cmdRequire(msg, args);
@@ -15911,7 +16143,10 @@ function cmdAttackInfo(msg, args) {
           <code>!mp scan [--mod N]</code> - 3.1.5 passive sweep of the page (best sense per target); closed doors/walls hide contacts unless a sense is Penetrating. Located contacts get player-only Locate and Attack buttons. First scan/round is the free check. GM tip: add a token action macro named Scan with body <code>!mp scan</code> (visible whenever a token is selected)<br/>
           <code>!mp willcheck --mod N [--present] [--phobia] [--stimulus "x"]</code> - Compulsion/Phobia save (<b>GM</b>)<br/>
           <code>!mp discomfort | --off</code> - Special Requirement penalty<br/>
-          <code>!mp require --interval 7d --consequence discomfort --name "x" | --met | --off | list</code> - Requirement clock (<b>GM</b>)<br/>
+          <code>!mp require --interval 7d --consequence discomfort|harm|fatigue [--dmg N] --name "x" | --met | --off | list</code> - Requirement clock; harm adds per-round Apply buttons, fatigue blocks dailyheal/rest (<b>GM</b>)<br/>
+          <code>!mp exposure --dmg N [--name "x"] | --off | list</code> - Susceptibility: per-round damage while exposed, Apply button each round (<b>GM</b>)<br/>
+          <code>!mp brightlight | --off</code> - Mark this page as bright light/sunlight for Dayblind (<b>GM</b>)<br/>
+          <b>Weakness tags</b> (any ability row's Notes): <code>fumble:18</code> Fumble-Prone, <code>noholdback</code> Can't Hold Back (or on one attack row's Notes for that attack only), <code>imperceptive:-3</code> all perception checks, <code>unliving:50</code>, <code>nopain</code>. Test with <code>!mp test weakness</code>.<br/>
           <b>Flash:</b> Flash is not a standalone command. Configure the attack row as a save attack with Sense Loss, then use <code>!mp atk</code>. Test it with <code>!mp test flash [LEVELS]</code>.` },
           conditions: { label: "Conditions, Damage, and Healing", body: `
           <code>!mp conditions --target TOKID</code> - List active conditions<br/>
@@ -17409,7 +17644,7 @@ function cmdAttackInfo(msg, args) {
       const tok = getObj("graphic", tokId);
       const char = getCharFromToken(tok);
       if (!tok || !char) return;
-      const gateMsg = unlivingHealBlock(char.id, tok);
+      const gateMsg = unlivingHealBlock(char.id, tok) || requirementFatigueBlock(char.id);
       if (gateMsg) {
         return ch("MP", `/w gm <b>${esc(char.get("name"))}</b>: ${gateMsg}`);
       }
@@ -17638,6 +17873,7 @@ function cmdAttackInfo(msg, args) {
     const recFrag = promptDueRecoveries(newRound);
     const invFrag = tickInvisibility(n);
     checkRequirementsDue();
+    const expoFrag = tickExposure(n);
     // v2.91.1: prune stale acquisition cache entries
     if (state.MP_Engine.acquired) {
       Object.keys(state.MP_Engine.acquired).forEach(k => {
@@ -17650,6 +17886,7 @@ function cmdAttackInfo(msg, args) {
     report += durFrag;
     report += recFrag;
     report += invFrag;
+    report += expoFrag;
     report += `</div>`;
     return report;
   }
@@ -17697,6 +17934,10 @@ function cmdAttackInfo(msg, args) {
       const name = char.get("name") || tok.get("name") || "Character";
       if (isVehicleMode(char.id)) {
         skipped.push(`${name} (vehicle mode)`);
+        return;
+      }
+      if (requirementFatigueBlock(char.id)) {
+        skipped.push(`${name} (Special Requirement unmet - Fatigue)`);
         return;
       }
       resters.push({ tok, char, name });
