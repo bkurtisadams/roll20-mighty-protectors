@@ -6,6 +6,10 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.176.2: no engine change; version bump to pair with sheet v45.01, whose
+  Roll button now sends Push/Hold Back from pushhb_query (the stale
+  push_query copy sent 0, so noholdback never saw a Hold Back).
+
 v2.176.1: noholdback also works in an attack row's Notes, applying to
   that attack only (an ability-row tag still covers every attack).
 

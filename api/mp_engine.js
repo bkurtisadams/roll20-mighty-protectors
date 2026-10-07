@@ -1,4 +1,11 @@
-/* Mighty Protectors Roll20 API Engine v2.178.1 - 2026-10-07
+/* Mighty Protectors Roll20 API Engine v2.179.0 - 2026-10-07
+ * v2.179.0: TURN ORDER BADGES. A token's Turn Order value gets an emoji
+ *   for its most serious status: Dead, then Unconscious, then Prone
+ *   (e.g. "3.12 ❌"); only one is shown so the row doesn't wrap. Kept in
+ *   step whenever the dead / sleepy / back-pain markers change (engine or
+ *   by hand), when the engine writes the Turn Order, and when the Turn
+ *   Order is edited or rolled into. Initiative values are still read by
+ *   their leading number, so sorting is unaffected.
  * v2.178.1: !mp removeturn now removes the selected token(s) instead of
  *   the top of the Turn Tracker; --target TOKID still works. With nothing
  *   selected it asks for a selection rather than removing anything.
@@ -11,16 +18,13 @@
  *   original size (70x70 -> 35x35 -> 70x70). Original size is kept in
  *   state.MP_Engine.halfSize, and range still measures from it, so a halved
  *   token doesn't gain distance.
- * v2.176.2: no engine change; version bump to pair with sheet v45.01, whose
- *   Roll button now sends Push/Hold Back from pushhb_query (the stale
- *   push_query copy sent 0, so noholdback never saw a Hold Back).
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.178.1";
+var MP_VERSION = "2.179.0";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -3720,6 +3724,7 @@ MP.Engine = (function () {
     tok.set("status_" + base, !!on);
     if (nextStr !== before) tok.set("statusmarkers", nextStr);
     if (on && !hasIt && (base === "sleepy" || base === "dead")) noteAirborneKO(tok);
+    if (hasIt !== !!on && TURN_BADGES.some(b => b[0] === base)) syncTurnBadges(tok.id);
   }
 
   function restoreTokenSnapshot(snap) {
@@ -18058,6 +18063,45 @@ function cmdAttackInfo(msg, args) {
   // Roll20 increments it each full cycle and the engine mirrors it into
   // currentRound + the game clock via advanceRound.
 
+  const TURN_BADGES = [["dead", "\u274C"], ["sleepy", "\u{1F4A4}"], ["back-pain", "\u2B07\uFE0F"]];
+  const TURN_BADGE_RE = /\s*(?:\u274C|\u{1F4A4}|\u2B07\uFE0F?)/gu;
+
+  function turnBadgeFor(tok) {
+    if (!tok) return "";
+    const have = parseMarkers(tok.get("statusmarkers"));
+    const hit = TURN_BADGES.find(b => have.includes(b[0]));
+    return hit ? hit[1] : "";
+  }
+
+  function badgedPr(pr, badge) {
+    const raw = pr === undefined || pr === null ? "" : String(pr);
+    const base = raw.replace(TURN_BADGE_RE, "").trim();
+    const want = badge ? (base ? base + " " + badge : badge) : base;
+    return want === raw ? pr : want;
+  }
+
+  function applyTurnBadges(to, onlyId) {
+    let changed = false;
+    const out = (to || []).map(e => {
+      if (!e || String(e.id) === "-1") return e;
+      if (onlyId && String(e.id) !== String(onlyId)) return e;
+      const pr = badgedPr(e.pr, turnBadgeFor(getObj("graphic", String(e.id))));
+      if (pr === e.pr) return e;
+      changed = true;
+      return Object.assign({}, e, { pr: pr });
+    });
+    return { to: out, changed: changed };
+  }
+
+  function writeTurnorder(to) {
+    Campaign().set("turnorder", JSON.stringify(applyTurnBadges(to).to));
+  }
+
+  function syncTurnBadges(onlyId) {
+    const res = applyTurnBadges(readTurnorder(), onlyId);
+    if (res.changed) Campaign().set("turnorder", JSON.stringify(res.to));
+  }
+
   function readTurnorder() {
     try {
       const raw = Campaign().get("turnorder");
@@ -18247,7 +18291,7 @@ function cmdAttackInfo(msg, args) {
     });
 
     if (removed.length) {
-      Campaign().set("turnorder", JSON.stringify(to));
+      writeTurnorder(to);
       onTurnorderChange();
     }
     let out = `/w gm <b>MP Turn Order:</b> `;
@@ -18338,7 +18382,7 @@ function cmdAttackInfo(msg, args) {
       });
       to = mergeSelectedInitiativeEntries(to, results);
       to = sortTurnorderEntries(to, sortMode);
-      Campaign().set("turnorder", JSON.stringify(to));
+      writeTurnorder(to);
 
       // Reuse the existing Super Speed implementation. If multiple selected tokens
       // represent the same character, only the first token receives that character's
@@ -18463,7 +18507,7 @@ function cmdAttackInfo(msg, args) {
           prs: customPrs.slice()
         };
         to = sortTurnorderEntries(to, sortMode);
-        Campaign().set("turnorder", JSON.stringify(to));
+        writeTurnorder(to);
 
         const rollText = rawRolls.map(formatTrackerPr).join(" + ");
         const phaseText = phases.map(formatTrackerPr).join(" → ");
@@ -18520,7 +18564,7 @@ function cmdAttackInfo(msg, args) {
     const prior = state.MP_Engine.superSpeedTracker[charId];
     if (prior) {
       const fresh = removeRecordedSuperSpeedTurns(charId, readTurnorder());
-      Campaign().set("turnorder", JSON.stringify(fresh));
+      writeTurnorder(fresh);
     }
 
     if (!isSuperSpeedInitiativeChecked(charId)) return;
@@ -18643,6 +18687,7 @@ function cmdAttackInfo(msg, args) {
   log("MP ENGINE v" + MP_VERSION + " CHAT HANDLERS REGISTERED");
   on("change:campaign:initiativepage", onTrackerPageChange);
   on("change:campaign:turnorder", onTurnorderChange);
+  on("change:campaign:turnorder", function() { syncTurnBadges(); });
   on("change:attribute", onAbilityAttributeChange);
   on("destroy:attribute", onAbilityAttributeDestroy);
   on("destroy:graphic", function(t) {
@@ -18673,6 +18718,7 @@ function cmdAttackInfo(msg, args) {
       if (!gc.topId) gc.topId = top;
       if (!gc.roundAnchor) gc.roundAnchor = top;
     }
+    syncTurnBadges();
 
     // A GM toggling Unconscious/Dead by hand on an airborne token (API-made
     // changes don't fire this; setMarker covers those).
@@ -18680,6 +18726,7 @@ function cmdAttackInfo(msg, args) {
       const had = String((prev && prev.statusmarkers) || "").split(",").map(x => x.split("@")[0]);
       const now = String(tok.get("statusmarkers") || "").split(",").map(x => x.split("@")[0]);
       if (["sleepy", "dead"].some(m => now.includes(m) && !had.includes(m))) noteAirborneKO(tok);
+      if (TURN_BADGES.some(b => now.includes(b[0]) !== had.includes(b[0]))) syncTurnBadges(tok.id);
     });
 
     // Roll20 replays pre-existing objects as add events if add handlers are
