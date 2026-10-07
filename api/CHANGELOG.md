@@ -6,6 +6,25 @@ first (each new version was prepended over time), but the oldest run at the
 bottom (v2.37 through v2.42.1) predates that practice and reads oldest-first.
 Entries are verbatim from the header; nothing was reworded or reordered.
 
+v2.176.1: noholdback also works in an attack row's Notes, applying to
+  that attack only (an ability-row tag still covers every attack).
+
+v2.176.0: WEAKNESSES - FUMBLE-PRONE, CAN'T HOLD BACK, DAYBLIND, HARM /
+  FATIGUE / SUSCEPTIBILITY, IMPERCEPTIVE. New ability-row Notes tags read
+  by getWeaknessFlags: fumble:N (fumble check on N-20: a 20 always checks,
+  N-19 check only when the roll also fails; attacks, reflected attacks,
+  acquisition, stand checks, area/attack/recovery saves), noholdback (a
+  negative Push is refused and the damage restored, incl. per-target area
+  re-rolls) and imperceptive:-N (added inside rollAcquisition, so every
+  perception check gets it). Dayblind now works: vision drops to Basic
+  when the observer has Glare, is lit by page daylight/global illum or a
+  bright light source, or the page is marked with new GM !mp brightlight.
+  !mp require takes --consequence harm [--dmg N] (overdue = per-round
+  Apply button on the round report) and fatigue (!mp dailyheal and !mp
+  rest skip the character). New GM !mp exposure --dmg N [--name] | --off
+  | list for Susceptibility: death-zone marker, per-round Apply button, no
+  Protection or roll-with. New !mp test weakness.
+
 v2.175.0: ALTITUDE IN AREAS, REACH AND FALLING. Areas are spheres: a
   token is swept only if its 3D distance (map distance plus altitude
   difference) is within the radius. The area sits at the aimed token's

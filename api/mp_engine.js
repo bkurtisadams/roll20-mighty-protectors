@@ -1,4 +1,12 @@
-/* Mighty Protectors Roll20 API Engine v2.177.0 - 2026-10-04
+/* Mighty Protectors Roll20 API Engine v2.178.1 - 2026-10-07
+ * v2.178.1: !mp removeturn now removes the selected token(s) instead of
+ *   the top of the Turn Tracker; --target TOKID still works. With nothing
+ *   selected it asks for a selection rather than removing anything.
+ * v2.178.0: GM !mp removeturn removes the current turn (top of the Turn
+ *   Tracker) from the tracker; --target TOKID removes that token instead.
+ *   The round anchor moves to the next combatant if the anchor is removed,
+ *   so round counting keeps working, and the character's recorded Super
+ *   Speed entries go too once none of its tokens remain.
  * v2.177.0: !mp half toggles the selected token(s) between half size and
  *   original size (70x70 -> 35x35 -> 70x70). Original size is kept in
  *   state.MP_Engine.halfSize, and range still measures from it, so a halved
@@ -6,30 +14,13 @@
  * v2.176.2: no engine change; version bump to pair with sheet v45.01, whose
  *   Roll button now sends Push/Hold Back from pushhb_query (the stale
  *   push_query copy sent 0, so noholdback never saw a Hold Back).
- * v2.176.1: noholdback also works in an attack row's Notes, applying to
- *   that attack only (an ability-row tag still covers every attack).
- * v2.176.0: WEAKNESSES - FUMBLE-PRONE, CAN'T HOLD BACK, DAYBLIND, HARM /
- *   FATIGUE / SUSCEPTIBILITY, IMPERCEPTIVE. New ability-row Notes tags read
- *   by getWeaknessFlags: fumble:N (fumble check on N-20: a 20 always checks,
- *   N-19 check only when the roll also fails; attacks, reflected attacks,
- *   acquisition, stand checks, area/attack/recovery saves), noholdback (a
- *   negative Push is refused and the damage restored, incl. per-target area
- *   re-rolls) and imperceptive:-N (added inside rollAcquisition, so every
- *   perception check gets it). Dayblind now works: vision drops to Basic
- *   when the observer has Glare, is lit by page daylight/global illum or a
- *   bright light source, or the page is marked with new GM !mp brightlight.
- *   !mp require takes --consequence harm [--dmg N] (overdue = per-round
- *   Apply button on the round report) and fatigue (!mp dailyheal and !mp
- *   rest skip the character). New GM !mp exposure --dmg N [--name] | --off
- *   | list for Susceptibility: death-zone marker, per-round Apply button, no
- *   Protection or roll-with. New !mp test weakness.
  *
  * Full version history: see CHANGELOG.md in the repo root.
  * Works with sheet's mpattack rolltemplate:
  *  {{mpapi=1}} {{atk=<character_id>}} {{def=<target token_id>}} {{row=<rowid>}}
  *  {{roll=[[1d20]]}} {{confirm=[[1d20]]}} {{target=[[...]]}} {{damage=[[...]]}} {{type=...}} {{subtype=...}}
  */
-var MP_VERSION = "2.177.0";
+var MP_VERSION = "2.178.1";
 log("MP ENGINE v" + MP_VERSION + " FILE STARTING");
 
 var MP = MP || {};
@@ -16021,6 +16012,9 @@ function cmdAttackInfo(msg, args) {
       case "clearturnorder":
         if (gmOnly(msg)) return;
         return cmdClearTurnOrder(msg);
+      case "removeturn":
+        if (gmOnly(msg)) return;
+        return cmdRemoveTurn(msg, args);
       case "atkinfo": return cmdAttackInfo(msg, args);
       case "atkrows": return cmdAttackRows(msg, args);
       case "hthmass":
@@ -16156,7 +16150,8 @@ function cmdAttackInfo(msg, args) {
           <code>!mp atkrows</code> - List a selected character's attack rows with rowids and save-field state<br/>
           <code>!mp attackcodes</code> - Show the Attack Notes code reference<br/>
           <code>!mp initselected [--sort desc|asc|none]</code> - Roll initiative for all selected represented tokens; descending is the default<br/>
-          <code>!mp clearturnorder</code> - Clear the entire Roll20 Turn Tracker (<b>GM</b>)` },
+          <code>!mp clearturnorder</code> - Clear the entire Roll20 Turn Tracker (<b>GM</b>)<br/>
+          <code>!mp removeturn [--target TOKID]</code> - Remove the selected token(s), or the target token, from the Turn Tracker (<b>GM</b>)` },
           powers: { label: "Powers and Senses", body: `
           <code>!mp siphon list | clear | reset | expire | adjust --target TOKID [--amt N]</code> - Siphon pools (<b>GM</b>): clear also removes the pooled Hits/Power, reset only zeroes the pool<br/>
           <code>!mp darkness --ranks 1-3 [--off] [--target TOKID]</code> - Apply/remove Darkness (<b>GM</b>)<br/>
@@ -18213,6 +18208,54 @@ function cmdAttackInfo(msg, args) {
     Campaign().set("turnorder", "");
     return ch("MP", `/w gm <b>MP Turn Order:</b> Cleared ${count} turn${count === 1 ? "" : "s"}.`);
   }
+
+  function cmdRemoveTurn(msg, args) {
+    let to = readTurnorder();
+    if (!to.length) return ch("MP", `/w gm <b>MP Turn Order:</b> The Turn Tracker is empty.`);
+
+    const ids = (msg.selected || []).filter(s => s && s._type === "graphic").map(s => String(s._id));
+    if (args.target) ids.push(String(args.target));
+    if (!ids.length) return ch("MP", `/w gm <b>MP Turn Order:</b> Select the token(s) to remove first.`);
+
+    const gc = state.MP_Engine.gameClock;
+    const removed = [], missing = [];
+    [...new Set(ids)].forEach(id => {
+      const tok = getObj("graphic", id);
+      const charId = tok ? tok.get("represents") : "";
+      const label = tok ? displayName(tok, charId ? getObj("character", charId) : null) : "Token";
+      const idx = to.findIndex(e => String(e.id) === id);
+      if (idx < 0) { missing.push(label); return; }
+
+      to = to.filter(e => String(e.id) !== id);
+      if (charId && !to.some(e => {
+        const t = String(e.id) !== "-1" ? getObj("graphic", String(e.id)) : null;
+        return t && t.get("represents") === charId;
+      })) {
+        to = removeRecordedSuperSpeedTurns(charId, to);
+      }
+
+      if (gc && gc.roundAnchor === id) {
+        let next = "";
+        for (let k = 0; k < to.length; k++) {
+          const e = to[(idx + k) % to.length];
+          if (String(e.id) !== "-1") { next = String(e.id); break; }
+        }
+        gc.roundAnchor = next || null;
+        if (!next) gc.leftAnchor = false;
+      }
+      removed.push(label + (idx === 0 ? " (current turn)" : ""));
+    });
+
+    if (removed.length) {
+      Campaign().set("turnorder", JSON.stringify(to));
+      onTurnorderChange();
+    }
+    let out = `/w gm <b>MP Turn Order:</b> `;
+    out += removed.length ? `Removed ${removed.map(esc).join(", ")}.` : `Nothing removed.`;
+    if (missing.length) out += ` Not in the Turn Tracker: ${missing.map(esc).join(", ")}.`;
+    return ch("MP", out);
+  }
+
 
   function cmdInitSelected(msg) {
     const sortMode = initSelectedSortMode(msg);
